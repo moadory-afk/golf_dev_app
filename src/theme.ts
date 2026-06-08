@@ -1,0 +1,18 @@
+export const C = {
+  green:      '#1a6b44',
+  greenDark:  '#0f4029',
+  greenMid:   '#2d8a5a',
+  greenLight: '#eaf5ef',
+  bg:         '#f0f5f2',
+  card:       '#ffffff',
+  text:       '#111b14',
+  muted:      '#6b7c74',
+  border:     '#dde8e2',
+  danger:     '#c0392b',
+  warn:       '#e67e22',
+  info:       '#2980b9',
+  gold:       '#c9900a',
+  silver:     '#8a9ba8',
+  bronze:     '#a07048',
+  eagle:      '#7c3aed',
+} as const

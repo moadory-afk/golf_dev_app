@@ -21,6 +21,7 @@ export default function MemberScreen() {
   const [myRole, setMyRole] = useState<string>('member')
   const [actionTarget, setActionTarget] = useState<Member | null>(null)
   const [acting, setActing] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -34,7 +35,7 @@ export default function MemberScreen() {
       const me = list.find((m) => m.userId === user?.id)
       setMyRole(me?.role ?? 'member')
     } catch {
-      Alert.alert('오류', '멤버 목록을 불러오지 못했습니다.')
+      setErrorMsg('멤버 목록을 불러오지 못했습니다.')
     } finally {
       setLoading(false)
     }
@@ -47,22 +48,24 @@ export default function MemberScreen() {
   async function handlePromote(target: Member) {
     setActionTarget(null)
     setActing(true)
+    setErrorMsg(null)
     try {
       await updateMemberRole(clubId, target.userId, 'admin')
       await load()
     } catch (e: unknown) {
-      Alert.alert('오류', e instanceof Error ? e.message : '역할 변경 실패')
+      setErrorMsg(e instanceof Error ? e.message : '역할 변경에 실패했습니다.')
     } finally { setActing(false) }
   }
 
   async function handleDemote(target: Member) {
     setActionTarget(null)
     setActing(true)
+    setErrorMsg(null)
     try {
       await updateMemberRole(clubId, target.userId, 'member')
       await load()
     } catch (e: unknown) {
-      Alert.alert('오류', e instanceof Error ? e.message : '역할 변경 실패')
+      setErrorMsg(e instanceof Error ? e.message : '역할 변경에 실패했습니다.')
     } finally { setActing(false) }
   }
 
@@ -78,11 +81,12 @@ export default function MemberScreen() {
         )
     if (!confirmed) return
     setActing(true)
+    setErrorMsg(null)
     try {
       await removeMember(clubId, target.userId)
       await load()
     } catch (e: unknown) {
-      Alert.alert('오류', e instanceof Error ? e.message : '내보내기 실패')
+      setErrorMsg(e instanceof Error ? e.message : '내보내기에 실패했습니다.')
     } finally { setActing(false) }
   }
 
@@ -134,6 +138,11 @@ export default function MemberScreen() {
         <View style={m.countRow}>
           <Text style={m.countText}>👥 전체 {members.length}명</Text>
         </View>
+        {errorMsg && (
+          <View style={m.errorBox}>
+            <Text style={m.errorText}>{errorMsg}</Text>
+          </View>
+        )}
 
         {loading && members.length === 0 ? (
           <ActivityIndicator color={C.green} style={{ marginTop: 40 }} />
@@ -241,7 +250,9 @@ const m = StyleSheet.create({
   divider: { height: 1, backgroundColor: '#f0f0f0', marginHorizontal: 20 },
 
   countRow: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 4 },
-  countText: { fontSize: 11, fontWeight: '700', color: C.muted, letterSpacing: 0.5 },
+  countText: { fontSize: 15, fontWeight: '700', color: C.muted, letterSpacing: 0.5 },
+  errorBox: { backgroundColor: '#fff0f0', borderRadius: 8, padding: 10, marginHorizontal: 16, marginBottom: 4, borderWidth: 1, borderColor: '#ffcccc' },
+  errorText: { fontSize: 13, color: '#c0392b' },
   sectionLabel: {
     fontSize: 11, fontWeight: '700', color: C.muted, letterSpacing: 0.5,
     paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8,

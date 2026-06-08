@@ -12,6 +12,8 @@ import { useClub } from '../lib/ClubContext'
 import { C } from '../theme'
 import type { User } from '@supabase/supabase-js'
 
+// 공유 링크는 남에게 보내는 링크이므로, 앱이 로컬(localhost/Tailscale)에서 실행 중이어도
+// 항상 배포된 프로덕션 주소를 써야 한다. window.location.origin을 쓰면 로컬 주소가 박혀 상대가 접속 불가.
 const APP_URL = 'https://golf-seven-psi.vercel.app'
 
 // ─── 아이콘 세트 ───────────────────────────────────────────────────────────────
@@ -125,10 +127,15 @@ function ClubGridCard({
     try {
       const compressed = await ImageManipulator.manipulateAsync(
         result.assets[0].uri,
-        [{ resize: { width: 200, height: 200 } }],
-        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+        [{ resize: { width: 100, height: 100 } }],
+        { compress: 0.4, format: ImageManipulator.SaveFormat.JPEG, base64: true },
       )
-      onAvatarChange(club.id, `data:image/jpeg;base64,${compressed.base64}`)
+      const dataUri = `data:image/jpeg;base64,${compressed.base64}`
+      if (dataUri.length > 20000) {
+        Alert.alert('사진이 너무 큽니다', '더 작은 사진을 선택해주세요.')
+        return
+      }
+      onAvatarChange(club.id, dataUri)
     } catch { Alert.alert('오류', '사진 처리에 실패했습니다.') }
     finally { setUploadingPhoto(false) }
   }
@@ -351,10 +358,14 @@ export default function ProfileScreen() {
     try {
       const compressed = await ImageManipulator.manipulateAsync(
         result.assets[0].uri,
-        [{ resize: { width: 200, height: 200 } }],
-        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+        [{ resize: { width: 100, height: 100 } }],
+        { compress: 0.4, format: ImageManipulator.SaveFormat.JPEG, base64: true },
       )
       const dataUri = `data:image/jpeg;base64,${compressed.base64}`
+      if (dataUri.length > 20000) {
+        Alert.alert('사진이 너무 큽니다', '더 작은 사진을 선택해주세요.')
+        return
+      }
       const { error } = await supabase.auth.updateUser({
         data: { ...user?.user_metadata, avatarUrl: dataUri, icon: '' },
       })
@@ -476,17 +487,9 @@ export default function ProfileScreen() {
   }
 
   async function handleLogout() {
-    const doLogout = async () => {
-      const { error } = await supabase.auth.signOut()
-      if (error) Alert.alert('오류', '로그아웃에 실패했습니다.')
-    }
+    await supabase.auth.signOut({ scope: 'local' })
     if (Platform.OS === 'web') {
-      if (confirm('로그아웃 하시겠습니까?')) await doLogout()
-    } else {
-      Alert.alert('로그아웃', '로그아웃 하시겠습니까?', [
-        { text: '취소', style: 'cancel' },
-        { text: '로그아웃', style: 'destructive', onPress: doLogout },
-      ])
+      window.location.href = '/'
     }
   }
 
@@ -729,24 +732,18 @@ export default function ProfileScreen() {
         )}
 
         {/* ── 클럽 관리 ── */}
-        <Text style={p.sectionLabel}>클럽 관리</Text>
-        <View style={p.menuCard}>
-          {isAdmin && (
-            <>
+        {isAdmin && (
+          <>
+            <Text style={p.sectionLabel}>클럽 관리</Text>
+            <View style={p.menuCard}>
               <TouchableOpacity style={p.menuRow} onPress={handleSharePromo}>
                 <Text style={p.menuIcon}>📢</Text>
                 <Text style={p.menuText}>앱 사용 권유 링크 공유</Text>
                 <Text style={p.menuArrow}>›</Text>
               </TouchableOpacity>
-              <View style={p.menuDivider} />
-            </>
-          )}
-          <TouchableOpacity style={p.menuRow} onPress={() => setShowCreateForm((v) => !v)}>
-            <Text style={p.menuIcon}>➕</Text>
-            <Text style={p.menuText}>새 클럽 만들기</Text>
-            <Text style={p.menuArrow}>›</Text>
-          </TouchableOpacity>
-        </View>
+            </View>
+          </>
+        )}
 
         {/* ── 계정 ── */}
         <Text style={p.sectionLabel}>계정</Text>

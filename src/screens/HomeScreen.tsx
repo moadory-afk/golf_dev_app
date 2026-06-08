@@ -5,12 +5,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useState, useCallback, useEffect } from 'react'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { getRounds, playerTotal, totalPar, computeHandicaps, shortName, type SavedRound } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
 import { useAsync } from '../lib/useAsync'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
 import { UserAvatarBtn } from '../components/UserAvatar'
+import { AppHeader } from '../components/AppHeader'
 import type { RootStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
@@ -32,7 +34,15 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets()
   const nav = useNavigation<Nav>()
   const [refreshKey, setRefreshKey] = useState(0)
-  const { activeClub: club } = useClub()
+  const { activeClub: club, clubsLoaded } = useClub()
+
+  // 클럽 로드 완료 후 소속 클럽 없으면 Club 탭으로 자동 이동
+  useEffect(() => {
+    if (clubsLoaded && !club) {
+      nav.navigate('Main', { screen: 'Club' })
+    }
+  }, [clubsLoaded, club]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const { data, loading } = useAsync(
     () => (club ? getRounds(club.id) : Promise.resolve([])),
     [refreshKey, club?.id],
@@ -43,13 +53,18 @@ export default function HomeScreen() {
   const [h2hPlayer, setH2hPlayer] = useState<string | null>(null)
   const onRefresh = useCallback(() => setRefreshKey((k) => k + 1), [])
 
+  const [handicapBasis, setHandicapBasis] = useState(5)
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setMyName(data.user?.user_metadata?.name ?? data.user?.email ?? null)
     })
+    AsyncStorage.getItem('@gogopar_handicap_basis').then(v => {
+      if (v === '3' || v === '5' || v === '10') setHandicapBasis(Number(v))
+    })
   }, [])
 
-  const handicaps = computeHandicaps(rounds)
+  const handicaps = computeHandicaps(rounds, handicapBasis)
 
   const byName = new Map<string, Array<{ date: string; total: number; par: number; courseName: string }>>()
   for (const r of rounds) {
@@ -107,8 +122,8 @@ export default function HomeScreen() {
   const myHandicap = (() => {
     if (!myEntries.length) return null
     const sorted = [...myEntries].sort((a, b) => a.date.localeCompare(b.date))
-    const last5 = sorted.slice(-5)
-    return Math.ceil(last5.reduce((sum, e) => sum + (e.total - e.par), 0) / last5.length)
+    const lastN = sorted.slice(-handicapBasis)
+    return Math.ceil(lastN.reduce((sum, e) => sum + (e.total - e.par), 0) / lastN.length)
   })()
   const myBest = myEntries.length > 0 ? myEntries.reduce((b, e) => e.total < b.total ? e : b) : null
   const myWins = myName ? (winCount.get(myName) ?? 0) : 0
@@ -155,51 +170,37 @@ export default function HomeScreen() {
   // 하위 호환 (PersonalDetailModal용)
   const myRecords = ginnessRecords.map(r => r.title)
 
-  // 핸디캡 추이 (최근 7라운드)
+  // 핸디캡 추이: 전체 기록 기반 5경기 슬라이딩 윈도우 → 마지막 10포인트 표시
   const myRoundsSorted = [...myEntries].sort((a, b) => a.date.localeCompare(b.date))
-  const handicapTrend = myRoundsSorted.slice(-7).map((e, idx, arr) => {
-    const last5 = arr.slice(Math.max(0, idx - 4), idx + 1)
+  const handicapTrend = myRoundsSorted.map((_, idx) => {
+    const last5 = myRoundsSorted.slice(Math.max(0, idx - 4), idx + 1)
     return Math.ceil(last5.reduce((s, x) => s + (x.total - x.par), 0) / last5.length)
-  })
+  }).slice(-10)
 
   const recent3 = rounds.slice(0, 3)
-  const userInitial = (myName ?? '?').slice(0, 1)
-  const greetingHour = new Date().getHours()
-  const greeting = greetingHour < 12 ? '좋은 아침이에요' : greetingHour < 18 ? '좋은 오후예요' : '좋은 저녁이에요'
+
+  // 클럽 로딩 전: 빈 화면 (모든 hook 호출 후)
+  if (!clubsLoaded) return <View style={{ flex: 1, backgroundColor: C.bg }} />
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       {h2hPlayer && (
-        <HeadToHeadModal player={h2hPlayer} rounds={rounds} handicaps={handicaps} onClose={() => setH2hPlayer(null)} />
+        <HeadToHeadModal player={h2hPlayer} rounds={rounds} handicaps={handicaps} onClose={() => setH2hPlayer(null)} basis={handicapBasis} />
       )}
       {personalDetail && myName && (
         <PersonalDetailModal
           type={personalDetail} myName={myName} rounds={rounds}
           handicaps={handicaps} myRecords={myRecords}
           winCount={winCount} singleBirdieMap={singleBirdieMap} singleParMap={singleParMap}
-          onClose={() => setPersonalDetail(null)}
+          onClose={() => setPersonalDetail(null)} basis={handicapBasis}
         />
       )}
-
       <ScrollView
         style={{ flex: 1 }}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} tintColor={C.green} />}
       >
-        {/* 헤더 */}
-        <View style={[s.header, { paddingTop: insets.top + 16 }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.greeting}>{greeting} ☀️</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={s.headerTitle}>{myName ? shortName(myName) : 'GogoPar'}</Text>
-              {club && (
-                <View style={s.clubBadge}>
-                  <Text style={s.clubBadgeText}>⛳ {club.name}</Text>
-                </View>
-              )}
-            </View>
-          </View>
-          <UserAvatarBtn size={38} />
-        </View>
+        {/* 헤더 (공용) */}
+        <AppHeader myName={myName} />
 
         <View style={s.content}>
           {/* 스탯 카드 3개 */}
@@ -208,7 +209,7 @@ export default function HomeScreen() {
               <TouchableOpacity style={s.statCard} onPress={() => setPersonalDetail('handicap')}>
                 <Text style={s.statLabel}>핸디캡</Text>
                 <Text style={s.statValue}>{myHandicap !== null ? diffText(myHandicap) : '-'}</Text>
-                <Text style={s.statSub}>최근 5경기</Text>
+                <Text style={s.statSub}>최근 {handicapBasis}경기</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.statCard} onPress={() => setPersonalDetail('best')}>
                 <Text style={s.statLabel}>베스트</Text>
@@ -226,7 +227,7 @@ export default function HomeScreen() {
           {/* 핸디캡 추이 */}
           {handicapTrend.length >= 2 && (
             <View style={s.card}>
-              <Text style={s.cardTitle}>📈 핸디캡 추이</Text>
+              <Text style={s.cardTitle}>📈 핸디캡 추이 (5경기 슬라이딩)</Text>
               <View style={s.trendWrap}>
                 {handicapTrend.map((h, i) => {
                   const min = Math.min(...handicapTrend)
@@ -237,7 +238,7 @@ export default function HomeScreen() {
                   const isLast = i === handicapTrend.length - 1
                   return (
                     <View key={i} style={s.trendCol}>
-                      {isLast && <Text style={s.trendCurrent}>{diffText(h)}</Text>}
+                      <Text style={[s.trendCurrent, { color: isLast ? C.green : C.muted }]}>{diffText(h)}</Text>
                       <View style={[s.trendBar, { height: barH, backgroundColor: isLast ? C.green : C.greenLight, borderColor: isLast ? C.green : C.border }]} />
                     </View>
                   )
@@ -351,11 +352,11 @@ export default function HomeScreen() {
 
 // ─── 상대 전적 모달 ───────────────────────────────────────────────────────────
 
-function handicapAt(name: string, allRounds: SavedRound[], beforeDate: string): number {
+function handicapAt(name: string, allRounds: SavedRound[], beforeDate: string, basis = 5): number {
   const prior = allRounds
     .filter((r) => r.date < beforeDate && r.players.some((p) => p.name === name))
     .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(-5)
+    .slice(-basis)
   if (!prior.length) return 0
   const diffs = prior.map((r) => {
     const p = r.players.find((pl) => pl.name === name)!
@@ -364,19 +365,24 @@ function handicapAt(name: string, allRounds: SavedRound[], beforeDate: string): 
   return Math.ceil(diffs.reduce((a, b) => a + b, 0) / diffs.length)
 }
 
-function HeadToHeadModal({ player, rounds, handicaps, onClose }: {
-  player: string; rounds: SavedRound[]; handicaps: Map<string, number>; onClose: () => void
+function HeadToHeadModal({ player, rounds, handicaps: _handicaps, onClose, basis = 5 }: {
+  player: string; rounds: SavedRound[]; handicaps: Map<string, number>; onClose: () => void; basis?: number
 }) {
-  const myHandicap = handicaps.get(player) ?? 0
+  const [localBasis, setLocalBasis] = useState<3 | 5 | 10>(basis as 3 | 5 | 10)
+  const [showDropdown, setShowDropdown] = useState(false)
+
+  const localHandicaps = computeHandicaps(rounds, localBasis)
+  const myHandicap = localHandicaps.get(player) ?? 0
+
   const opponents = new Map<string, { played: number; wins: number; losses: number }>()
   for (const r of rounds) {
     const me = r.players.find((p) => p.name === player)
     if (!me) continue
-    const myH = handicapAt(player, rounds, r.date)
+    const myH = handicapAt(player, rounds, r.date, localBasis)
     const myNet = playerTotal(me.strokes) - myH
     for (const opp of r.players) {
       if (opp.name === player) continue
-      const oppH = handicapAt(opp.name, rounds, r.date)
+      const oppH = handicapAt(opp.name, rounds, r.date, localBasis)
       const oppNet = playerTotal(opp.strokes) - oppH
       const rec = opponents.get(opp.name) ?? { played: 0, wins: 0, losses: 0 }
       rec.played++
@@ -386,16 +392,41 @@ function HeadToHeadModal({ player, rounds, handicaps, onClose }: {
     }
   }
   const sorted = [...opponents.entries()]
-    .map(([name, rec]) => ({ name, rec, oppH: handicaps.get(name) ?? 0, diff: myHandicap - (handicaps.get(name) ?? 0) }))
+    .map(([name, rec]) => ({ name, rec, oppH: localHandicaps.get(name) ?? 0, diff: myHandicap - (localHandicaps.get(name) ?? 0) }))
     .sort((a, b) => a.diff - b.diff)
 
   return (
     <Modal transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
-        <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
-          <View style={s.modalHeader}>
-            <Text style={s.modalTitle}>⚔️ 역대 전적 (핸디 {myHandicap > 0 ? '+' : ''}{myHandicap})</Text>
-            <TouchableOpacity style={s.closeBtn} onPress={onClose}><Text style={s.closeBtnText}>닫기</Text></TouchableOpacity>
+        <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => { if (showDropdown) setShowDropdown(false) }}>
+          <View style={[s.modalHeader, { zIndex: 10 }]}>
+            <Text style={[s.modalTitle, { fontSize: 14 }]}>⚔️ 역대 전적 (핸디 {myHandicap > 0 ? '+' : ''}{myHandicap})</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View>
+                <TouchableOpacity
+                  onPress={() => setShowDropdown(v => !v)}
+                  style={s.dropdownTrigger}
+                >
+                  <Text style={s.dropdownTriggerText}>{localBasis}경기 ▾</Text>
+                </TouchableOpacity>
+                {showDropdown && (
+                  <View style={s.dropdownMenu}>
+                    {([3, 5, 10] as const).map((n) => (
+                      <TouchableOpacity
+                        key={n}
+                        onPress={() => { setLocalBasis(n); setShowDropdown(false) }}
+                        style={s.dropdownItem}
+                      >
+                        <Text style={[s.dropdownItemText, localBasis === n && s.dropdownItemActive]}>
+                          {n}경기{localBasis === n ? ' ✓' : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+              <TouchableOpacity style={s.closeBtn} onPress={onClose}><Text style={s.closeBtnText}>닫기</Text></TouchableOpacity>
+            </View>
           </View>
           <ScrollView horizontal>
             <View>
@@ -433,13 +464,13 @@ function HeadToHeadModal({ player, rounds, handicaps, onClose }: {
 
 // ─── 개인 상세 모달 ───────────────────────────────────────────────────────────
 
-function PersonalDetailModal({ type, myName, rounds, handicaps, myRecords, winCount, singleBirdieMap, singleParMap, onClose }: {
+function PersonalDetailModal({ type, myName, rounds, handicaps, myRecords, winCount, singleBirdieMap, singleParMap, onClose, basis = 5 }: {
   type: PersonalDetailType; myName: string; rounds: SavedRound[]
   handicaps: Map<string, number>; myRecords: string[]
   winCount: Map<string, number>
   singleBirdieMap: Map<string, { count: number; date: string; courseName: string }>
   singleParMap: Map<string, { count: number; date: string; courseName: string }>
-  onClose: () => void
+  onClose: () => void; basis?: number
 }) {
   const myRounds = rounds
     .filter((r) => r.players.some((p) => p.name === myName))
@@ -470,8 +501,8 @@ function PersonalDetailModal({ type, myName, rounds, handicaps, myRecords, winCo
   let title = ''; let headers: string[] = []; let rows: Row[] = []
 
   if (type === 'handicap') {
-    title = '핸디캡 근거 (최근 5경기)'; headers = ['날짜', '코스', '스코어', '파대비']
-    const last5 = myRounds.slice(-5)
+    title = `핸디캡 근거 (최근 ${basis}경기)`; headers = ['날짜', '코스', '스코어', '파대비']
+    const last5 = myRounds.slice(-basis)
     rows = last5.map((e) => ({ cols: [e.date.slice(5), e.courseName.slice(0, 7), `${e.total}`, { text: diffText(e.diff), color: e.diff <= 0 ? C.green : C.warn }] }))
   } else if (type === 'best') {
     title = '베스트 스코어 순위'; headers = ['날짜', '코스', '스코어', '파대비']
@@ -567,8 +598,20 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
+    flexDirection: 'row', alignItems: 'center',
   },
   clubBadgeText: { color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: '600' },
+  clubBadgeCaret: { color: 'rgba(255,255,255,0.9)', fontSize: 11, marginLeft: 4 },
+  menuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.15)' },
+  clubMenu: {
+    position: 'absolute', backgroundColor: '#fff', borderRadius: 12, paddingVertical: 6, maxWidth: 260,
+    shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8,
+  },
+  clubMenuItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingHorizontal: 14, paddingVertical: 11 },
+  clubMenuItemActive: { backgroundColor: C.greenLight },
+  clubMenuText: { fontSize: 14, color: C.text, fontWeight: '500' },
+  clubMenuTextActive: { color: C.green, fontWeight: '700' },
+  clubMenuCheck: { color: C.green, fontWeight: '800', fontSize: 14 },
   profileBtn: {
     width: 38, height: 38, borderRadius: 19,
     backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center',
@@ -677,4 +720,12 @@ const s = StyleSheet.create({
   tableRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.border },
   th: { fontSize: 11, color: C.muted, fontWeight: '700' },
   td: { fontSize: 13, color: C.text },
+
+  // 드롭다운
+  dropdownTrigger: { paddingVertical: 4, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1, borderColor: C.green, backgroundColor: C.green },
+  dropdownTriggerText: { fontSize: 12, color: '#fff', fontWeight: '600' },
+  dropdownMenu: { position: 'absolute', top: 32, right: 0, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: C.border, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 20, zIndex: 100, minWidth: 90 },
+  dropdownItem: { paddingVertical: 10, paddingHorizontal: 16 },
+  dropdownItemText: { fontSize: 13, color: C.text },
+  dropdownItemActive: { color: C.green, fontWeight: '700' } as const,
 })
