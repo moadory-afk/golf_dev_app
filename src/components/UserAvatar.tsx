@@ -18,22 +18,27 @@ export function useUserAvatar(): AvatarData {
   const [data, setData] = useState<AvatarData>({ avatarUrl: '', icon: '', initial: '?' })
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return
+      const { data: profile } = await supabase.from('profiles').select('name').eq('id', user.id).single()
+      const name = profile?.name ?? user.user_metadata?.name ?? user.email ?? '?'
       setData({
-        avatarUrl: user?.user_metadata?.avatarUrl ?? '',
-        icon: user?.user_metadata?.icon ?? '',
-        initial: (user?.user_metadata?.name ?? user?.email ?? '?').slice(0, 1),
+        avatarUrl: user.user_metadata?.avatarUrl ?? '',
+        icon: user.user_metadata?.icon ?? '',
+        initial: name.slice(0, 1),
       })
     })
 
     // 프로필 변경 감지 (auth state 변경 시 갱신)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
       const user = session?.user
       if (user) {
+        const { data: profile } = await supabase.from('profiles').select('name').eq('id', user.id).single()
+        const name = profile?.name ?? user.user_metadata?.name ?? user.email ?? '?'
         setData({
           avatarUrl: user.user_metadata?.avatarUrl ?? '',
           icon: user.user_metadata?.icon ?? '',
-          initial: (user.user_metadata?.name ?? user.email ?? '?').slice(0, 1),
+          initial: name.slice(0, 1),
         })
       }
     })

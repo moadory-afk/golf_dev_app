@@ -136,8 +136,10 @@ export default function HistoryScreen() {
   useFocusEffect(useCallback(() => { setRefreshKey((k) => k + 1) }, []))
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setMyName(data.user?.user_metadata?.name ?? null)
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return
+      const { data: profile } = await supabase.from('profiles').select('name').eq('id', data.user.id).single()
+      setMyName(profile?.name ?? data.user?.user_metadata?.name ?? null)
     })
     AsyncStorage.getItem('@gogopar_handicap_basis').then(v => {
       if (v === '3' || v === '5' || v === '10') setHandicapBasis(Number(v))
