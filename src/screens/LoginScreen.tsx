@@ -38,13 +38,11 @@ export default function LoginScreen() {
     }
     setErrorMsg(null)
     setLoading(true)
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: nameToEmail(name),
-      password,
-    })
+    const email = nameToEmail(name)
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     setLoading(false)
     if (error) {
-      setErrorMsg('이름 또는 비밀번호가 올바르지 않습니다.\n계정이 없으시면 위의 "회원가입" 탭을 이용해주세요.')
+      setErrorMsg(`실패: ${email}\n${error.message}`)
     } else if (data.user) {
       try { await ensureProfile(data.user.id, name.trim()) } catch { /* 무시 */ }
     }
