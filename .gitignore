@@ -31,6 +31,7 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 
 # typescript
@@ -39,3 +40,22 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# 빌드 산출물
+dist2/
+dist3/
+dist4/
+dist_deploy/
+
+# 내부 전용
+CLAUDE.md
+.claude/
+
+# 로컬 실행 스크립트
+*.bat
+*.ps1
+
+# 시드/마이그레이션 로컬 스크립트 (키 하드코딩 위험)
+seed_*.js
+seed_*.sql
+*.sql
