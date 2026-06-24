@@ -56,8 +56,10 @@ export default function HomeScreen() {
   const [handicapBasis, setHandicapBasis] = useState(5)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setMyName(data.user?.user_metadata?.name ?? data.user?.email ?? null)
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return
+      const { data: profile } = await supabase.from('profiles').select('name').eq('id', data.user.id).single()
+      setMyName(profile?.name ?? data.user?.user_metadata?.name ?? data.user?.email ?? null)
     })
     AsyncStorage.getItem('@gogopar_handicap_basis').then(v => {
       if (v === '3' || v === '5' || v === '10') setHandicapBasis(Number(v))
