@@ -6,7 +6,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useClub } from '../lib/ClubContext'
 import { shortName } from '../lib/store'
 import { UserAvatarBtn } from './UserAvatar'
-import { C } from '../theme'
+import { C, isTurf } from '../theme'
+import { Icon } from './Icon'
 import type { RootStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
@@ -15,6 +16,10 @@ type Nav = NativeStackNavigationProp<RootStackParamList>
 // 기본: 인사말 + [내이름] [클럽▾] ... [아바타]
 // showSettings: 클럽명 오른쪽에 설정 버튼 추가 (클럽 화면)
 // rightExtra: 아바타 왼쪽에 요소 추가 (기록 화면의 스코어 입력 등)
+//
+// 디자인 버전은 theme.ts 의 APP_VERSION 으로 분기합니다.
+//  - legacy: 이모지(⛳ ⚙️) + 흰 텍스트
+//  - turf:   라인 아이콘 + 라임 포인트, 잉크 헤더 (greenDark 가 잉크로 매핑됨)
 export function AppHeader({ myName, showSettings = false, rightExtra }: {
   myName: string | null
   showSettings?: boolean
@@ -44,14 +49,19 @@ export function AppHeader({ myName, showSettings = false, rightExtra }: {
           {club && (
             <View ref={badgeRef} collapsable={false}>
               <TouchableOpacity style={s.clubBadge} onPress={openMenu} activeOpacity={0.7}>
-                <Text style={s.clubBadgeText} numberOfLines={1}>⛳ {club.name}</Text>
-                <Text style={s.caret}>▾</Text>
+                {isTurf && <Icon name="flag" size={13} color={C.accent} strokeWidth={2} />}
+                <Text style={s.clubBadgeText} numberOfLines={1}>{isTurf ? '' : '⛳ '}{club.name}</Text>
+                {isTurf
+                  ? <Icon name="chevronDown" size={13} color="rgba(255,255,255,0.8)" />
+                  : <Text style={s.caret}>▾</Text>}
               </TouchableOpacity>
             </View>
           )}
           {showSettings && club && (
             <TouchableOpacity style={s.memberBtn} onPress={() => nav.navigate('Settings')}>
-              <Text style={{ fontSize: 11 }}>⚙️</Text>
+              {isTurf
+                ? <Icon name="settings" size={12} color="rgba(255,255,255,0.85)" />
+                : <Text style={{ fontSize: 11 }}>⚙️</Text>}
               <Text style={s.memberBtnText}>설정</Text>
             </TouchableOpacity>
           )}
@@ -76,7 +86,9 @@ export function AppHeader({ myName, showSettings = false, rightExtra }: {
                     onPress={() => { setActiveClub(c); setMenu(null) }}
                   >
                     <Text style={[s.menuText, active && s.menuTextActive]} numberOfLines={1}>⛳ {c.name}</Text>
-                    {active && <Text style={s.check}>✓</Text>}
+                    {active && (isTurf
+                      ? <Icon name="check" size={14} color={C.green} strokeWidth={2.4} />
+                      : <Text style={s.check}>✓</Text>)}
                   </TouchableOpacity>
                 )
               })}
@@ -96,12 +108,11 @@ const s = StyleSheet.create({
   greeting: { color: 'rgba(255,255,255,0.7)', fontSize: 14, marginBottom: 8 },
   greetingName: { color: '#fff', fontSize: 14, fontWeight: '800' },
   identityRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  right: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
   clubBadge: {
-    backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12,
+    backgroundColor: isTurf ? 'rgba(198,255,58,0.12)' : 'rgba(255,255,255,0.15)', borderRadius: 12,
     paddingHorizontal: 10, paddingVertical: 4, maxWidth: 150,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
-    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderColor: isTurf ? 'rgba(198,255,58,0.3)' : 'rgba(255,255,255,0.25)',
+    flexDirection: 'row', alignItems: 'center', gap: isTurf ? 5 : 0,
   },
   clubBadgeText: { color: 'rgba(255,255,255,0.92)', fontSize: 12, fontWeight: '600', flexShrink: 1 },
   caret: { color: 'rgba(255,255,255,0.9)', fontSize: 11, marginLeft: 4 },
