@@ -93,7 +93,7 @@ export default function ResultScreen() {
             <Text style={[s.rankName, { flex: 1 }]}>{r.name}</Text>
             <Text style={s.rankScore}>{r.total}</Text>
             <Text style={[s.muted, { width: 44, textAlign: 'right' }]}>{diffText(r.diff)}</Text>
-            {r.birdie > 0 && <Text style={{ width: 42, textAlign: 'right', color: C.info, fontWeight: '600', fontSize: 12 }}>🐦{r.birdie}</Text>}
+            {r.birdie > 0 && <Text style={{ width: 42, textAlign: 'right', color: C.info, fontWeight: '600', fontSize: 12 }}>버디 {r.birdie}</Text>}
           </View>
         ))}
         <Text style={[s.muted, { marginTop: 8 }]}>코스 파 {par}</Text>

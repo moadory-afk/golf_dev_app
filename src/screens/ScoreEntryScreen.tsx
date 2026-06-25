@@ -18,12 +18,12 @@ type Nav = RootStackProps<'ScoreEntry'>['navigation']
 
 function scoreLabel(strokes: number, par: number): { text: string; color: string } {
   const d = strokes - par
-  if (d <= -2) return { text: '🦅 이글', color: C.eagle }
-  if (d === -1) return { text: '🐦 버디', color: C.info }
-  if (d === 0)  return { text: 'E 파',    color: C.muted }
-  if (d === 1)  return { text: '+1 보기', color: C.warn }
-  if (d === 2)  return { text: '+2 더블', color: C.danger }
-  if (d === 3)  return { text: '+3 트리플', color: C.danger }
+  if (d <= -2) return { text: '이글', color: C.eagle }
+  if (d === -1) return { text: '버디', color: C.info }
+  if (d === 0)  return { text: '파',    color: C.muted }
+  if (d === 1)  return { text: '보기', color: C.warn }
+  if (d === 2)  return { text: '더블', color: C.danger }
+  if (d === 3)  return { text: '트리플', color: C.danger }
   return { text: `+${d}`, color: C.danger }
 }
 
@@ -394,7 +394,7 @@ export default function ScoreEntryScreen() {
       {holeResult && settlement && (
         <View style={s.settlementCard}>
           <Text style={s.settlementTitle}>
-            💰 {hole + 1}홀 {holeResult.isBaepan ? '배판' : '호판'}  타당 {fmtKRW(holeResult.holeFee)}
+            {hole + 1}홀 {holeResult.isBaepan ? '배판' : '호판'}  타당 {fmtKRW(holeResult.holeFee)}
           </Text>
           <View style={s.settleLine}>
             <Text style={s.settleType}>타당</Text>
@@ -413,7 +413,7 @@ export default function ScoreEntryScreen() {
           <View style={s.settleLine}>
             <Text style={s.settleType}>보너스</Text>
             {holeResult.birdies.length === 0 ? (
-              <Text style={s.settleNone}>🐦 없음</Text>
+              <Text style={s.settleNone}>없음</Text>
             ) : (
               <View style={s.settleAmounts}>
                 {players.map((p) => {

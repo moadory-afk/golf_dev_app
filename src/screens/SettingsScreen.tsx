@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabase'
 import { updateClubSettings, getClubSettlement, saveClubSettlement } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
 import { C } from '../theme'
+import { EmojiIcon } from '../components/EmojiIcon'
 import type { User } from '@supabase/supabase-js'
 import type { RootStackParamList } from '../navigation/types'
 
@@ -128,7 +129,7 @@ export default function SettingsScreen() {
         <Modal transparent animationType="fade" onRequestClose={() => setShareModal(null)}>
           <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setShareModal(null)}>
             <TouchableOpacity style={s.shareModalCard} activeOpacity={1} onPress={() => {}}>
-              <Text style={s.shareModalTitle}>📨 초대 메시지</Text>
+              <Text style={s.shareModalTitle}>초대 메시지</Text>
               <Text style={s.shareModalDesc}>아래 메시지를 복사해서 카카오톡, 문자 등으로 보내세요</Text>
               <View style={s.shareMessageBox}>
                 <Text style={s.shareMessageText} selectable>{shareModal.message}</Text>
@@ -137,13 +138,13 @@ export default function SettingsScreen() {
                 await Clipboard.setStringAsync(shareModal.message)
                 Alert.alert('복사 완료! 카카오톡이나 문자에 붙여넣기 하세요.')
               }}>
-                <Text style={s.copyMsgBtnText}>📋 메시지 전체 복사</Text>
+                <Text style={s.copyMsgBtnText}>메시지 전체 복사</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.copyLinkOnlyBtn} onPress={async () => {
                 await Clipboard.setStringAsync(shareModal.link)
                 Alert.alert('링크 복사 완료!')
               }}>
-                <Text style={s.copyLinkOnlyBtnText}>🔗 링크만 복사</Text>
+                <Text style={s.copyLinkOnlyBtnText}>링크만 복사</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.shareModalClose} onPress={() => setShareModal(null)}>
                 <Text style={s.shareModalCloseText}>닫기</Text>
@@ -161,7 +162,7 @@ export default function SettingsScreen() {
           {isAdmin && (
             <>
               <TouchableOpacity style={s.menuRow} onPress={() => setEditingClub(v => !v)}>
-                <Text style={s.menuRowIcon}>✏️</Text>
+                <View style={s.menuRowIcon}><EmojiIcon char="✏️" size={17} color={C.muted} /></View>
                 <Text style={s.menuRowText}>클럽명 변경</Text>
                 <Text style={s.menuRowArrow}>{editingClub ? '∧' : '›'}</Text>
               </TouchableOpacity>
@@ -181,13 +182,13 @@ export default function SettingsScreen() {
             style={s.menuRow}
             onPress={() => activeClub && nav.navigate('Members', { clubId: activeClub.id })}
           >
-            <Text style={s.menuRowIcon}>👥</Text>
+            <View style={s.menuRowIcon}><EmojiIcon char="👥" size={18} color={C.muted} /></View>
             <Text style={s.menuRowText}>멤버 목록</Text>
             <Text style={s.menuRowArrow}>›</Text>
           </TouchableOpacity>
           <View style={s.menuDivider} />
           <TouchableOpacity style={s.menuRow} onPress={handleShareLink}>
-            <Text style={s.menuRowIcon}>🔗</Text>
+            <View style={s.menuRowIcon}><EmojiIcon char="🔗" size={17} color={C.muted} /></View>
             <Text style={s.menuRowText}>멤버 초대</Text>
             <Text style={s.menuRowArrow}>›</Text>
           </TouchableOpacity>
@@ -199,7 +200,7 @@ export default function SettingsScreen() {
 
           {/* 핸디 기준 경기 */}
           <View style={[s.menuRow, { zIndex: 10 }]}>
-            <Text style={s.menuRowIcon}>📊</Text>
+            <View style={s.menuRowIcon}><EmojiIcon char="📊" size={18} color={C.muted} /></View>
             <Text style={s.menuRowText}>핸디 기준 경기</Text>
             <View>
               <TouchableOpacity style={s.dropdownTrigger} onPress={() => setShowHandicapDrop(v => !v)}>
@@ -226,7 +227,7 @@ export default function SettingsScreen() {
 
           {/* 타당 금액 */}
           <View style={s.menuRow}>
-            <Text style={s.menuRowIcon}>💰</Text>
+            <View style={s.menuRowIcon}><EmojiIcon char="💰" size={18} color={C.muted} /></View>
             <Text style={s.menuRowText}>타당 금액</Text>
             <View style={s.inputRow}>
               <TextInput
@@ -243,7 +244,7 @@ export default function SettingsScreen() {
 
           {/* 버디 보너스 */}
           <View style={s.menuRow}>
-            <Text style={s.menuRowIcon}>🐦</Text>
+            <View style={s.menuRowIcon}><EmojiIcon char="🐦" size={18} color={C.muted} /></View>
             <Text style={s.menuRowText}>버디 보너스</Text>
             <View style={{ flexDirection: 'row', gap: 6 }}>
               {([5000, 10000] as const).map(v => (
@@ -263,7 +264,7 @@ export default function SettingsScreen() {
 
           {/* 배판 조건 */}
           <View style={s.menuRow}>
-            <Text style={s.menuRowIcon}>⚡</Text>
+            <View style={s.menuRowIcon}><EmojiIcon char="⚡" size={18} color={C.muted} /></View>
             <Text style={s.menuRowText}>배판 조건</Text>
             <Switch
               value={baepanOn}
@@ -289,13 +290,13 @@ export default function SettingsScreen() {
         <Text style={s.sectionLabel}>앱 정보</Text>
         <View style={s.menuCard}>
           <View style={s.menuRow}>
-            <Text style={s.menuRowIcon}>📱</Text>
+            <View style={s.menuRowIcon}><EmojiIcon char="📱" size={18} color={C.muted} /></View>
             <Text style={s.menuRowText}>버전</Text>
             <Text style={{ fontSize: 13, color: C.muted }}>v1.0</Text>
           </View>
           <View style={s.menuDivider} />
           <TouchableOpacity style={s.menuRow} onPress={handleLogout}>
-            <Text style={s.menuRowIcon}>🚪</Text>
+            <View style={s.menuRowIcon}><EmojiIcon char="🚪" size={18} color={C.danger} /></View>
             <Text style={[s.menuRowText, { color: C.danger }]}>로그아웃</Text>
             <Text style={s.menuRowArrow}>›</Text>
           </TouchableOpacity>
@@ -313,7 +314,7 @@ const s = StyleSheet.create({
 
   menuCard: { backgroundColor: C.card, borderRadius: 16, marginHorizontal: 14, marginBottom: 6, overflow: 'visible', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   menuRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 15, gap: 12 },
-  menuRowIcon: { fontSize: 18, width: 26, textAlign: 'center' },
+  menuRowIcon: { width: 26, alignItems: 'center', justifyContent: 'center' },
   menuRowText: { flex: 1, fontSize: 15, color: C.text, fontWeight: '500' },
   menuRowArrow: { fontSize: 16, color: C.muted },
   menuDivider: { height: 1, backgroundColor: C.border, marginLeft: 54 },

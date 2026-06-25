@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvo
 import { supabase } from '../lib/supabase'
 import { ensureProfile } from '../lib/store'
 import { C } from '../theme'
+import { Icon } from '../components/Icon'
 
 // 이름을 내부 이메일로 변환 (사용자에게 노출 안 됨)
 // 한글 등 유니코드를 hex로 인코딩하여 유효한 이메일 형식 생성
@@ -79,7 +80,7 @@ export default function LoginScreen() {
     <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled">
       <View style={s.header}>
-        <Text style={s.logo}>⛳</Text>
+        <View style={{ marginBottom: 8 }}><Icon name="flag" size={50} color={C.green} strokeWidth={1.6} /></View>
         <Text style={s.title}>Let's GogoPar</Text>
         <Text style={s.sub}>골프 스코어 관리</Text>
       </View>

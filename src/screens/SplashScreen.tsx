@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet } from 'react-native'
+import { Icon } from '../components/Icon'
 
 const GOLD  = '#c9900a'
 const GREEN = '#1a6b44'
@@ -9,7 +10,7 @@ export default function SplashScreen() {
       <View style={s.card}>
         {/* Header */}
         <View style={s.header}>
-          <Text style={s.flag}>⛳</Text>
+          <View style={s.flag}><Icon name="flag" size={18} color="#fff" strokeWidth={2} /></View>
           <Text style={s.gogopar}>GogoPar</Text>
           <Text style={s.scoreLabel}>S C O R E</Text>
         </View>

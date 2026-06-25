@@ -10,6 +10,7 @@ export type IconName =
   | 'chevronDown' | 'chevronRight' | 'chevronLeft' | 'check'
   | 'plus' | 'minus' | 'camera' | 'trophy' | 'target' | 'trend'
   | 'coin' | 'edit' | 'link' | 'bolt' | 'chart' | 'money' | 'logout'
+  | 'medal' | 'mail' | 'phone' | 'versus' | 'flame' | 'star' | 'trendDown'
   // 스코어 표기 (홀별 점수 라벨)
   | 'birdie' | 'par' | 'bogey' | 'double' | 'eagle'
 
@@ -136,6 +137,36 @@ function paths(name: IconName, p: any) {
       return <>
         <Path d="M14 5 H6 a1 1 0 0 0 -1 1 V18 a1 1 0 0 0 1 1 H14" {...p} />
         <Path d="M11 12 H20 M16.5 8.5 L20 12 L16.5 15.5" {...p} />
+      </>
+    case 'medal':
+      return <>
+        <Path d="M8.5 3.5 L11 9 M15.5 3.5 L13 9" {...p} />
+        <Circle cx={12} cy={14.5} r={5} {...p} />
+        <Path d="M12 12 L12.9 13.7 L14.7 14 L13.4 15.3 L13.7 17.1 L12 16.2 L10.3 17.1 L10.6 15.3 L9.3 14 L11.1 13.7 Z" {...p} strokeWidth={1.2} />
+      </>
+    case 'mail':
+      return <>
+        <Rect x={3.5} y={5.5} width={17} height={13} rx={2} {...p} />
+        <Path d="M4.5 7 L12 12.5 L19.5 7" {...p} />
+      </>
+    case 'phone':
+      return <>
+        <Rect x={7} y={3.5} width={10} height={17} rx={2.5} {...p} />
+        <Path d="M10.5 17.5 H13.5" {...p} />
+      </>
+    case 'versus':
+      return <>
+        <Path d="M4 5 L7 5 L10.5 14 M9 10.5 L12 5" {...p} />
+        <Path d="M14 19 L20 5 M20 19 L17 12" {...p} />
+      </>
+    case 'flame':
+      return <Path d="M12 3 C13 7 17 8 17 13 a5 5 0 0 1 -10 0 c0 -2 1 -3 2 -4 c0.5 1.5 1.5 2 2.5 2 C13.5 9 11 6 12 3 Z" {...p} />
+    case 'star':
+      return <Path d="M12 3.5 L14.4 9 L20 9.6 L15.8 13.4 L17 19 L12 16 L7 19 L8.2 13.4 L4 9.6 L9.6 9 Z" {...p} />
+    case 'trendDown':
+      return <>
+        <Polyline points="4,7.5 9.5,13 13,10 20,17.5" {...p} />
+        <Path d="M15.5 17.5 H20 V13" {...p} />
       </>
     // ── 스코어 표기 ──
     case 'eagle':

@@ -13,6 +13,8 @@ import { supabase } from '../lib/supabase'
 import { C } from '../theme'
 import { UserAvatarBtn } from '../components/UserAvatar'
 import { AppHeader } from '../components/AppHeader'
+import { EmojiIcon } from '../components/EmojiIcon'
+import { Icon } from '../components/Icon'
 import type { RootStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
@@ -229,7 +231,10 @@ export default function HomeScreen() {
           {/* 핸디캡 추이 */}
           {handicapTrend.length >= 2 && (
             <View style={s.card}>
-              <Text style={s.cardTitle}>📈 핸디캡 추이 (5경기 슬라이딩)</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 14 }}>
+                <Icon name="trend" size={16} color={C.green} />
+                <Text style={[s.cardTitle, { marginBottom: 0 }]}>핸디캡 추이 (5경기 슬라이딩)</Text>
+              </View>
               <View style={s.trendWrap}>
                 {handicapTrend.map((h, i) => {
                   const min = Math.min(...handicapTrend)
@@ -254,7 +259,10 @@ export default function HomeScreen() {
           {myEntries.length > 0 && myName && (
             <View style={s.card}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <Text style={s.cardTitle}>🎖️ 클럽 신기록</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                  <Icon name="medal" size={17} color={C.green} />
+                  <Text style={[s.cardTitle, { marginBottom: 0 }]}>클럽 신기록</Text>
+                </View>
                 {ginnessRecords.length > 0 && (
                   <View style={s.recordCountBadge}>
                     <Text style={s.recordCountText}>{ginnessRecords.length}개 보유</Text>
@@ -264,15 +272,15 @@ export default function HomeScreen() {
 
               {ginnessRecords.length === 0 ? (
                 <View style={s.noRecordBox}>
-                  <Text style={{ fontSize: 36, marginBottom: 10 }}>🏆</Text>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: C.muted }}>아직 보유한 클럽 신기록이 없어요</Text>
+                  <Icon name="trophy" size={34} color={C.muted} strokeWidth={1.5} />
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: C.muted, marginTop: 10 }}>아직 보유한 클럽 신기록이 없어요</Text>
                   <Text style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>기록을 세워보세요!</Text>
                 </View>
               ) : (
                 ginnessRecords.map((rec, i) => (
                   <View key={i} style={[s.ginnessRow, i === 0 && { borderTopWidth: 0 }]}>
                     <View style={s.ginnessIconWrap}>
-                      <Text style={{ fontSize: 20 }}>{rec.icon}</Text>
+                      <EmojiIcon char={rec.icon} size={20} color={C.gold} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={s.ginnessTitle}>{rec.title}</Text>
@@ -286,7 +294,8 @@ export default function HomeScreen() {
               )}
 
               <TouchableOpacity style={s.h2hBtn} onPress={() => setH2hPlayer(myName)}>
-                <Text style={s.h2hBtnText}>⚔️ 상대 전적 보기 →</Text>
+                <Icon name="versus" size={15} color={C.green} />
+                <Text style={s.h2hBtnText}>상대 전적 보기 →</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -294,8 +303,8 @@ export default function HomeScreen() {
           {/* 클럽 없음 안내 */}
           {!club && !loading && (
             <View style={s.noClubCard}>
-              <Text style={{ fontSize: 40, marginBottom: 12 }}>⛳</Text>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: C.text, marginBottom: 6 }}>클럽에 소속되어 있지 않아요</Text>
+              <Icon name="flag" size={38} color={C.green} strokeWidth={1.6} />
+              <Text style={{ fontSize: 16, fontWeight: '700', color: C.text, marginBottom: 6, marginTop: 12 }}>클럽에 소속되어 있지 않아요</Text>
               <Text style={{ fontSize: 13, color: C.muted, textAlign: 'center', lineHeight: 20 }}>
                 프로필에서 클럽을 만들거나{'\n'}초대 링크로 참여해보세요
               </Text>
@@ -305,7 +314,10 @@ export default function HomeScreen() {
           {/* 최근 라운드 */}
           {recent3.length > 0 && (
             <View style={s.card}>
-              <Text style={s.cardTitle}>📋 최근 라운드</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 14 }}>
+                <Icon name="list" size={16} color={C.green} />
+                <Text style={[s.cardTitle, { marginBottom: 0 }]}>최근 라운드</Text>
+              </View>
               {recent3.map((r) => {
                 const myP = myName ? r.players.find((p) => p.name === myName) : null
                 const myScore = myP ? playerTotal(myP.strokes) : null
@@ -318,7 +330,7 @@ export default function HomeScreen() {
                   >
                     <View style={{ flex: 1 }}>
                       <Text style={s.recentCourse}>{r.courseName}</Text>
-                      <Text style={s.recentDate}>{r.date}  👥 {r.players.length}명</Text>
+                      <Text style={s.recentDate}>{r.date} · {r.players.length}명</Text>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
                       {myScore !== null ? (
@@ -341,8 +353,8 @@ export default function HomeScreen() {
           {/* 기록 없음 */}
           {club && !loading && rounds.length === 0 && (
             <View style={s.emptyCard}>
-              <Text style={{ fontSize: 36, marginBottom: 10 }}>🏌️</Text>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: C.text }}>아직 기록이 없어요</Text>
+              <Icon name="flag" size={34} color={C.green} strokeWidth={1.6} />
+              <Text style={{ fontSize: 15, fontWeight: '700', color: C.text, marginTop: 10 }}>아직 기록이 없어요</Text>
               <Text style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>첫 라운드를 기록해보세요!</Text>
             </View>
           )}
@@ -402,7 +414,7 @@ function HeadToHeadModal({ player, rounds, handicaps: _handicaps, onClose, basis
       <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => { if (showDropdown) setShowDropdown(false) }}>
           <View style={[s.modalHeader, { zIndex: 10 }]}>
-            <Text style={[s.modalTitle, { fontSize: 14 }]}>⚔️ 역대 전적 (핸디 {myHandicap > 0 ? '+' : ''}{myHandicap})</Text>
+            <Text style={[s.modalTitle, { fontSize: 14 }]}>역대 전적 (핸디 {myHandicap > 0 ? '+' : ''}{myHandicap})</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <View>
                 <TouchableOpacity
@@ -533,7 +545,7 @@ function PersonalDetailModal({ type, myName, rounds, handicaps, myRecords, winCo
         <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
           <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
             <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>🏅 보유 신기록</Text>
+              <Text style={s.modalTitle}>보유 신기록</Text>
               <TouchableOpacity style={s.closeBtn} onPress={onClose}><Text style={s.closeBtnText}>닫기</Text></TouchableOpacity>
             </View>
             <ScrollView>
@@ -542,7 +554,7 @@ function PersonalDetailModal({ type, myName, rounds, handicaps, myRecords, winCo
               ) : myRecords.map((rec, i) => (
                 <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border }}>
                   <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ fontSize: 18 }}>🏅</Text>
+                    <Icon name="medal" size={18} color={C.green} />
                   </View>
                   <Text style={{ fontSize: 14, fontWeight: '600', color: C.text }}>{rec}</Text>
                 </View>
