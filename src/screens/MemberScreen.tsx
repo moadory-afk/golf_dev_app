@@ -136,7 +136,7 @@ export default function MemberScreen() {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={C.green} />}
       >
         <View style={m.countRow}>
-          <Text style={m.countText}>👥 전체 {members.length}명</Text>
+          <Text style={m.countText}>전체 {members.length}명</Text>
         </View>
         {errorMsg && (
           <View style={m.errorBox}>

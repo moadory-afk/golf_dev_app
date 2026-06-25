@@ -5,6 +5,7 @@ import {
 } from 'react-native'
 import { createClub, joinClub, type ClubInfo } from '../lib/store'
 import { C } from '../theme'
+import { Icon } from '../components/Icon'
 
 interface Props {
   onComplete: (club: ClubInfo) => void
@@ -47,7 +48,7 @@ export default function ClubSetupScreen({ onComplete }: Props) {
     <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={s.header}>
-          <Text style={s.logo}>⛳</Text>
+          <View style={s.logo}><Icon name="flag" size={50} color={C.green} strokeWidth={1.6} /></View>
           <Text style={s.title}>클럽 설정</Text>
           <Text style={s.sub}>클럽을 만들거나 초대코드로 참여하세요</Text>
         </View>

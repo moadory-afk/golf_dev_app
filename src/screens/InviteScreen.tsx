@@ -7,6 +7,7 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { joinClub, getClubByInviteCode, ensureProfile } from '../lib/store'
 import { C } from '../theme'
+import { Icon } from '../components/Icon'
 
 function nameToEmail(name: string): string {
   const hex = Array.from(name.trim())
@@ -98,7 +99,7 @@ export default function InviteScreen({ joinCode, onJoined, onDismiss }: Props) {
 
         {/* 초대 카드 */}
         <View style={s.inviteCard}>
-          <Text style={s.golf}>⛳</Text>
+          <View style={s.golf}><Icon name="flag" size={46} color={C.green} strokeWidth={1.6} /></View>
           {loadingClub ? (
             <ActivityIndicator color={C.green} style={{ marginVertical: 12 }} />
           ) : club ? (

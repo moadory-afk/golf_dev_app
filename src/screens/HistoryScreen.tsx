@@ -13,6 +13,7 @@ import { getRounds, getRound, playerTotal, totalPar, computeHandicaps, shortName
 import { useClub } from '../lib/ClubContext'
 import { useAsync } from '../lib/useAsync'
 import { C } from '../theme'
+import { EmojiIcon } from '../components/EmojiIcon'
 import type { RootStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
@@ -363,17 +364,20 @@ function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicap
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
                 {bestPlayer && (
                   <View style={[s.statChip, { backgroundColor: '#fffbe8' }]}>
-                    <Text style={s.statChipText}>🏆 {shortName(bestPlayer.name)} <Text style={{ color: C.gold }}>{best}</Text></Text>
+                    <EmojiIcon char="🏆" size={12} color={C.gold} />
+                    <Text style={s.statChipText}>{shortName(bestPlayer.name)} <Text style={{ color: C.gold }}>{best}</Text></Text>
                   </View>
                 )}
                 {winner && (
                   <View style={[s.statChip, { backgroundColor: C.greenLight }]}>
-                    <Text style={s.statChipText}>🥇 {shortName(winner.name)} <Text style={{ color: C.green }}>{diffText(winner.netVsPar)}</Text></Text>
+                    <EmojiIcon char="🥇" size={12} />
+                    <Text style={s.statChipText}>{shortName(winner.name)} <Text style={{ color: C.green }}>{diffText(winner.netVsPar)}</Text></Text>
                   </View>
                 )}
                 {runnerUp && (
                   <View style={[s.statChip, { backgroundColor: '#f4f6f8' }]}>
-                    <Text style={s.statChipText}>🥈 {shortName(runnerUp.name)} <Text style={{ color: C.muted }}>{diffText(runnerUp.netVsPar)}</Text></Text>
+                    <EmojiIcon char="🥈" size={12} />
+                    <Text style={s.statChipText}>{shortName(runnerUp.name)} <Text style={{ color: C.muted }}>{diffText(runnerUp.netVsPar)}</Text></Text>
                   </View>
                 )}
               </View>
@@ -385,19 +389,22 @@ function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicap
                 {newRecords.length > 0 ? (
                   newRecords.map((rec, i) => (
                     <View key={i} style={s.recordTag}>
-                      <Text style={s.recordTagText}>{rec.icon} {rec.text}</Text>
+                      <EmojiIcon char={rec.icon} size={12} color="#8a6000" />
+                      <Text style={s.recordTagText}>{rec.text}</Text>
                     </View>
                   ))
                 ) : (
                   <>
                     {birdieTop && birdieTop.count > 0 && (
                       <View style={[s.statChip, { backgroundColor: '#eff6ff' }]}>
-                        <Text style={s.statChipText}>🐦 {shortName(birdieTop.name)} <Text style={{ color: C.info }}>{birdieTop.count}개</Text></Text>
+                        <EmojiIcon char="🐦" size={12} color={C.info} />
+                        <Text style={s.statChipText}>{shortName(birdieTop.name)} <Text style={{ color: C.info }}>{birdieTop.count}개</Text></Text>
                       </View>
                     )}
                     {parTop && parTop.count > 0 && (
                       <View style={[s.statChip, { backgroundColor: '#f0f5f2' }]}>
-                        <Text style={s.statChipText}>⛳ {shortName(parTop.name)} <Text style={{ color: C.green }}>{parTop.count}개</Text></Text>
+                        <EmojiIcon char="⛳" size={12} color={C.green} />
+                        <Text style={s.statChipText}>{shortName(parTop.name)} <Text style={{ color: C.green }}>{parTop.count}개</Text></Text>
                       </View>
                     )}
                   </>
@@ -517,7 +524,8 @@ function ByPlayer({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handica
                   <Text style={s.cardBold}>{shortName(p.name)}</Text>
                   {(playerBadges.get(p.name) ?? []).map((b) => (
                     <View key={b.label} style={s.badge}>
-                      <Text style={s.badgeText}>{b.icon} {b.label}</Text>
+                      <EmojiIcon char={b.icon} size={11} color={C.green} />
+                      <Text style={s.badgeText}>{b.label}</Text>
                     </View>
                   ))}
                 </View>
@@ -539,7 +547,7 @@ function ByPlayer({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handica
               ))}
             </View>
             <TouchableOpacity style={s.smallBtn} onPress={() => setGraphPlayer(p.name)}>
-              <Text style={s.smallBtnText}>📈 추이</Text>
+              <Text style={s.smallBtnText}>추이</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -639,13 +647,13 @@ function Club({ rounds }: { rounds: SavedRound[] }) {
           </View>
           {/* 클럽 평균 */}
           <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => setShowChart('avg')}>
-            <Text style={{ fontSize: 22, fontWeight: '700', color: C.green }}>{clubAvg} <Text style={{ fontSize: 14 }}>📈</Text></Text>
+            <Text style={{ fontSize: 22, fontWeight: '700', color: C.green }}>{clubAvg}</Text>
             <Text style={[s.muted, { fontSize: 11, textAlign: 'center' }]}>클럽 평균</Text>
           </TouchableOpacity>
           {/* 최저타 */}
           {bestRecord && (
             <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => setShowChart('best')}>
-              <Text style={{ fontSize: 22, fontWeight: '700', color: C.text }}>{bestRecord.total} <Text style={{ fontSize: 14 }}>📈</Text></Text>
+              <Text style={{ fontSize: 22, fontWeight: '700', color: C.text }}>{bestRecord.total}</Text>
               <Text style={[s.muted, { fontSize: 11, textAlign: 'center' }]}>최저타</Text>
             </TouchableOpacity>
           )}
@@ -692,10 +700,10 @@ function Club({ rounds }: { rounds: SavedRound[] }) {
         </View>
         {stats.map((stat, i) => {
           const medalBg = ['#fffbe8', '#f4f6f8', '#fdf5f0']
-          const rankLabel = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`
+          const isMedal = i < 3
           return (
             <View key={stat.name} style={[s.tableRow, { alignItems: 'center' }, i < 3 && { backgroundColor: medalBg[i], borderRadius: 8, marginBottom: 2 }]}>
-              <Text style={[s.td, { flex: 0.6, fontSize: i < 3 ? 16 : 13, textAlign: 'center' }]}>{rankLabel}</Text>
+              <View style={{ flex: 0.6, alignItems: 'center' }}>{isMedal ? <EmojiIcon char={['🥇','🥈','🥉'][i]} size={17} /> : <Text style={[s.td, { fontSize: 13 }]}>{i + 1}</Text>}</View>
               <Text style={[s.td, { flex: 2, fontWeight: i < 3 ? '700' : '400' }]}>{shortName(stat.name)}</Text>
               <Text style={[s.td, { flex: 1, textAlign: 'center' }]}>{stat.rounds}</Text>
               <Text style={[s.td, { flex: 1.2, textAlign: 'center', fontWeight: '700', color: i === 0 ? C.gold : C.text }]}>{stat.avg}</Text>
@@ -801,10 +809,10 @@ const s = StyleSheet.create({
   bold: { fontWeight: '700', color: C.text },
   muted: { fontSize: 13, color: C.muted },
   // 통계 칩
-  statChip: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 12 },
+  statChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 12 },
   statChipText: { fontSize: 12, fontWeight: '500', color: C.text },
   // 신기록 태그
-  recordTag: { backgroundColor: '#fffce8', borderWidth: 1, borderColor: '#f0d060', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 },
+  recordTag: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#fffce8', borderWidth: 1, borderColor: '#f0d060', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 },
   recordTagText: { fontSize: 12, fontWeight: '700', color: '#8a6000' },
   inProgressBadge: { backgroundColor: C.green, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 },
   inProgressText: { fontSize: 11, fontWeight: '700', color: '#fff' },
@@ -816,7 +824,7 @@ const s = StyleSheet.create({
   avatarText: { fontSize: 16, fontWeight: '800', color: C.green },
   pill: { backgroundColor: C.greenLight, borderRadius: 20, paddingHorizontal: 11, paddingVertical: 4 },
   pillText: { fontSize: 13, fontWeight: '700', color: C.green },
-  badge: { backgroundColor: C.greenLight, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: C.greenLight, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
   badgeText: { fontSize: 10, fontWeight: '700', color: C.green },
   smallBtn: { backgroundColor: C.green, borderRadius: 20, paddingVertical: 6, paddingHorizontal: 14 },
   smallBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },

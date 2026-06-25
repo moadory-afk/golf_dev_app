@@ -8,6 +8,7 @@ import { calcSettlement, holeNetForPlayer, fmtKRW } from '../features/settlement
 import { useAsync } from '../lib/useAsync'
 import { useClub } from '../lib/ClubContext'
 import { C } from '../theme'
+import { Icon } from '../components/Icon'
 import AppTabBar from '../components/AppTabBar'
 import type { RootStackProps } from '../navigation/types'
 
@@ -155,9 +156,6 @@ function computeAwardResult(
 function diffText(d: number) { return d > 0 ? `+${d}` : `${d}` }
 
 function rankMedal(i: number) {
-  if (i === 0) return '🥇'
-  if (i === 1) return '🥈'
-  if (i === 2) return '🥉'
   return `${i + 1}`
 }
 
@@ -385,7 +383,7 @@ export default function RoundDetailScreen() {
                 <Text style={s.rankName}>{shortName(r.name)}</Text>
                 <Text style={s.rankScore}>{r.total}</Text>
                 <Text style={[s.rankDiff, { color: displayDiff <= 0 ? C.green : C.warn }]}>{diffText(displayDiff)}</Text>
-                <Text style={s.rankBirdie}>{r.birdie > 0 ? `🐦${r.birdie}` : ''}</Text>
+                <Text style={s.rankBirdie}>{r.birdie > 0 ? `버디 ${r.birdie}` : ''}</Text>
               </View>
             )
           })}
@@ -453,7 +451,7 @@ export default function RoundDetailScreen() {
               <Text style={s.rankScore}>{r.total}</Text>
               <Text style={[s.rankDiff, { flex: 1, color: (r.shinScore - par) <= 0 ? C.green : C.warn }]}>{r.shinScore}</Text>
               <Text style={[s.rankDiff, { flex: 0.9, color: r.diff < 0 ? C.info : r.diff > 0 ? C.warn : C.muted }]}>{diffText(r.diff)}</Text>
-              <Text style={s.rankBirdie}>{r.birdie > 0 ? `🐦${r.birdie}` : ''}</Text>
+              <Text style={s.rankBirdie}>{r.birdie > 0 ? `버디 ${r.birdie}` : ''}</Text>
             </View>
           ))}
         </View>
@@ -560,7 +558,10 @@ export default function RoundDetailScreen() {
           .filter((r): r is AwardResult => r !== null)
         const clubAwardCard = (
           <View style={s.card}>
-            <Text style={s.cardTitle}>🏆 클럽 시상</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+              <Icon name="trophy" size={16} color={C.text} />
+              <Text style={[s.cardTitle, { marginBottom: 0 }]}>클럽 시상</Text>
+            </View>
             {awardResults.length === 0
               ? <Text style={s.muted}>설정된 시상 항목이 없습니다</Text>
               : awardResults.map((award, i) => (
@@ -668,7 +669,7 @@ export default function RoundDetailScreen() {
                               {net > 0 ? `+${fmtKRW(net)}` : net < 0 ? `-${fmtKRW(net)}` : '0'}
                             </Text>
                             {h.birdies.includes(name) && (
-                              <Text style={{ fontSize: 10, color: C.info }}>{h.strokes[name] <= h.par - 2 ? '🦅' : '🐦'}</Text>
+                              <Text style={{ fontSize: 10, color: C.info }}>{h.strokes[name] <= h.par - 2 ? 'E' : 'B'}</Text>
                             )}
                           </View>
                         ))}

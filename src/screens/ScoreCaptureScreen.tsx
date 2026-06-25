@@ -160,7 +160,7 @@ export default function ScoreCaptureScreen() {
           onPress={() => setCardOpen((v) => !v)}
           activeOpacity={0.7}
         >
-          <Text style={[s.cardTitle, { marginBottom: 0 }]}>🏆 정산 설정</Text>
+          <Text style={[s.cardTitle, { marginBottom: 0 }]}>정산 설정</Text>
           {!cardOpen && (
             <View style={s.statusWrap}>
               <View style={[s.statusDot, settlementOn ? s.dotOn : s.dotOff]} />

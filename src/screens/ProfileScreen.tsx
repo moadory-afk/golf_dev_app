@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabase'
 import { createClub, updateClubSettings, deleteClub, ensureProfile, type ClubInfo } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
 import { C } from '../theme'
+import { EmojiIcon } from '../components/EmojiIcon'
 import type { User } from '@supabase/supabase-js'
 
 // 공유 링크는 남에게 보내는 링크이므로, 앱이 로컬(localhost/Tailscale)에서 실행 중이어도
@@ -227,7 +228,7 @@ function ClubGridCard({
               {isActive && <View style={g.activeBadge}><Text style={{ fontSize: 10, color: '#fff', fontWeight: '700' }}>활성</Text></View>}
               {isAdmin && isActive && (
                 <TouchableOpacity style={g.editIcon} onPress={() => flipTo('back')}>
-                  <Text style={{ fontSize: 13 }}>✏️</Text>
+                  <EmojiIcon char="✏️" size={13} color={C.muted} />
                 </TouchableOpacity>
               )}
             </View>
@@ -247,7 +248,7 @@ function ClubGridCard({
             </View>
             {isActive && (
               <TouchableOpacity style={[g.shareBtn, { backgroundColor: color }]} onPress={onShare}>
-                <Text style={g.shareBtnText}>🔗 초대</Text>
+                <Text style={g.shareBtnText}>초대</Text>
               </TouchableOpacity>
             )}
           </TouchableOpacity>
@@ -604,7 +605,7 @@ export default function ProfileScreen() {
         <Modal transparent animationType="fade" onRequestClose={() => setShareModal(null)}>
           <TouchableOpacity style={p.overlay} activeOpacity={1} onPress={() => setShareModal(null)}>
             <TouchableOpacity style={p.shareCard} activeOpacity={1} onPress={() => {}}>
-              <Text style={p.shareTitle}>📨 초대 메시지</Text>
+              <Text style={p.shareTitle}>초대 메시지</Text>
               <Text style={p.shareDesc}>아래 메시지를 복사해서 카카오톡, 문자로 보내세요</Text>
               <View style={p.shareBox}>
                 <Text style={p.shareText} selectable>{shareModal.message}</Text>
@@ -613,7 +614,7 @@ export default function ProfileScreen() {
                 await Clipboard.setStringAsync(shareModal.message)
                 Alert.alert('복사 완료!')
               }}>
-                <Text style={p.copyBtnText}>📋 메시지 전체 복사</Text>
+                <Text style={p.copyBtnText}>메시지 전체 복사</Text>
               </TouchableOpacity>
 <TouchableOpacity style={{ paddingVertical: 8, alignItems: 'center' }} onPress={() => setShareModal(null)}>
                 <Text style={{ color: C.muted, fontSize: 14 }}>닫기</Text>
@@ -641,7 +642,7 @@ export default function ProfileScreen() {
               )}
             </View>
             <View style={p.avatarEditBadge}>
-              <Text style={{ fontSize: 10 }}>✏️</Text>
+              <EmojiIcon char="✏️" size={11} color={C.text} />
             </View>
           </TouchableOpacity>
 
@@ -676,7 +677,7 @@ export default function ProfileScreen() {
               <>
                 <Text style={p.profileName}>{userName}</Text>
                 <TouchableOpacity onPress={() => { setEditNameVal(userName); setEditingName(true) }}>
-                  <Text style={p.profileEditHint}>✏️ 이름 수정</Text>
+                  <Text style={p.profileEditHint}>이름 수정</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -755,7 +756,7 @@ export default function ProfileScreen() {
           </TouchableOpacity>
           <View style={p.menuDivider} />
           <TouchableOpacity style={p.menuRow} onPress={handleLogout}>
-            <Text style={p.menuIcon}>🚪</Text>
+            <View style={[p.menuIcon, { alignItems: 'center' }]}><EmojiIcon char="🚪" size={17} color={C.danger} /></View>
             <Text style={[p.menuText, { color: C.danger }]}>로그아웃</Text>
             <Text style={p.menuArrow}>›</Text>
           </TouchableOpacity>

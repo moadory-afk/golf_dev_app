@@ -15,6 +15,7 @@ import { useAsync } from '../lib/useAsync'
 import { useClub } from '../lib/ClubContext'
 import DateField, { todayLocal } from '../components/DateField'
 import { C } from '../theme'
+import { EmojiIcon } from '../components/EmojiIcon'
 import type { RootStackProps } from '../navigation/types'
 import { AWARD_CONFIG_KEY, AWARD_CATEGORIES, fillToCount, type AwardItemDef } from '../lib/awardConfig'
 
@@ -678,7 +679,7 @@ export default function RoundSetupScreen() {
               style={[s.modeBtn, inputMode === 'direct' && s.modeBtnOn]}
               onPress={() => setInputMode('direct')}
             >
-              <Text style={s.modeIcon}>✏️</Text>
+              <View style={s.modeIcon}><EmojiIcon char="✏️" size={16} color={C.green} /></View>
               <Text style={[s.modeBtnText, inputMode === 'direct' && s.modeBtnTextOn]}>직접 입력</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -697,7 +698,7 @@ export default function RoundSetupScreen() {
               onPress={handleStart}
               disabled={!getPars() || gamePlayers.length < 1}
             >
-              <Text style={s.startBtnText}>⛳ 입력 시작</Text>
+              <Text style={s.startBtnText}>입력 시작</Text>
             </TouchableOpacity>
           )}
 
@@ -784,7 +785,7 @@ export default function RoundSetupScreen() {
                   >
                     {saveBusy
                       ? <ActivityIndicator color="#fff" />
-                      : <Text style={s.startBtnText}>⚡ 바로 저장</Text>
+                      : <Text style={s.startBtnText}>바로 저장</Text>
                     }
                   </TouchableOpacity>
                   {/* 수정 필요 → ScoreEntry */}
@@ -804,7 +805,7 @@ export default function RoundSetupScreen() {
                     }}
                     disabled={saveBusy}
                   >
-                    <Text style={s.editBtnText}>✏️ 수정 필요</Text>
+                    <Text style={s.editBtnText}>수정 필요</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={{ marginTop: 8, alignItems: 'center' }}

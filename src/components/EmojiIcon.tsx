@@ -12,7 +12,7 @@ import { Icon, type IconName } from './Icon'
 const MAP: Record<string, IconName> = {
   '🏆': 'trophy', '🏅': 'medal', '🎖️': 'medal', '🎖': 'medal',
   '🥇': 'medal', '🥈': 'medal', '🥉': 'medal',
-  '🐦': 'birdie', '🦅': 'eagle',
+  '🐦': 'birdie', '🐦🐦': 'birdie', '🦅': 'eagle',
   '⛳': 'flag', '🏌️': 'flag', '🏌': 'flag',
   '📈': 'trend', '📉': 'trendDown', '📊': 'chart',
   '📋': 'list', '👥': 'users', '👤': 'user',

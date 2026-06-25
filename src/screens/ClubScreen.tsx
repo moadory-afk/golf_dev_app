@@ -12,6 +12,8 @@ import { useAsync } from '../lib/useAsync'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
 import { AppHeader } from '../components/AppHeader'
+import { Icon } from '../components/Icon'
+import { EmojiIcon } from '../components/EmojiIcon'
 import type { RootStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
@@ -247,8 +249,8 @@ export default function ClubScreen() {
           {/* 클럽 없음 */}
           {!club && !loading && (
             <View style={s.emptyCard}>
-              <Text style={{ fontSize: 40, marginBottom: 12 }}>⛳</Text>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: C.text, marginBottom: 6 }}>소속 클럽이 없어요</Text>
+              <Icon name="flag" size={38} color={C.green} strokeWidth={1.6} />
+              <Text style={{ fontSize: 16, fontWeight: '700', color: C.text, marginBottom: 6, marginTop: 12 }}>소속 클럽이 없어요</Text>
               <Text style={{ fontSize: 13, color: C.muted, textAlign: 'center', lineHeight: 20 }}>
                 프로필에서 클럽을 만들거나{'\n'}초대 링크로 참여해보세요
               </Text>
@@ -261,8 +263,8 @@ export default function ClubScreen() {
           {/* 기록 없음 */}
           {club && !loading && rounds.length === 0 && (
             <View style={s.emptyCard}>
-              <Text style={{ fontSize: 36, marginBottom: 10 }}>🏌️</Text>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: C.text }}>아직 클럽 기록이 없어요</Text>
+              <Icon name="flag" size={34} color={C.green} strokeWidth={1.6} />
+              <Text style={{ fontSize: 15, fontWeight: '700', color: C.text, marginTop: 10 }}>아직 클럽 기록이 없어요</Text>
             </View>
           )}
 
@@ -270,14 +272,14 @@ export default function ClubScreen() {
           {handicapRanking.length > 0 && (
             <TouchableOpacity style={s.card} onPress={() => setRankingType('lowestHandicap')} activeOpacity={0.85}>
               <View style={s.cardTitleRow}>
-                <Text style={s.cardTitle}>📊 핸디캡 랭킹 (최근 {handicapBasis}경기)</Text>
+                <Text style={s.cardTitle}>핸디캡 랭킹 (최근 {handicapBasis}경기)</Text>
                 <Text style={s.more}>전체보기 ›</Text>
               </View>
               {handicapRanking.slice(0, 5).map(({ name, handicap, avgScore }, i) => (
                 <View key={name} style={[s.rankRow, i < 3 && { backgroundColor: MEDAL_BG[i], borderRadius: 10 }]}>
-                  <Text style={[s.rankNum, i < 3 && { fontSize: 18 }]}>
-                    {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
-                  </Text>
+                  <View style={[s.rankNum, { alignItems: 'center', justifyContent: 'center' }]}>
+                    {i < 3 ? <EmojiIcon char={['🥇','🥈','🥉'][i]} size={17} /> : <Text style={s.rankNum}>{i + 1}</Text>}
+                  </View>
                   <Text style={[s.rankName, myName && name === myName && { color: C.green, fontWeight: '700' }]}>
                     {shortName(name)}{myName && name === myName ? ' (나)' : ''}
                   </Text>
@@ -292,11 +294,14 @@ export default function ClubScreen() {
           {/* 명예의 전당 */}
           {rounds.length > 0 && (
             <View style={s.card}>
-              <Text style={s.cardTitle}>🏆 명예의 전당</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+                <Icon name="trophy" size={16} color={C.text} />
+                <Text style={[s.cardTitle, { marginBottom: 0 }]}>명예의 전당</Text>
+              </View>
               {highlights.map(({ icon, label, value, type }) => (
                 <TouchableOpacity key={label} style={s.hallRow} onPress={() => setRankingType(type)}>
                   <View style={s.hallIconWrap}>
-                    <Text style={{ fontSize: 15 }}>{icon}</Text>
+                    <EmojiIcon char={icon} size={15} color={C.green} />
                   </View>
                   <Text style={s.hallLabel}>{label}</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -311,7 +316,7 @@ export default function ClubScreen() {
           {/* 최근 클럽 라운드 */}
           {recent3.length > 0 && (
             <View style={s.card}>
-              <Text style={s.cardTitle}>📅 최근 클럽 라운드</Text>
+              <Text style={s.cardTitle}>최근 클럽 라운드</Text>
               {recent3.map((r) => {
                 const best = Math.min(...r.players.map((p) => playerTotal(p.strokes)))
                 const winner = getWinner(r, handicaps)
@@ -319,11 +324,11 @@ export default function ClubScreen() {
                   <TouchableOpacity key={r.id} style={s.roundRow} onPress={() => nav.navigate('RoundDetail', { id: r.id })}>
                     <View style={s.roundLeft}>
                       <Text style={s.roundCourse}>{r.courseName}</Text>
-                      <Text style={s.roundMeta}>{r.date}  👥 {r.players.length}명</Text>
+                      <Text style={s.roundMeta}>{r.date} · {r.players.length}명</Text>
                     </View>
                     <View style={{ alignItems: 'flex-end', gap: 3 }}>
-                      <Text style={s.roundStat}>🏆 <Text style={{ color: C.text, fontWeight: '700' }}>{best}타</Text></Text>
-                      {winner && <Text style={s.roundStat}>🥇 <Text style={{ color: C.green, fontWeight: '700' }}>{shortName(winner)}</Text></Text>}
+                      <Text style={s.roundStat}>최저 <Text style={{ color: C.text, fontWeight: '700' }}>{best}타</Text></Text>
+                      {winner && <Text style={s.roundStat}>우승 <Text style={{ color: C.green, fontWeight: '700' }}>{shortName(winner)}</Text></Text>}
                     </View>
                   </TouchableOpacity>
                 )
@@ -362,9 +367,9 @@ function RankingModal({ config, onClose }: {
               <Text style={[s.muted, { padding: 16, textAlign: 'center' }]}>데이터 없음</Text>
             ) : config.rows.map((row, i) => (
               <View key={i} style={[s.tableRow, i < 3 && { backgroundColor: MEDAL_BG[i], borderRadius: 8, marginBottom: 2 }]}>
-                <Text style={[s.td, { flex: 0.6, fontSize: i < 3 ? 17 : 13, textAlign: 'center' }]}>
-                  {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
-                </Text>
+                <View style={{ flex: 0.6, alignItems: 'center' }}>
+                  {i < 3 ? <EmojiIcon char={['🥇','🥈','🥉'][i]} size={17} /> : <Text style={[s.td, { fontSize: 13 }]}>{i + 1}</Text>}
+                </View>
                 <View style={{ flex: 2.5 }}>
                   <Text style={[s.td, { fontWeight: i < 3 ? '700' : '500' }]}>{row.name}</Text>
                   {row.sub && <Text style={{ fontSize: 11, color: C.muted }}>{row.sub}</Text>}
