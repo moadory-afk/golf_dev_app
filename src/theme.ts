@@ -13,7 +13,7 @@
 
 export type AppVersion = 'legacy' | 'turf'
 
-export const APP_VERSION: AppVersion = 'truf'
+export const APP_VERSION: AppVersion = 'legacy'
 
 // 두 팔레트는 키 구성이 완전히 동일합니다 (드롭인 호환).
 type Palette = {
