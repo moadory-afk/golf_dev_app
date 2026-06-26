@@ -299,6 +299,7 @@ export default function ProfileScreen() {
   // 프로필 편집 상태
   const [editingName, setEditingName] = useState(false)
   const [editNameVal, setEditNameVal] = useState('')
+  const [profileName, setProfileName] = useState('')
   const [savingName, setSavingName] = useState(false)
   const [showAvatarOptions, setShowAvatarOptions] = useState(false)
   const [showProfileIconPicker, setShowProfileIconPicker] = useState(false)
@@ -323,16 +324,28 @@ export default function ProfileScreen() {
   const [createLoading, setCreateLoading] = useState(false)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       setUser(data.user)
       setProfileIcon(data.user?.user_metadata?.icon ?? '')
       setAvatarUrl(data.user?.user_metadata?.avatarUrl ?? '')
-      setEditNameVal(data.user?.user_metadata?.name ?? '')
-      setClubAvatars(data.user?.user_metadata?.clubAvatars ?? {})
+     const metadataName = data.user?.user_metadata?.name ?? ''
+let fallbackName = ''
+if (data.user && !metadataName) {
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('name')
+    .eq('id', data.user.id)
+    .maybeSingle()
+  fallbackName = profile?.name ?? ''
+}
+const displayName = metadataName || fallbackName
+setProfileName(displayName)
+setEditNameVal(displayName)
+setClubAvatars(data.user?.user_metadata?.clubAvatars ?? {})
     })
   }, [])
 
-  const userName = user?.user_metadata?.name ?? user?.email ?? ''
+  const userName = profileName || user?.user_metadata?.name || user?.email || ''
   const userInitial = userName.slice(0, 1)
 
   // 사진 업로드 (source: 'camera' | 'gallery')
@@ -402,7 +415,9 @@ export default function ProfileScreen() {
       await ensureProfile(user!.id, editNameVal.trim())
       const { data } = await supabase.auth.getUser()
       setUser(data.user)
+      setProfileName(editNameVal.trim())
       setEditingName(false)
+      
     } catch { Alert.alert('오류', '이름 변경에 실패했습니다.') }
     finally { setSavingName(false) }
   }
