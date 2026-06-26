@@ -14,6 +14,7 @@ import { useClub } from '../lib/ClubContext'
 import { useAsync } from '../lib/useAsync'
 import { C } from '../theme'
 import { EmojiIcon } from '../components/EmojiIcon'
+import { Icon } from '../components/Icon'
 import type { RootStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
@@ -151,14 +152,7 @@ export default function HistoryScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <AppHeader
-        myName={myName}
-        rightExtra={activeClub ? (
-          <TouchableOpacity style={s.addBtn} onPress={() => nav.navigate('RoundSetup', {})}>
-            <Text style={s.addBtnText}>＋ 라운드 추가</Text>
-          </TouchableOpacity>
-        ) : null}
-      />
+      <AppHeader myName={myName} />
       <View style={s.tabs}>
         {(['byRound', 'byPlayer', 'club'] as Tab[]).map((t) => (
           <TouchableOpacity key={t} style={[s.tab, tab === t && s.tabActive]} onPress={() => setTab(t)}>
@@ -174,6 +168,7 @@ export default function HistoryScreen() {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} tintColor={C.green} />}
       >
         {tab === 'byRound' && <ByRound rounds={rounds} handicapBasis={handicapBasis} />}
+        {tab === 'byRound' && activeClub && <AddRoundButton />}
         {tab === 'byPlayer' && <ByPlayer rounds={rounds} handicapBasis={handicapBasis} />}
         {tab === 'club' && <Club rounds={rounds} />}
       </ScrollView>
@@ -182,6 +177,27 @@ export default function HistoryScreen() {
 }
 
 // ─── 라운딩별 ────────────────────────────────────────────────────────────────
+
+function AddRoundButton() {
+  const nav = useNavigation<Nav>()
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.82}
+      style={s.addRoundCard}
+      onPress={() => nav.navigate('RoundSetup', {})}
+    >
+      <View style={s.addRoundIcon}>
+        <Icon name="plus" size={18} color={C.green} strokeWidth={2.4} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={s.addRoundTitle}>라운드 추가</Text>
+        <Text style={s.addRoundSub}>새 스코어와 시상 기록을 남겨보세요</Text>
+      </View>
+      <Icon name="chevronRight" size={19} color={C.muted} />
+    </TouchableOpacity>
+  )
+}
 
 function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicapBasis?: number }) {
   const nav = useNavigation<Nav>()
@@ -791,8 +807,18 @@ function TrendModal({ title, data, onClose }: {
 const s = StyleSheet.create({
   appHeader: { backgroundColor: C.greenDark, paddingBottom: 18, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
   headerTitle: { color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
-  addBtn: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, paddingVertical: 4, paddingHorizontal: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
-  addBtnText: { color: 'rgba(255,255,255,0.92)', fontSize: 12, fontWeight: '600' },
+  addRoundCard: {
+    backgroundColor: C.card, borderRadius: 20, paddingVertical: 16, paddingHorizontal: 18,
+    marginTop: 2, marginBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderWidth: 1, borderColor: C.border,
+    shadowColor: '#1a6b44', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 3 }, elevation: 2,
+  },
+  addRoundIcon: {
+    width: 38, height: 38, borderRadius: 19, backgroundColor: C.greenLight,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  addRoundTitle: { color: C.text, fontSize: 15, fontWeight: '800' },
+  addRoundSub: { color: C.muted, fontSize: 12, fontWeight: '500', marginTop: 2 },
   profileBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' },
   profileInitial: { color: '#fff', fontSize: 16, fontWeight: '900' },
   tabs: { flexDirection: 'row', backgroundColor: C.greenLight, marginHorizontal: 12, marginVertical: 10, borderRadius: 50, padding: 4 },
