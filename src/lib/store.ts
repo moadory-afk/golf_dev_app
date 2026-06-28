@@ -26,6 +26,7 @@ export interface SavedRound {
   pars: number[]
   shinperioHoles: number[]
   players: PlayerScore[]
+  handicaps?: Record<string, number>
   photoData: string[]
   settlement?: SettlementConfig
   golfCourseId?: string
@@ -39,6 +40,7 @@ interface RoundRow {
   pars: number[]
   shinperio_holes: number[]
   players: PlayerScore[]
+  handicaps?: Record<string, number>
   photo_data?: string[]
   settlement?: SettlementConfig
   golf_course_id?: string
@@ -53,6 +55,7 @@ function fromRow(row: RoundRow): SavedRound {
     pars: row.pars,
     shinperioHoles: row.shinperio_holes,
     players: row.players,
+    handicaps: row.handicaps,
     photoData: row.photo_data ?? [],
     settlement: row.settlement,
     golfCourseId: row.golf_course_id,
@@ -68,7 +71,7 @@ async function getUser() {
 export async function getRounds(clubId: string): Promise<SavedRound[]> {
   const { data, error } = await supabase
     .from('rounds')
-    .select('id, date, course_name, pars, shinperio_holes, players, is_complete')
+    .select('id, date, course_name, pars, shinperio_holes, players, handicaps, is_complete')
     .eq('club_id', clubId)
     .order('date', { ascending: false })
   if (error) throw error
@@ -105,6 +108,39 @@ function mergePlayers(existing: PlayerScore[], incoming: PlayerScore[]): PlayerS
   return [...byName.values()]
 }
 
+async function getRoundClubId(id: string): Promise<string | undefined> {
+  const { data, error } = await supabase
+    .from('rounds')
+    .select('club_id')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  const row = data as { club_id?: string } | null
+  return row?.club_id
+}
+
+async function computeHandicapSnapshot(
+  clubId: string,
+  date: string,
+  players: PlayerScore[],
+  basis = 5,
+  excludeRoundId?: string
+): Promise<Record<string, number>> {
+  const { data, error } = await supabase
+    .from('rounds')
+    .select('id, date, course_name, pars, shinperio_holes, players, handicaps, is_complete')
+    .eq('club_id', clubId)
+    .lt('date', date)
+    .order('date', { ascending: true })
+  if (error) throw error
+
+  const priorRounds = ((data ?? []) as RoundRow[])
+    .filter((r) => r.id !== excludeRoundId)
+    .map(fromRow)
+  const names = players.map((p) => p.name)
+  return Object.fromEntries(names.map((name) => [name, handicapBefore(name, priorRounds, date, basis)]))
+}
+
 export async function saveRound(input: {
   courseName: string
   pars: number[]
@@ -118,6 +154,9 @@ export async function saveRound(input: {
   const user = await getUser()
   if (!user) throw new Error('로그인이 필요합니다.')
   const date = input.date ?? new Date().toISOString().slice(0, 10)
+  const handicaps = input.clubId
+    ? await computeHandicapSnapshot(input.clubId, date, input.players)
+    : {}
 
   // 중복 방지: 키 = 날짜 + 선수 + 홀별 스코어 (골프장/코스는 무시)
   // 같은 클럽·같은 날짜에 선수가 겹치는 라운드가 있으면 그 라운드에 병합한다.
@@ -133,8 +172,10 @@ export async function saveRound(input: {
     )
     if (existingRow) {
       const existing = fromRow(existingRow)
+      const players = mergePlayers(existing.players, input.players)
       const payload: Record<string, unknown> = {
-        players: mergePlayers(existing.players, input.players),
+        players,
+        handicaps: await computeHandicapSnapshot(input.clubId, date, players, 5, existing.id),
       }
       if (input.settlement) payload.settlement = input.settlement
       if (input.photoData && input.photoData.length > 0)
@@ -153,6 +194,7 @@ export async function saveRound(input: {
     pars: input.pars,
     shinperio_holes: selectShinperioHoles(12),
     players: input.players,
+    handicaps,
     photo_data: input.photoData ?? [],
   }
   if (input.clubId) payload.club_id = input.clubId
@@ -175,6 +217,9 @@ export async function createRoundDraft(input: {
   const user = await getUser()
   if (!user) throw new Error('로그인이 필요합니다.')
   const date = input.date ?? new Date().toISOString().slice(0, 10)
+  const handicaps = input.clubId
+    ? await computeHandicapSnapshot(input.clubId, date, input.players)
+    : {}
   const payload: Record<string, unknown> = {
     user_id: user.id,
     date,
@@ -182,6 +227,7 @@ export async function createRoundDraft(input: {
     pars: input.pars,
     shinperio_holes: selectShinperioHoles(12),
     players: input.players,
+    handicaps,
     photo_data: [],
   }
   if (input.clubId) payload.club_id = input.clubId
@@ -196,12 +242,16 @@ export async function updateRound(
   id: string,
   input: { courseName: string; pars: number[]; players: PlayerScore[]; date?: string; photoData?: string[]; settlement?: SettlementConfig; golfCourseId?: string }
 ): Promise<SavedRound> {
+  const current = await getRound(id)
+  const date = input.date ?? current?.date ?? new Date().toISOString().slice(0, 10)
   const payload: Record<string, unknown> = {
     course_name: input.courseName || '이름 없는 코스',
     pars: input.pars,
     players: input.players,
   }
   if (input.date) payload.date = input.date
+  const clubId = await getRoundClubId(id)
+  if (clubId) payload.handicaps = await computeHandicapSnapshot(clubId, date, input.players, 5, id)
   if (input.photoData && input.photoData.length > 0) payload.photo_data = input.photoData
   if (input.settlement !== undefined) payload.settlement = input.settlement
   if (input.golfCourseId) payload.golf_course_id = input.golfCourseId
@@ -514,6 +564,32 @@ export function computeHandicaps(rounds: SavedRound[], basis = 5): Map<string, n
   for (const [name, entries] of byPlayer) {
     const lastN = [...entries].sort((a, b) => a.date.localeCompare(b.date)).slice(-basis)
     result.set(name, Math.ceil(lastN.reduce((s, e) => s + e.diff, 0) / lastN.length))
+  }
+  return result
+}
+
+export function handicapBefore(name: string, rounds: SavedRound[], beforeDate: string, basis = 5): number {
+  const prior = rounds
+    .filter((r) => r.date < beforeDate && r.players.some((p) => p.name === name))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-basis)
+  if (!prior.length) return 0
+  return Math.ceil(prior.reduce((sum, r) => {
+    const player = r.players.find((p) => p.name === name)!
+    return sum + (playerTotal(player.strokes) - totalPar(r.pars))
+  }, 0) / prior.length)
+}
+
+export function getHandicapsForRound(round: SavedRound, rounds: SavedRound[], basis = 5): Map<string, number> {
+  const result = new Map<string, number>()
+  for (const player of round.players) {
+    const saved = round.handicaps?.[player.name]
+    result.set(
+      player.name,
+      typeof saved === 'number' && Number.isFinite(saved)
+        ? saved
+        : handicapBefore(player.name, rounds, round.date, basis)
+    )
   }
   return result
 }

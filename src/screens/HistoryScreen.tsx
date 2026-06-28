@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '../lib/supabase'
 import { AppHeader } from '../components/AppHeader'
 import Svg, { Polyline, Circle, Line, Text as SvgText, G } from 'react-native-svg'
-import { getRounds, getRound, playerTotal, totalPar, computeHandicaps, shortName, type SavedRound } from '../lib/store'
+import { getRounds, getRound, playerTotal, totalPar, getHandicapsForRound, shortName, type SavedRound } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
 import { useAsync } from '../lib/useAsync'
 import { C } from '../theme'
@@ -55,8 +55,6 @@ function getPlayerBadges(rounds: SavedRound[], basis = 5): Map<string, Badge[]> 
     badges.set(name, arr)
   }
 
-  const handicaps = computeHandicaps(rounds, basis)
-
   let medalName = '', medalScore = Infinity
   for (const r of rounds)
     for (const p of r.players) {
@@ -69,7 +67,7 @@ function getPlayerBadges(rounds: SavedRound[], basis = 5): Map<string, Badge[]> 
 
   const winCount = new Map<string, number>()
   for (const r of sorted) {
-    const w = getWinnerLocal(r, handicaps)
+    const w = getWinnerLocal(r, getHandicapsForRound(r, rounds, basis))
     if (w) winCount.set(w, (winCount.get(w) ?? 0) + 1)
   }
   let topWinName = '', topWinCount = 0
@@ -79,7 +77,7 @@ function getPlayerBadges(rounds: SavedRound[], basis = 5): Map<string, Badge[]> 
   const streakMap = new Map<string, number>()
   let curPlayer = '', curStreak = 0
   for (const r of sorted) {
-    const w = getWinnerLocal(r, handicaps)
+    const w = getWinnerLocal(r, getHandicapsForRound(r, rounds, basis))
     if (w && w === curPlayer) {
       curStreak++
     } else {
@@ -246,7 +244,7 @@ function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicap
           const best = Math.min(...totals)
           const avg = Math.ceil(totals.reduce((a, b) => a + b, 0) / totals.length)
           const bestPlayer = r.players.find((p) => playerTotal(p.strokes) === best)
-          const roundHandicaps = computeHandicaps(rounds, handicapBasis)
+          const roundHandicaps = getHandicapsForRound(r, rounds, handicapBasis)
           const ranked = r.players
             .map((p) => {
               const handicap = roundHandicaps.get(p.name) ?? 0
@@ -291,7 +289,7 @@ function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicap
             // 최다우승 갱신
             const winsMap = new Map<string, number>()
             for (const pr of priorRounds) {
-              const w = getWinnerLocal(pr, roundHandicaps)
+              const w = getWinnerLocal(pr, getHandicapsForRound(pr, rounds, handicapBasis))
               if (w) winsMap.set(w, (winsMap.get(w) ?? 0) + 1)
             }
             const priorMaxWins = Math.max(0, ...[...winsMap.values()])

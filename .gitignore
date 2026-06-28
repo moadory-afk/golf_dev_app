@@ -59,3 +59,5 @@ CLAUDE.md
 seed_*.js
 seed_*.sql
 *.sql
+!supabase/migrations/*.sql
+supabase/.temp/

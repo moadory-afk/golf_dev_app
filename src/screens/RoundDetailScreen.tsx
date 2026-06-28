@@ -2,7 +2,7 @@ import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Alert, Image, Pla
 import { useRoute, useNavigation } from '@react-navigation/native'
 import { useState, useEffect } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { getRound, getRounds, deleteRound, updateRoundSettlement, playerTotal, totalPar, computeHandicaps, shortName } from '../lib/store'
+import { getRound, getRounds, deleteRound, updateRoundSettlement, playerTotal, totalPar, getHandicapsForRound, shortName } from '../lib/store'
 import { AWARD_CONFIG_KEY, AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
 import { calcSettlement, holeNetForPlayer, fmtKRW } from '../features/settlement'
 import { useAsync } from '../lib/useAsync'
@@ -206,7 +206,7 @@ export default function RoundDetailScreen() {
   if (!round) return <View style={s.center}><Text style={s.muted}>라운드를 찾을 수 없습니다.</Text></View>
 
   const par = totalPar(round.pars)
-  const handicaps = computeHandicaps(allRounds ?? [], handicapBasis)
+  const handicaps = getHandicapsForRound(round, allRounds ?? [], handicapBasis)
 
   const regularRank = round.players
     .map((p) => {
