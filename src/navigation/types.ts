@@ -12,6 +12,8 @@ export type RootStackParamList = {
   Main: NavigatorScreenParams<MainTabParamList> | undefined
   Profile: undefined
   Settings: undefined
+  FeePrototype: undefined
+  NoticePrototype: undefined
   ScoreCapture: undefined
   Members: { clubId: string }
   RoundDetail: { id: string }

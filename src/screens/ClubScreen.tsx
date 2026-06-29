@@ -1,5 +1,5 @@
 import {
-  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal,
+  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Image,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
@@ -18,6 +18,8 @@ import type { RootStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
 type RankingType = 'recentMedal' | 'recentWins' | 'wins' | 'streak' | 'lowestHandicap' | 'birdie' | 'singleBirdie'
+
+const CLUB_HERO_IMAGE = 'https://images.unsplash.com/photo-1592919505780-303950717480?auto=format&fit=crop&w=1200&q=80'
 
 function diffText(d: number) { return d > 0 ? `+${d}` : `${d}` }
 
@@ -231,6 +233,38 @@ export default function ClubScreen() {
 
   const MEDAL_BG = ['#fffbe8', '#f4f6f8', '#fdf5f0']
   const MEDAL_COLOR = [C.gold, C.silver, C.bronze]
+  const isManagerView = club?.role === 'admin'
+  const managementMenus = club ? [
+    {
+      key: 'members',
+      title: '회원 관리',
+      subtitle: '회원 정보와 권한을 관리합니다',
+      icon: 'users' as const,
+      onPress: () => nav.navigate('Members', { clubId: club.id }),
+    },
+    {
+      key: 'fee',
+      title: '회비 관리',
+      subtitle: '회비 정책과 납부 현황을 확인합니다',
+      icon: 'money' as const,
+      featured: true,
+      onPress: () => nav.navigate('FeePrototype'),
+    },
+    {
+      key: 'notice',
+      title: '공지 관리',
+      subtitle: '공지 등록과 게시 상태를 관리합니다',
+      icon: 'mail' as const,
+      onPress: () => nav.navigate('NoticePrototype'),
+    },
+    {
+      key: 'settings',
+      title: '운영 설정',
+      subtitle: '클럽 정보와 운영 환경을 설정합니다',
+      icon: 'settings' as const,
+      onPress: () => nav.navigate('Settings'),
+    },
+  ] : []
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -243,9 +277,60 @@ export default function ClubScreen() {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} tintColor={C.green} />}
       >
         {/* 헤더 (공용) — 클럽명 오른쪽 멤버 버튼 */}
-        <AppHeader myName={myName} showSettings />
+        <AppHeader myName={myName} />
 
         <View style={s.content}>
+          {club && (
+            <>
+              <Text style={s.pageSectionTitle}>클럽 관리</Text>
+
+              <View style={s.clubHeroCard}>
+                <Image source={{ uri: CLUB_HERO_IMAGE }} style={s.clubHeroImage} resizeMode="cover" />
+                <View style={s.clubHeroBody}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.clubHeroName} numberOfLines={1}>{club.name}</Text>
+                    <Text style={s.clubHeroMeta} numberOfLines={2}>
+                      {club.subtitle?.trim() ? club.subtitle : '운영 중인 골프 클럽'}
+                    </Text>
+                  </View>
+                  <TouchableOpacity style={s.clubInfoBtn} onPress={() => nav.navigate('Settings')} activeOpacity={0.84}>
+                    <Text style={s.clubInfoBtnText}>클럽 정보</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {isManagerView && (
+                <>
+                  <Text style={s.pageSectionTitle}>관리 메뉴</Text>
+                  <View style={s.managementGrid}>
+                    {managementMenus.map((menu) => (
+                      <TouchableOpacity
+                        key={menu.key}
+                        style={[s.managementCard, menu.featured && s.managementCardFeatured]}
+                        onPress={menu.onPress}
+                        activeOpacity={0.86}
+                      >
+                        <View style={[s.managementIcon, menu.featured && s.managementIconFeatured]}>
+                          <Icon
+                            name={menu.icon}
+                            size={22}
+                            color={menu.featured ? C.accentText : C.greenDark}
+                            strokeWidth={2}
+                          />
+                        </View>
+                        <Text style={s.managementTitle}>{menu.title}</Text>
+                        <Text style={s.managementSubtitle}>{menu.subtitle}</Text>
+                        <View style={s.managementArrowWrap}>
+                          <Icon name="chevronRight" size={16} color={C.muted} />
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
+            </>
+          )}
+
           {/* 클럽 없음 */}
           {!club && !loading && (
             <View style={s.emptyCard}>
@@ -269,6 +354,10 @@ export default function ClubScreen() {
           )}
 
           {/* 핸디캡 랭킹 */}
+          {club && (handicapRanking.length > 0 || rounds.length > 0) && (
+            <Text style={s.pageSectionTitle}>클럽 기록</Text>
+          )}
+
           {handicapRanking.length > 0 && (
             <TouchableOpacity style={s.card} onPress={() => setRankingType('lowestHandicap')} activeOpacity={0.85}>
               <View style={s.cardTitleRow}>
@@ -405,6 +494,87 @@ const s = StyleSheet.create({
   clubPillTextActive: { color: C.greenDark },
 
   content: { padding: 16 },
+  pageSectionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: C.text,
+    marginBottom: 12,
+  },
+  clubHeroCard: {
+    backgroundColor: C.card,
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: C.border,
+    shadowColor: '#1a6b44',
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  clubHeroImage: {
+    width: '100%',
+    height: 150,
+  },
+  clubHeroBody: {
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  clubHeroName: { fontSize: 24, fontWeight: '900', color: C.text },
+  clubHeroMeta: { fontSize: 13, color: C.muted, marginTop: 6, lineHeight: 19 },
+  clubInfoBtn: {
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: '#f7faf7',
+  },
+  clubInfoBtnText: { fontSize: 13, fontWeight: '800', color: C.text },
+  managementGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 14,
+  },
+  managementCard: {
+    width: '47.5%',
+    minHeight: 172,
+    backgroundColor: C.card,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+    shadowColor: '#1a6b44',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  managementCardFeatured: {
+    borderColor: '#94bb36',
+    backgroundColor: '#f8ffd9',
+  },
+  managementIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: C.greenLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+  managementIconFeatured: {
+    backgroundColor: C.accent,
+  },
+  managementTitle: { fontSize: 18, fontWeight: '900', color: C.text },
+  managementSubtitle: { fontSize: 13, color: C.muted, lineHeight: 19, marginTop: 10 },
+  managementArrowWrap: {
+    marginTop: 'auto',
+    alignSelf: 'flex-end',
+    paddingTop: 16,
+  },
 
   emptyCard: { backgroundColor: C.card, borderRadius: 20, padding: 32, alignItems: 'center', marginBottom: 14 },
   goProfileBtn: { marginTop: 16, paddingVertical: 10, paddingHorizontal: 24, backgroundColor: C.green, borderRadius: 20 },

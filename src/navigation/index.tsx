@@ -15,6 +15,8 @@ import ScoreReviewScreen from '../screens/ScoreReviewScreen'
 import ResultScreen from '../screens/ResultScreen'
 import MemberScreen from '../screens/MemberScreen'
 import SettingsScreen from '../screens/SettingsScreen'
+import FeePrototypeScreen from '../screens/FeePrototypeScreen'
+import NoticePrototypeScreen from '../screens/NoticePrototypeScreen'
 import RoundSetupScreen from '../screens/RoundSetupScreen'
 import ScoreEntryScreen from '../screens/ScoreEntryScreen'
 import type { MainTabParamList, RootStackParamList } from './types'
@@ -117,6 +119,8 @@ export default function Navigation() {
           <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
           <Stack.Screen name="Profile" component={ProfileScreen} options={({ navigation }) => ({ title: '프로필 · 설정', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={({ navigation }) => ({ title: '설정', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="FeePrototype" component={FeePrototypeScreen} options={({ navigation }) => ({ title: '회비 관리', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="NoticePrototype" component={NoticePrototypeScreen} options={({ navigation }) => ({ title: '공지 관리', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="Members" component={MemberScreen} options={({ navigation }) => ({ title: '멤버 관리', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="RoundDetail" component={RoundDetailScreen} options={({ navigation }) => ({ title: '라운드 상세', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.navigate('Main', { screen: 'History' })} /> })} />
           <Stack.Screen name="ScoreCapture" component={ScoreCaptureScreen} options={({ navigation }) => ({ title: '스코어 입력', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
