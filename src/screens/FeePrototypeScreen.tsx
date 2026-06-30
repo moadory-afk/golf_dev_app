@@ -1,9 +1,10 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { C } from '../theme'
 import { Icon } from '../components/Icon'
+import DateField, { todayLocal } from '../components/DateField'
 import type { RootStackParamList } from '../navigation/types'
 import { useClub } from '../lib/ClubContext'
 import { useAsync } from '../lib/useAsync'
@@ -28,10 +29,12 @@ type FeeTab = 'treasury' | 'payment'
 type PaymentFilter = 'all' | 'partial' | 'unpaid'
 type TransactionFilter = 'all' | 'income' | 'expense'
 type Nav = NativeStackNavigationProp<RootStackParamList>
+type PolicyAdjustmentItem = FeePolicyAdjustmentItem
 type TransactionDraft = {
   id: string | null
   type: 'income' | 'expense'
   detail: string
+  customDetail: string
   amount: string
   memo: string
   entryDate: string
@@ -80,6 +83,12 @@ function getMonthLabel(offset: number) {
   return `${target.getFullYear()}년 ${target.getMonth() + 1}월`
 }
 
+function getMonthKey(offset: number) {
+  const base = new Date()
+  const target = new Date(base.getFullYear(), base.getMonth() + offset, 1)
+  return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}`
+}
+
 function formatAmountInput(value: string) {
   const digits = value.replace(/[^0-9]/g, '')
   if (!digits) return ''
@@ -98,11 +107,23 @@ function nextStatus(status: FeePaymentStatus): FeePaymentStatus {
   return 'paid'
 }
 
-function SummaryCard({ label, value, tone }: { label: string; value: string; tone?: string }) {
-  return (
-    <View style={s.summaryCard}>
+function SummaryCard({ label, value, tone, active, onPress }: { label: string; value: string; tone?: string; active?: boolean; onPress?: () => void }) {
+  const content = (
+    <>
       <Text style={s.summaryLabel}>{label}</Text>
       <Text style={[s.summaryValue, tone ? { color: tone } : null]}>{value}</Text>
+    </>
+  )
+  if (onPress) {
+    return (
+      <TouchableOpacity style={[s.summaryCard, active && s.summaryCardActive]} activeOpacity={0.82} onPress={onPress}>
+        {content}
+      </TouchableOpacity>
+    )
+  }
+  return (
+    <View style={s.summaryCard}>
+      {content}
     </View>
   )
 }
@@ -146,9 +167,10 @@ export default function FeePrototypeScreen() {
     id: null,
     type: 'income',
     detail: '회비',
+    customDetail: '',
     amount: '',
     memo: '',
-    entryDate: new Date().toISOString().slice(0, 10),
+    entryDate: todayLocal(),
   })
 
   const { data, loading, error } = useAsync(
@@ -198,6 +220,27 @@ export default function FeePrototypeScreen() {
   const treasuryMonthLabel = getMonthLabel(treasuryMonthOffset)
   const paymentMonthLabel = paymentData?.cycle?.label ?? getMonthLabel(paymentMonthOffset)
 
+  useLayoutEffect(() => {
+    nav.setOptions({
+      headerRight: () => (
+        <View style={s.headerActionRow}>
+          <TouchableOpacity
+            style={[s.headerPolicyBtn, !isAdmin && { opacity: 0.55 }]}
+            activeOpacity={0.82}
+            onPress={() => isAdmin && setPolicyOpen(true)}
+            disabled={!isAdmin}
+          >
+            <Icon name="settings" size={15} color={C.accentText} />
+            <Text style={s.headerPolicyBtnText}>정책</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.headerCloseBtn} onPress={() => nav.goBack()}>
+            <Text style={s.headerCloseBtnText}>닫기</Text>
+          </TouchableOpacity>
+        </View>
+      ),
+    })
+  }, [isAdmin, nav])
+
   useEffect(() => {
     setTransactionItems(transactions)
   }, [transactions])
@@ -213,10 +256,12 @@ export default function FeePrototypeScreen() {
   }, [members, paymentFilter, paymentOverrides])
 
   const filteredTransactions = useMemo(() => {
-    if (transactionFilter === 'income') return transactionItems.filter((item) => item.type === 'income')
-    if (transactionFilter === 'expense') return transactionItems.filter((item) => item.type === 'expense')
-    return transactionItems
-  }, [transactionItems, transactionFilter])
+    const monthKey = getMonthKey(treasuryMonthOffset)
+    const monthlyItems = transactionItems.filter((item) => item.entryDate.startsWith(monthKey))
+    if (transactionFilter === 'income') return monthlyItems.filter((item) => item.type === 'income')
+    if (transactionFilter === 'expense') return monthlyItems.filter((item) => item.type === 'expense')
+    return monthlyItems
+  }, [transactionItems, transactionFilter, treasuryMonthOffset])
 
   const paymentSummary = useMemo(() => {
     const totalDue = members.reduce((sum, member) => sum + member.amountDue, 0)
@@ -227,12 +272,17 @@ export default function FeePrototypeScreen() {
   }, [members])
 
   const treasurySummary = useMemo(() => {
-    const income = transactionItems.filter((item) => item.type === 'income').reduce((sum, item) => sum + item.amount, 0)
-    const expense = transactionItems.filter((item) => item.type === 'expense').reduce((sum, item) => sum + item.amount, 0)
-    const balance = income - expense
-    const previousBalance = balance - income + expense
-    return { balance, previousBalance, income, expense, count: transactionItems.length }
-  }, [transactionItems])
+    const monthKey = getMonthKey(treasuryMonthOffset)
+    const previousItems = transactionItems.filter((item) => item.entryDate < monthKey)
+    const monthlyItems = transactionItems.filter((item) => item.entryDate.startsWith(monthKey))
+    const previousIncome = previousItems.filter((item) => item.type === 'income').reduce((sum, item) => sum + item.amount, 0)
+    const previousExpense = previousItems.filter((item) => item.type === 'expense').reduce((sum, item) => sum + item.amount, 0)
+    const income = monthlyItems.filter((item) => item.type === 'income').reduce((sum, item) => sum + item.amount, 0)
+    const expense = monthlyItems.filter((item) => item.type === 'expense').reduce((sum, item) => sum + item.amount, 0)
+    const previousBalance = previousIncome - previousExpense
+    const balance = previousBalance + income - expense
+    return { balance, previousBalance, income, expense, count: monthlyItems.length }
+  }, [transactionItems, treasuryMonthOffset])
 
   function updateFallbackMember(statusId: string, next: FeePaymentStatus, amountPaid: number) {
     setFallbackMembers((current) =>
@@ -364,10 +414,13 @@ export default function FeePrototypeScreen() {
 
   function openTransactionEditor(item?: TreasuryEntryItem) {
     if (item) {
+      const details = item.type === 'income' ? INCOME_DETAILS : EXPENSE_DETAILS
+      const isDefaultDetail = details.includes(item.title as any)
       setTransactionDraft({
         id: item.id,
         type: item.type,
-        detail: item.title,
+        detail: isDefaultDetail ? item.title : '기타',
+        customDetail: isDefaultDetail ? '' : item.title,
         amount: item.amount.toLocaleString('ko-KR'),
         memo: item.memo ?? '',
         entryDate: item.entryDate,
@@ -377,9 +430,10 @@ export default function FeePrototypeScreen() {
         id: null,
         type: 'income',
         detail: '회비',
+        customDetail: '',
         amount: '',
         memo: '',
-        entryDate: new Date().toISOString().slice(0, 10),
+        entryDate: todayLocal(),
       })
     }
     setTransactionEditorOpen(true)
@@ -388,12 +442,15 @@ export default function FeePrototypeScreen() {
   async function saveTransactionDraft() {
     const amount = Number(transactionDraft.amount.replace(/[^0-9]/g, ''))
     if (!amount) return
+    const finalDetail = transactionDraft.detail === '기타' && transactionDraft.customDetail.trim()
+      ? transactionDraft.customDetail.trim()
+      : transactionDraft.detail
 
     const nextItem: TreasuryEntryItem = {
       id: transactionDraft.id ?? `draft-${Date.now()}`,
       clubId: club?.id ?? 'mock-club',
       type: transactionDraft.type,
-      title: transactionDraft.detail,
+      title: finalDetail,
       amount,
       entryDate: transactionDraft.entryDate,
       memo: transactionDraft.memo,
@@ -413,7 +470,7 @@ export default function FeePrototypeScreen() {
     if (transactionDraft.id) {
       await updateTreasuryEntry(transactionDraft.id, {
         type: transactionDraft.type,
-        title: transactionDraft.detail,
+        title: finalDetail,
         amount,
         entryDate: transactionDraft.entryDate,
         memo: transactionDraft.memo,
@@ -421,7 +478,7 @@ export default function FeePrototypeScreen() {
     } else {
       await createTreasuryEntry(club.id, {
         type: transactionDraft.type,
-        title: transactionDraft.detail,
+        title: finalDetail,
         amount,
         entryDate: transactionDraft.entryDate,
         memo: transactionDraft.memo,
@@ -455,18 +512,6 @@ export default function FeePrototypeScreen() {
       contentContainerStyle={s.content}
       refreshControl={<RefreshControl refreshing={loading} onRefresh={() => setRefreshKey((value) => value + 1)} tintColor={C.green} />}
     >
-      <View style={s.hero}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.heroEyebrow}>{club?.name ?? '클럽 운영'}</Text>
-          <Text style={s.heroTitle}>회비 관리</Text>
-          <Text style={s.heroSub}>총무가 자금 흐름과 회원별 납부 상태를 한 화면에서 관리하는 영역입니다.</Text>
-        </View>
-        <TouchableOpacity style={[s.policyBtn, !isAdmin && { opacity: 0.55 }]} activeOpacity={0.82} onPress={() => isAdmin && setPolicyOpen(true)} disabled={!isAdmin}>
-          <Icon name="settings" size={15} color={C.accentText} />
-          <Text style={s.policyBtnText}>정책</Text>
-        </TouchableOpacity>
-      </View>
-
       {usingFallback && (
         <View style={s.noticeCard}>
           <Text style={s.noticeTitle}>회비 테이블 연결 전 미리보기 화면</Text>
@@ -490,40 +535,41 @@ export default function FeePrototypeScreen() {
         </TouchableOpacity>
       </View>
 
+      <View style={s.monthNavBar}>
+        <TouchableOpacity
+          style={s.monthNavBtn}
+          onPress={() => activeTab === 'treasury' ? setTreasuryMonthOffset((value) => value - 1) : setPaymentMonthOffset((value) => value - 1)}
+          activeOpacity={0.82}
+        >
+          <Icon name="chevronLeft" size={15} color={C.green} />
+          <Text style={s.monthNavText}>이전달</Text>
+        </TouchableOpacity>
+        <View style={s.monthNavCenter}>
+          <Text style={s.monthNavTitle}>{activeTab === 'treasury' ? treasuryMonthLabel : paymentMonthLabel}</Text>
+        </View>
+        <TouchableOpacity
+          style={[s.monthNavBtn, { justifyContent: 'flex-end' }]}
+          onPress={() => activeTab === 'treasury' ? setTreasuryMonthOffset((value) => value + 1) : setPaymentMonthOffset((value) => value + 1)}
+          activeOpacity={0.82}
+        >
+          <Text style={s.monthNavText}>다음달</Text>
+          <Icon name="chevronRight" size={15} color={C.green} />
+        </TouchableOpacity>
+      </View>
+
       {activeTab === 'treasury' ? (
         <>
 
           <View style={s.summaryGrid}>
             <SummaryCard label="전월잔액" value={formatKrw(treasurySummary.previousBalance)} />
-            <SummaryCard label="현재잔액" value={formatKrw(treasurySummary.balance)} />
-            <SummaryCard label="이번 달 입금" value={formatKrw(treasurySummary.income)} tone={C.green} />
-            <SummaryCard label="이번 달 지급" value={formatKrw(treasurySummary.expense)} tone={C.danger} />
+            <SummaryCard label="현재잔액" value={formatKrw(treasurySummary.balance)} active={transactionFilter === 'all'} onPress={() => setTransactionFilter('all')} />
+            <SummaryCard label="이번 달 입금" value={formatKrw(treasurySummary.income)} tone={C.green} active={transactionFilter === 'income'} onPress={() => setTransactionFilter('income')} />
+            <SummaryCard label="이번 달 지급" value={formatKrw(treasurySummary.expense)} tone={C.danger} active={transactionFilter === 'expense'} onPress={() => setTransactionFilter('expense')} />
           </View>
 
           <View style={s.card}>
             <View style={s.monthCardHeader}>
-              <Text style={s.sectionTitle}>최근 거래 내역</Text>
-              <View style={s.headerMonthNav}>
-                <TouchableOpacity style={s.headerMonthBtn} onPress={() => setTreasuryMonthOffset((value) => value - 1)} activeOpacity={0.82}>
-                  <Icon name="chevronLeft" size={14} color={C.green} />
-                </TouchableOpacity>
-                <Text style={s.headerMonthLabel}>{treasuryMonthLabel}</Text>
-                <TouchableOpacity style={s.headerMonthBtn} onPress={() => setTreasuryMonthOffset((value) => value + 1)} activeOpacity={0.82}>
-                  <Icon name="chevronRight" size={14} color={C.green} />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={s.filterRow}>
-              <TouchableOpacity style={[s.chip, transactionFilter === 'all' && s.chipActive]} onPress={() => setTransactionFilter('all')} activeOpacity={0.82}>
-                <Text style={[s.chipText, transactionFilter === 'all' && s.chipActiveText]}>전체</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[s.chip, transactionFilter === 'income' && s.chipActive]} onPress={() => setTransactionFilter('income')} activeOpacity={0.82}>
-                <Text style={[s.chipText, transactionFilter === 'income' && s.chipActiveText]}>입금</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[s.chip, transactionFilter === 'expense' && s.chipActive]} onPress={() => setTransactionFilter('expense')} activeOpacity={0.82}>
-                <Text style={[s.chipText, transactionFilter === 'expense' && s.chipActiveText]}>지급</Text>
-              </TouchableOpacity>
+              <Text style={s.sectionTitle}>거래 내역</Text>
             </View>
 
             <View style={s.transactionCardList}>
@@ -587,18 +633,9 @@ export default function FeePrototypeScreen() {
 
           <View style={s.card}>
             <View style={s.monthCardHeader}>
-              <TouchableOpacity style={s.monthInlineBtn} onPress={() => setPaymentMonthOffset((value) => value - 1)} activeOpacity={0.82}>
-                <Icon name="chevronLeft" size={15} color={C.green} />
-                <Text style={s.monthInlineText}>이전달</Text>
-              </TouchableOpacity>
               <View style={s.monthInlineCenter}>
                 <Text style={s.sectionTitle}>회원별 납부 상태</Text>
-                <Text style={s.monthInlineLabel}>{paymentMonthLabel}</Text>
               </View>
-              <TouchableOpacity style={[s.monthInlineBtn, { justifyContent: 'flex-end' }]} onPress={() => setPaymentMonthOffset((value) => value + 1)} activeOpacity={0.82}>
-                <Text style={s.monthInlineText}>다음달</Text>
-                <Icon name="chevronRight" size={15} color={C.green} />
-              </TouchableOpacity>
             </View>
 
             <View style={s.memberGrid}>
@@ -773,17 +810,35 @@ export default function FeePrototypeScreen() {
                 <View style={s.segmentRow}>
                   <TouchableOpacity
                     style={[s.segmentBtn, transactionDraft.type === 'income' && s.segmentBtnActive]}
-                    onPress={() => setTransactionDraft((current) => ({ ...current, type: 'income', detail: INCOME_DETAILS.includes(current.detail as any) ? current.detail : '회비' }))}
+                    onPress={() => setTransactionDraft((current) => ({
+                      ...current,
+                      type: 'income',
+                      detail: INCOME_DETAILS.includes(current.detail as any) ? current.detail : '회비',
+                      customDetail: '',
+                    }))}
                   >
                     <Text style={[s.segmentText, transactionDraft.type === 'income' && s.segmentTextActive]}>입금</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[s.segmentBtn, transactionDraft.type === 'expense' && s.segmentBtnActive]}
-                    onPress={() => setTransactionDraft((current) => ({ ...current, type: 'expense', detail: EXPENSE_DETAILS.includes(current.detail as any) ? current.detail : '캐디피' }))}
+                    onPress={() => setTransactionDraft((current) => ({
+                      ...current,
+                      type: 'expense',
+                      detail: EXPENSE_DETAILS.includes(current.detail as any) ? current.detail : '캐디피',
+                      customDetail: '',
+                    }))}
                   >
                     <Text style={[s.segmentText, transactionDraft.type === 'expense' && s.segmentTextActive]}>지급</Text>
                   </TouchableOpacity>
                 </View>
+              </View>
+
+              <View style={s.policySection}>
+                <Text style={s.policySectionTitle}>날짜</Text>
+                <DateField
+                  value={transactionDraft.entryDate}
+                  onChange={(entryDate) => setTransactionDraft((current) => ({ ...current, entryDate }))}
+                />
               </View>
 
               <View style={s.policySection}>
@@ -793,12 +848,25 @@ export default function FeePrototypeScreen() {
                     <TouchableOpacity
                       key={detail}
                       style={[s.detailChip, transactionDraft.detail === detail && s.detailChipActive]}
-                      onPress={() => setTransactionDraft((current) => ({ ...current, detail }))}
+                      onPress={() => setTransactionDraft((current) => ({
+                        ...current,
+                        detail,
+                        customDetail: detail === '기타' ? current.customDetail : '',
+                      }))}
                     >
                       <Text style={[s.detailChipText, transactionDraft.detail === detail && s.detailChipTextActive]}>{detail}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
+                {transactionDraft.detail === '기타' ? (
+                  <TextInput
+                    style={[s.policyInput, { marginTop: 10 }]}
+                    value={transactionDraft.customDetail}
+                    onChangeText={(customDetail) => setTransactionDraft((current) => ({ ...current, customDetail }))}
+                    placeholder="세부항목 직접 입력"
+                    placeholderTextColor={C.muted}
+                  />
+                ) : null}
               </View>
 
               <View style={s.policySection}>
@@ -830,7 +898,7 @@ export default function FeePrototypeScreen() {
               <TouchableOpacity style={s.editorDeleteBtn} onPress={deleteTransactionDraft}>
                 <Text style={s.editorDeleteText}>삭제</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={s.policySaveBtn} onPress={saveTransactionDraft}>
+              <TouchableOpacity style={s.editorSaveBtn} onPress={saveTransactionDraft}>
                 <Text style={s.policySaveText}>저장</Text>
               </TouchableOpacity>
             </View>
@@ -844,28 +912,24 @@ export default function FeePrototypeScreen() {
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   content: { padding: 16, gap: 14, paddingBottom: 28 },
-  hero: {
-    backgroundColor: C.greenDark,
-    borderRadius: 20,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  heroEyebrow: { color: 'rgba(255,255,255,0.65)', fontSize: 12, fontWeight: '700' },
-  heroTitle: { color: '#fff', fontSize: 22, fontWeight: '900', marginTop: 6 },
-  heroSub: { color: 'rgba(255,255,255,0.72)', fontSize: 12, marginTop: 8, lineHeight: 18 },
-  policyBtn: {
+  headerActionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginRight: 8 },
+  headerPolicyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     backgroundColor: C.accent,
-    borderRadius: 16,
+    borderRadius: 14,
     paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingVertical: 6,
   },
-  policyBtnText: { color: C.accentText, fontSize: 12, fontWeight: '800' },
+  headerPolicyBtnText: { color: C.accentText, fontSize: 12, fontWeight: '800' },
+  headerCloseBtn: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  headerCloseBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   noticeCard: { backgroundColor: C.card, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: C.border },
   noticeTitle: { fontSize: 13, fontWeight: '900', color: C.text },
   noticeBody: { fontSize: 12, color: C.muted, marginTop: 6, lineHeight: 18 },
@@ -876,23 +940,11 @@ const s = StyleSheet.create({
   tabButtonTextActive: { color: C.accentText },
   summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   summaryCard: { flexBasis: '47%', flexGrow: 1, backgroundColor: C.card, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: C.border },
+  summaryCardActive: { borderColor: C.green, backgroundColor: C.greenLight },
   summaryLabel: { fontSize: 11, color: C.muted, fontWeight: '700' },
   summaryValue: { fontSize: 18, color: C.text, fontWeight: '900', marginTop: 8 },
   monthCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 },
-  headerMonthNav: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  headerMonthBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: C.greenLight,
-  },
-  headerMonthLabel: { fontSize: 12, fontWeight: '800', color: C.green, minWidth: 74, textAlign: 'center' },
-  monthInlineBtn: { minWidth: 76, flexDirection: 'row', alignItems: 'center', gap: 4 },
   monthInlineCenter: { flex: 1, alignItems: 'center' },
-  monthInlineText: { fontSize: 12, fontWeight: '800', color: C.green },
-  monthInlineLabel: { fontSize: 11, fontWeight: '700', color: C.muted, marginTop: 4 },
   monthNavBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1086,6 +1138,14 @@ const s = StyleSheet.create({
     paddingVertical: 14,
   },
   editorDeleteText: { color: C.danger, fontSize: 14, fontWeight: '900' },
+  editorSaveBtn: {
+    flex: 1,
+    marginTop: 0,
+    borderRadius: 16,
+    backgroundColor: C.green,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
   policyListRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border },
   policyListName: { flex: 1, fontSize: 13, fontWeight: '800', color: C.text },
   policyListAmount: { fontSize: 13, fontWeight: '800', color: C.text },
