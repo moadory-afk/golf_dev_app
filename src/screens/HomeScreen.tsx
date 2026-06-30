@@ -1,4 +1,4 @@
-import {
+﻿import {
   ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -6,7 +6,7 @@ import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useState, useCallback, useEffect } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { getRounds, playerTotal, totalPar, computeHandicaps, shortName, type SavedRound } from '../lib/store'
+import { getRounds, getClubMembers, getFeeDashboard, playerTotal, totalPar, computeHandicaps, shortName, type SavedRound } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
 import { useAsync } from '../lib/useAsync'
 import { supabase } from '../lib/supabase'
@@ -49,10 +49,24 @@ export default function HomeScreen() {
     () => (club ? getRounds(club.id) : Promise.resolve([])),
     [refreshKey, club?.id],
   )
+  const { data: clubMembers } = useAsync(
+    () => (club ? getClubMembers(club.id) : Promise.resolve([])),
+    [club?.id],
+  )
+  const { data: feeDashboard } = useAsync(
+    () => (club ? getFeeDashboard(club.id) : Promise.resolve(null)),
+    [club?.id, refreshKey],
+  )
   const rounds = data ?? []
   const [myName, setMyName] = useState<string | null>(null)
   const [personalDetail, setPersonalDetail] = useState<PersonalDetailType | null>(null)
   const [h2hPlayer, setH2hPlayer] = useState<string | null>(null)
+  const [showClubRecords, setShowClubRecords] = useState(true)
+  const [roundAttendance, setRoundAttendance] = useState<Record<string, '미정' | '참석' | '불참'>>({})
+  const [showUpcomingCard, setShowUpcomingCard] = useState(true)
+  const [attendanceSheetOpen, setAttendanceSheetOpen] = useState(false)
+  const [myUserId, setMyUserId] = useState<string | null>(null)
+  const [showFeeCard, setShowFeeCard] = useState(true)
   const onRefresh = useCallback(() => setRefreshKey((k) => k + 1), [])
 
   const [handicapBasis, setHandicapBasis] = useState(5)
@@ -60,6 +74,7 @@ export default function HomeScreen() {
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return
+      setMyUserId(data.user.id)
       const { data: profile } = await supabase.from('profiles').select('name').eq('id', data.user.id).single()
       setMyName(profile?.name ?? data.user?.user_metadata?.name ?? data.user?.email ?? null)
     })
@@ -182,6 +197,19 @@ export default function HomeScreen() {
   }).slice(-10)
 
   const recent3 = rounds.slice(0, 3)
+  const upcomingRound = { id: 'u1', date: '2026-07-08', time: '18:30', course: '미정' }
+  const isAdmin = club?.role === 'admin'
+  const myAttendanceKey = myUserId ?? '__me__'
+  const myAttendance = roundAttendance[myAttendanceKey] ?? '미정'
+  const feeCycleLabel = feeDashboard?.cycle?.label ?? '현재 회차'
+  const feeMembers = feeDashboard?.members ?? []
+  const feePaidCount = feeMembers.filter((m) => m.status === 'paid').length
+  const feePartialCount = feeMembers.filter((m) => m.status === 'partial').length
+  const feeUnpaidCount = feeMembers.filter((m) => m.status === 'unpaid').length
+  const nextAttendance = (value: '미정' | '참석' | '불참') => {
+    const order: Array<'미정' | '참석' | '불참'> = ['미정', '참석', '불참']
+    return order[(order.indexOf(value) + 1) % order.length]
+  }
 
   // 클럽 로딩 전: 빈 화면 (모든 hook 호출 후)
   if (!clubsLoaded) return <View style={{ flex: 1, backgroundColor: C.bg }} />
@@ -263,40 +291,55 @@ export default function HomeScreen() {
                   <Icon name="medal" size={17} color={C.green} />
                   <Text style={[s.cardTitle, { marginBottom: 0 }]}>클럽 신기록</Text>
                 </View>
-                {ginnessRecords.length > 0 && (
-                  <View style={s.recordCountBadge}>
-                    <Text style={s.recordCountText}>{ginnessRecords.length}개 보유</Text>
-                  </View>
-                )}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  {ginnessRecords.length > 0 && (
+                    <View style={s.recordCountBadge}>
+                      <Text style={s.recordCountText}>{ginnessRecords.length}개 보유</Text>
+                    </View>
+                  )}
+                  <TouchableOpacity style={s.recordToggleBtn} onPress={() => setShowClubRecords((v) => !v)}>
+                    <Text style={s.recordToggleText}>{showClubRecords ? '접기' : '펼치기'}</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              {ginnessRecords.length === 0 ? (
-                <View style={s.noRecordBox}>
-                  <Icon name="trophy" size={34} color={C.muted} strokeWidth={1.5} />
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: C.muted, marginTop: 10 }}>아직 보유한 클럽 신기록이 없어요</Text>
-                  <Text style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>기록을 세워보세요!</Text>
+              {!showClubRecords && (
+                <View style={s.recordCollapsedBox}>
+                  <Text style={s.recordCollapsedText}>보유한 신기록 {ginnessRecords.length}개</Text>
                 </View>
-              ) : (
-                ginnessRecords.map((rec, i) => (
-                  <View key={i} style={[s.ginnessRow, i === 0 && { borderTopWidth: 0 }]}>
-                    <View style={s.ginnessIconWrap}>
-                      <EmojiIcon char={rec.icon} size={20} color={C.gold} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.ginnessTitle}>{rec.title}</Text>
-                      {rec.detail && <Text style={s.ginnessSub}>{rec.detail}</Text>}
-                    </View>
-                    <View style={s.ginnessValueWrap}>
-                      <Text style={s.ginnessValue}>{rec.value}</Text>
-                    </View>
-                  </View>
-                ))
               )}
 
-              <TouchableOpacity style={s.h2hBtn} onPress={() => setH2hPlayer(myName)}>
-                <Icon name="versus" size={15} color={C.green} />
-                <Text style={s.h2hBtnText}>상대 전적 보기 →</Text>
-              </TouchableOpacity>
+              {showClubRecords && (
+                <>
+                  {ginnessRecords.length === 0 ? (
+                    <View style={s.noRecordBox}>
+                      <Icon name="trophy" size={34} color={C.muted} strokeWidth={1.5} />
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: C.muted, marginTop: 10 }}>아직 보유한 클럽 신기록이 없어요</Text>
+                      <Text style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>기록을 세워보세요!</Text>
+                    </View>
+                  ) : (
+                    ginnessRecords.map((rec, i) => (
+                      <View key={i} style={[s.ginnessRow, i === 0 && { borderTopWidth: 0 }]}>
+                        <View style={s.ginnessIconWrap}>
+                          <EmojiIcon char={rec.icon} size={20} color={C.gold} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.ginnessTitle}>{rec.title}</Text>
+                          {rec.detail && <Text style={s.ginnessSub}>{rec.detail}</Text>}
+                        </View>
+                        <View style={s.ginnessValueWrap}>
+                          <Text style={s.ginnessValue}>{rec.value}</Text>
+                        </View>
+                      </View>
+                    ))
+                  )}
+
+                  <TouchableOpacity style={s.h2hBtn} onPress={() => setH2hPlayer(myName)}>
+                    <Icon name="versus" size={15} color={C.green} />
+                    <Text style={s.h2hBtnText}>상대 전적 보기 →</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           )}
 
@@ -349,6 +392,161 @@ export default function HomeScreen() {
               })}
             </View>
           )}
+
+          <View style={s.protoSection}>
+            <View style={s.protoCard}>
+              <View style={s.protoTopRow}>
+                <Text style={s.protoTitle}>예정된 라운드</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <TouchableOpacity style={s.recordToggleBtn} onPress={() => setShowUpcomingCard((v) => !v)}>
+                    <Text style={s.recordToggleText}>{showUpcomingCard ? '접기' : '펼치기'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              {showUpcomingCard ? (
+                <>
+                  <Text style={s.protoSub}>총무가 등록한 일정입니다. 항목을 누르면 전체 회원 참석 여부를 확인할 수 있습니다.</Text>
+                  <TouchableOpacity style={s.roundRow} onPress={() => setAttendanceSheetOpen(true)}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.roundDate}>{upcomingRound.date} · {upcomingRound.time || '미정'}</Text>
+                      <Text style={s.roundCourse}>{upcomingRound.course || '미정'}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <TouchableOpacity
+                        style={[
+                          s.attendanceBtn,
+                          myAttendance === '참석' && s.attendanceYes,
+                          myAttendance === '불참' && s.attendanceNo,
+                        ]}
+                        onPress={() => {
+                          if (!myUserId) return
+                          setRoundAttendance((prev) => ({
+                            ...prev,
+                            [myUserId]: nextAttendance(prev[myUserId] ?? '미정'),
+                          }))
+                        }}
+                      >
+                        <Text style={[
+                          s.attendanceText,
+                          myAttendance === '참석' && s.attendanceTextYes,
+                          myAttendance === '불참' && s.attendanceTextNo,
+                        ]}>
+                          {myAttendance}
+                        </Text>
+                      </TouchableOpacity>
+                      <Text style={s.roundLink}>참석 확인</Text>
+                    </View>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <TouchableOpacity style={s.roundCollapsedBox} onPress={() => setAttendanceSheetOpen(true)}>
+                  <Text style={s.roundCollapsedText}>{upcomingRound.date} · {upcomingRound.time || '미정'} · {upcomingRound.course || '미정'}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={s.protoCard}>
+              <View style={s.protoTopRow}>
+                <Text style={s.protoTitle}>회비납부 현황</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <TouchableOpacity style={s.recordToggleBtn} onPress={() => setShowFeeCard((v) => !v)}>
+                    <Text style={s.recordToggleText}>{showFeeCard ? '접기' : '펼치기'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              {showFeeCard ? (
+                <>
+                  <Text style={s.protoSub}>현재 회차 기준 납부와 미납 상태를 보여주는 영역입니다.</Text>
+                  <View style={s.feeSummaryBox}>
+                    <View style={s.feeSummaryRow}>
+                      <Text style={s.feeSummaryLabel}>회차</Text>
+                      <Text style={s.feeSummaryValue}>{feeCycleLabel}</Text>
+                    </View>
+                    <View style={s.feeSummaryRow}>
+                      <Text style={s.feeSummaryLabel}>납부 현황</Text>
+                      <Text style={[s.feeSummaryValue, feeUnpaidCount > 0 && s.feeSummaryValueWarn]}>
+                        완납 {feePaidCount} · 일부납 {feePartialCount} · 미납 {feeUnpaidCount}
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity style={[s.h2hBtn, { marginTop: 12 }]} onPress={() => nav.navigate('FeePrototype')}>
+                    <Icon name="money" size={15} color={C.green} />
+                    <Text style={s.h2hBtnText}>회비관리 현황 확인 →</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <View style={s.feeCollapsedBox}>
+                  <Text style={s.feeCollapsedText}>{feeCycleLabel}</Text>
+                  <Text style={s.feeCollapsedSub}>완납 {feePaidCount} · 일부납 {feePartialCount} · 미납 {feeUnpaidCount}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          <Modal transparent animationType="fade" visible={attendanceSheetOpen} onRequestClose={() => setAttendanceSheetOpen(false)}>
+            <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setAttendanceSheetOpen(false)}>
+              <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+                <View style={s.modalHeader}>
+                  <Text style={s.modalTitle}>예정된 라운드 참석 현황</Text>
+                  <TouchableOpacity style={s.closeBtn} onPress={() => setAttendanceSheetOpen(false)}>
+                    <Text style={s.closeBtnText}>닫기</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={s.protoSub}>{upcomingRound.date} · {upcomingRound.time || '미정'} · {upcomingRound.course || '미정'}</Text>
+                <View style={s.attendanceSummaryRow}>
+                  <Text style={s.attendanceSummaryText}>총원 {clubMembers?.length ?? 0}명</Text>
+                  <Text style={s.attendanceSummaryText}>{isAdmin ? '총무만 수정 가능' : '참석 여부는 총무가 관리'}</Text>
+                </View>
+                <ScrollView style={{ marginTop: 8, maxHeight: 420 }}>
+                  {(clubMembers ?? []).map((member) => {
+                    const status = roundAttendance[member.userId] ?? '미정'
+                    return (
+                      <View key={member.userId} style={s.attendanceMemberRow}>
+                        <Text style={s.attendanceMemberName}>{member.name}</Text>
+                        {isAdmin ? (
+                          <TouchableOpacity
+                            style={[
+                              s.attendanceBtn,
+                              status === '참석' && s.attendanceYes,
+                              status === '불참' && s.attendanceNo,
+                            ]}
+                            onPress={() => {
+                              setRoundAttendance((prev) => ({
+                                ...prev,
+                                [member.userId]: nextAttendance(prev[member.userId] ?? '미정'),
+                              }))
+                            }}
+                          >
+                            <Text style={[
+                              s.attendanceText,
+                              status === '참석' && s.attendanceTextYes,
+                              status === '불참' && s.attendanceTextNo,
+                            ]}>
+                              {status}
+                            </Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <View style={[
+                            s.attendanceBtn,
+                            status === '참석' && s.attendanceYes,
+                            status === '불참' && s.attendanceNo,
+                          ]}>
+                            <Text style={[
+                              s.attendanceText,
+                              status === '참석' && s.attendanceTextYes,
+                              status === '불참' && s.attendanceTextNo,
+                            ]}>
+                              {status}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    )
+                  })}
+                </ScrollView>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </Modal>
 
           {/* 기록 없음 */}
           {club && !loading && rounds.length === 0 && (
@@ -660,6 +858,21 @@ const s = StyleSheet.create({
     shadowColor: '#1a6b44', shadowOpacity: 0.07, shadowRadius: 10, elevation: 2,
   },
   cardTitle: { fontSize: 15, fontWeight: '700', color: C.text, marginBottom: 14 },
+  recordToggleBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: C.greenLight,
+  },
+  recordToggleText: { fontSize: 12, color: C.green, fontWeight: '700' },
+  recordCollapsedBox: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: '#f6fbf7',
+    marginBottom: 4,
+  },
+  recordCollapsedText: { fontSize: 13, fontWeight: '700', color: C.green },
 
   // 하이라이트 행
   highlightRow: {
@@ -711,6 +924,116 @@ const s = StyleSheet.create({
   recentDate: { fontSize: 12, color: C.muted, marginTop: 2 },
   recentScore: { fontSize: 16, fontWeight: '900', color: C.text },
   recentDiff: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+
+  protoSection: { marginBottom: 14, gap: 10 },
+  protoCard: {
+    backgroundColor: C.card,
+    borderRadius: 18,
+    padding: 16,
+    shadowColor: '#1a6b44',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  protoTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  protoTitle: { fontSize: 15, fontWeight: '800', color: C.text, flex: 1 },
+  protoBadge: {
+    backgroundColor: C.greenLight,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  protoBadgeText: { fontSize: 11, color: C.green, fontWeight: '800' },
+  protoSub: { fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 18 },
+  protoMetaRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  protoMetaLabel: { fontSize: 11, color: C.muted, fontWeight: '700' },
+  protoMetaValue: { fontSize: 12, color: C.text, fontWeight: '700', textAlign: 'right', flex: 1 },
+  feeSummaryBox: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: '#f6fbf7',
+  },
+  feeSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  feeSummaryLabel: { fontSize: 11, color: C.muted, fontWeight: '700' },
+  feeSummaryValue: { fontSize: 12, color: C.text, fontWeight: '800', textAlign: 'right', flex: 1 },
+  feeSummaryValueWarn: { color: C.warn },
+  feeCollapsedBox: {
+    marginTop: 6,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: '#f6fbf7',
+  },
+  feeCollapsedText: { fontSize: 14, fontWeight: '800', color: C.text },
+  feeCollapsedSub: { fontSize: 12, fontWeight: '700', color: C.green, marginTop: 4 },
+  feeMemberRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+  feeMemberName: { fontSize: 13, fontWeight: '700', color: C.text, flex: 1 },
+  feeMemberStatus: { fontSize: 12, fontWeight: '800' },
+  feeMemberStatusPaid: { color: C.green },
+  feeMemberStatusPartial: { color: C.warn },
+  feeMemberStatusUnpaid: { color: '#d65b4a' },
+  roundRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+  roundDate: { fontSize: 12, color: C.muted, fontWeight: '600' },
+  roundCourse: { fontSize: 14, color: C.text, fontWeight: '800', marginTop: 4 },
+  roundLink: { fontSize: 12, color: C.green, fontWeight: '800' },
+  roundCollapsedBox: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: '#f6fbf7',
+  },
+  roundCollapsedText: { fontSize: 13, color: C.text, fontWeight: '700' },
+  attendanceBtn: {
+    minWidth: 72,
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: '#f3f5f3',
+  },
+  attendanceYes: { backgroundColor: C.greenLight },
+  attendanceNo: { backgroundColor: '#fdeeee' },
+  attendanceText: { fontSize: 12, fontWeight: '800', color: C.muted },
+  attendanceTextYes: { color: C.green },
+  attendanceTextNo: { color: '#d65b4a' },
+  attendanceSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: 8 },
+  attendanceSummaryText: { fontSize: 11, color: C.muted, fontWeight: '700' },
+  attendanceMemberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+  attendanceMemberName: { fontSize: 13, color: C.text, fontWeight: '700', flex: 1 },
 
   // 빈 상태
   noClubCard: {

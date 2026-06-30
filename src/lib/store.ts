@@ -468,6 +468,375 @@ export async function saveClubSettlement(clubId: string, config: SettlementConfi
   if (error) throw error
 }
 
+export type FeeMode = 'monthly' | 'yearly'
+export type FeeVisibility = 'admin_only' | 'members'
+export type FeePaymentStatus = 'paid' | 'partial' | 'unpaid'
+export type TreasuryEntryType = 'income' | 'expense'
+
+export interface ClubFeePolicy {
+  clubId: string
+  feeMode: FeeMode
+  defaultAmount: number
+  visibility: FeeVisibility
+  autoCreateCycles: boolean
+  active: boolean
+}
+
+export interface ClubFeeCycle {
+  id: string
+  clubId: string
+  cycleKey: string
+  label: string
+  feeYear: number
+  feeMonth: number | null
+  amount: number
+  dueDate: string | null
+  status: 'open' | 'closed'
+}
+
+export interface FeeMemberStatusItem {
+  id: string
+  cycleId: string
+  userId: string
+  name: string
+  amountDue: number
+  amountPaid: number
+  status: FeePaymentStatus
+  updatedAt: string
+}
+
+export interface TreasuryEntryItem {
+  id: string
+  clubId: string
+  type: TreasuryEntryType
+  title: string
+  amount: number
+  entryDate: string
+  memo: string
+}
+
+export interface FeeDashboardData {
+  connectionReady: boolean
+  policy: ClubFeePolicy | null
+  cycle: ClubFeeCycle | null
+  members: FeeMemberStatusItem[]
+  treasuryEntries: TreasuryEntryItem[]
+}
+
+function isFeeTableMissing(err: any): boolean {
+  const code = err?.code ?? ''
+  const message = String(err?.message ?? '')
+  return code === '42P01' || message.includes('club_fee_') || message.includes('club_treasury_entries')
+}
+
+function getCycleParts(mode: FeeMode, now = new Date()) {
+  const year = now.getFullYear()
+  const month = now.getMonth() + 1
+  if (mode === 'yearly') {
+    return {
+      cycleKey: `${year}`,
+      label: `${year}년 회비`,
+      feeYear: year,
+      feeMonth: null as number | null,
+    }
+  }
+  return {
+    cycleKey: `${year}-${String(month).padStart(2, '0')}`,
+    label: `${year}년 ${month}월 회비`,
+    feeYear: year,
+    feeMonth: month,
+  }
+}
+
+export function feeStatusToKorean(status: FeePaymentStatus): '완납' | '일부납' | '미납' {
+  if (status === 'paid') return '완납'
+  if (status === 'partial') return '일부납'
+  return '미납'
+}
+
+function normalizeCycleRow(row: any): ClubFeeCycle {
+  return {
+    id: row.id,
+    clubId: row.club_id,
+    cycleKey: row.cycle_key,
+    label: row.label,
+    feeYear: row.fee_year,
+    feeMonth: row.fee_month ?? null,
+    amount: row.amount ?? 0,
+    dueDate: row.due_date ?? null,
+    status: row.status ?? 'open',
+  }
+}
+
+function normalizePolicyRow(row: any): ClubFeePolicy {
+  return {
+    clubId: row.club_id,
+    feeMode: row.fee_mode,
+    defaultAmount: row.default_amount ?? 0,
+    visibility: row.visibility ?? 'members',
+    autoCreateCycles: row.auto_create_cycles ?? true,
+    active: row.active ?? true,
+  }
+}
+
+async function getClubFeePolicy(clubId: string): Promise<ClubFeePolicy | null> {
+  const { data, error } = await supabase
+    .from('club_fee_policies')
+    .select('club_id, fee_mode, default_amount, visibility, auto_create_cycles, active')
+    .eq('club_id', clubId)
+    .maybeSingle()
+  if (error) throw error
+  return data ? normalizePolicyRow(data) : null
+}
+
+async function ensureCurrentFeeCycle(clubId: string, policy: ClubFeePolicy): Promise<ClubFeeCycle | null> {
+  const cycleParts = getCycleParts(policy.feeMode)
+  const { data: existing, error } = await supabase
+    .from('club_fee_cycles')
+    .select('id, club_id, cycle_key, label, fee_year, fee_month, amount, due_date, status')
+    .eq('club_id', clubId)
+    .eq('cycle_key', cycleParts.cycleKey)
+    .maybeSingle()
+  if (error) throw error
+  if (existing) return normalizeCycleRow(existing)
+  if (!policy.autoCreateCycles) return null
+
+  const { data, error: insertError } = await supabase
+    .from('club_fee_cycles')
+    .insert({
+      club_id: clubId,
+      cycle_key: cycleParts.cycleKey,
+      label: cycleParts.label,
+      fee_year: cycleParts.feeYear,
+      fee_month: cycleParts.feeMonth,
+      amount: policy.defaultAmount,
+      status: 'open',
+    })
+    .select('id, club_id, cycle_key, label, fee_year, fee_month, amount, due_date, status')
+    .single()
+  if (insertError) throw insertError
+  return normalizeCycleRow(data)
+}
+
+async function ensureFeeStatusesForCycle(clubId: string, cycle: ClubFeeCycle, policy: ClubFeePolicy): Promise<void> {
+  const clubMembers = await getClubMembers(clubId)
+  const { data: existingRows, error } = await supabase
+    .from('club_fee_member_statuses')
+    .select('member_user_id')
+    .eq('cycle_id', cycle.id)
+  if (error) throw error
+
+  const existing = new Set((existingRows ?? []).map((row: any) => row.member_user_id))
+  const missing = clubMembers.filter((member) => !existing.has(member.userId))
+  if (missing.length === 0) return
+
+  const { error: insertError } = await supabase
+    .from('club_fee_member_statuses')
+    .insert(
+      missing.map((member) => ({
+        club_id: clubId,
+        cycle_id: cycle.id,
+        member_user_id: member.userId,
+        amount_due: policy.defaultAmount,
+        amount_paid: 0,
+        status: 'unpaid',
+      }))
+    )
+  if (insertError) throw insertError
+}
+
+async function getCycleMemberStatuses(clubId: string, cycleId: string): Promise<FeeMemberStatusItem[]> {
+  const [clubMembers, statusResult] = await Promise.all([
+    getClubMembers(clubId),
+    supabase
+      .from('club_fee_member_statuses')
+      .select('id, cycle_id, member_user_id, amount_due, amount_paid, status, updated_at')
+      .eq('cycle_id', cycleId)
+      .order('updated_at', { ascending: false }),
+  ])
+
+  if (statusResult.error) throw statusResult.error
+  const nameMap = new Map(clubMembers.map((member) => [member.userId, member.name]))
+  return (statusResult.data ?? []).map((row: any) => ({
+    id: row.id,
+    cycleId: row.cycle_id,
+    userId: row.member_user_id,
+    name: nameMap.get(row.member_user_id) ?? '(이름 없음)',
+    amountDue: row.amount_due ?? 0,
+    amountPaid: row.amount_paid ?? 0,
+    status: row.status ?? 'unpaid',
+    updatedAt: row.updated_at ?? '',
+  }))
+}
+
+export async function getFeeDashboard(clubId: string): Promise<FeeDashboardData> {
+  try {
+    const policy = await getClubFeePolicy(clubId)
+    if (!policy || !policy.active) {
+      return { connectionReady: true, policy: null, cycle: null, members: [], treasuryEntries: [] }
+    }
+
+    const cycle = await ensureCurrentFeeCycle(clubId, policy)
+    if (!cycle) {
+      return { connectionReady: true, policy, cycle: null, members: [], treasuryEntries: [] }
+    }
+
+    await ensureFeeStatusesForCycle(clubId, cycle, policy)
+    const [members, treasuryResult] = await Promise.all([
+      getCycleMemberStatuses(clubId, cycle.id),
+      supabase
+        .from('club_treasury_entries')
+        .select('id, club_id, entry_type, title, amount, entry_date, memo')
+        .eq('club_id', clubId)
+        .order('entry_date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(20),
+    ])
+    if (treasuryResult.error) throw treasuryResult.error
+
+    const treasuryEntries: TreasuryEntryItem[] = (treasuryResult.data ?? []).map((row: any) => ({
+      id: row.id,
+      clubId: row.club_id,
+      type: row.entry_type,
+      title: row.title,
+      amount: row.amount ?? 0,
+      entryDate: row.entry_date,
+      memo: row.memo ?? '',
+    }))
+
+    return { connectionReady: true, policy, cycle, members, treasuryEntries }
+  } catch (err) {
+    if (isFeeTableMissing(err)) {
+      return { connectionReady: false, policy: null, cycle: null, members: [], treasuryEntries: [] }
+    }
+    throw err
+  }
+}
+
+export async function getFeeMemberHistory(clubId: string, memberUserId: string): Promise<FeeMemberStatusItem[]> {
+  const { data, error } = await supabase
+    .from('club_fee_member_statuses')
+    .select('id, cycle_id, member_user_id, amount_due, amount_paid, status, updated_at')
+    .eq('club_id', clubId)
+    .eq('member_user_id', memberUserId)
+    .order('updated_at', { ascending: false })
+  if (error) throw error
+
+  const clubMembers = await getClubMembers(clubId)
+  const name = clubMembers.find((member) => member.userId === memberUserId)?.name ?? '(이름 없음)'
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    cycleId: row.cycle_id,
+    userId: row.member_user_id,
+    name,
+    amountDue: row.amount_due ?? 0,
+    amountPaid: row.amount_paid ?? 0,
+    status: row.status ?? 'unpaid',
+    updatedAt: row.updated_at ?? '',
+  }))
+}
+
+export async function updateFeeMemberStatus(statusId: string, nextStatus: FeePaymentStatus): Promise<void> {
+  const user = await getUser()
+  const { data, error } = await supabase
+    .from('club_fee_member_statuses')
+    .select('amount_due, amount_paid')
+    .eq('id', statusId)
+    .single()
+  if (error) throw error
+
+  const amountDue = data.amount_due ?? 0
+  const amountPaid = nextStatus === 'paid'
+    ? amountDue
+    : nextStatus === 'partial'
+      ? Math.max(Math.floor(amountDue / 2), data.amount_paid ?? 0)
+      : 0
+
+  const { error: updateError } = await supabase
+    .from('club_fee_member_statuses')
+    .update({
+      status: nextStatus,
+      amount_paid: amountPaid,
+      updated_at: new Date().toISOString(),
+      updated_by: user?.id ?? null,
+    })
+    .eq('id', statusId)
+  if (updateError) throw updateError
+}
+
+export async function updateFeeMemberPayment(
+  statusId: string,
+  nextStatus: FeePaymentStatus,
+  amountPaid: number
+): Promise<void> {
+  const user = await getUser()
+  const { error } = await supabase
+    .from('club_fee_member_statuses')
+    .update({
+      status: nextStatus,
+      amount_paid: Math.max(0, amountPaid),
+      updated_at: new Date().toISOString(),
+      updated_by: user?.id ?? null,
+    })
+    .eq('id', statusId)
+  if (error) throw error
+}
+
+export async function getTreasuryEntries(clubId: string): Promise<TreasuryEntryItem[]> {
+  const { data, error } = await supabase
+    .from('club_treasury_entries')
+    .select('id, club_id, entry_type, title, amount, entry_date, memo')
+    .eq('club_id', clubId)
+    .order('entry_date', { ascending: false })
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    clubId: row.club_id,
+    type: row.entry_type,
+    title: row.title,
+    amount: row.amount ?? 0,
+    entryDate: row.entry_date,
+    memo: row.memo ?? '',
+  }))
+}
+
+export async function createTreasuryEntry(
+  clubId: string,
+  input: { type: TreasuryEntryType; title: string; amount: number; entryDate?: string; memo?: string }
+): Promise<void> {
+  const user = await getUser()
+  const { error } = await supabase
+    .from('club_treasury_entries')
+    .insert({
+      club_id: clubId,
+      entry_type: input.type,
+      title: input.title,
+      amount: input.amount,
+      entry_date: input.entryDate ?? new Date().toISOString().slice(0, 10),
+      memo: input.memo ?? '',
+      created_by: user?.id ?? null,
+    })
+  if (error) throw error
+}
+
+export async function updateTreasuryEntry(
+  entryId: string,
+  input: { type: TreasuryEntryType; title: string; amount: number; entryDate?: string; memo?: string }
+): Promise<void> {
+  const { error } = await supabase
+    .from('club_treasury_entries')
+    .update({
+      entry_type: input.type,
+      title: input.title,
+      amount: input.amount,
+      entry_date: input.entryDate ?? new Date().toISOString().slice(0, 10),
+      memo: input.memo ?? '',
+    })
+    .eq('id', entryId)
+  if (error) throw error
+}
+
 export async function getClubByInviteCode(code: string): Promise<{ name: string; subtitle: string } | null> {
   const { data } = await supabase
     .from('clubs')

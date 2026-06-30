@@ -16,7 +16,10 @@ import ResultScreen from '../screens/ResultScreen'
 import MemberScreen from '../screens/MemberScreen'
 import SettingsScreen from '../screens/SettingsScreen'
 import FeePrototypeScreen from '../screens/FeePrototypeScreen'
+import FeeMemberPrototypeScreen from '../screens/FeeMemberPrototypeScreen'
 import NoticePrototypeScreen from '../screens/NoticePrototypeScreen'
+import TreasuryEntryPrototypeScreen from '../screens/TreasuryEntryPrototypeScreen'
+import TreasuryLedgerPrototypeScreen from '../screens/TreasuryLedgerPrototypeScreen'
 import RoundSetupScreen from '../screens/RoundSetupScreen'
 import ScoreEntryScreen from '../screens/ScoreEntryScreen'
 import type { MainTabParamList, RootStackParamList } from './types'
@@ -120,6 +123,23 @@ export default function Navigation() {
           <Stack.Screen name="Profile" component={ProfileScreen} options={({ navigation }) => ({ title: '프로필 · 설정', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={({ navigation }) => ({ title: '설정', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="FeePrototype" component={FeePrototypeScreen} options={({ navigation }) => ({ title: '회비 관리', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="FeeMemberPrototype" component={FeeMemberPrototypeScreen} options={({ navigation }) => ({ title: '회원 회비 상세', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="TreasuryLedgerPrototype" component={TreasuryLedgerPrototypeScreen} options={({ navigation }) => ({ title: '입금 · 지급 내역', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen
+            name="TreasuryEntryPrototype"
+            component={TreasuryEntryPrototypeScreen}
+            options={({ navigation, route }) => ({
+              title: route.params.entry
+                ? route.params.kind === 'income'
+                  ? '입금 수정'
+                  : '지급 수정'
+                : route.params.kind === 'income'
+                  ? '입금 등록'
+                  : '지급 등록',
+              headerLeft: () => null,
+              headerRight: () => <CloseBtn onPress={() => navigation.goBack()} />,
+            })}
+          />
           <Stack.Screen name="NoticePrototype" component={NoticePrototypeScreen} options={({ navigation }) => ({ title: '공지 관리', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="Members" component={MemberScreen} options={({ navigation }) => ({ title: '멤버 관리', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="RoundDetail" component={RoundDetailScreen} options={({ navigation }) => ({ title: '라운드 상세', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.navigate('Main', { screen: 'History' })} /> })} />

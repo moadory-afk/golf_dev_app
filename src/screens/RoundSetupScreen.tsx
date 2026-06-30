@@ -1,4 +1,4 @@
-import { ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Alert, ActivityIndicator, Modal } from 'react-native'
+import { ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Alert, ActivityIndicator, Modal, Platform } from 'react-native'
 import { useNavigation, useRoute } from '@react-navigation/native'
 import { useState, useEffect } from 'react'
 import * as ImagePicker from 'expo-image-picker'
@@ -337,22 +337,29 @@ export default function RoundSetupScreen() {
     setSaveBusy(true)
     try {
       const photoData: string[] = []
-      for (const uri of imageUris) {
-        const res = await manipulateAsync(uri, [{ resize: { width: 800 } }], {
-          compress: 0.6, format: SaveFormat.JPEG, base64: true,
-        })
-        if (res.base64) photoData.push(`data:image/jpeg;base64,${res.base64}`)
+      if (Platform.OS !== 'web') {
+        for (const uri of imageUris) {
+          const res = await manipulateAsync(uri, [{ resize: { width: 800 } }], {
+            compress: 0.6, format: SaveFormat.JPEG, base64: true,
+          })
+          if (res.base64) photoData.push(`data:image/jpeg;base64,${res.base64}`)
+        }
       }
-      const saved = await saveRound({
-        date,
-        courseName: getCourseName(),
-        pars,
-        players: buildPlayers(ocrResult),
-        photoData,
-        clubId: activeClub?.id,
-        settlement: buildSettlement(),
-        golfCourseId: showManual ? undefined : selectedCourse?.id,
-      })
+      const saved = await Promise.race([
+        saveRound({
+          date,
+          courseName: getCourseName(),
+          pars,
+          players: buildPlayers(ocrResult),
+          photoData,
+          clubId: activeClub?.id,
+          settlement: buildSettlement(),
+          golfCourseId: showManual ? undefined : selectedCourse?.id,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('저장 요청 시간이 초과되었습니다. 네트워크 상태를 확인한 뒤 다시 시도해주세요.')), 20000)
+        ),
+      ])
       nav.navigate('RoundDetail', { id: saved.id })
     } catch (err) {
       Alert.alert('저장 오류', String(err))

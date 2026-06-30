@@ -13,6 +13,19 @@ export type RootStackParamList = {
   Profile: undefined
   Settings: undefined
   FeePrototype: undefined
+  FeeMemberPrototype: { clubId: string; memberUserId: string; memberName: string; statusId: string }
+  TreasuryLedgerPrototype: undefined
+  TreasuryEntryPrototype: {
+    kind: 'income' | 'expense'
+    entry?: {
+      id: string
+      type: 'income' | 'expense'
+      title: string
+      amount: number
+      entryDate: string
+      memo: string
+    }
+  }
   NoticePrototype: undefined
   ScoreCapture: undefined
   Members: { clubId: string }
