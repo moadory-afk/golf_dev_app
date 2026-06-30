@@ -138,6 +138,9 @@ export default function HomeScreen() {
     .sort((a, b) => a.total - b.total)
 
   const myEntries = myName ? (byName.get(myName) ?? []) : []
+  const myAverage = myEntries.length > 0
+    ? Math.round(myEntries.reduce((sum, e) => sum + e.total, 0) / myEntries.length)
+    : null
   const myHandicap = (() => {
     if (!myEntries.length) return null
     const sorted = [...myEntries].sort((a, b) => a.date.localeCompare(b.date))
@@ -206,6 +209,16 @@ export default function HomeScreen() {
   const feePaidCount = feeMembers.filter((m) => m.status === 'paid').length
   const feePartialCount = feeMembers.filter((m) => m.status === 'partial').length
   const feeUnpaidCount = feeMembers.filter((m) => m.status === 'unpaid').length
+  const feeStatusSummary = (() => {
+    if (feeUnpaidCount === 0 && feePartialCount === 0) return '오늘 기준 완납'
+    const now = new Date()
+    const months: string[] = []
+    for (let offset = feeUnpaidCount; offset >= 1; offset -= 1) {
+      const month = new Date(now.getFullYear(), now.getMonth() - offset, 1).getMonth() + 1
+      months.push(String(month))
+    }
+    return `오늘 기준 ${months.join(',')}월 미납`
+  })()
   const nextAttendance = (value: '미정' | '참석' | '불참') => {
     const order: Array<'미정' | '참석' | '불참'> = ['미정', '참석', '불참']
     return order[(order.indexOf(value) + 1) % order.length]
@@ -243,15 +256,15 @@ export default function HomeScreen() {
                 <Text style={s.statValue}>{myHandicap !== null ? diffText(myHandicap) : '-'}</Text>
                 <Text style={s.statSub}>최근 {handicapBasis}경기</Text>
               </TouchableOpacity>
+              <TouchableOpacity style={s.statCard}>
+                <Text style={s.statLabel}>평균</Text>
+                <Text style={s.statValue}>{myAverage !== null ? `${myAverage}타` : '-'}</Text>
+                <Text style={s.statSub}>전체 경기 평균</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={s.statCard} onPress={() => setPersonalDetail('best')}>
                 <Text style={s.statLabel}>베스트</Text>
                 <Text style={[s.statValue, { color: C.gold }]}>{myBest ? `${myBest.total}타` : '-'}</Text>
                 <Text style={s.statSub}>{myBest?.courseName.slice(0, 5) ?? ''}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.statCard} onPress={() => setPersonalDetail('wins')}>
-                <Text style={s.statLabel}>우승</Text>
-                <Text style={[s.statValue, { color: C.green }]}>{myWins}회</Text>
-                <Text style={s.statSub}>정규 신페리오</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -456,28 +469,21 @@ export default function HomeScreen() {
               </View>
               {showFeeCard ? (
                 <>
-                  <Text style={s.protoSub}>현재 회차 기준 납부와 미납 상태를 보여주는 영역입니다.</Text>
                   <View style={s.feeSummaryBox}>
                     <View style={s.feeSummaryRow}>
-                      <Text style={s.feeSummaryLabel}>회차</Text>
-                      <Text style={s.feeSummaryValue}>{feeCycleLabel}</Text>
-                    </View>
-                    <View style={s.feeSummaryRow}>
                       <Text style={s.feeSummaryLabel}>납부 현황</Text>
-                      <Text style={[s.feeSummaryValue, feeUnpaidCount > 0 && s.feeSummaryValueWarn]}>
-                        완납 {feePaidCount} · 일부납 {feePartialCount} · 미납 {feeUnpaidCount}
+                      <Text style={[s.feeSummaryValue, (feeUnpaidCount > 0 || feePartialCount > 0) && s.feeSummaryValueWarn]}>
+                        {feeStatusSummary}
                       </Text>
                     </View>
                   </View>
-                  <TouchableOpacity style={[s.h2hBtn, { marginTop: 12 }]} onPress={() => nav.navigate('FeePrototype')}>
-                    <Icon name="money" size={15} color={C.green} />
-                    <Text style={s.h2hBtnText}>회비관리 현황 확인 →</Text>
+                  <TouchableOpacity style={s.feeActionBtn} onPress={() => nav.navigate('FeePrototype')}>
+                    <Text style={s.feeActionText}>회비관리 현황 확인 →</Text>
                   </TouchableOpacity>
                 </>
               ) : (
                 <View style={s.feeCollapsedBox}>
-                  <Text style={s.feeCollapsedText}>{feeCycleLabel}</Text>
-                  <Text style={s.feeCollapsedSub}>완납 {feePaidCount} · 일부납 {feePartialCount} · 미납 {feeUnpaidCount}</Text>
+                  <Text style={s.feeCollapsedText}>{feeStatusSummary}</Text>
                 </View>
               )}
             </View>
@@ -976,6 +982,15 @@ const s = StyleSheet.create({
   },
   feeCollapsedText: { fontSize: 14, fontWeight: '800', color: C.text },
   feeCollapsedSub: { fontSize: 12, fontWeight: '700', color: C.green, marginTop: 4 },
+  feeActionBtn: {
+    marginTop: 12,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: C.greenLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feeActionText: { color: C.green, fontWeight: '800', fontSize: 13 },
   feeMemberRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

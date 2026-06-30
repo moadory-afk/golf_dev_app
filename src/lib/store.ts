@@ -589,6 +589,32 @@ async function getClubFeePolicy(clubId: string): Promise<ClubFeePolicy | null> {
   return data ? normalizePolicyRow(data) : null
 }
 
+export async function saveClubFeePolicy(input: {
+  clubId: string
+  feeMode: FeeMode
+  defaultAmount: number
+  visibility?: FeeVisibility
+  autoCreateCycles?: boolean
+  active?: boolean
+}): Promise<ClubFeePolicy> {
+  const payload = {
+    club_id: input.clubId,
+    fee_mode: input.feeMode,
+    default_amount: input.defaultAmount,
+    visibility: input.visibility ?? 'members',
+    auto_create_cycles: input.autoCreateCycles ?? true,
+    active: input.active ?? true,
+  }
+
+  const { data, error } = await supabase
+    .from('club_fee_policies')
+    .upsert(payload, { onConflict: 'club_id' })
+    .select('club_id, fee_mode, default_amount, visibility, auto_create_cycles, active')
+    .single()
+  if (error) throw error
+  return normalizePolicyRow(data)
+}
+
 async function ensureCurrentFeeCycle(clubId: string, policy: ClubFeePolicy): Promise<ClubFeeCycle | null> {
   const cycleParts = getCycleParts(policy.feeMode)
   const { data: existing, error } = await supabase
