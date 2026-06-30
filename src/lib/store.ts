@@ -472,6 +472,13 @@ export type FeeMode = 'monthly' | 'yearly'
 export type FeeVisibility = 'admin_only' | 'members'
 export type FeePaymentStatus = 'paid' | 'partial' | 'unpaid'
 export type TreasuryEntryType = 'income' | 'expense'
+export type FeePolicyAdjustmentType = 'contribution' | 'discount'
+
+export interface FeePolicyAdjustmentItem {
+  userId: string
+  name: string
+  amount: string
+}
 
 export interface ClubFeePolicy {
   clubId: string
@@ -480,6 +487,8 @@ export interface ClubFeePolicy {
   visibility: FeeVisibility
   autoCreateCycles: boolean
   active: boolean
+  contributions: FeePolicyAdjustmentItem[]
+  discounts: FeePolicyAdjustmentItem[]
 }
 
 export interface ClubFeeCycle {
@@ -523,6 +532,13 @@ export interface FeeDashboardData {
   treasuryEntries: TreasuryEntryItem[]
 }
 
+export interface FeePaymentMonthData {
+  connectionReady: boolean
+  policy: ClubFeePolicy | null
+  cycle: ClubFeeCycle | null
+  members: FeeMemberStatusItem[]
+}
+
 function isFeeTableMissing(err: any): boolean {
   const code = err?.code ?? ''
   const message = String(err?.message ?? '')
@@ -546,6 +562,13 @@ function getCycleParts(mode: FeeMode, now = new Date()) {
     feeYear: year,
     feeMonth: month,
   }
+}
+
+function getCyclePartsByOffset(mode: FeeMode, offset: number, now = new Date()) {
+  if (mode === 'yearly') {
+    return getCycleParts(mode, new Date(now.getFullYear() + offset, 0, 1))
+  }
+  return getCycleParts(mode, new Date(now.getFullYear(), now.getMonth() + offset, 1))
 }
 
 export function feeStatusToKorean(status: FeePaymentStatus): '완납' | '일부납' | '미납' {
@@ -576,17 +599,48 @@ function normalizePolicyRow(row: any): ClubFeePolicy {
     visibility: row.visibility ?? 'members',
     autoCreateCycles: row.auto_create_cycles ?? true,
     active: row.active ?? true,
+    contributions: [],
+    discounts: [],
   }
 }
 
+function normalizePolicyAdjustments(rows: any[], nameMap: Map<string, string>) {
+  const contributions: FeePolicyAdjustmentItem[] = []
+  const discounts: FeePolicyAdjustmentItem[] = []
+
+  for (const row of rows) {
+    const item = {
+      userId: row.member_user_id,
+      name: nameMap.get(row.member_user_id) ?? '',
+      amount: String(row.amount ?? 0),
+    }
+    if (row.adjustment_type === 'contribution') contributions.push(item)
+    if (row.adjustment_type === 'discount') discounts.push(item)
+  }
+
+  return { contributions, discounts }
+}
+
 async function getClubFeePolicy(clubId: string): Promise<ClubFeePolicy | null> {
-  const { data, error } = await supabase
-    .from('club_fee_policies')
-    .select('club_id, fee_mode, default_amount, visibility, auto_create_cycles, active')
-    .eq('club_id', clubId)
-    .maybeSingle()
-  if (error) throw error
-  return data ? normalizePolicyRow(data) : null
+  const [policyResult, adjustmentResult, members] = await Promise.all([
+    supabase
+      .from('club_fee_policies')
+      .select('club_id, fee_mode, default_amount, visibility, auto_create_cycles, active')
+      .eq('club_id', clubId)
+      .maybeSingle(),
+    supabase
+      .from('club_fee_policy_adjustments')
+      .select('member_user_id, amount, adjustment_type')
+      .eq('club_id', clubId),
+    getClubMembers(clubId),
+  ])
+  if (policyResult.error) throw policyResult.error
+  if (adjustmentResult.error) throw adjustmentResult.error
+  if (!policyResult.data) return null
+
+  const nameMap = new Map(members.map((member) => [member.userId, member.name]))
+  const adjustments = normalizePolicyAdjustments(adjustmentResult.data ?? [], nameMap)
+  return { ...normalizePolicyRow(policyResult.data), ...adjustments }
 }
 
 export async function saveClubFeePolicy(input: {
@@ -596,6 +650,8 @@ export async function saveClubFeePolicy(input: {
   visibility?: FeeVisibility
   autoCreateCycles?: boolean
   active?: boolean
+  contributions?: FeePolicyAdjustmentItem[]
+  discounts?: FeePolicyAdjustmentItem[]
 }): Promise<ClubFeePolicy> {
   const payload = {
     club_id: input.clubId,
@@ -612,11 +668,51 @@ export async function saveClubFeePolicy(input: {
     .select('club_id, fee_mode, default_amount, visibility, auto_create_cycles, active')
     .single()
   if (error) throw error
-  return normalizePolicyRow(data)
+
+  const contributionRows = (input.contributions ?? []).map((item) => ({
+    club_id: input.clubId,
+    member_user_id: item.userId,
+    amount: Number(item.amount.replace(/[^0-9]/g, '')) || 0,
+    adjustment_type: 'contribution' as FeePolicyAdjustmentType,
+  }))
+  const discountRows = (input.discounts ?? []).map((item) => ({
+    club_id: input.clubId,
+    member_user_id: item.userId,
+    amount: Number(item.amount.replace(/[^0-9]/g, '')) || 0,
+    adjustment_type: 'discount' as FeePolicyAdjustmentType,
+  }))
+
+  const { error: deleteError } = await supabase
+    .from('club_fee_policy_adjustments')
+    .delete()
+    .eq('club_id', input.clubId)
+  if (deleteError) throw deleteError
+
+  const adjustmentRows = [...contributionRows, ...discountRows]
+  if (adjustmentRows.length > 0) {
+    const { error: insertError } = await supabase
+      .from('club_fee_policy_adjustments')
+      .insert(adjustmentRows)
+    if (insertError) throw insertError
+  }
+
+  return {
+    ...normalizePolicyRow(data),
+    contributions: input.contributions ?? [],
+    discounts: input.discounts ?? [],
+  }
 }
 
 async function ensureCurrentFeeCycle(clubId: string, policy: ClubFeePolicy): Promise<ClubFeeCycle | null> {
   const cycleParts = getCycleParts(policy.feeMode)
+  return ensureFeeCycleByParts(clubId, policy, cycleParts)
+}
+
+async function ensureFeeCycleByParts(
+  clubId: string,
+  policy: ClubFeePolicy,
+  cycleParts: ReturnType<typeof getCycleParts>
+): Promise<ClubFeeCycle | null> {
   const { data: existing, error } = await supabase
     .from('club_fee_cycles')
     .select('id, club_id, cycle_key, label, fee_year, fee_month, amount, due_date, status')
@@ -642,6 +738,11 @@ async function ensureCurrentFeeCycle(clubId: string, policy: ClubFeePolicy): Pro
     .single()
   if (insertError) throw insertError
   return normalizeCycleRow(data)
+}
+
+async function ensureFeeCycleByOffset(clubId: string, policy: ClubFeePolicy, offset: number): Promise<ClubFeeCycle | null> {
+  const cycleParts = getCyclePartsByOffset(policy.feeMode, offset)
+  return ensureFeeCycleByParts(clubId, policy, cycleParts)
 }
 
 async function ensureFeeStatusesForCycle(clubId: string, cycle: ClubFeeCycle, policy: ClubFeePolicy): Promise<void> {
@@ -734,6 +835,29 @@ export async function getFeeDashboard(clubId: string): Promise<FeeDashboardData>
   } catch (err) {
     if (isFeeTableMissing(err)) {
       return { connectionReady: false, policy: null, cycle: null, members: [], treasuryEntries: [] }
+    }
+    throw err
+  }
+}
+
+export async function getFeePaymentMonthData(clubId: string, offset = 0): Promise<FeePaymentMonthData> {
+  try {
+    const policy = await getClubFeePolicy(clubId)
+    if (!policy || !policy.active) {
+      return { connectionReady: true, policy: null, cycle: null, members: [] }
+    }
+
+    const cycle = await ensureFeeCycleByOffset(clubId, policy, offset)
+    if (!cycle) {
+      return { connectionReady: true, policy, cycle: null, members: [] }
+    }
+
+    await ensureFeeStatusesForCycle(clubId, cycle, policy)
+    const members = await getCycleMemberStatuses(clubId, cycle.id)
+    return { connectionReady: true, policy, cycle, members }
+  } catch (err) {
+    if (isFeeTableMissing(err)) {
+      return { connectionReady: false, policy: null, cycle: null, members: [] }
     }
     throw err
   }
@@ -859,6 +983,14 @@ export async function updateTreasuryEntry(
       entry_date: input.entryDate ?? new Date().toISOString().slice(0, 10),
       memo: input.memo ?? '',
     })
+    .eq('id', entryId)
+  if (error) throw error
+}
+
+export async function deleteTreasuryEntry(entryId: string): Promise<void> {
+  const { error } = await supabase
+    .from('club_treasury_entries')
+    .delete()
     .eq('id', entryId)
   if (error) throw error
 }

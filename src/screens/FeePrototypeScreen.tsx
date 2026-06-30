@@ -2,20 +2,24 @@
 import { Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { C } from '../theme'
 import { Icon } from '../components/Icon'
 import type { RootStackParamList } from '../navigation/types'
 import { useClub } from '../lib/ClubContext'
 import { useAsync } from '../lib/useAsync'
 import {
+  createTreasuryEntry,
+  deleteTreasuryEntry,
   feeStatusToKorean,
   getFeeDashboard,
   getClubMembers,
+  getFeePaymentMonthData,
   saveClubFeePolicy,
+  updateTreasuryEntry,
   updateFeeMemberPayment,
   type FeeMemberStatusItem,
   type FeePaymentStatus,
+  type FeePolicyAdjustmentItem,
   type FeeMode,
   type TreasuryEntryItem,
 } from '../lib/store'
@@ -24,7 +28,6 @@ type FeeTab = 'treasury' | 'payment'
 type PaymentFilter = 'all' | 'partial' | 'unpaid'
 type TransactionFilter = 'all' | 'income' | 'expense'
 type Nav = NativeStackNavigationProp<RootStackParamList>
-type PolicyAdjustmentItem = { userId: string; name: string; amount: string }
 type TransactionDraft = {
   id: string | null
   type: 'income' | 'expense'
@@ -34,7 +37,6 @@ type TransactionDraft = {
   entryDate: string
 }
 
-const POLICY_EXTRA_KEY = '@gogopar_fee_policy_extras'
 const INCOME_DETAILS = ['회비', '찬조금', '기타'] as const
 const EXPENSE_DETAILS = ['캐디피', '식사', '간식', '숙소', '기타'] as const
 
@@ -153,6 +155,10 @@ export default function FeePrototypeScreen() {
     () => (club ? getFeeDashboard(club.id) : Promise.resolve(null)),
     [club?.id, refreshKey]
   )
+  const { data: paymentData } = useAsync(
+    () => (club ? getFeePaymentMonthData(club.id, paymentMonthOffset) : Promise.resolve(null)),
+    [club?.id, refreshKey, paymentMonthOffset]
+  )
   const { data: clubMembers } = useAsync(
     () => (club ? getClubMembers(club.id) : Promise.resolve([])),
     [club?.id]
@@ -167,33 +173,17 @@ export default function FeePrototypeScreen() {
   useEffect(() => {
     setPolicyFeeMode(data?.policy?.feeMode ?? 'monthly')
     setPolicyAmount(String(data?.policy?.defaultAmount ?? 100000))
-  }, [data?.policy?.feeMode, data?.policy?.defaultAmount])
-
-  useEffect(() => {
-    if (!club?.id) return
-    AsyncStorage.getItem(`${POLICY_EXTRA_KEY}:${club.id}`).then((raw) => {
-      if (!raw) {
-        setContributions([])
-        setDiscounts([])
-        return
-      }
-      try {
-        const parsed = JSON.parse(raw) as { contributions?: PolicyAdjustmentItem[]; discounts?: PolicyAdjustmentItem[] }
-        setContributions(parsed.contributions ?? [])
-        setDiscounts(parsed.discounts ?? [])
-      } catch {
-        setContributions([])
-        setDiscounts([])
-      }
-    })
-  }, [club?.id])
+    setContributions(data?.policy?.contributions ?? [])
+    setDiscounts(data?.policy?.discounts ?? [])
+  }, [data?.policy?.feeMode, data?.policy?.defaultAmount, data?.policy?.contributions, data?.policy?.discounts])
 
   const usingFallback = !data?.connectionReady || !data?.policy
-  const members = usingFallback ? fallbackMembers : (data?.members ?? [])
+  const usingPaymentFallback = !paymentData?.connectionReady || !paymentData?.policy
+  const members = usingPaymentFallback ? fallbackMembers : (paymentData?.members ?? [])
   const transactions = usingFallback ? FALLBACK_TRANSACTIONS : (data?.treasuryEntries ?? [])
   const isAdmin = club?.role === 'admin'
   const treasuryMonthLabel = getMonthLabel(treasuryMonthOffset)
-  const paymentMonthLabel = getMonthLabel(paymentMonthOffset)
+  const paymentMonthLabel = paymentData?.cycle?.label ?? getMonthLabel(paymentMonthOffset)
 
   useEffect(() => {
     setTransactionItems(transactions)
@@ -349,11 +339,9 @@ export default function FeePrototypeScreen() {
         visibility: data?.policy?.visibility ?? 'members',
         autoCreateCycles: data?.policy?.autoCreateCycles ?? true,
         active: true,
+        contributions,
+        discounts,
       })
-      await AsyncStorage.setItem(
-        `${POLICY_EXTRA_KEY}:${club.id}`,
-        JSON.stringify({ contributions, discounts })
-      )
       setPolicyOpen(false)
       setRefreshKey((value) => value + 1)
     } finally {
@@ -384,7 +372,7 @@ export default function FeePrototypeScreen() {
     setTransactionEditorOpen(true)
   }
 
-  function saveTransactionDraft() {
+  async function saveTransactionDraft() {
     const amount = Number(transactionDraft.amount.replace(/[^0-9]/g, ''))
     if (!amount) return
 
@@ -398,20 +386,54 @@ export default function FeePrototypeScreen() {
       memo: transactionDraft.memo,
     }
 
-    setTransactionItems((current) => {
-      if (!transactionDraft.id) return [nextItem, ...current]
-      return current.map((item) => (item.id === transactionDraft.id ? nextItem : item))
-    })
+    if (usingFallback) {
+      setTransactionItems((current) => {
+        if (!transactionDraft.id) return [nextItem, ...current]
+        return current.map((item) => (item.id === transactionDraft.id ? nextItem : item))
+      })
+      setTransactionEditorOpen(false)
+      return
+    }
+
+    if (!club?.id) return
+
+    if (transactionDraft.id) {
+      await updateTreasuryEntry(transactionDraft.id, {
+        type: transactionDraft.type,
+        title: transactionDraft.detail,
+        amount,
+        entryDate: transactionDraft.entryDate,
+        memo: transactionDraft.memo,
+      })
+    } else {
+      await createTreasuryEntry(club.id, {
+        type: transactionDraft.type,
+        title: transactionDraft.detail,
+        amount,
+        entryDate: transactionDraft.entryDate,
+        memo: transactionDraft.memo,
+      })
+    }
+
     setTransactionEditorOpen(false)
+    setRefreshKey((value) => value + 1)
   }
 
-  function deleteTransactionDraft() {
+  async function deleteTransactionDraft() {
     if (!transactionDraft.id) {
       setTransactionEditorOpen(false)
       return
     }
-    setTransactionItems((current) => current.filter((item) => item.id !== transactionDraft.id))
+
+    if (usingFallback) {
+      setTransactionItems((current) => current.filter((item) => item.id !== transactionDraft.id))
+      setTransactionEditorOpen(false)
+      return
+    }
+
+    await deleteTreasuryEntry(transactionDraft.id)
     setTransactionEditorOpen(false)
+    setRefreshKey((value) => value + 1)
   }
 
   return (
