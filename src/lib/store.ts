@@ -545,6 +545,12 @@ function isFeeTableMissing(err: any): boolean {
   return code === '42P01' || message.includes('club_fee_') || message.includes('club_treasury_entries')
 }
 
+function isFeeAdjustmentTableMissing(err: any): boolean {
+  const code = err?.code ?? ''
+  const message = String(err?.message ?? '')
+  return code === '42P01' || message.includes('club_fee_policy_adjustments')
+}
+
 function getCycleParts(mode: FeeMode, now = new Date()) {
   const year = now.getFullYear()
   const month = now.getMonth() + 1
@@ -635,11 +641,14 @@ async function getClubFeePolicy(clubId: string): Promise<ClubFeePolicy | null> {
     getClubMembers(clubId),
   ])
   if (policyResult.error) throw policyResult.error
-  if (adjustmentResult.error) throw adjustmentResult.error
   if (!policyResult.data) return null
 
   const nameMap = new Map(members.map((member) => [member.userId, member.name]))
-  const adjustments = normalizePolicyAdjustments(adjustmentResult.data ?? [], nameMap)
+  const adjustments = adjustmentResult.error
+    ? (isFeeAdjustmentTableMissing(adjustmentResult.error)
+        ? { contributions: [], discounts: [] }
+        : (() => { throw adjustmentResult.error })())
+    : normalizePolicyAdjustments(adjustmentResult.data ?? [], nameMap)
   return { ...normalizePolicyRow(policyResult.data), ...adjustments }
 }
 
@@ -682,18 +691,22 @@ export async function saveClubFeePolicy(input: {
     adjustment_type: 'discount' as FeePolicyAdjustmentType,
   }))
 
-  const { error: deleteError } = await supabase
-    .from('club_fee_policy_adjustments')
-    .delete()
-    .eq('club_id', input.clubId)
-  if (deleteError) throw deleteError
-
-  const adjustmentRows = [...contributionRows, ...discountRows]
-  if (adjustmentRows.length > 0) {
-    const { error: insertError } = await supabase
+  try {
+    const { error: deleteError } = await supabase
       .from('club_fee_policy_adjustments')
-      .insert(adjustmentRows)
-    if (insertError) throw insertError
+      .delete()
+      .eq('club_id', input.clubId)
+    if (deleteError) throw deleteError
+
+    const adjustmentRows = [...contributionRows, ...discountRows]
+    if (adjustmentRows.length > 0) {
+      const { error: insertError } = await supabase
+        .from('club_fee_policy_adjustments')
+        .insert(adjustmentRows)
+      if (insertError) throw insertError
+    }
+  } catch (err) {
+    if (!isFeeAdjustmentTableMissing(err)) throw err
   }
 
   return {

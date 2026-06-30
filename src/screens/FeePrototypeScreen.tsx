@@ -177,9 +177,22 @@ export default function FeePrototypeScreen() {
     setDiscounts(data?.policy?.discounts ?? [])
   }, [data?.policy?.feeMode, data?.policy?.defaultAmount, data?.policy?.contributions, data?.policy?.discounts])
 
-  const usingFallback = !data?.connectionReady || !data?.policy
-  const usingPaymentFallback = !paymentData?.connectionReady || !paymentData?.policy
-  const members = usingPaymentFallback ? fallbackMembers : (paymentData?.members ?? [])
+  const usingFallback = data?.connectionReady === false
+  const usingPaymentFallback = paymentData?.connectionReady === false
+  const members = useMemo(() => {
+    if (usingPaymentFallback) return fallbackMembers
+    if ((paymentData?.members ?? []).length > 0) return paymentData?.members ?? []
+    return (clubMembers ?? []).map((member) => ({
+      id: `empty-${member.userId}`,
+      cycleId: paymentData?.cycle?.id ?? 'no-cycle',
+      userId: member.userId,
+      name: member.name,
+      amountDue: paymentData?.cycle?.amount ?? (Number(policyAmount || 0) || 0),
+      amountPaid: 0,
+      status: 'unpaid' as FeePaymentStatus,
+      updatedAt: '',
+    }))
+  }, [usingPaymentFallback, paymentData?.members, paymentData?.cycle?.id, paymentData?.cycle?.amount, clubMembers, policyAmount])
   const transactions = usingFallback ? FALLBACK_TRANSACTIONS : (data?.treasuryEntries ?? [])
   const isAdmin = club?.role === 'admin'
   const treasuryMonthLabel = getMonthLabel(treasuryMonthOffset)
@@ -534,15 +547,27 @@ export default function FeePrototypeScreen() {
                 </TouchableOpacity>
               ))}
 
-              <TouchableOpacity style={s.newTransactionCard} activeOpacity={0.82} onPress={() => openTransactionEditor()}>
-                <View style={s.newTransactionIcon}>
-                  <Icon name="plus" size={16} color={C.green} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.newTransactionTitle}>신규거래 추가</Text>
-                  <Text style={s.newTransactionSub}>입금 또는 지급 항목을 새로 등록합니다.</Text>
-                </View>
-              </TouchableOpacity>
+              {filteredTransactions.length === 0 ? (
+                <TouchableOpacity style={s.newTransactionCard} activeOpacity={0.82} onPress={() => openTransactionEditor()}>
+                  <View style={s.newTransactionIcon}>
+                    <Icon name="plus" size={16} color={C.green} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.newTransactionTitle}>신규거래 추가</Text>
+                    <Text style={s.newTransactionSub}>등록된 거래가 없습니다. 첫 거래를 추가해 주세요.</Text>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={s.newTransactionCard} activeOpacity={0.82} onPress={() => openTransactionEditor()}>
+                  <View style={s.newTransactionIcon}>
+                    <Icon name="plus" size={16} color={C.green} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.newTransactionTitle}>신규거래 추가</Text>
+                    <Text style={s.newTransactionSub}>입금 또는 지급 항목을 새로 등록합니다.</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </>
@@ -599,6 +624,11 @@ export default function FeePrototypeScreen() {
                   </TouchableOpacity>
                 )
               })}
+              {filteredMembers.length === 0 && (
+                <View style={s.emptyPaymentBox}>
+                  <Text style={s.emptyPaymentText}>해당 월 회비 데이터가 없습니다.</Text>
+                </View>
+              )}
             </View>
           </View>
         </>
@@ -890,6 +920,18 @@ const s = StyleSheet.create({
   sectionTitle: { fontSize: 15, fontWeight: '900', color: C.text },
   sectionAction: { fontSize: 12, fontWeight: '800', color: C.green },
   memberGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  emptyPaymentBox: {
+    width: '100%',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: '#f8fbf8',
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyPaymentText: { fontSize: 13, fontWeight: '700', color: C.muted },
   memberToggle: {
     width: '23%',
     minHeight: 54,
