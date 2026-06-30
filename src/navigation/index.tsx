@@ -4,7 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { C, isTurf } from '../theme'
 import { Icon, type IconName } from '../components/Icon'
-import { ClubProvider } from '../lib/ClubContext'
+import { ClubProvider, useClub } from '../lib/ClubContext'
 import HomeScreen from '../screens/HomeScreen'
 import ClubScreen from '../screens/ClubScreen'
 import HistoryScreen from '../screens/HistoryScreen'
@@ -108,23 +108,29 @@ function MainTabs() {
   )
 }
 
-export default function Navigation() {
+function clubScreenTitle(clubName: string | undefined, title: string) {
+  return clubName ? `${clubName} ${title}` : title
+}
+
+function NavigationStack() {
+  const { activeClub } = useClub()
+  const clubName = activeClub?.name
+
   return (
-    <ClubProvider>
-      <NavigationContainer>
-        <Stack.Navigator
-          screenOptions={{
-            headerStyle: { backgroundColor: C.greenDark },
-            headerTintColor: '#fff',
-            headerTitleStyle: { fontWeight: '700' },
-            headerBackVisible: false,
-          }}
-        >
+    <NavigationContainer>
+      <Stack.Navigator
+        screenOptions={{
+          headerStyle: { backgroundColor: C.greenDark },
+          headerTintColor: '#fff',
+          headerTitleStyle: { fontWeight: '700' },
+          headerBackVisible: false,
+        }}
+      >
           <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
           <Stack.Screen name="Profile" component={ProfileScreen} options={({ navigation }) => ({ title: '프로필 · 설정', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
-          <Stack.Screen name="Settings" component={SettingsScreen} options={({ navigation }) => ({ title: '설정', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
-          <Stack.Screen name="FeePrototype" component={FeePrototypeScreen} options={({ navigation }) => ({ title: '회비 관리', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
-          <Stack.Screen name="RoundSchedulePrototype" component={RoundSchedulePrototypeScreen} options={({ navigation }) => ({ title: '라운드 일정', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="Settings" component={SettingsScreen} options={({ navigation }) => ({ title: clubScreenTitle(clubName, '운영 설정'), headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="FeePrototype" component={FeePrototypeScreen} options={({ navigation }) => ({ title: clubScreenTitle(clubName, '회비 관리'), headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="RoundSchedulePrototype" component={RoundSchedulePrototypeScreen} options={({ navigation }) => ({ title: clubScreenTitle(clubName, '라운드 일정'), headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="FeeMemberPrototype" component={FeeMemberPrototypeScreen} options={({ navigation }) => ({ title: '회원 회비 상세', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="TreasuryLedgerPrototype" component={TreasuryLedgerPrototypeScreen} options={({ navigation }) => ({ title: '입금 · 지급 내역', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen
@@ -142,16 +148,23 @@ export default function Navigation() {
               headerRight: () => <CloseBtn onPress={() => navigation.goBack()} />,
             })}
           />
-          <Stack.Screen name="NoticePrototype" component={NoticePrototypeScreen} options={({ navigation }) => ({ title: '공지 관리', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
-          <Stack.Screen name="Members" component={MemberScreen} options={({ navigation }) => ({ title: '멤버 관리', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="NoticePrototype" component={NoticePrototypeScreen} options={({ navigation }) => ({ title: clubScreenTitle(clubName, '공지사항'), headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="Members" component={MemberScreen} options={({ navigation }) => ({ title: clubScreenTitle(clubName, '회원 관리'), headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="RoundDetail" component={RoundDetailScreen} options={({ navigation }) => ({ title: '라운드 상세', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.navigate('Main', { screen: 'History' })} /> })} />
           <Stack.Screen name="ScoreCapture" component={ScoreCaptureScreen} options={({ navigation }) => ({ title: '스코어 입력', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="ScoreReview" component={ScoreReviewScreen} options={({ navigation }) => ({ title: '스코어 확인 · 보정', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="Result" component={ResultScreen} options={({ navigation }) => ({ title: '라운드 결과', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="RoundSetup" component={RoundSetupScreen} options={({ navigation }) => ({ title: '코스 · 날짜 선택', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="ScoreEntry" component={ScoreEntryScreen} options={({ navigation }) => ({ title: '스코어 입력', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.navigate('Main', { screen: 'History' })} /> })} />
-        </Stack.Navigator>
-      </NavigationContainer>
+      </Stack.Navigator>
+    </NavigationContainer>
+  )
+}
+
+export default function Navigation() {
+  return (
+    <ClubProvider>
+      <NavigationStack />
     </ClubProvider>
   )
 }

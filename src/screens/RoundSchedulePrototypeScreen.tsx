@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import DateField, { todayLocal } from '../components/DateField'
 import { Icon } from '../components/Icon'
+import { useNavigation } from '@react-navigation/native'
 import { useClub } from '../lib/ClubContext'
 import {
   deleteRoundSchedule,
@@ -91,7 +92,12 @@ function normalizeTimeInput(value: string) {
 }
 
 export default function RoundSchedulePrototypeScreen() {
+  const nav = useNavigation()
   const { activeClub: club } = useClub()
+
+  useLayoutEffect(() => {
+    nav.setOptions({ title: `${club?.name ?? '클럽'} 라운드 일정` })
+  }, [nav, club?.name])
   const [items, setItems] = useState<ScheduledRound[]>([])
   const [courses, setCourses] = useState<GolfCourse[]>([])
   const [layouts, setLayouts] = useState<CourseLayout[]>([])
@@ -318,7 +324,7 @@ export default function RoundSchedulePrototypeScreen() {
 
           {sortedItems.length === 0 ? (
             <TouchableOpacity style={s.emptyCard} onPress={openCreate} activeOpacity={0.86}>
-              <Icon name="calendar" size={24} color={C.green} />
+              <Icon name="flag" size={24} color={C.green} />
               <Text style={s.emptyTitle}>등록된 라운드 일정이 없습니다</Text>
               <Text style={s.emptyDesc}>첫 일정을 등록하면 홈 화면의 예정된 라운드 카드와 연결됩니다.</Text>
             </TouchableOpacity>
@@ -326,7 +332,7 @@ export default function RoundSchedulePrototypeScreen() {
             sortedItems.map((item) => (
               <TouchableOpacity key={item.id} style={s.scheduleCard} onPress={() => openEdit(item)} activeOpacity={0.86}>
                 <View style={s.scheduleIcon}>
-                  <Icon name="calendar" size={18} color={C.greenDark} />
+                  <Icon name="flag" size={18} color={C.greenDark} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={s.scheduleDate}>{item.date}</Text>

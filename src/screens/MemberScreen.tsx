@@ -1,19 +1,28 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useLayoutEffect } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
   Alert, ActivityIndicator, Modal, RefreshControl, Platform,
 } from 'react-native'
-import { useRoute } from '@react-navigation/native'
+import { useNavigation, useRoute } from '@react-navigation/native'
 import { supabase } from '../lib/supabase'
 import { getClubMembers, removeMember, updateMemberRole } from '../lib/store'
+import { useClub } from '../lib/ClubContext'
 import { C } from '../theme'
-import type { RootStackProps } from '../navigation/types'
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import type { RootStackParamList, RootStackProps } from '../navigation/types'
 
 type Member = { userId: string; name: string; role: string }
+type Nav = NativeStackNavigationProp<RootStackParamList>
 
 export default function MemberScreen() {
+  const nav = useNavigation<Nav>()
   const route = useRoute<RootStackProps<'Members'>['route']>()
   const { clubId } = route.params
+  const { activeClub } = useClub()
+
+  useLayoutEffect(() => {
+    nav.setOptions({ title: `${activeClub?.name ?? '클럽'} 회원 관리` })
+  }, [nav, activeClub?.name])
 
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)

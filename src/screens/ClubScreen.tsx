@@ -1,12 +1,12 @@
 import {
-  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Image,
+  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Image, Share, Alert,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useState, useCallback, useEffect } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { getRounds, playerTotal, totalPar, computeHandicaps, shortName, type SavedRound } from '../lib/store'
+import { getClubMembers, getRounds, playerTotal, totalPar, computeHandicaps, shortName, type SavedRound } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
 import { useAsync } from '../lib/useAsync'
 import { supabase } from '../lib/supabase'
@@ -20,6 +20,13 @@ type Nav = NativeStackNavigationProp<RootStackParamList>
 type RankingType = 'recentMedal' | 'recentWins' | 'wins' | 'streak' | 'lowestHandicap' | 'birdie' | 'singleBirdie'
 
 const CLUB_HERO_IMAGE = 'https://images.unsplash.com/photo-1592919505780-303950717480?auto=format&fit=crop&w=1200&q=80'
+const APP_URL = 'https://golf-seven-psi.vercel.app'
+
+const RECENT_NOTICES = [
+  { title: '7월 월례회 공지', date: '06.28' },
+  { title: '하계 라운드 일정 안내', date: '06.24' },
+  { title: '회원 가입 안내문', date: '06.19' },
+]
 
 function diffText(d: number) { return d > 0 ? `+${d}` : `${d}` }
 
@@ -51,9 +58,17 @@ export default function ClubScreen() {
     () => (club ? getRounds(club.id) : Promise.resolve([])),
     [refreshKey, club?.id],
   )
+  const { data: clubMembers } = useAsync(
+    () => (club ? getClubMembers(club.id) : Promise.resolve([])),
+    [refreshKey, club?.id],
+  )
   const rounds = data ?? []
+  const members = clubMembers ?? []
+  const adminMembers = members.filter((member) => member.role === 'admin')
   const onRefresh = useCallback(() => setRefreshKey((k) => k + 1), [])
   const [rankingType, setRankingType] = useState<RankingType | null>(null)
+  const [clubInfoOpen, setClubInfoOpen] = useState(false)
+  const [showHallCriteria, setShowHallCriteria] = useState(false)
   const [myName, setMyName] = useState<string | null>(null)
 
   const [handicapBasis, setHandicapBasis] = useState(5)
@@ -68,6 +83,18 @@ export default function ClubScreen() {
       if (v === '3' || v === '5' || v === '10') setHandicapBasis(Number(v))
     })
   }, [])
+
+  async function handleInviteMember() {
+    if (!club) return
+    const link = `${APP_URL}/?join=${club.inviteCode}`
+    const senderName = myName ?? '클럽 회원'
+    const message = `[${senderName}]님이 [${club.name}] 골프 클럽에 초대합니다!\n\n${link}`
+    try {
+      await Share.share({ title: `${club.name} 골프 클럽 초대`, message })
+    } catch {
+      Alert.alert('초대코드', club.inviteCode)
+    }
+  }
 
   const userInitial = (myName ?? '?').slice(0, 1)
   const handicaps = computeHandicaps(rounds, handicapBasis)
@@ -254,7 +281,7 @@ export default function ClubScreen() {
       key: 'roundSchedule',
       title: '라운드 일정',
       subtitle: '날짜, 시간, 골프장 정보를 등록하고 예정 라운드를 관리합니다',
-      icon: 'calendar' as const,
+      icon: 'flag' as const,
       onPress: () => nav.navigate('RoundSchedulePrototype'),
     },
     {
@@ -278,6 +305,21 @@ export default function ClubScreen() {
       {rankingType && (
         <RankingModal config={rankingConfig[rankingType]} onClose={() => setRankingType(null)} />
       )}
+      {clubInfoOpen && club && (
+        <ClubInfoModal
+          clubName={club.name}
+          subtitle={club.subtitle?.trim() ? club.subtitle : '골프의 모든 경험을 하나로.'}
+          role={club.role === 'admin' ? '관리자' : '일반회원'}
+          memberCount={members.length}
+          admins={adminMembers}
+          onClose={() => setClubInfoOpen(false)}
+          onMembers={() => {
+            setClubInfoOpen(false)
+            nav.navigate('Members', { clubId: club.id })
+          }}
+          onInvite={handleInviteMember}
+        />
+      )}
 
       <ScrollView
         style={{ flex: 1 }}
@@ -300,10 +342,66 @@ export default function ClubScreen() {
                       {club.subtitle?.trim() ? club.subtitle : '운영 중인 골프 클럽'}
                     </Text>
                   </View>
-                  <TouchableOpacity style={s.clubInfoBtn} onPress={() => nav.navigate('Settings')} activeOpacity={0.84}>
+                  <TouchableOpacity style={s.clubInfoBtn} onPress={() => setClubInfoOpen(true)} activeOpacity={0.84}>
                     <Text style={s.clubInfoBtnText}>클럽 정보</Text>
                   </TouchableOpacity>
                 </View>
+              </View>
+
+              <View style={s.card}>
+                <View style={s.cardTitleRow}>
+                  <Text style={[s.cardTitle, { marginBottom: 0 }]}>공지사항</Text>
+                  <TouchableOpacity onPress={() => nav.navigate('NoticePrototype')} activeOpacity={0.82}>
+                    <Text style={s.more}>전체보기 ›</Text>
+                  </TouchableOpacity>
+                </View>
+                {RECENT_NOTICES.map((notice) => (
+                  <TouchableOpacity key={`${notice.title}-${notice.date}`} style={s.noticeRow} onPress={() => nav.navigate('NoticePrototype')} activeOpacity={0.82}>
+                    <View style={s.noticeIcon}>
+                      <Icon name="mail" size={15} color={C.green} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.noticeTitle}>{notice.title}</Text>
+                      <Text style={s.noticeMeta}>{notice.date}</Text>
+                    </View>
+                    <Icon name="chevronRight" size={16} color={C.muted} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={s.card}>
+                <View style={s.cardTitleRow}>
+                  <Text style={[s.cardTitle, { marginBottom: 0 }]}>명예의 전당 선정 기준</Text>
+                  <TouchableOpacity style={s.recordToggleBtn} onPress={() => setShowHallCriteria((value) => !value)} activeOpacity={0.82}>
+                    <Text style={s.recordToggleText}>{showHallCriteria ? '접기' : '펼치기'}</Text>
+                  </TouchableOpacity>
+                </View>
+                {showHallCriteria ? (
+                  <>
+                    <View style={s.ruleRow}>
+                      <Text style={s.ruleLabel}>우승 기록</Text>
+                      <Text style={s.ruleValue}>최다 우승 · 최다 연속 우승</Text>
+                    </View>
+                    <View style={s.ruleRow}>
+                      <Text style={s.ruleLabel}>스코어 기록</Text>
+                      <Text style={s.ruleValue}>최저타 · 최고타 · 버디왕 · 파왕</Text>
+                    </View>
+                    <View style={s.ruleRow}>
+                      <Text style={s.ruleLabel}>성장 기록</Text>
+                      <Text style={s.ruleValue}>최저 핸디 · 전후반/평균타/핸디 개선</Text>
+                    </View>
+                    <View style={s.ruleRow}>
+                      <Text style={s.ruleLabel}>참가 기록</Text>
+                      <Text style={s.ruleValue}>최다 라운드 참가</Text>
+                    </View>
+                    <View style={s.ruleRow}>
+                      <Text style={s.ruleLabel}>핸디 기준</Text>
+                      <Text style={s.ruleValue}>최근 {handicapBasis}경기</Text>
+                    </View>
+                  </>
+                ) : (
+                  <Text style={s.criteriaCollapsedText}>우승, 스코어, 성장, 참가 기록을 기준으로 선정합니다.</Text>
+                )}
               </View>
 
               {isManagerView && (
@@ -360,80 +458,85 @@ export default function ClubScreen() {
             </View>
           )}
 
-          {/* 핸디캡 랭킹 */}
-          {club && (handicapRanking.length > 0 || rounds.length > 0) && (
-            <Text style={s.pageSectionTitle}>클럽 기록</Text>
-          )}
-
-          {handicapRanking.length > 0 && (
-            <TouchableOpacity style={s.card} onPress={() => setRankingType('lowestHandicap')} activeOpacity={0.85}>
-              <View style={s.cardTitleRow}>
-                <Text style={s.cardTitle}>핸디캡 랭킹 (최근 {handicapBasis}경기)</Text>
-                <Text style={s.more}>전체보기 ›</Text>
-              </View>
-              {handicapRanking.slice(0, 5).map(({ name, handicap, avgScore }, i) => (
-                <View key={name} style={[s.rankRow, i < 3 && { backgroundColor: MEDAL_BG[i], borderRadius: 10 }]}>
-                  <View style={[s.rankNum, { alignItems: 'center', justifyContent: 'center' }]}>
-                    {i < 3 ? <EmojiIcon char={['🥇','🥈','🥉'][i]} size={17} /> : <Text style={s.rankNum}>{i + 1}</Text>}
-                  </View>
-                  <Text style={[s.rankName, myName && name === myName && { color: C.green, fontWeight: '700' }]}>
-                    {shortName(name)}{myName && name === myName ? ' (나)' : ''}
-                  </Text>
-                  <Text style={[s.rankValue, { color: i < 3 ? MEDAL_COLOR[i] : C.text }]}>
-                    {avgScore ? `${avgScore} (${diffText(handicap)})` : diffText(handicap)}
-                  </Text>
-                </View>
-              ))}
-            </TouchableOpacity>
-          )}
-
-          {/* 명예의 전당 */}
-          {rounds.length > 0 && (
-            <View style={s.card}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
-                <Icon name="trophy" size={16} color={C.text} />
-                <Text style={[s.cardTitle, { marginBottom: 0 }]}>명예의 전당</Text>
-              </View>
-              {highlights.map(({ icon, label, value, type }) => (
-                <TouchableOpacity key={label} style={s.hallRow} onPress={() => setRankingType(type)}>
-                  <View style={s.hallIconWrap}>
-                    <EmojiIcon char={icon} size={15} color={C.green} />
-                  </View>
-                  <Text style={s.hallLabel}>{label}</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Text style={s.hallValue}>{value}</Text>
-                    <Text style={{ color: C.muted, fontSize: 16 }}>›</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {/* 최근 클럽 라운드 */}
-          {recent3.length > 0 && (
-            <View style={s.card}>
-              <Text style={s.cardTitle}>최근 클럽 라운드</Text>
-              {recent3.map((r) => {
-                const best = Math.min(...r.players.map((p) => playerTotal(p.strokes)))
-                const winner = getWinner(r, handicaps)
-                return (
-                  <TouchableOpacity key={r.id} style={s.roundRow} onPress={() => nav.navigate('RoundDetail', { id: r.id })}>
-                    <View style={s.roundLeft}>
-                      <Text style={s.roundCourse}>{r.courseName}</Text>
-                      <Text style={s.roundMeta}>{r.date} · {r.players.length}명</Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end', gap: 3 }}>
-                      <Text style={s.roundStat}>최저 <Text style={{ color: C.text, fontWeight: '700' }}>{best}타</Text></Text>
-                      {winner && <Text style={s.roundStat}>우승 <Text style={{ color: C.green, fontWeight: '700' }}>{shortName(winner)}</Text></Text>}
-                    </View>
-                  </TouchableOpacity>
-                )
-              })}
-            </View>
-          )}
         </View>
       </ScrollView>
     </View>
+  )
+}
+
+function ClubInfoModal({
+  clubName,
+  subtitle,
+  role,
+  memberCount,
+  admins,
+  onClose,
+  onMembers,
+  onInvite,
+}: {
+  clubName: string
+  subtitle: string
+  role: string
+  memberCount: number
+  admins: Array<{ userId: string; name: string; role: string }>
+  onClose: () => void
+  onMembers: () => void
+  onInvite: () => void
+}) {
+  return (
+    <Modal transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+          <View style={s.modalHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.clubInfoTitle}>{clubName}</Text>
+              <Text style={s.clubInfoSubtitle}>{subtitle}</Text>
+            </View>
+            <TouchableOpacity style={s.closeBtn} onPress={onClose}>
+              <Text style={s.closeBtnText}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={s.clubInfoStats}>
+            <Text style={s.clubInfoStat}>회원 {memberCount}명</Text>
+            <Text style={s.clubInfoStat}>운영진 {admins.length}명</Text>
+            <Text style={s.clubInfoStat}>내 역할 {role}</Text>
+          </View>
+
+          <View style={s.infoSection}>
+            <Text style={s.infoSectionTitle}>멤버</Text>
+            <View style={s.infoDivider} />
+            <Text style={s.infoLabel}>운영진</Text>
+            {admins.length > 0 ? admins.map((admin) => (
+              <View key={admin.userId} style={s.adminRow}>
+                <Text style={s.adminName}>{admin.name}</Text>
+                <Text style={s.adminRole}>관리자</Text>
+              </View>
+            )) : (
+              <Text style={s.infoMuted}>등록된 운영진이 없습니다.</Text>
+            )}
+            <View style={s.infoActionRow}>
+              <TouchableOpacity style={s.infoActionBtn} onPress={onMembers} activeOpacity={0.82}>
+                <Text style={s.infoActionText}>전체 멤버 보기</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.infoActionBtn} onPress={onInvite} activeOpacity={0.82}>
+                <Text style={s.infoActionText}>멤버 초대</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={s.infoSection}>
+            <Text style={s.infoSectionTitle}>회칙</Text>
+            <View style={s.infoDivider} />
+            <Text style={s.ruleDesc}>회원 자격, 회비, 운영진, 탈퇴 기준 등 동호회 운영 기준을 확인합니다.</Text>
+            <Text style={s.infoMuted}>최근 수정일: 2026.06.30</Text>
+            <TouchableOpacity style={s.infoActionBtn} activeOpacity={0.82}>
+              <Text style={s.infoActionText}>회칙 보기</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
   )
 }
 
@@ -594,6 +697,16 @@ const s = StyleSheet.create({
   cardTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   cardTitle: { fontSize: 15, fontWeight: '700', color: C.text, marginBottom: 14 },
   more: { fontSize: 13, color: C.green, fontWeight: '600' },
+  noticeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border },
+  noticeIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
+  noticeTitle: { fontSize: 13, fontWeight: '700', color: C.text },
+  noticeMeta: { fontSize: 11, color: C.muted, marginTop: 2 },
+  recordToggleBtn: { borderRadius: 999, backgroundColor: C.greenLight, paddingHorizontal: 10, paddingVertical: 5 },
+  recordToggleText: { fontSize: 12, fontWeight: '800', color: C.green },
+  criteriaCollapsedText: { fontSize: 13, fontWeight: '700', color: C.muted, lineHeight: 20 },
+  ruleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: C.border },
+  ruleLabel: { fontSize: 13, fontWeight: '700', color: C.muted },
+  ruleValue: { flex: 1, fontSize: 13, fontWeight: '800', color: C.text, textAlign: 'right' },
 
   // 핸디캡 랭킹
   rankRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 6, marginBottom: 2 },
@@ -658,6 +771,22 @@ const s = StyleSheet.create({
   modalCard: { backgroundColor: C.card, borderRadius: 20, padding: 20, width: '90%', maxHeight: '78%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   modalTitle: { fontSize: 15, fontWeight: '700', color: C.text, flex: 1, marginRight: 8 },
+  clubInfoTitle: { fontSize: 22, fontWeight: '900', color: C.text },
+  clubInfoSubtitle: { fontSize: 13, color: C.muted, marginTop: 5, lineHeight: 18 },
+  clubInfoStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+  clubInfoStat: { backgroundColor: C.greenLight, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, fontWeight: '800', color: C.green },
+  infoSection: { paddingTop: 12, marginTop: 4 },
+  infoSectionTitle: { fontSize: 15, fontWeight: '900', color: C.text },
+  infoDivider: { height: 1, backgroundColor: C.border, marginTop: 10, marginBottom: 10 },
+  infoLabel: { fontSize: 12, fontWeight: '800', color: C.muted, marginBottom: 6 },
+  adminRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
+  adminName: { fontSize: 14, fontWeight: '800', color: C.text },
+  adminRole: { fontSize: 12, fontWeight: '800', color: C.green },
+  infoMuted: { fontSize: 12, color: C.muted, lineHeight: 18 },
+  infoActionRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  infoActionBtn: { flex: 1, borderRadius: 14, backgroundColor: C.greenLight, paddingVertical: 11, alignItems: 'center', marginTop: 10 },
+  infoActionText: { fontSize: 13, fontWeight: '800', color: C.green },
+  ruleDesc: { fontSize: 13, color: C.text, lineHeight: 20, marginBottom: 8 },
   closeBtn: { backgroundColor: C.green, borderRadius: 20, paddingVertical: 5, paddingHorizontal: 14 },
   closeBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   tableHeader: { flexDirection: 'row', borderBottomWidth: 1.5, borderBottomColor: C.border, paddingBottom: 7, marginBottom: 2 },

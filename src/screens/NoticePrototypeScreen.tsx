@@ -1,6 +1,9 @@
+import { useLayoutEffect } from 'react'
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { C } from '../theme'
+import { useNavigation } from '@react-navigation/native'
 import { Icon } from '../components/Icon'
+import { useClub } from '../lib/ClubContext'
+import { C } from '../theme'
 
 const notices = [
   { title: '7월 월례회 공지', state: '게시 중', date: '06.28' },
@@ -9,12 +12,19 @@ const notices = [
 ]
 
 export default function NoticePrototypeScreen() {
+  const nav = useNavigation()
+  const { activeClub } = useClub()
+
+  useLayoutEffect(() => {
+    nav.setOptions({ title: `${activeClub?.name ?? '클럽'} 공지사항` })
+  }, [nav, activeClub?.name])
+
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
       <View style={s.hero}>
-        <Text style={s.heroEyebrow}>운영 준비 화면</Text>
-        <Text style={s.heroTitle}>공지 관리</Text>
-        <Text style={s.heroSub}>공지 작성과 게시 흐름을 넣기 전 정적 구조를 확인합니다</Text>
+        <Text style={s.heroEyebrow}>{activeClub?.name ?? '클럽'}</Text>
+        <Text style={s.heroTitle}>공지사항</Text>
+        <Text style={s.heroSub}>공지 등록과 게시 상태를 관리하는 화면입니다.</Text>
       </View>
 
       <View style={s.card}>
@@ -40,7 +50,7 @@ export default function NoticePrototypeScreen() {
 
       <View style={s.card}>
         <Text style={s.sectionTitle}>다음 구현 범위</Text>
-        <Text style={s.body}>공지 등록, 수정, 게시 전환, 중요 공지 표시를 순서대로 붙일 예정입니다.</Text>
+        <Text style={s.body}>공지 등록, 수정, 게시 전환, 중요 공지 표시 기능을 순서대로 붙일 예정입니다.</Text>
         <TouchableOpacity style={s.primaryBtn} activeOpacity={0.82}>
           <Text style={s.primaryBtnText}>공지 작성 화면 준비</Text>
         </TouchableOpacity>

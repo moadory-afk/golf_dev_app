@@ -1,5 +1,5 @@
 import {
-  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Dimensions,
+  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Dimensions, TextInput,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '../lib/supabase'
 import { AppHeader } from '../components/AppHeader'
 import Svg, { Polyline, Circle, Line, Text as SvgText, G } from 'react-native-svg'
-import { getRounds, getRound, playerTotal, totalPar, getHandicapsForRound, shortName, type SavedRound } from '../lib/store'
+import { getRounds, getRound, playerTotal, totalPar, getHandicapsForRound, computeHandicaps, shortName, type SavedRound } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
 import { useAsync } from '../lib/useAsync'
 import { C } from '../theme'
@@ -18,9 +18,18 @@ import { Icon } from '../components/Icon'
 import type { RootStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
-type Tab = 'byRound' | 'byPlayer' | 'club'
+type Tab = 'byRound' | 'byPlayer' | 'club' | 'hall'
+type RankingType = 'wins' | 'streak' | 'lowestHandicap' | 'birdie' | 'singleBirdie' | 'frontBack' | 'avgImprove' | 'handicapImprove' | 'singlePar' | 'roundsPlayed' | 'lowestScore' | 'highestScore'
 
 function diffText(d: number) { return d > 0 ? `+${d}` : `${d}` }
+
+function formatWinners(names: string[], value: string): string {
+  if (names.length === 0) return '-'
+  const label = names.length <= 3
+    ? names.map(shortName).join(', ')
+    : `${shortName(names[0])} 외 ${names.length - 1}명`
+  return `${label} (${value})`
+}
 
 function holeStats(strokes: number[], pars: number[]) {
   let birdie = 0, par = 0, bogey = 0, dbl = 0, dblPlus = 0
@@ -152,10 +161,10 @@ export default function HistoryScreen() {
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <AppHeader myName={myName} />
       <View style={s.tabs}>
-        {(['byRound', 'byPlayer', 'club'] as Tab[]).map((t) => (
+        {(['byRound', 'byPlayer', 'club', 'hall'] as Tab[]).map((t) => (
           <TouchableOpacity key={t} style={[s.tab, tab === t && s.tabActive]} onPress={() => setTab(t)}>
             <Text style={[s.tabText, tab === t && s.tabTextActive]}>
-              {t === 'byRound' ? '라운딩별' : t === 'byPlayer' ? '개인별' : '클럽 전체'}
+              {t === 'byRound' ? '라운딩별' : t === 'byPlayer' ? '개인별' : t === 'club' ? '클럽 전체' : '명예의 전당'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -167,8 +176,9 @@ export default function HistoryScreen() {
       >
         {tab === 'byRound' && <ByRound rounds={rounds} handicapBasis={handicapBasis} />}
         {tab === 'byRound' && activeClub && <AddRoundButton />}
-        {tab === 'byPlayer' && <ByPlayer rounds={rounds} handicapBasis={handicapBasis} />}
+        {tab === 'byPlayer' && <ByPlayer rounds={rounds} handicapBasis={handicapBasis} myName={myName} />}
         {tab === 'club' && <Club rounds={rounds} />}
+        {tab === 'hall' && <HallOfFame rounds={rounds} handicapBasis={handicapBasis} />}
       </ScrollView>
     </View>
   )
@@ -437,136 +447,297 @@ function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicap
 interface PlayerRound {
   roundId: string; date: string; courseName: string
   total: number; diff: number; strokes: number[]; pars: number[]
+  front: number; back: number; birdie: number; parCount: number; bogey: number; double: number; triplePlus: number
 }
 
-function ByPlayer({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicapBasis?: number }) {
-  const nav = useNavigation<Nav>()
-  const [selected, setSelected] = useState<string | null>(null)
-  const [graphPlayer, setGraphPlayer] = useState<string | null>(null)
-
+function ByPlayer({ rounds, handicapBasis = 5, myName }: { rounds: SavedRound[]; handicapBasis?: number; myName: string | null }) {
+  const [targetScore, setTargetScore] = useState('')
+  const [detailModal, setDetailModal] = useState<'target' | 'trend' | 'hole' | 'score' | 'rank' | 'improve' | 'rounds' | null>(null)
   const byName = new Map<string, PlayerRound[]>()
+
   for (const r of rounds) {
-    const par = totalPar(r.pars)
+    const coursePar = totalPar(r.pars)
     for (const p of r.players) {
       const total = playerTotal(p.strokes)
+      const stats = holeStats(p.strokes, r.pars)
       const arr = byName.get(p.name) ?? []
-      arr.push({ roundId: r.id, date: r.date, courseName: r.courseName, total, diff: total - par, strokes: p.strokes, pars: r.pars })
+      arr.push({
+        roundId: r.id,
+        date: r.date,
+        courseName: r.courseName,
+        total,
+        diff: total - coursePar,
+        strokes: p.strokes,
+        pars: r.pars,
+        front: p.strokes.slice(0, 9).reduce((sum, score) => sum + score, 0),
+        back: p.strokes.slice(9, 18).reduce((sum, score) => sum + score, 0),
+        birdie: stats.birdie,
+        parCount: stats.par,
+        bogey: stats.bogey,
+        double: stats.dbl,
+        triplePlus: stats.dblPlus,
+      })
       byName.set(p.name, arr)
     }
   }
 
-  const playerBadges = getPlayerBadges(rounds, handicapBasis)
+  const playerRounds = myName ? [...(byName.get(myName) ?? [])].sort((a, b) => b.date.localeCompare(a.date)) : []
+  if (!myName || playerRounds.length === 0) return <Text style={s.muted}>내 개인 기록 데이터가 없습니다.</Text>
 
-  const players = Array.from(byName.entries())
-    .map(([name, list]) => {
-      const sorted = [...list].sort((a, b) => a.date.localeCompare(b.date))
-      const totals = sorted.map((x) => x.total)
-      return {
-        name, rounds: sorted.length,
-        avg: Math.ceil(totals.reduce((a, b) => a + b, 0) / totals.length),
-        best: Math.min(...totals),
-        list: sorted,
-        recent3: sorted.slice(-3).map((x) => x.total).reverse(),
+  const totals = playerRounds.map((round) => round.total)
+  const avg = Math.ceil(totals.reduce((sum, total) => sum + total, 0) / totals.length)
+  const best = Math.min(...totals)
+  const lastN = [...playerRounds].sort((a, b) => a.date.localeCompare(b.date)).slice(-handicapBasis)
+  const handicap = Math.ceil(lastN.reduce((sum, round) => sum + round.diff, 0) / lastN.length)
+  const recent5 = playerRounds.slice(0, 5)
+  const recent5Avg = Math.ceil(recent5.reduce((sum, round) => sum + round.total, 0) / recent5.length)
+  const oldestRecent = recent5[recent5.length - 1]
+  const latestRecent = recent5[0]
+  const trendText = oldestRecent && latestRecent
+    ? latestRecent.total < oldestRecent.total
+      ? `최근 흐름이 ${oldestRecent.total - latestRecent.total}타 개선됐습니다.`
+      : latestRecent.total > oldestRecent.total
+        ? `최근 흐름이 ${latestRecent.total - oldestRecent.total}타 높아졌습니다.`
+        : '최근 흐름이 안정적으로 유지되고 있습니다.'
+    : '최근 흐름을 분석할 기록이 부족합니다.'
+  const parType = { 3: { total: 0, count: 0 }, 4: { total: 0, count: 0 }, 5: { total: 0, count: 0 } }
+  const scoreTotals = { birdie: 0, par: 0, bogey: 0, double: 0, triplePlus: 0 }
+  let frontTotal = 0, backTotal = 0
+  for (const round of playerRounds) {
+    round.strokes.forEach((score, index) => {
+      const par = round.pars[index] as 3 | 4 | 5
+      if (parType[par]) {
+        parType[par].total += score
+        parType[par].count += 1
       }
     })
-    .sort((a, b) => b.rounds - a.rounds || a.name.localeCompare(b.name))
-
-  if (players.length === 0) return <Text style={s.muted}>데이터가 없습니다.</Text>
-
-  // 개인 상세 화면
-  if (selected) {
-    const p = players.find((x) => x.name === selected)
-    if (!p) { setSelected(null); return null }
-    return (
-      <>
-        <View style={[s.card, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
-          <View>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: C.text }}>{shortName(p.name)}</Text>
-            <Text style={s.muted}>{p.rounds}경기 · 평균 {p.avg} · 최저 {p.best}</Text>
-          </View>
-          <TouchableOpacity style={s.smallBtn} onPress={() => setSelected(null)}>
-            <Text style={s.smallBtnText}>← 목록</Text>
-          </TouchableOpacity>
-        </View>
-        {p.list.map((x) => {
-          const stats = holeStats(x.strokes, x.pars)
-          return (
-            <TouchableOpacity key={x.roundId} style={s.card} onPress={() => nav.navigate('RoundDetail', { id: x.roundId })}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <View>
-                  <Text style={s.cardBold}>{x.courseName}</Text>
-                  <Text style={s.muted}>{x.date}</Text>
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={{ fontSize: 20, fontWeight: '700', color: C.text }}>{x.total}</Text>
-                  <Text style={s.muted}>{diffText(x.diff)}</Text>
-                </View>
-              </View>
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
-                {stats.birdie > 0 && <Text style={{ fontSize: 12, color: '#2980b9', fontWeight: '600' }}>버디 {stats.birdie}</Text>}
-                {stats.par > 0 && <Text style={[s.muted, { fontSize: 12 }]}>파 {stats.par}</Text>}
-                {stats.bogey > 0 && <Text style={{ fontSize: 12, color: '#e67e22' }}>보기 {stats.bogey}</Text>}
-                {stats.dbl > 0 && <Text style={{ fontSize: 12, color: '#c0392b' }}>더블 {stats.dbl}</Text>}
-                {stats.dblPlus > 0 && <Text style={{ fontSize: 12, color: '#8e1a0e', fontWeight: '600' }}>더블+ {stats.dblPlus}</Text>}
-              </View>
-            </TouchableOpacity>
-          )
-        })}
-      </>
-    )
+    scoreTotals.birdie += round.birdie
+    scoreTotals.par += round.parCount
+    scoreTotals.bogey += round.bogey
+    scoreTotals.double += round.double
+    scoreTotals.triplePlus += round.triplePlus
+    frontTotal += round.front
+    backTotal += round.back
   }
+  const avgParType = (par: 3 | 4 | 5) => parType[par].count ? (parType[par].total / parType[par].count).toFixed(1) : '-'
+  const frontAvg = Math.round(frontTotal / playerRounds.length)
+  const backAvg = Math.round(backTotal / playerRounds.length)
+  const parAverages = [
+    { label: 'Par 3', value: Number(avgParType(3)) },
+    { label: 'Par 4', value: Number(avgParType(4)) },
+    { label: 'Par 5', value: Number(avgParType(5)) },
+  ].filter((item) => !Number.isNaN(item.value))
+  const strength = [...parAverages].sort((a, b) => a.value - b.value)[0]
+  const weakness = [...parAverages].sort((a, b) => b.value - a.value)[0]
+  const playerStats = [...byName.entries()].map(([name, list]) => {
+    const sorted = [...list].sort((a, b) => a.date.localeCompare(b.date))
+    const playerTotals = sorted.map((round) => round.total)
+    const playerLastN = sorted.slice(-handicapBasis)
+    return {
+      name,
+      avg: Math.ceil(playerTotals.reduce((sum, total) => sum + total, 0) / playerTotals.length),
+      handicap: Math.ceil(playerLastN.reduce((sum, round) => sum + round.diff, 0) / playerLastN.length),
+      birdie: sorted.reduce((sum, round) => sum + round.birdie, 0),
+    }
+  })
+  const rankOf = (items: typeof playerStats, key: 'avg' | 'handicap' | 'birdie', lowerBetter: boolean) => {
+    const sorted = [...items].sort((a, b) => lowerBetter ? a[key] - b[key] : b[key] - a[key])
+    return sorted.findIndex((item) => item.name === myName) + 1
+  }
+  const totalPlayers = playerStats.length
+  const target = Number(targetScore.replace(/[^0-9]/g, ''))
+  const targetGap = target ? avg - target : 0
+  const aiComments = [
+    recent5Avg < avg
+      ? `최근 5경기 평균이 전체 평균보다 ${avg - recent5Avg}타 낮아져 흐름이 좋습니다.`
+      : recent5Avg > avg
+        ? `최근 5경기 평균이 전체 평균보다 ${recent5Avg - avg}타 높아졌습니다.`
+        : '최근 5경기 평균이 전체 평균과 비슷하게 유지되고 있습니다.',
+    backAvg > frontAvg
+      ? `후반이 전반보다 ${backAvg - frontAvg}타 높아 후반 집중 관리가 필요합니다.`
+      : backAvg < frontAvg
+        ? `후반이 전반보다 ${frontAvg - backAvg}타 낮아 마무리 흐름이 좋습니다.`
+        : '전후반 타수 균형이 안정적입니다.',
+    scoreTotals.double + scoreTotals.triplePlus > playerRounds.length * 3
+      ? '더블 이상 홀이 많은 편이라 큰 실수를 줄이는 전략이 효과적입니다.'
+      : '더블 이상 관리가 비교적 안정적입니다.',
+  ]
+  const improvementItems = [
+    `1순위: ${weakness?.label ?? '취약 홀'}에서 안전한 공략으로 평균 타수를 낮추기`,
+    `2순위: 후반 평균 ${backAvg}타를 전반 평균 ${frontAvg}타에 가깝게 만들기`,
+    `3순위: 더블/트리플+ ${scoreTotals.double + scoreTotals.triplePlus}개를 줄이기`,
+  ]
 
-  // 선수 목록
-  const graphData = graphPlayer
-    ? players.find((p) => p.name === graphPlayer)?.list.map((x) => ({ date: x.date, value: x.total }))
-    : null
+  const modalTitle = detailModal === 'target' ? '목표 설정'
+    : detailModal === 'trend' ? '추이 분석'
+      : detailModal === 'hole' ? '홀 유형별 평균'
+        : detailModal === 'score' ? '스코어 분포'
+          : detailModal === 'rank' ? '클럽 내 순위'
+            : detailModal === 'improve' ? '개선 리포트'
+              : '라운드별 상세'
 
   return (
     <>
-      {graphData && graphPlayer && (
-        <TrendModal title={`${shortName(graphPlayer)} 타수 추이`} data={graphData} onClose={() => setGraphPlayer(null)} />
-      )}
-      {players.map((p) => (
-        <TouchableOpacity key={p.name} style={s.card} onPress={() => setSelected(p.name)}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-              <View style={s.avatar}>
-                <Text style={s.avatarText}>{shortName(p.name).slice(0, 1)}</Text>
+      {detailModal && (
+        <Modal transparent animationType="fade" onRequestClose={() => setDetailModal(null)}>
+          <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setDetailModal(null)}>
+            <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+              <View style={s.modalHeader}>
+                <Text style={s.modalTitle}>{modalTitle}</Text>
+                <TouchableOpacity style={s.closeBtn} onPress={() => setDetailModal(null)}><Text style={s.closeBtnText}>닫기</Text></TouchableOpacity>
               </View>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-                  <Text style={s.cardBold}>{shortName(p.name)}</Text>
-                  {(playerBadges.get(p.name) ?? []).map((b) => (
-                    <View key={b.label} style={s.badge}>
-                      <EmojiIcon char={b.icon} size={11} color={C.green} />
-                      <Text style={s.badgeText}>{b.label}</Text>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {detailModal === 'target' && (
+                  <>
+                    <View style={s.goalRow}>
+                      <TextInput
+                        style={s.goalInput}
+                        value={targetScore}
+                        onChangeText={(value) => setTargetScore(value.replace(/[^0-9]/g, ''))}
+                        keyboardType="numeric"
+                        placeholder={`${Math.max(1, avg - 3)}`}
+                        placeholderTextColor={C.muted}
+                      />
+                      <Text style={s.goalUnit}>타 목표</Text>
                     </View>
-                  ))}
-                </View>
-                <Text style={s.muted}>{p.rounds}경기</Text>
-              </View>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: C.text }}>{p.avg}</Text>
-              <Text style={[s.muted, { fontSize: 12 }]}>최저 {p.best}</Text>
-            </View>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-            <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Text style={[s.muted, { fontSize: 12 }]}>최근</Text>
-              {p.recent3.map((score, i) => (
-                <View key={i} style={s.pill}>
-                  <Text style={s.pillText}>{score}</Text>
-                </View>
-              ))}
-            </View>
-            <TouchableOpacity style={s.smallBtn} onPress={() => setGraphPlayer(p.name)}>
-              <Text style={s.smallBtnText}>추이</Text>
+                    <Text style={s.insightText}>
+                      {target ? (targetGap > 0 ? `현재 평균에서 ${targetGap}타를 줄이면 목표에 도달합니다.` : '현재 평균이 목표 수준에 도달했습니다.') : '목표 타수를 입력하면 현재 평균과 비교합니다.'}
+                    </Text>
+                  </>
+                )}
+                {detailModal === 'trend' && (
+                  <>
+                    <Text style={s.insightText}>{trendText}</Text>
+                    <View style={s.miniTrendRow}>
+                      {[...playerRounds].sort((a, b) => a.date.localeCompare(b.date)).slice(-6).map((round) => (
+                        <View key={round.roundId} style={s.miniTrendItem}>
+                          <Text style={s.miniTrendValue}>{round.total}</Text>
+                          <View style={[s.miniTrendBar, { height: Math.max(18, 72 - (round.total - best) * 2) }]} />
+                          <Text style={s.miniTrendDate}>{round.date.slice(5)}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    <View style={s.analysisRow}><Text style={s.analysisLabel}>최근 5경기 평균</Text><Text style={s.analysisValue}>{recent5Avg}타</Text></View>
+                    <View style={s.analysisRow}><Text style={s.analysisLabel}>전후반 차이</Text><Text style={s.analysisValue}>{diffText(backAvg - frontAvg)}타</Text></View>
+                  </>
+                )}
+                {detailModal === 'hole' && (
+                  <>
+                    <View style={s.metricGrid}>
+                      <MetricCard label="Par 3" value={`${avgParType(3)}타`} />
+                      <MetricCard label="Par 4" value={`${avgParType(4)}타`} />
+                      <MetricCard label="Par 5" value={`${avgParType(5)}타`} />
+                    </View>
+                    {strength && weakness && <Text style={s.insightText}>강점은 {strength.label}, 보완 포인트는 {weakness.label}입니다.</Text>}
+                  </>
+                )}
+                {detailModal === 'score' && (
+                  <View style={s.scoreDistRow}>
+                    <ScoreDist label="버디" value={scoreTotals.birdie} color={C.info} />
+                    <ScoreDist label="파" value={scoreTotals.par} color={C.green} />
+                    <ScoreDist label="보기" value={scoreTotals.bogey} color={C.warn} />
+                    <ScoreDist label="더블" value={scoreTotals.double} color={C.danger} />
+                    <ScoreDist label="트리플+" value={scoreTotals.triplePlus} color={C.text} />
+                  </View>
+                )}
+                {detailModal === 'rank' && (
+                  <>
+                    <View style={s.analysisRow}><Text style={s.analysisLabel}>평균 순위</Text><Text style={s.analysisValue}>{rankOf(playerStats, 'avg', true)} / {totalPlayers}</Text></View>
+                    <View style={s.analysisRow}><Text style={s.analysisLabel}>핸디 순위</Text><Text style={s.analysisValue}>{rankOf(playerStats, 'handicap', true)} / {totalPlayers}</Text></View>
+                    <View style={s.analysisRow}><Text style={s.analysisLabel}>버디 순위</Text><Text style={s.analysisValue}>{rankOf(playerStats, 'birdie', false)} / {totalPlayers}</Text></View>
+                  </>
+                )}
+                {detailModal === 'improve' && improvementItems.map((item) => (
+                  <BulletText key={item} text={item} />
+                ))}
+                {detailModal === 'rounds' && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View>
+                      <View style={s.tableHeader}>
+                        {['날짜', '코스', '총타', '파대비', '전반', '후반', 'B/P/Bg/D/T+'].map((header, index) => (
+                          <Text key={header} style={[s.th, { width: [54, 82, 42, 52, 42, 42, 92][index], textAlign: index >= 2 ? 'right' : 'left' }]}>{header}</Text>
+                        ))}
+                      </View>
+                      {playerRounds.map((round) => (
+                        <View key={round.roundId} style={s.tableRow}>
+                          <Text style={[s.td, { width: 54 }]}>{round.date.slice(5)}</Text>
+                          <Text style={[s.td, { width: 82 }]} numberOfLines={1}>{round.courseName.slice(0, 7)}</Text>
+                          <Text style={[s.td, { width: 42, textAlign: 'right', fontWeight: '700' }]}>{round.total}</Text>
+                          <Text style={[s.td, { width: 52, textAlign: 'right', color: round.diff <= 0 ? C.green : C.warn }]}>{diffText(round.diff)}</Text>
+                          <Text style={[s.td, { width: 42, textAlign: 'right' }]}>{round.front}</Text>
+                          <Text style={[s.td, { width: 42, textAlign: 'right' }]}>{round.back}</Text>
+                          <Text style={[s.td, { width: 92, textAlign: 'right' }]}>{round.birdie}/{round.parCount}/{round.bogey}/{round.double}/{round.triplePlus}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </ScrollView>
+                )}
+              </ScrollView>
             </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      ))}
+          </TouchableOpacity>
+        </Modal>
+      )}
+
+      <View style={s.metricGridCompact}>
+        <MetricCard label="평균" value={`${avg}타`} />
+        <MetricCard label="핸디" value={diffText(handicap)} />
+        <MetricCard label="베스트" value={`${best}타`} tone={C.gold} />
+        <MetricCard label="최근5" value={`${recent5Avg}타`} />
+      </View>
+
+      <View style={s.card}>
+        <Text style={s.cardTitle}>AI 코멘트</Text>
+        {aiComments.slice(0, 2).map((comment) => (
+          <BulletText key={comment} text={comment} />
+        ))}
+      </View>
+
+      <View style={s.detailGrid}>
+        <DetailButton label="목표 설정" onPress={() => setDetailModal('target')} />
+        <DetailButton label="추이 분석" onPress={() => setDetailModal('trend')} />
+        <DetailButton label="홀 유형" onPress={() => setDetailModal('hole')} />
+        <DetailButton label="스코어 분포" onPress={() => setDetailModal('score')} />
+        <DetailButton label="클럽 순위" onPress={() => setDetailModal('rank')} />
+        <DetailButton label="개선 리포트" onPress={() => setDetailModal('improve')} />
+        <DetailButton label="라운드 상세" onPress={() => setDetailModal('rounds')} />
+      </View>
     </>
+  )
+}
+
+function MetricCard({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  return (
+    <View style={s.metricCard}>
+      <Text style={s.metricLabel}>{label}</Text>
+      <Text style={[s.metricValue, tone ? { color: tone } : null]}>{value}</Text>
+    </View>
+  )
+}
+
+function ScoreDist({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <View style={s.scoreDistItem}>
+      <Text style={[s.scoreDistValue, { color }]}>{value}</Text>
+      <Text style={s.scoreDistLabel}>{label}</Text>
+    </View>
+  )
+}
+
+function BulletText({ text }: { text: string }) {
+  return (
+    <View style={s.bulletRow}>
+      <Text style={s.bulletDot}>•</Text>
+      <Text style={s.bulletText}>{text}</Text>
+    </View>
+  )
+}
+
+function DetailButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={s.detailButton} activeOpacity={0.82} onPress={onPress}>
+      <Text style={s.detailButtonText}>{label}</Text>
+      <Text style={s.detailButtonArrow}>›</Text>
+    </TouchableOpacity>
   )
 }
 
@@ -611,6 +782,7 @@ function Club({ rounds }: { rounds: SavedRound[] }) {
       return {
         name, rounds: totals.length,
         avg: Math.ceil(totals.reduce((a, b) => a + b, 0) / totals.length),
+        worst: Math.max(...totals),
         best: Math.min(...totals),
         handicap,
       }
@@ -676,7 +848,7 @@ function Club({ rounds }: { rounds: SavedRound[] }) {
 
       <View style={s.card}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, zIndex: 99 }}>
-          <Text style={[s.cardTitle, { marginBottom: 0 }]}>전체 랭킹 (평균)</Text>
+          <Text style={[s.cardTitle, { marginBottom: 0 }]}>클럽 랭킹</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, zIndex: 99 }}>
             <Text style={{ fontSize: 12, color: C.muted, fontWeight: '600' }}>핸디</Text>
             <View>
@@ -709,8 +881,9 @@ function Club({ rounds }: { rounds: SavedRound[] }) {
           <Text style={[s.th, { flex: 2 }]}>이름</Text>
           <Text style={[s.th, { flex: 1, textAlign: 'center' }]}>경기</Text>
           <Text style={[s.th, { flex: 1.2, textAlign: 'center' }]}>평균</Text>
+          <Text style={[s.th, { flex: 1, textAlign: 'center' }]}>최고</Text>
           <Text style={[s.th, { flex: 1, textAlign: 'center' }]}>최저</Text>
-          <Text style={[s.th, { flex: 1.2, textAlign: 'center' }]}>{'핸디\n최근' + handicapBasis}</Text>
+          <Text style={[s.th, { flex: 1.2, textAlign: 'center' }]}>핸디</Text>
         </View>
         {stats.map((stat, i) => {
           const medalBg = ['#fffbe8', '#f4f6f8', '#fdf5f0']
@@ -721,6 +894,7 @@ function Club({ rounds }: { rounds: SavedRound[] }) {
               <Text style={[s.td, { flex: 2, fontWeight: i < 3 ? '700' : '400' }]}>{shortName(stat.name)}</Text>
               <Text style={[s.td, { flex: 1, textAlign: 'center' }]}>{stat.rounds}</Text>
               <Text style={[s.td, { flex: 1.2, textAlign: 'center', fontWeight: '700', color: i === 0 ? C.gold : C.text }]}>{stat.avg}</Text>
+              <Text style={[s.td, { flex: 1, textAlign: 'center' }]}>{stat.worst}</Text>
               <Text style={[s.td, { flex: 1, textAlign: 'center' }]}>{stat.best}</Text>
               <Text style={[s.td, {
                 flex: 1.2, textAlign: 'center', fontWeight: '600',
@@ -733,6 +907,254 @@ function Club({ rounds }: { rounds: SavedRound[] }) {
         })}
       </View>
     </>
+  )
+}
+
+// ─── 명예의 전당 ─────────────────────────────────────────────────────────────
+
+function HallOfFame({ rounds, handicapBasis }: { rounds: SavedRound[]; handicapBasis: number }) {
+  const [rankingType, setRankingType] = useState<RankingType | null>(null)
+
+  if (rounds.length === 0) return <Text style={s.muted}>명예의 전당 데이터가 없습니다.</Text>
+
+  const avgOf = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length
+  const handicaps = computeHandicaps(rounds, handicapBasis)
+  const sortedRounds = [...rounds].sort((a, b) => a.date.localeCompare(b.date))
+  const winCount = new Map<string, number>()
+  for (const r of sortedRounds) {
+    const w = getWinnerLocal(r, getHandicapsForRound(r, rounds, handicapBasis))
+    if (w) winCount.set(w, (winCount.get(w) ?? 0) + 1)
+  }
+  const winRanking = [...winCount.entries()].map(([name, wins]) => ({ name, wins })).sort((a, b) => b.wins - a.wins)
+
+  let maxStreak = 0, maxStreakPlayer = '', curStreak = 0, curPlayer = ''
+  for (const r of sortedRounds) {
+    const w = getWinnerLocal(r, getHandicapsForRound(r, rounds, handicapBasis))
+    if (w && w === curPlayer) curStreak++
+    else {
+      if (curStreak > maxStreak) { maxStreak = curStreak; maxStreakPlayer = curPlayer }
+      curPlayer = w ?? ''; curStreak = w ? 1 : 0
+    }
+  }
+  if (curStreak > maxStreak) { maxStreak = curStreak; maxStreakPlayer = curPlayer }
+
+  const birdieCount = new Map<string, number>()
+  const singleBirdieMap = new Map<string, { count: number; date: string; courseName: string }>()
+  const singleParMap = new Map<string, { count: number; date: string; courseName: string }>()
+  const scoreRecords: { name: string; total: number; date: string; courseName: string }[] = []
+  for (const r of rounds) {
+    for (const p of r.players) {
+      let b = 0
+      let parCount = 0
+      p.strokes.forEach((strokes, i) => {
+        const diff = strokes - r.pars[i]
+        if (diff <= -1) b++
+        if (diff === 0) parCount++
+      })
+      birdieCount.set(p.name, (birdieCount.get(p.name) ?? 0) + b)
+      const prev = singleBirdieMap.get(p.name)
+      if (!prev || b > prev.count) singleBirdieMap.set(p.name, { count: b, date: r.date, courseName: r.courseName })
+      const prevPar = singleParMap.get(p.name)
+      if (!prevPar || parCount > prevPar.count) singleParMap.set(p.name, { count: parCount, date: r.date, courseName: r.courseName })
+      scoreRecords.push({ name: p.name, total: playerTotal(p.strokes), date: r.date, courseName: r.courseName })
+    }
+  }
+  const birdieRanking = [...birdieCount.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
+  const singleBirdieRanking = [...singleBirdieMap.entries()].map(([name, v]) => ({ name, ...v })).filter((x) => x.count > 0).sort((a, b) => b.count - a.count)
+  const singleParRanking = [...singleParMap.entries()].map(([name, v]) => ({ name, ...v })).filter((x) => x.count > 0).sort((a, b) => b.count - a.count)
+  const handicapRanking = [...handicaps.entries()].sort((a, b) => a[1] - b[1]).map(([name, handicap]) => ({ name, handicap }))
+  const lowestScoreRanking = [...scoreRecords].sort((a, b) => a.total - b.total)
+  const highestScoreRanking = [...scoreRecords].sort((a, b) => b.total - a.total)
+
+  const playerRounds = new Map<string, { date: string; total: number; diff: number }[]>()
+  const frontBackRanking: { name: string; improvement: number; front: number; back: number; date: string; courseName: string }[] = []
+  for (const r of rounds) {
+    const coursePar = totalPar(r.pars)
+    for (const p of r.players) {
+      const total = playerTotal(p.strokes)
+      const list = playerRounds.get(p.name) ?? []
+      list.push({ date: r.date, total, diff: total - coursePar })
+      playerRounds.set(p.name, list)
+
+      const front = p.strokes.slice(0, 9).reduce((sum, score) => sum + score, 0)
+      const back = p.strokes.slice(9, 18).reduce((sum, score) => sum + score, 0)
+      frontBackRanking.push({ name: p.name, improvement: front - back, front, back, date: r.date, courseName: r.courseName })
+    }
+  }
+  const frontBackImprovementRanking = frontBackRanking.filter((r) => r.improvement > 0).sort((a, b) => b.improvement - a.improvement)
+
+  const avgImproveRanking = [...playerRounds.entries()]
+    .map(([name, list]) => {
+      const sorted = [...list].sort((a, b) => a.date.localeCompare(b.date))
+      if (sorted.length < 10) return null
+      const past7 = sorted.slice(-10, -3).map((r) => r.total)
+      const recent3 = sorted.slice(-3).map((r) => r.total)
+      const pastAvg = Math.round(avgOf(past7))
+      const recentAvg = Math.round(avgOf(recent3))
+      return { name, improvement: pastAvg - recentAvg, pastAvg, recentAvg }
+    })
+    .filter((row): row is { name: string; improvement: number; pastAvg: number; recentAvg: number } => row !== null)
+    .filter((row) => row.improvement > 0)
+    .sort((a, b) => b.improvement - a.improvement)
+
+  const handicapImproveRanking = [...playerRounds.entries()]
+    .map(([name, list]) => {
+      const sorted = [...list].sort((a, b) => a.date.localeCompare(b.date))
+      if (sorted.length < handicapBasis * 2) return null
+      const pastHandicap = Math.ceil(avgOf(sorted.slice(0, handicapBasis).map((r) => r.diff)))
+      const recentHandicap = Math.ceil(avgOf(sorted.slice(-handicapBasis).map((r) => r.diff)))
+      return { name, improvement: pastHandicap - recentHandicap, pastHandicap, recentHandicap }
+    })
+    .filter((row): row is { name: string; improvement: number; pastHandicap: number; recentHandicap: number } => row !== null)
+    .filter((row) => row.improvement > 0)
+    .sort((a, b) => b.improvement - a.improvement)
+
+  const topWinner = winRanking[0]
+  const mostWinsText = topWinner ? formatWinners(winRanking.filter((r) => r.wins === topWinner.wins).map((r) => r.name), `${topWinner.wins}회`) : '-'
+  const lowestHandicapEntry = handicapRanking[0]
+  const lowestHandiText = lowestHandicapEntry ? formatWinners(handicapRanking.filter((r) => r.handicap === lowestHandicapEntry.handicap).map((r) => r.name), diffText(lowestHandicapEntry.handicap)) : '-'
+  const topBirdie = birdieRanking[0]
+  const topBirdieText = topBirdie && topBirdie.count > 0 ? formatWinners(birdieRanking.filter((r) => r.count === topBirdie.count).map((r) => r.name), `${topBirdie.count}개`) : '-'
+  const topSingleBirdie = singleBirdieRanking[0]
+  const topSingleBirdieText = topSingleBirdie ? formatWinners(singleBirdieRanking.filter((r) => r.count === topSingleBirdie.count).map((r) => r.name), `${topSingleBirdie.count}개`) : '-'
+  const topSinglePar = singleParRanking[0]
+  const topSingleParText = topSinglePar ? formatWinners(singleParRanking.filter((r) => r.count === topSinglePar.count).map((r) => r.name), `${topSinglePar.count}개`) : '-'
+  const topRoundsPlayed = [...playerRounds.entries()].map(([name, list]) => ({ name, count: list.length })).sort((a, b) => b.count - a.count)[0]
+  const roundsPlayedText = topRoundsPlayed ? formatWinners([...playerRounds.entries()].filter(([, list]) => list.length === topRoundsPlayed.count).map(([name]) => name), `${topRoundsPlayed.count}회`) : '-'
+  const topLowestScore = lowestScoreRanking[0]
+  const lowestScoreText = topLowestScore ? formatWinners(lowestScoreRanking.filter((r) => r.total === topLowestScore.total).map((r) => r.name), `${topLowestScore.total}타`) : '-'
+  const topHighestScore = highestScoreRanking[0]
+  const highestScoreText = topHighestScore ? formatWinners(highestScoreRanking.filter((r) => r.total === topHighestScore.total).map((r) => r.name), `${topHighestScore.total}타`) : '-'
+  const topFrontBack = frontBackImprovementRanking[0]
+  const topFrontBackText = topFrontBack ? `${shortName(topFrontBack.name)} (${topFrontBack.improvement}타 개선)` : '-'
+  const topAvgImprove = avgImproveRanking[0]
+  const topAvgImproveText = topAvgImprove && topAvgImprove.improvement > 0 ? `${shortName(topAvgImprove.name)} (${topAvgImprove.improvement}타 개선)` : '-'
+  const topHandicapImprove = handicapImproveRanking[0]
+  const topHandicapImproveText = topHandicapImprove && topHandicapImprove.improvement > 0 ? `${shortName(topHandicapImprove.name)} (${topHandicapImprove.improvement}타 개선)` : '-'
+
+  const rankingConfig: Record<RankingType, { title: string; col: string; rows: { name: string; value: string; sub?: string }[] }> = {
+    wins: { title: '최다 우승', col: '우승 횟수', rows: winRanking.map((r) => ({ name: shortName(r.name), value: `${r.wins}회` })) },
+    streak: { title: '최다 연속 우승', col: '연속', rows: maxStreak > 0 ? [{ name: shortName(maxStreakPlayer), value: `${maxStreak}연승` }] : [] },
+    lowestHandicap: { title: `핸디캡 랭킹 (최근 ${handicapBasis}경기)`, col: '핸디', rows: handicapRanking.map((r) => ({ name: shortName(r.name), value: diffText(r.handicap) })) },
+    birdie: { title: '버디왕 (전체)', col: '버디 수', rows: birdieRanking.map((r) => ({ name: shortName(r.name), value: `${r.count}개` })) },
+    singleBirdie: { title: '버디왕 (1경기)', col: '버디 수', rows: singleBirdieRanking.map((r) => ({ name: shortName(r.name), value: `${r.count}개`, sub: `${r.date.slice(5)} ${r.courseName}` })) },
+    singlePar: { title: '파왕 (1경기)', col: '파 수', rows: singleParRanking.map((r) => ({ name: shortName(r.name), value: `${r.count}개`, sub: `${r.date.slice(5)} ${r.courseName}` })) },
+    roundsPlayed: { title: '최다 라운드 참가', col: '참가', rows: [...playerRounds.entries()].map(([name, list]) => ({ name: shortName(name), value: `${list.length}회` })).sort((a, b) => Number(b.value.replace('회', '')) - Number(a.value.replace('회', ''))) },
+    lowestScore: { title: '최저타', col: '스코어', rows: lowestScoreRanking.map((r) => ({ name: shortName(r.name), value: `${r.total}타`, sub: `${r.date.slice(5)} ${r.courseName}` })) },
+    highestScore: { title: '최고타', col: '스코어', rows: highestScoreRanking.map((r) => ({ name: shortName(r.name), value: `${r.total}타`, sub: `${r.date.slice(5)} ${r.courseName}` })) },
+    frontBack: {
+      title: '전반 대비 후반 개선 최대',
+      col: '개선',
+      rows: frontBackImprovementRanking.map((r) => ({ name: shortName(r.name), value: `${r.improvement}타`, sub: `${r.date.slice(5)} ${r.courseName} · 전반 ${r.front} / 후반 ${r.back}` })),
+    },
+    avgImprove: {
+      title: '최대 평균타 개선',
+      col: '개선',
+      rows: avgImproveRanking.map((r) => ({ name: shortName(r.name), value: `${r.improvement}타`, sub: `과거7 ${r.pastAvg}타 → 최근3 ${r.recentAvg}타` })),
+    },
+    handicapImprove: {
+      title: '최대 핸디 개선',
+      col: '개선',
+      rows: handicapImproveRanking.map((r) => ({ name: shortName(r.name), value: `${r.improvement}타`, sub: `초기 ${diffText(r.pastHandicap)} → 최근 ${diffText(r.recentHandicap)}` })),
+    },
+  }
+  const highlightSections = [
+    {
+      title: '우승 기록',
+      items: [
+        { icon: '🏅', label: '최다 우승', value: mostWinsText, type: 'wins' as RankingType },
+        { icon: '🔥', label: '최다 연속 우승', value: maxStreak > 0 ? `${shortName(maxStreakPlayer)} (${maxStreak}연승)` : '-', type: 'streak' as RankingType },
+      ],
+    },
+    {
+      title: '스코어 기록',
+      items: [
+        { icon: '🏆', label: '최저타', value: lowestScoreText, type: 'lowestScore' as RankingType },
+        { icon: '📈', label: '최고타', value: highestScoreText, type: 'highestScore' as RankingType },
+        { icon: '🐦', label: '버디왕 (전체)', value: topBirdieText, type: 'birdie' as RankingType },
+        { icon: '⛳', label: '버디왕 (1경기)', value: topSingleBirdieText, type: 'singleBirdie' as RankingType },
+        { icon: '◎', label: '파왕 (1경기)', value: topSingleParText, type: 'singlePar' as RankingType },
+      ],
+    },
+    {
+      title: '성장 기록',
+      items: [
+        { icon: '📉', label: '최저 핸디', value: lowestHandiText, type: 'lowestHandicap' as RankingType },
+        { icon: '↘️', label: '전후반 개선', value: topFrontBackText, type: 'frontBack' as RankingType },
+        { icon: '📊', label: '평균타 개선', value: topAvgImproveText, type: 'avgImprove' as RankingType },
+        { icon: '🪄', label: '핸디 개선', value: topHandicapImproveText, type: 'handicapImprove' as RankingType },
+      ],
+    },
+    {
+      title: '참가 기록',
+      items: [
+        { icon: '🗓️', label: '최다 라운드 참가', value: roundsPlayedText, type: 'roundsPlayed' as RankingType },
+      ],
+    },
+  ]
+
+  return (
+    <>
+      {rankingType && <RankingModal config={rankingConfig[rankingType]} onClose={() => setRankingType(null)} />}
+      <View style={s.card}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+          <Icon name="trophy" size={16} color={C.text} />
+          <Text style={[s.cardTitle, { marginBottom: 0 }]}>명예의 전당</Text>
+        </View>
+        {highlightSections.map((section) => (
+          <View key={section.title} style={s.hallSection}>
+            <Text style={s.hallSectionTitle}>{section.title}</Text>
+            {section.items.map(({ icon, label, value, type }) => (
+              <TouchableOpacity key={label} style={s.hallRow} onPress={() => setRankingType(type)}>
+                <View style={s.hallIconWrap}><EmojiIcon char={icon} size={15} color={C.green} /></View>
+                <Text style={s.hallLabel}>{label}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={s.hallValue}>{value}</Text>
+                  <Text style={{ color: C.muted, fontSize: 16 }}>›</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ))}
+      </View>
+    </>
+  )
+}
+
+function RankingModal({ config, onClose }: {
+  config: { title: string; col: string; rows: { name: string; value: string; sub?: string }[] }
+  onClose: () => void
+}) {
+  return (
+    <Modal transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+          <View style={s.modalHeader}>
+            <Text style={s.modalTitle}>{config.title}</Text>
+            <TouchableOpacity style={s.closeBtn} onPress={onClose}><Text style={s.closeBtnText}>닫기</Text></TouchableOpacity>
+          </View>
+          <ScrollView>
+            <View style={s.tableHeader}>
+              <Text style={[s.th, { flex: 0.6 }]}>순위</Text>
+              <Text style={[s.th, { flex: 2.5 }]}>플레이어</Text>
+              <Text style={[s.th, { flex: 1.5, textAlign: 'right' }]}>{config.col}</Text>
+            </View>
+            {config.rows.length === 0 ? (
+              <Text style={[s.muted, { padding: 16, textAlign: 'center' }]}>데이터 없음</Text>
+            ) : config.rows.map((row, i) => (
+              <View key={i} style={s.tableRow}>
+                <Text style={[s.td, { flex: 0.6, textAlign: 'center' }]}>{i + 1}</Text>
+                <View style={{ flex: 2.5 }}>
+                  <Text style={[s.td, { fontWeight: i < 3 ? '700' : '500' }]}>{row.name}</Text>
+                  {row.sub && <Text style={{ fontSize: 11, color: C.muted }}>{row.sub}</Text>}
+                </View>
+                <Text style={[s.td, { flex: 1.5, textAlign: 'right', fontWeight: '700' }]}>{row.value}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
   )
 }
 
@@ -850,6 +1272,46 @@ const s = StyleSheet.create({
   pillText: { fontSize: 13, fontWeight: '700', color: C.green },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: C.greenLight, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
   badgeText: { fontSize: 10, fontWeight: '700', color: C.green },
+  metricGridCompact: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
+  metricCard: { flexBasis: '47%', flexGrow: 1, backgroundColor: C.card, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: C.border },
+  metricLabel: { fontSize: 11, fontWeight: '800', color: C.muted },
+  metricValue: { fontSize: 20, fontWeight: '900', color: C.text, marginTop: 8 },
+  analysisRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: C.border },
+  analysisLabel: { fontSize: 13, fontWeight: '700', color: C.muted },
+  analysisValue: { fontSize: 14, fontWeight: '900', color: C.text },
+  insightText: { fontSize: 13, color: C.muted, lineHeight: 20, marginBottom: 10 },
+  bulletRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
+  bulletDot: { width: 12, fontSize: 13, color: C.muted, lineHeight: 20 },
+  bulletText: { flex: 1, fontSize: 13, color: C.muted, lineHeight: 20 },
+  goalRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  goalInput: {
+    minWidth: 86, borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8,
+    fontSize: 18, fontWeight: '900', color: C.text, textAlign: 'center', backgroundColor: '#fff',
+  },
+  goalUnit: { fontSize: 13, fontWeight: '800', color: C.text },
+  miniTrendRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', minHeight: 116, gap: 8 },
+  miniTrendItem: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
+  miniTrendValue: { fontSize: 11, fontWeight: '800', color: C.text, marginBottom: 5 },
+  miniTrendBar: { width: '70%', borderRadius: 8, backgroundColor: C.green },
+  miniTrendDate: { fontSize: 10, color: C.muted, marginTop: 6 },
+  scoreDistRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
+  scoreDistItem: { flex: 1, alignItems: 'center', backgroundColor: C.greenLight, borderRadius: 14, paddingVertical: 10 },
+  scoreDistValue: { fontSize: 17, fontWeight: '900' },
+  scoreDistLabel: { fontSize: 10, fontWeight: '800', color: C.muted, marginTop: 3 },
+  detailGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  detailButton: {
+    flexBasis: '48%', flexGrow: 1, minHeight: 44, borderRadius: 14, borderWidth: 1, borderColor: C.border,
+    backgroundColor: C.card, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  detailButtonText: { fontSize: 13, fontWeight: '800', color: C.text },
+  detailButtonArrow: { fontSize: 18, fontWeight: '700', color: C.muted },
+  hallSection: { marginTop: 8 },
+  hallSectionTitle: { fontSize: 12, fontWeight: '900', color: C.text, marginBottom: 4 },
+  hallRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border, gap: 10 },
+  hallIconWrap: { width: 32, height: 32, borderRadius: 16, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
+  hallLabel: { flex: 1, fontSize: 13, color: C.muted },
+  hallValue: { fontSize: 13, fontWeight: '600', color: C.text, textAlign: 'right', flexShrink: 1 },
   smallBtn: { backgroundColor: C.green, borderRadius: 20, paddingVertical: 6, paddingHorizontal: 14 },
   smallBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   yearNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 24, paddingVertical: 10, marginBottom: 4 },

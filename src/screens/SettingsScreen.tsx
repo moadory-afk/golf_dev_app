@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useLayoutEffect } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet, Alert, ScrollView, TextInput,
   ActivityIndicator, Platform, Share, Modal, Switch,
@@ -24,6 +24,10 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets()
   const nav = useNavigation<Nav>()
   const { activeClub, refreshClubs } = useClub()
+
+  useLayoutEffect(() => {
+    nav.setOptions({ title: `${activeClub?.name ?? '클럽'} 운영 설정` })
+  }, [nav, activeClub?.name])
   const [user, setUser] = useState<User | null>(null)
 
   // 클럽 관리

@@ -19,7 +19,7 @@ import { Icon } from '../components/Icon'
 import type { RootStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
-type PersonalDetailType = 'handicap' | 'best' | 'wins' | 'singleBirdie' | 'records'
+type PersonalDetailType = 'handicap' | 'average' | 'best' | 'wins' | 'singleBirdie' | 'records'
 
 function diffText(d: number) { return d > 0 ? `+${d}` : `${d}` }
 
@@ -69,11 +69,12 @@ export default function HomeScreen() {
   const [myName, setMyName] = useState<string | null>(null)
   const [personalDetail, setPersonalDetail] = useState<PersonalDetailType | null>(null)
   const [h2hPlayer, setH2hPlayer] = useState<string | null>(null)
+  const [recentRoundOpen, setRecentRoundOpen] = useState(false)
   const [roundAttendance, setRoundAttendance] = useState<Record<string, '미정' | '참석' | '불참'>>({})
-  const [showUpcomingCard, setShowUpcomingCard] = useState(true)
+  const [showUpcomingCard, setShowUpcomingCard] = useState(false)
   const [attendanceSheetOpen, setAttendanceSheetOpen] = useState(false)
   const [myUserId, setMyUserId] = useState<string | null>(null)
-  const [showFeeCard, setShowFeeCard] = useState(true)
+  const [showFeeCard, setShowFeeCard] = useState(false)
   const [upcomingRound, setUpcomingRound] = useState<ScheduledRound | null>(null)
   const onRefresh = useCallback(() => setRefreshKey((k) => k + 1), [])
 
@@ -239,33 +240,18 @@ export default function HomeScreen() {
       sub: recentRound.courseName.slice(0, 5),
     }
   })()
-  const headToHeadSummary = (() => {
-    if (!myName) return '0승 0무 0패'
-    let wins = 0
-    let draws = 0
-    let losses = 0
+  const headToHeadHandicapDiff = (() => {
+    if (!myName || myHandicap === null) return 0
+    let total = 0
     for (const round of rounds) {
       const me = round.players.find((player) => player.name === myName)
       if (!me) continue
-      const myNet = playerTotal(me.strokes) - (handicaps.get(myName) ?? 0)
       for (const opp of round.players) {
         if (opp.name === myName) continue
-        const oppNet = playerTotal(opp.strokes) - (handicaps.get(opp.name) ?? 0)
-        if (myNet < oppNet) wins += 1
-        else if (myNet > oppNet) losses += 1
-        else draws += 1
+        total += myHandicap - (handicaps.get(opp.name) ?? 0)
       }
     }
-    return `${wins}승 ${draws}무 ${losses}패`
-  })()
-  const headToHeadParts = (() => {
-    const match = headToHeadSummary.match(/(\d+)승\s+(\d+)무\s+(\d+)패/)
-    if (!match) return { wins: 0, draws: 0, losses: 0 }
-    return {
-      wins: Number(match[1]),
-      draws: Number(match[2]),
-      losses: Number(match[3]),
-    }
+    return total
   })()
   const feeCycleLabel = feeDashboard?.cycle?.label ?? '현재 회차'
   const feeMembers = feeDashboard?.members ?? []
@@ -303,6 +289,9 @@ export default function HomeScreen() {
           onClose={() => setPersonalDetail(null)} basis={handicapBasis}
         />
       )}
+      {recentRoundOpen && recent3[0] && myName && (
+        <RecentRoundModal round={recent3[0]} myName={myName} onClose={() => setRecentRoundOpen(false)} />
+      )}
       <ScrollView
         style={{ flex: 1 }}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} tintColor={C.green} />}
@@ -319,7 +308,7 @@ export default function HomeScreen() {
                 <Text style={s.statValue}>{myHandicap !== null ? diffText(myHandicap) : '-'}</Text>
                 <Text style={s.statSub}>최근 {handicapBasis}경기</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={s.statCard}>
+              <TouchableOpacity style={s.statCard} onPress={() => setPersonalDetail('average')}>
                 <Text style={s.statLabel}>평균</Text>
                 <Text style={s.statValue}>{myAverage !== null ? `${myAverage}타` : '-'}</Text>
                 <Text style={s.statSub}>전체 경기 평균</Text>
@@ -331,7 +320,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={s.statCard}
-                onPress={() => recent3[0] && nav.navigate('RoundDetail', { id: recent3[0].id })}
+                onPress={() => recent3[0] && setRecentRoundOpen(true)}
                 disabled={!recent3[0]}
               >
                 <Text style={s.statLabel}>최근라운드</Text>
@@ -340,8 +329,8 @@ export default function HomeScreen() {
               </TouchableOpacity>
               <TouchableOpacity style={s.statCard} onPress={() => setH2hPlayer(myName)}>
                 <Text style={s.statLabel}>상대전적</Text>
-                <Text style={s.statValue}>{headToHeadParts.wins}:{headToHeadParts.draws}:{headToHeadParts.losses}</Text>
-                <Text style={s.statSub}>승:무:패</Text>
+                <Text style={s.statValue}>{diffText(headToHeadHandicapDiff)}타</Text>
+                <Text style={s.statSub}>핸디차이</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.statCard} onPress={() => setPersonalDetail('records')}>
                 <Text style={s.statLabel}>보유기록</Text>
@@ -584,6 +573,63 @@ export default function HomeScreen() {
 
 // ─── 상대 전적 모달 ───────────────────────────────────────────────────────────
 
+function RecentRoundModal({ round, myName, onClose }: { round: SavedRound; myName: string; onClose: () => void }) {
+  const player = round.players.find((p) => p.name === myName)
+  const total = player ? playerTotal(player.strokes) : null
+  const par = totalPar(round.pars)
+  const diff = total !== null ? total - par : null
+  const stats = player ? player.strokes.reduce((acc, score, index) => {
+    const scoreDiff = score - round.pars[index]
+    if (scoreDiff <= -1) acc.birdie += 1
+    else if (scoreDiff === 0) acc.par += 1
+    else if (scoreDiff === 1) acc.bogey += 1
+    else if (scoreDiff === 2) acc.double += 1
+    else acc.triplePlus += 1
+    return acc
+  }, { birdie: 0, par: 0, bogey: 0, double: 0, triplePlus: 0 }) : null
+
+  return (
+    <Modal transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+          <View style={s.modalHeader}>
+            <Text style={s.modalTitle}>최근 라운드</Text>
+            <TouchableOpacity style={s.closeBtn} onPress={onClose}><Text style={s.closeBtnText}>닫기</Text></TouchableOpacity>
+          </View>
+          <Text style={{ fontSize: 15, fontWeight: '800', color: C.text }}>{round.courseName}</Text>
+          <Text style={[s.muted, { marginTop: 4 }]}>{round.date}</Text>
+          {player && total !== null && diff !== null && stats ? (
+            <>
+              <View style={s.recentRoundScoreBox}>
+                <Text style={s.recentRoundScore}>{total}타</Text>
+                <Text style={[s.recentRoundDiff, { color: diff <= 0 ? C.green : C.warn }]}>{diffText(diff)}</Text>
+              </View>
+              <View style={s.scoreDistRow}>
+                <ScorePill label="버디" value={stats.birdie} color={C.info} />
+                <ScorePill label="파" value={stats.par} color={C.green} />
+                <ScorePill label="보기" value={stats.bogey} color={C.warn} />
+                <ScorePill label="더블" value={stats.double} color={C.danger} />
+                <ScorePill label="트리플+" value={stats.triplePlus} color={C.text} />
+              </View>
+            </>
+          ) : (
+            <Text style={[s.muted, { marginTop: 14 }]}>이 라운드에 내 기록이 없습니다.</Text>
+          )}
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  )
+}
+
+function ScorePill({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <View style={s.scorePill}>
+      <Text style={[s.scorePillValue, { color }]}>{value}</Text>
+      <Text style={s.scorePillLabel}>{label}</Text>
+    </View>
+  )
+}
+
 function handicapAt(name: string, allRounds: SavedRound[], beforeDate: string, basis = 5): number {
   const prior = allRounds
     .filter((r) => r.date < beforeDate && r.players.some((p) => p.name === name))
@@ -736,6 +782,13 @@ function PersonalDetailModal({ type, myName, rounds, handicaps, myRecords, winCo
     title = `핸디캡 근거 (최근 ${basis}경기)`; headers = ['날짜', '코스', '스코어', '파대비']
     const last5 = myRounds.slice(-basis)
     rows = last5.map((e) => ({ cols: [e.date.slice(5), e.courseName.slice(0, 7), `${e.total}`, { text: diffText(e.diff), color: e.diff <= 0 ? C.green : C.warn }] }))
+  } else if (type === 'average') {
+    const avg = Math.round(myRounds.reduce((sum, e) => sum + e.total, 0) / myRounds.length)
+    title = `전체 라운드 기록 (평균 ${avg}타)`; headers = ['날짜', '코스', '스코어', '평균차']
+    rows = [...myRounds].sort((a, b) => b.date.localeCompare(a.date)).map((e) => {
+      const diff = e.total - avg
+      return { cols: [e.date.slice(5), e.courseName.slice(0, 7), `${e.total}`, { text: diffText(diff), color: diff <= 0 ? C.green : C.warn }] }
+    })
   } else if (type === 'best') {
     title = '베스트 스코어 순위'; headers = ['날짜', '코스', '스코어', '파대비']
     rows = [...myRounds].sort((a, b) => a.total - b.total).map((e) => ({ cols: [e.date.slice(5), e.courseName.slice(0, 7), `${e.total}`, { text: diffText(e.diff), color: e.diff <= 0 ? C.green : C.warn }] }))
@@ -1108,6 +1161,13 @@ const s = StyleSheet.create({
   modalTitle: { fontSize: 15, fontWeight: '700', color: C.text, flex: 1, marginRight: 8 },
   closeBtn: { backgroundColor: C.green, borderRadius: 20, paddingVertical: 5, paddingHorizontal: 14 },
   closeBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  recentRoundScoreBox: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 16, marginBottom: 14 },
+  recentRoundScore: { fontSize: 30, fontWeight: '900', color: C.text },
+  recentRoundDiff: { fontSize: 15, fontWeight: '800', marginBottom: 4 },
+  scoreDistRow: { flexDirection: 'row', gap: 7 },
+  scorePill: { flex: 1, alignItems: 'center', backgroundColor: C.greenLight, borderRadius: 12, paddingVertical: 9 },
+  scorePillValue: { fontSize: 16, fontWeight: '900' },
+  scorePillLabel: { fontSize: 10, fontWeight: '800', color: C.muted, marginTop: 3 },
   tableHeader: { flexDirection: 'row', borderBottomWidth: 1.5, borderBottomColor: C.border, paddingBottom: 7, marginBottom: 2 },
   tableRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.border },
   th: { fontSize: 11, color: C.muted, fontWeight: '700' },
