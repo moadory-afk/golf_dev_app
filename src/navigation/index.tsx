@@ -21,6 +21,7 @@ import NoticePrototypeScreen from '../screens/NoticePrototypeScreen'
 import TreasuryEntryPrototypeScreen from '../screens/TreasuryEntryPrototypeScreen'
 import TreasuryLedgerPrototypeScreen from '../screens/TreasuryLedgerPrototypeScreen'
 import RoundSetupScreen from '../screens/RoundSetupScreen'
+import RoundSchedulePrototypeScreen from '../screens/RoundSchedulePrototypeScreen'
 import ScoreEntryScreen from '../screens/ScoreEntryScreen'
 import type { MainTabParamList, RootStackParamList } from './types'
 
@@ -123,6 +124,7 @@ export default function Navigation() {
           <Stack.Screen name="Profile" component={ProfileScreen} options={({ navigation }) => ({ title: '프로필 · 설정', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={({ navigation }) => ({ title: '설정', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="FeePrototype" component={FeePrototypeScreen} options={({ navigation }) => ({ title: '회비 관리', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="RoundSchedulePrototype" component={RoundSchedulePrototypeScreen} options={({ navigation }) => ({ title: '라운드 일정', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="FeeMemberPrototype" component={FeeMemberPrototypeScreen} options={({ navigation }) => ({ title: '회원 회비 상세', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="TreasuryLedgerPrototype" component={TreasuryLedgerPrototypeScreen} options={({ navigation }) => ({ title: '입금 · 지급 내역', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen

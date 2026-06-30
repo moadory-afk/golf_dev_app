@@ -251,6 +251,13 @@ export default function ClubScreen() {
       onPress: () => nav.navigate('FeePrototype'),
     },
     {
+      key: 'roundSchedule',
+      title: '라운드 일정',
+      subtitle: '날짜, 시간, 골프장 정보를 등록하고 예정 라운드를 관리합니다',
+      icon: 'calendar' as const,
+      onPress: () => nav.navigate('RoundSchedulePrototype'),
+    },
+    {
       key: 'notice',
       title: '공지 관리',
       subtitle: '공지 등록과 게시 상태를 관리합니다',

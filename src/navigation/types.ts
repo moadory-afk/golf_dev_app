@@ -13,6 +13,7 @@ export type RootStackParamList = {
   Profile: undefined
   Settings: undefined
   FeePrototype: undefined
+  RoundSchedulePrototype: undefined
   FeeMemberPrototype: { clubId: string; memberUserId: string; memberName: string; statusId: string }
   TreasuryLedgerPrototype: undefined
   TreasuryEntryPrototype: {

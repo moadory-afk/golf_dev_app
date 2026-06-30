@@ -7,6 +7,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useState, useCallback, useEffect } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { getRounds, getClubMembers, getFeeDashboard, playerTotal, totalPar, computeHandicaps, shortName, type SavedRound } from '../lib/store'
+import { getRoundSchedules, getUpcomingRound, type ScheduledRound } from '../lib/roundSchedule'
 import { useClub } from '../lib/ClubContext'
 import { useAsync } from '../lib/useAsync'
 import { supabase } from '../lib/supabase'
@@ -67,6 +68,7 @@ export default function HomeScreen() {
   const [attendanceSheetOpen, setAttendanceSheetOpen] = useState(false)
   const [myUserId, setMyUserId] = useState<string | null>(null)
   const [showFeeCard, setShowFeeCard] = useState(true)
+  const [upcomingRound, setUpcomingRound] = useState<ScheduledRound | null>(null)
   const onRefresh = useCallback(() => setRefreshKey((k) => k + 1), [])
 
   const [handicapBasis, setHandicapBasis] = useState(5)
@@ -82,6 +84,14 @@ export default function HomeScreen() {
       if (v === '3' || v === '5' || v === '10') setHandicapBasis(Number(v))
     })
   }, [])
+
+  useEffect(() => {
+    if (!club?.id) {
+      setUpcomingRound(null)
+      return
+    }
+    getRoundSchedules(club.id).then((items) => setUpcomingRound(getUpcomingRound(items)))
+  }, [club?.id, refreshKey])
 
   const handicaps = computeHandicaps(rounds, handicapBasis)
 
@@ -200,7 +210,7 @@ export default function HomeScreen() {
   }).slice(-10)
 
   const recent3 = rounds.slice(0, 3)
-  const upcomingRound = { id: 'u1', date: '2026-07-08', time: '18:30', course: '미정' }
+  const nextRound = upcomingRound ?? { id: 'u1', date: '미정', time: '미정', course: '미정', note: '', createdAt: '', updatedAt: '' }
   const isAdmin = club?.role === 'admin'
   const myAttendanceKey = myUserId ?? '__me__'
   const myAttendance = roundAttendance[myAttendanceKey] ?? '미정'
@@ -421,8 +431,8 @@ export default function HomeScreen() {
                   <Text style={s.protoSub}>총무가 등록한 일정입니다. 항목을 누르면 전체 회원 참석 여부를 확인할 수 있습니다.</Text>
                   <TouchableOpacity style={s.roundRow} onPress={() => setAttendanceSheetOpen(true)}>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.roundDate}>{upcomingRound.date} · {upcomingRound.time || '미정'}</Text>
-                      <Text style={s.roundCourse}>{upcomingRound.course || '미정'}</Text>
+                      <Text style={s.roundDate}>{nextRound.date} · {nextRound.time || '미정'}</Text>
+                      <Text style={s.roundCourse}>{nextRound.course || '미정'}</Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <TouchableOpacity
@@ -453,7 +463,7 @@ export default function HomeScreen() {
                 </>
               ) : (
                 <TouchableOpacity style={s.roundCollapsedBox} onPress={() => setAttendanceSheetOpen(true)}>
-                  <Text style={s.roundCollapsedText}>{upcomingRound.date} · {upcomingRound.time || '미정'} · {upcomingRound.course || '미정'}</Text>
+                  <Text style={s.roundCollapsedText}>{nextRound.date} · {nextRound.time || '미정'} · {nextRound.course || '미정'}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -498,7 +508,7 @@ export default function HomeScreen() {
                     <Text style={s.closeBtnText}>닫기</Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={s.protoSub}>{upcomingRound.date} · {upcomingRound.time || '미정'} · {upcomingRound.course || '미정'}</Text>
+                <Text style={s.protoSub}>{nextRound.date} · {nextRound.time || '미정'} · {nextRound.course || '미정'}</Text>
                 <View style={s.attendanceSummaryRow}>
                   <Text style={s.attendanceSummaryText}>총원 {clubMembers?.length ?? 0}명</Text>
                   <Text style={s.attendanceSummaryText}>{isAdmin ? '총무만 수정 가능' : '참석 여부는 총무가 관리'}</Text>
