@@ -129,11 +129,11 @@ function getPlayerBadges(rounds: SavedRound[], basis = 5): Map<string, Badge[]> 
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets()
   const nav = useNavigation<Nav>()
-  const [tab, setTab] = useState<Tab>('byRound')
+  const [tab, setTab] = useState<Tab>('byPlayer')
   const [refreshKey, setRefreshKey] = useState(0)
   const [myName, setMyName] = useState<string | null>(null)
   const [handicapBasis, setHandicapBasis] = useState(5)
-  const { activeClub } = useClub()
+  const { activeClub, clubsLoaded } = useClub()
   const { data, loading } = useAsync(
     () => (activeClub ? getRounds(activeClub.id) : Promise.resolve([])),
     [refreshKey, activeClub?.id],
@@ -161,7 +161,7 @@ export default function HistoryScreen() {
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <AppHeader myName={myName} />
       <View style={s.tabs}>
-        {(['byRound', 'byPlayer', 'club', 'hall'] as Tab[]).map((t) => (
+        {(['byPlayer', 'byRound', 'club', 'hall'] as Tab[]).map((t) => (
           <TouchableOpacity key={t} style={[s.tab, tab === t && s.tabActive]} onPress={() => setTab(t)}>
             <Text style={[s.tabText, tab === t && s.tabTextActive]}>
               {t === 'byRound' ? '라운딩별' : t === 'byPlayer' ? '개인별' : t === 'club' ? '클럽 전체' : '명예의 전당'}
@@ -174,11 +174,17 @@ export default function HistoryScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} tintColor={C.green} />}
       >
-        {tab === 'byRound' && <ByRound rounds={rounds} handicapBasis={handicapBasis} />}
-        {tab === 'byRound' && activeClub && <AddRoundButton />}
-        {tab === 'byPlayer' && <ByPlayer rounds={rounds} handicapBasis={handicapBasis} myName={myName} />}
-        {tab === 'club' && <Club rounds={rounds} />}
-        {tab === 'hall' && <HallOfFame rounds={rounds} handicapBasis={handicapBasis} />}
+        {!clubsLoaded || loading ? (
+          <Text style={s.muted}>데이터를 불러오는 중입니다.</Text>
+        ) : (
+          <>
+            {tab === 'byRound' && <ByRound rounds={rounds} handicapBasis={handicapBasis} />}
+            {tab === 'byRound' && activeClub && <AddRoundButton />}
+            {tab === 'byPlayer' && <ByPlayer rounds={rounds} handicapBasis={handicapBasis} myName={myName} />}
+            {tab === 'club' && <Club rounds={rounds} />}
+            {tab === 'hall' && <HallOfFame rounds={rounds} handicapBasis={handicapBasis} />}
+          </>
+        )}
       </ScrollView>
     </View>
   )
@@ -1286,7 +1292,7 @@ const s = StyleSheet.create({
   bulletText: { flex: 1, fontSize: 13, color: C.muted, lineHeight: 20 },
   goalRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   goalInput: {
-    minWidth: 86, borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8,
+    width: 86, borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8,
     fontSize: 18, fontWeight: '900', color: C.text, textAlign: 'center', backgroundColor: '#fff',
   },
   goalUnit: { fontSize: 13, fontWeight: '800', color: C.text },

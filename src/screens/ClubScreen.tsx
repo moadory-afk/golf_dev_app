@@ -69,6 +69,7 @@ export default function ClubScreen() {
   const [rankingType, setRankingType] = useState<RankingType | null>(null)
   const [clubInfoOpen, setClubInfoOpen] = useState(false)
   const [showHallCriteria, setShowHallCriteria] = useState(false)
+  const [clubTab, setClubTab] = useState<'club' | 'manage'>('club')
   const [myName, setMyName] = useState<string | null>(null)
 
   const [handicapBasis, setHandicapBasis] = useState(5)
@@ -331,80 +332,103 @@ export default function ClubScreen() {
         <View style={s.content}>
           {club && (
             <>
-              <Text style={s.pageSectionTitle}>클럽 관리</Text>
-
-              <View style={s.clubHeroCard}>
-                <Image source={{ uri: CLUB_HERO_IMAGE }} style={s.clubHeroImage} resizeMode="cover" />
-                <View style={s.clubHeroBody}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.clubHeroName} numberOfLines={1}>{club.name}</Text>
-                    <Text style={s.clubHeroMeta} numberOfLines={2}>
-                      {club.subtitle?.trim() ? club.subtitle : '운영 중인 골프 클럽'}
-                    </Text>
-                  </View>
-                  <TouchableOpacity style={s.clubInfoBtn} onPress={() => setClubInfoOpen(true)} activeOpacity={0.84}>
-                    <Text style={s.clubInfoBtnText}>클럽 정보</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={s.card}>
-                <View style={s.cardTitleRow}>
-                  <Text style={[s.cardTitle, { marginBottom: 0 }]}>공지사항</Text>
-                  <TouchableOpacity onPress={() => nav.navigate('NoticePrototype')} activeOpacity={0.82}>
-                    <Text style={s.more}>전체보기 ›</Text>
-                  </TouchableOpacity>
-                </View>
-                {RECENT_NOTICES.map((notice) => (
-                  <TouchableOpacity key={`${notice.title}-${notice.date}`} style={s.noticeRow} onPress={() => nav.navigate('NoticePrototype')} activeOpacity={0.82}>
-                    <View style={s.noticeIcon}>
-                      <Icon name="mail" size={15} color={C.green} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.noticeTitle}>{notice.title}</Text>
-                      <Text style={s.noticeMeta}>{notice.date}</Text>
-                    </View>
-                    <Icon name="chevronRight" size={16} color={C.muted} />
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <View style={s.card}>
-                <View style={s.cardTitleRow}>
-                  <Text style={[s.cardTitle, { marginBottom: 0 }]}>명예의 전당 선정 기준</Text>
-                  <TouchableOpacity style={s.recordToggleBtn} onPress={() => setShowHallCriteria((value) => !value)} activeOpacity={0.82}>
-                    <Text style={s.recordToggleText}>{showHallCriteria ? '접기' : '펼치기'}</Text>
-                  </TouchableOpacity>
-                </View>
-                {showHallCriteria ? (
-                  <>
-                    <View style={s.ruleRow}>
-                      <Text style={s.ruleLabel}>우승 기록</Text>
-                      <Text style={s.ruleValue}>최다 우승 · 최다 연속 우승</Text>
-                    </View>
-                    <View style={s.ruleRow}>
-                      <Text style={s.ruleLabel}>스코어 기록</Text>
-                      <Text style={s.ruleValue}>최저타 · 최고타 · 버디왕 · 파왕</Text>
-                    </View>
-                    <View style={s.ruleRow}>
-                      <Text style={s.ruleLabel}>성장 기록</Text>
-                      <Text style={s.ruleValue}>최저 핸디 · 전후반/평균타/핸디 개선</Text>
-                    </View>
-                    <View style={s.ruleRow}>
-                      <Text style={s.ruleLabel}>참가 기록</Text>
-                      <Text style={s.ruleValue}>최다 라운드 참가</Text>
-                    </View>
-                    <View style={s.ruleRow}>
-                      <Text style={s.ruleLabel}>핸디 기준</Text>
-                      <Text style={s.ruleValue}>최근 {handicapBasis}경기</Text>
-                    </View>
-                  </>
-                ) : (
-                  <Text style={s.criteriaCollapsedText}>우승, 스코어, 성장, 참가 기록을 기준으로 선정합니다.</Text>
-                )}
-              </View>
-
               {isManagerView && (
+                <View style={s.clubTabBar}>
+                  <TouchableOpacity
+                    style={[s.clubTabBtn, clubTab === 'club' && s.clubTabBtnActive]}
+                    onPress={() => setClubTab('club')}
+                    activeOpacity={0.84}
+                  >
+                    <Text style={[s.clubTabText, clubTab === 'club' && s.clubTabTextActive]}>클럽</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[s.clubTabBtn, clubTab === 'manage' && s.clubTabBtnActive]}
+                    onPress={() => setClubTab('manage')}
+                    activeOpacity={0.84}
+                  >
+                    <Text style={[s.clubTabText, clubTab === 'manage' && s.clubTabTextActive]}>관리</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {(!isManagerView || clubTab === 'club') && (
+                <>
+                  <Text style={s.pageSectionTitle}>클럽 관리</Text>
+
+                  <View style={s.clubHeroCard}>
+                    <Image source={{ uri: CLUB_HERO_IMAGE }} style={s.clubHeroImage} resizeMode="cover" />
+                    <View style={s.clubHeroBody}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.clubHeroName} numberOfLines={1}>{club.name}</Text>
+                        <Text style={s.clubHeroMeta} numberOfLines={2}>
+                          {club.subtitle?.trim() ? club.subtitle : '운영 중인 골프 클럽'}
+                        </Text>
+                      </View>
+                      <TouchableOpacity style={s.clubInfoBtn} onPress={() => setClubInfoOpen(true)} activeOpacity={0.84}>
+                        <Text style={s.clubInfoBtnText}>클럽 정보</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={s.card}>
+                    <View style={s.cardTitleRow}>
+                      <Text style={[s.cardTitle, { marginBottom: 0 }]}>공지사항</Text>
+                      <TouchableOpacity onPress={() => nav.navigate('NoticePrototype')} activeOpacity={0.82}>
+                        <Text style={s.more}>전체보기 ›</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {RECENT_NOTICES.map((notice) => (
+                      <TouchableOpacity key={`${notice.title}-${notice.date}`} style={s.noticeRow} onPress={() => nav.navigate('NoticePrototype')} activeOpacity={0.82}>
+                        <View style={s.noticeIcon}>
+                          <Icon name="mail" size={15} color={C.green} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.noticeTitle}>{notice.title}</Text>
+                          <Text style={s.noticeMeta}>{notice.date}</Text>
+                        </View>
+                        <Icon name="chevronRight" size={16} color={C.muted} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <View style={s.card}>
+                    <View style={s.cardTitleRow}>
+                      <Text style={[s.cardTitle, { marginBottom: 0 }]}>명예의 전당 선정 기준</Text>
+                      <TouchableOpacity style={s.recordToggleBtn} onPress={() => setShowHallCriteria((value) => !value)} activeOpacity={0.82}>
+                        <Text style={s.recordToggleText}>{showHallCriteria ? '접기' : '펼치기'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {showHallCriteria ? (
+                      <>
+                        <View style={s.ruleRow}>
+                          <Text style={s.ruleLabel}>우승 기록</Text>
+                          <Text style={s.ruleValue}>최다 우승 · 최다 연속 우승</Text>
+                        </View>
+                        <View style={s.ruleRow}>
+                          <Text style={s.ruleLabel}>스코어 기록</Text>
+                          <Text style={s.ruleValue}>최저타 · 최고타 · 버디왕 · 파왕</Text>
+                        </View>
+                        <View style={s.ruleRow}>
+                          <Text style={s.ruleLabel}>성장 기록</Text>
+                          <Text style={s.ruleValue}>최저 핸디 · 전후반/평균타/핸디 개선</Text>
+                        </View>
+                        <View style={s.ruleRow}>
+                          <Text style={s.ruleLabel}>참가 기록</Text>
+                          <Text style={s.ruleValue}>최다 라운드 참가</Text>
+                        </View>
+                        <View style={s.ruleRow}>
+                          <Text style={s.ruleLabel}>핸디 기준</Text>
+                          <Text style={s.ruleValue}>최근 {handicapBasis}경기</Text>
+                        </View>
+                      </>
+                    ) : (
+                      <Text style={s.criteriaCollapsedText}>우승, 스코어, 성장, 참가 기록을 기준으로 선정합니다.</Text>
+                    )}
+                  </View>
+                </>
+              )}
+
+              {isManagerView && clubTab === 'manage' && (
                 <>
                   <Text style={s.pageSectionTitle}>관리 메뉴</Text>
                   <View style={s.managementGrid}>
@@ -610,6 +634,11 @@ const s = StyleSheet.create({
     color: C.text,
     marginBottom: 12,
   },
+  clubTabBar: { flexDirection: 'row', backgroundColor: C.greenLight, borderRadius: 999, padding: 4, marginBottom: 16 },
+  clubTabBtn: { flex: 1, alignItems: 'center', borderRadius: 999, paddingVertical: 9 },
+  clubTabBtnActive: { backgroundColor: C.card, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
+  clubTabText: { fontSize: 13, fontWeight: '800', color: C.muted },
+  clubTabTextActive: { color: C.green },
   clubHeroCard: {
     backgroundColor: C.card,
     borderRadius: 20,

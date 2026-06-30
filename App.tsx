@@ -96,7 +96,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    const fallback = setTimeout(() => setLoading(false), 3000)
+    const fallback = setTimeout(() => setLoading(false), 8000)
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       clearTimeout(fallback)

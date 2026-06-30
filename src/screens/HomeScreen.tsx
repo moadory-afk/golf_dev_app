@@ -74,7 +74,7 @@ export default function HomeScreen() {
   const [showUpcomingCard, setShowUpcomingCard] = useState(false)
   const [attendanceSheetOpen, setAttendanceSheetOpen] = useState(false)
   const [myUserId, setMyUserId] = useState<string | null>(null)
-  const [showFeeCard, setShowFeeCard] = useState(false)
+  const [showFeeCard, setShowFeeCard] = useState(true)
   const [upcomingRound, setUpcomingRound] = useState<ScheduledRound | null>(null)
   const onRefresh = useCallback(() => setRefreshKey((k) => k + 1), [])
 
@@ -439,7 +439,7 @@ export default function HomeScreen() {
 
             <View style={s.protoCard}>
               <View style={s.protoTopRow}>
-                <Text style={s.protoTitle}>회비납부 현황</Text>
+                <Text style={s.protoTitle}>회비관리 현황</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <TouchableOpacity style={s.recordToggleBtn} onPress={() => setShowFeeCard((v) => !v)}>
                     <Text style={s.recordToggleText}>{showFeeCard ? '접기' : '펼치기'}</Text>

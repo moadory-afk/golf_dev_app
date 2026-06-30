@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { getMyClubs, type ClubInfo } from './store'
+import { supabase } from './supabase'
 
 interface ClubContextValue {
   activeClub: ClubInfo | null
@@ -26,6 +27,12 @@ export function ClubProvider({ children }: { children: ReactNode }) {
 
   const refreshClubs = useCallback(async () => {
     try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setState({ myClubs: [], activeClub: null, loaded: false })
+        return
+      }
+
       const clubs = await getMyClubs()
       // 단일 setState로 원자적 업데이트 → 중간 상태 없음
       setState((prev) => ({
@@ -42,6 +49,14 @@ export function ClubProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refreshClubs()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        refreshClubs()
+      } else {
+        setState({ myClubs: [], activeClub: null, loaded: true })
+      }
+    })
+    return () => subscription.unsubscribe()
   }, [refreshClubs])
 
   const setActiveClub = useCallback((club: ClubInfo) => {
