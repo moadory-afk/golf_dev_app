@@ -4,7 +4,7 @@
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { getRounds, getClubMembers, getFeeDashboard, getFeeMemberHistory, playerTotal, totalPar, computeHandicaps, shortName, type SavedRound } from '../lib/store'
 import {
@@ -51,6 +51,8 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets()
   const nav = useNavigation<Nav>()
   const [refreshKey, setRefreshKey] = useState(0)
+  const [roundRefreshKey, setRoundRefreshKey] = useState(0)
+  const roundRealtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { activeClub: club, clubsLoaded } = useClub()
 
   // 클럽 로드 완료 후 소속 클럽 없으면 Club 탭으로 자동 이동
@@ -84,7 +86,10 @@ export default function HomeScreen() {
   const [myUserId, setMyUserId] = useState<string | null>(null)
   const [showFeeCard, setShowFeeCard] = useState(true)
   const [upcomingRound, setUpcomingRound] = useState<ScheduledRound | null>(null)
-  const onRefresh = useCallback(() => setRefreshKey((k) => k + 1), [])
+  const onRefresh = useCallback(() => {
+    setRefreshKey((k) => k + 1)
+    setRoundRefreshKey((k) => k + 1)
+  }, [])
 
   const [handicapBasis, setHandicapBasis] = useState(5)
   const { data: myFeeHistory, loading: myFeeHistoryLoading } = useAsync(
@@ -110,7 +115,7 @@ export default function HomeScreen() {
       return
     }
     getRoundSchedules(club.id).then((items) => setUpcomingRound(getUpcomingRound(items)))
-  }, [club?.id, refreshKey])
+  }, [club?.id, roundRefreshKey])
 
   useEffect(() => {
     if (!club?.id || !upcomingRound?.id) {
@@ -120,7 +125,31 @@ export default function HomeScreen() {
     getRoundAttendanceMap(club.id, upcomingRound.id)
       .then(setRoundAttendance)
       .catch(() => setRoundAttendance({}))
-  }, [club?.id, upcomingRound?.id, refreshKey])
+  }, [club?.id, upcomingRound?.id, roundRefreshKey])
+
+  useEffect(() => {
+    if (!club?.id) return
+
+    const queueRoundRefresh = () => {
+      if (roundRealtimeTimer.current) clearTimeout(roundRealtimeTimer.current)
+      roundRealtimeTimer.current = setTimeout(() => {
+        setRoundRefreshKey((key) => key + 1)
+      }, 500)
+    }
+
+    const channel = supabase
+      .channel(`club-rounds:${club.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'club_round_schedules', filter: `club_id=eq.${club.id}` }, queueRoundRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'club_round_attendances', filter: `club_id=eq.${club.id}` }, queueRoundRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'club_round_groups', filter: `club_id=eq.${club.id}` }, queueRoundRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'club_round_group_members', filter: `club_id=eq.${club.id}` }, queueRoundRefresh)
+      .subscribe()
+
+    return () => {
+      if (roundRealtimeTimer.current) clearTimeout(roundRealtimeTimer.current)
+      supabase.removeChannel(channel)
+    }
+  }, [club?.id])
 
   const handicaps = computeHandicaps(rounds, handicapBasis)
 

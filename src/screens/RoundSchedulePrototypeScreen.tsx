@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import DateField, { todayLocal } from '../components/DateField'
 import { Icon } from '../components/Icon'
@@ -6,8 +6,10 @@ import { useNavigation } from '@react-navigation/native'
 import { useClub } from '../lib/ClubContext'
 import {
   deleteRoundSchedule,
+  getRoundAttendanceMap,
   getRoundSchedules,
   upsertRoundSchedule,
+  type RoundAttendanceLabel,
   type RoundAttendanceMode,
   type RoundScheduleStatus,
   type ScheduledRound,
@@ -15,6 +17,7 @@ import {
   type ScheduledRoundGroupMember,
 } from '../lib/roundSchedule'
 import { getClubMembers, getCourseLayouts, getGolfCourses, type CourseLayout, type GolfCourse } from '../lib/store'
+import { supabase } from '../lib/supabase'
 import { C } from '../theme'
 
 type ClubMember = { userId: string; name: string; role: string }
@@ -107,6 +110,9 @@ export default function RoundSchedulePrototypeScreen() {
   const [draft, setDraft] = useState<Draft>(createEmptyDraft())
   const [coursePickerOpen, setCoursePickerOpen] = useState(false)
   const [layoutPickerTarget, setLayoutPickerTarget] = useState<{ groupId: string; side: 'front' | 'back' } | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [attendanceMap, setAttendanceMap] = useState<Record<string, RoundAttendanceLabel>>({})
+  const realtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     getGolfCourses().then(setCourses).catch(() => setCourses([]))
@@ -116,6 +122,40 @@ export default function RoundSchedulePrototypeScreen() {
     if (!club?.id) return
     getRoundSchedules(club.id).then(setItems)
     getClubMembers(club.id).then(setClubMembers).catch(() => setClubMembers([]))
+  }, [club?.id, refreshKey])
+
+  useEffect(() => {
+    if (!club?.id || !draft.id || !editorOpen) {
+      setAttendanceMap({})
+      return
+    }
+    getRoundAttendanceMap(club.id, draft.id)
+      .then(setAttendanceMap)
+      .catch(() => setAttendanceMap({}))
+  }, [club?.id, draft.id, editorOpen, refreshKey])
+
+  useEffect(() => {
+    if (!club?.id) return
+
+    const queueRefresh = () => {
+      if (realtimeTimer.current) clearTimeout(realtimeTimer.current)
+      realtimeTimer.current = setTimeout(() => {
+        setRefreshKey((key) => key + 1)
+      }, 500)
+    }
+
+    const channel = supabase
+      .channel(`round-schedule-screen:${club.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'club_round_schedules', filter: `club_id=eq.${club.id}` }, queueRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'club_round_attendances', filter: `club_id=eq.${club.id}` }, queueRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'club_round_groups', filter: `club_id=eq.${club.id}` }, queueRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'club_round_group_members', filter: `club_id=eq.${club.id}` }, queueRefresh)
+      .subscribe()
+
+    return () => {
+      if (realtimeTimer.current) clearTimeout(realtimeTimer.current)
+      supabase.removeChannel(channel)
+    }
   }, [club?.id])
 
   useEffect(() => {
@@ -130,6 +170,20 @@ export default function RoundSchedulePrototypeScreen() {
     () => [...items].sort((a, b) => `${a.date} ${a.time || '99:99'}`.localeCompare(`${b.date} ${b.time || '99:99'}`)),
     [items]
   )
+  const sortedClubMembers = useMemo(() => {
+    const order: Record<RoundAttendanceLabel, number> = { 참석: 0, 미정: 1, 불참: 2 }
+    return [...clubMembers].sort((a, b) => {
+      const left = order[attendanceMap[a.userId] ?? '미정']
+      const right = order[attendanceMap[b.userId] ?? '미정']
+      return left - right || a.name.localeCompare(b.name, 'ko-KR')
+    })
+  }, [clubMembers, attendanceMap])
+
+  function attendanceColor(status: RoundAttendanceLabel) {
+    if (status === '참석') return C.green
+    if (status === '불참') return '#d65b4a'
+    return C.muted
+  }
 
   function openCreate() {
     setDraft(createEmptyDraft())
@@ -483,10 +537,11 @@ export default function RoundSchedulePrototypeScreen() {
                       <View style={s.memberSection}>
                         <Text style={s.memberSectionLabel}>회원 배정</Text>
                         <View style={s.memberChipWrap}>
-                          {clubMembers.map((member) => {
+                          {sortedClubMembers.map((member) => {
                             const selected = isMemberSelected(group.id, member.userId)
                             const assignedGroupId = memberAssignedGroup(member.userId)
                             const disabled = !!assignedGroupId && assignedGroupId !== group.id
+                            const attendance = attendanceMap[member.userId] ?? '미정'
 
                             return (
                               <TouchableOpacity
@@ -504,6 +559,7 @@ export default function RoundSchedulePrototypeScreen() {
                                     s.memberChipText,
                                     selected && s.memberChipTextActive,
                                     disabled && s.memberChipTextDisabled,
+                                    !selected && !disabled && { color: attendanceColor(attendance) },
                                   ]}
                                 >
                                   {member.name}

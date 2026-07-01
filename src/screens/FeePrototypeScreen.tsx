@@ -574,7 +574,13 @@ export default function FeePrototypeScreen() {
 
             <View style={s.transactionCardList}>
               {filteredTransactions.map((item) => (
-                <TouchableOpacity key={item.id} style={s.transactionCard} activeOpacity={0.82} onPress={() => openTransactionEditor(item)}>
+                <TouchableOpacity
+                  key={item.id}
+                  style={[s.transactionCard, !isAdmin && s.disabledAction]}
+                  activeOpacity={0.82}
+                  onPress={() => isAdmin && openTransactionEditor(item)}
+                  disabled={!isAdmin}
+                >
                   <View style={[s.transactionIcon, item.type === 'income' ? s.incomeIcon : s.expenseIcon]}>
                     <Text style={s.transactionIconText}>{item.type === 'income' ? '+' : '-'}</Text>
                   </View>
@@ -594,7 +600,12 @@ export default function FeePrototypeScreen() {
               ))}
 
               {filteredTransactions.length === 0 ? (
-                <TouchableOpacity style={s.newTransactionCard} activeOpacity={0.82} onPress={() => openTransactionEditor()}>
+                <TouchableOpacity
+                  style={[s.newTransactionCard, !isAdmin && s.disabledAction]}
+                  activeOpacity={0.82}
+                  onPress={() => isAdmin && openTransactionEditor()}
+                  disabled={!isAdmin}
+                >
                   <View style={s.newTransactionIcon}>
                     <Icon name="plus" size={16} color={C.green} />
                   </View>
@@ -604,7 +615,12 @@ export default function FeePrototypeScreen() {
                   </View>
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity style={s.newTransactionCard} activeOpacity={0.82} onPress={() => openTransactionEditor()}>
+                <TouchableOpacity
+                  style={[s.newTransactionCard, !isAdmin && s.disabledAction]}
+                  activeOpacity={0.82}
+                  onPress={() => isAdmin && openTransactionEditor()}
+                  disabled={!isAdmin}
+                >
                   <View style={s.newTransactionIcon}>
                     <Icon name="plus" size={16} color={C.green} />
                   </View>
@@ -1034,6 +1050,7 @@ const s = StyleSheet.create({
   },
   partialSaveBtnText: { color: C.accentText, fontSize: 12, fontWeight: '900' },
   transactionCardList: { gap: 10 },
+  disabledAction: { opacity: 0.55 },
   transactionCard: {
     flexDirection: 'row',
     alignItems: 'center',
