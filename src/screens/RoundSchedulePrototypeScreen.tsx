@@ -31,12 +31,13 @@ import type { RootStackParamList } from '../navigation/types'
 type Nav = NativeStackNavigationProp<RootStackParamList>
 
 type ClubMember = { userId: string; name: string; role: string }
-type RoundEditorTab = 'basic' | 'score' | 'award'
+type RoundEditorTab = 'basic' | 'score' | 'award' | 'money'
 
 const ROUND_EDITOR_TABS: Array<{ value: RoundEditorTab; label: string }> = [
   { value: 'basic', label: '기본' },
   { value: 'score', label: '스코어' },
   { value: 'award', label: '시상' },
+  { value: 'money', label: '머니게임' },
 ]
 
 type Draft = {
@@ -793,7 +794,7 @@ export default function RoundSchedulePrototypeScreen() {
                   </View>
                 )}
               </ScrollView>
-            ) : (
+            ) : editorTab === 'award' ? (
               <ScrollView contentContainerStyle={s.awardBody}>
                 <Text style={s.fieldLabel}>시상 인원</Text>
                 <View style={s.awardChipRow}>
@@ -844,6 +845,14 @@ export default function RoundSchedulePrototypeScreen() {
                 <TouchableOpacity style={s.saveButton} onPress={saveAwardConfig} activeOpacity={0.86}>
                   <Text style={s.saveButtonText}>시상룰 저장</Text>
                 </TouchableOpacity>
+              </ScrollView>
+            ) : (
+              <ScrollView contentContainerStyle={s.scoreBody}>
+                <View style={s.editorPlaceholder}>
+                  <Icon name="settings" size={28} color={C.green} />
+                  <Text style={s.editorPlaceholderTitle}>머니게임</Text>
+                  <Text style={s.editorPlaceholderDesc}>게임룰 기능을 이곳으로 이동할 예정입니다.</Text>
+                </View>
               </ScrollView>
             )}
           </View>
@@ -1066,6 +1075,7 @@ const s = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
+    height: '92%',
     maxHeight: '92%',
     paddingTop: 20,
     paddingHorizontal: 20,
@@ -1103,7 +1113,7 @@ const s = StyleSheet.create({
   },
   editorPlaceholderTitle: { fontSize: 18, fontWeight: '900', color: C.text },
   editorPlaceholderDesc: { fontSize: 13, lineHeight: 20, color: C.muted, textAlign: 'center' },
-  scoreBody: { gap: 10, paddingBottom: 20 },
+  scoreBody: { flexGrow: 1, gap: 10, paddingBottom: 20 },
   scoreGroupCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1174,7 +1184,7 @@ const s = StyleSheet.create({
     marginTop: 12,
   },
   scoreSaveButtonText: { fontSize: 14, fontWeight: '900', color: C.accentText },
-  awardBody: { gap: 14, paddingBottom: 20 },
+  awardBody: { flexGrow: 1, gap: 14, paddingBottom: 20 },
   awardChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   awardChip: {
     borderRadius: 999,
@@ -1208,7 +1218,7 @@ const s = StyleSheet.create({
     paddingVertical: 10,
   },
   closeButtonText: { fontSize: 14, fontWeight: '800', color: C.text },
-  formBody: { gap: 18, paddingBottom: 12 },
+  formBody: { flexGrow: 1, gap: 18, paddingBottom: 12 },
   fieldGroup: { gap: 8 },
   fieldLabel: { fontSize: 14, fontWeight: '800', color: C.text },
   selector: {

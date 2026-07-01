@@ -2,8 +2,9 @@ import {
   ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Image, Share, Alert,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useNavigation } from '@react-navigation/native'
+import { CommonActions, useNavigation, useRoute } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import type { RouteProp } from '@react-navigation/native'
 import { useState, useCallback, useEffect } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { getClubMembers, getRounds, playerTotal, totalPar, computeHandicaps, shortName, type SavedRound } from '../lib/store'
@@ -14,9 +15,10 @@ import { C } from '../theme'
 import { AppHeader } from '../components/AppHeader'
 import { Icon } from '../components/Icon'
 import { EmojiIcon } from '../components/EmojiIcon'
-import type { RootStackParamList } from '../navigation/types'
+import type { MainTabParamList, RootStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
+type ClubRoute = RouteProp<MainTabParamList, 'Club'>
 type RankingType = 'recentMedal' | 'recentWins' | 'wins' | 'streak' | 'lowestHandicap' | 'birdie' | 'singleBirdie'
 
 const CLUB_HERO_IMAGE = 'https://images.unsplash.com/photo-1592919505780-303950717480?auto=format&fit=crop&w=1200&q=80'
@@ -52,6 +54,7 @@ function getWinner(r: SavedRound, handicaps: Map<string, number>): string | null
 export default function ClubScreen() {
   const insets = useSafeAreaInsets()
   const nav = useNavigation<Nav>()
+  const route = useRoute<ClubRoute>()
   const [refreshKey, setRefreshKey] = useState(0)
   const { activeClub: club } = useClub()
   const { data, loading } = useAsync(
@@ -256,13 +259,20 @@ export default function ClubScreen() {
   const MEDAL_BG = ['#fffbe8', '#f4f6f8', '#fdf5f0']
   const MEDAL_COLOR = [C.gold, C.silver, C.bronze]
   const isManagerView = club?.role === 'admin'
+
+  useEffect(() => {
+    if (!route.params?.openManageMenu || !isManagerView) return
+    setManageMenuOpen(true)
+    nav.dispatch(CommonActions.setParams({ openManageMenu: false }))
+  }, [route.params?.openManageMenu, isManagerView, nav])
+
   const managementMenus = club ? [
     {
       key: 'members',
       title: '회원 관리',
       subtitle: '회원 정보와 권한을 관리합니다',
       icon: 'users' as const,
-      onPress: () => nav.navigate('Members', { clubId: club.id }),
+      onPress: () => nav.navigate('Members', { clubId: club.id, returnToManageMenu: true }),
     },
     {
       key: 'fee',
@@ -270,28 +280,28 @@ export default function ClubScreen() {
       subtitle: '회비 정책과 납부 현황을 확인합니다',
       icon: 'money' as const,
       featured: true,
-      onPress: () => nav.navigate('FeePrototype'),
+      onPress: () => nav.navigate('FeePrototype', { returnToManageMenu: true }),
     },
     {
       key: 'roundSchedule',
       title: '라운드 일정',
       subtitle: '날짜, 시간, 골프장 정보를 등록하고 예정 라운드를 관리합니다',
       icon: 'flag' as const,
-      onPress: () => nav.navigate('RoundSchedulePrototype'),
+      onPress: () => nav.navigate('RoundSchedulePrototype', { returnToManageMenu: true }),
     },
     {
       key: 'notice',
       title: '공지 관리',
       subtitle: '공지 등록과 게시 상태를 관리합니다',
       icon: 'mail' as const,
-      onPress: () => nav.navigate('NoticePrototype'),
+      onPress: () => nav.navigate('NoticePrototype', { returnToManageMenu: true }),
     },
     {
       key: 'settings',
       title: '운영 설정',
       subtitle: '클럽 정보와 운영 환경을 설정합니다',
       icon: 'settings' as const,
-      onPress: () => nav.navigate('Settings'),
+      onPress: () => nav.navigate('Settings', { returnToManageMenu: true }),
     },
   ] : []
 
