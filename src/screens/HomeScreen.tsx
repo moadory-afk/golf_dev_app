@@ -4,7 +4,7 @@
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { getRounds, getClubMembers, getFeeDashboard, getFeeMemberHistory, playerTotal, totalPar, computeHandicaps, shortName, type SavedRound } from '../lib/store'
 import {
@@ -85,7 +85,8 @@ export default function HomeScreen() {
   const [roundSheetMode, setRoundSheetMode] = useState<'attendance' | 'groups'>('attendance')
   const [myUserId, setMyUserId] = useState<string | null>(null)
   const [showFeeCard, setShowFeeCard] = useState(true)
-  const [upcomingRound, setUpcomingRound] = useState<ScheduledRound | null>(null)
+  const [scheduledRounds, setScheduledRounds] = useState<ScheduledRound[]>([])
+  const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null)
   const onRefresh = useCallback(() => {
     setRefreshKey((k) => k + 1)
     setRoundRefreshKey((k) => k + 1)
@@ -111,21 +112,28 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (!club?.id) {
-      setUpcomingRound(null)
+      setScheduledRounds([])
+      setSelectedRoundId(null)
       return
     }
-    getRoundSchedules(club.id).then((items) => setUpcomingRound(getUpcomingRound(items)))
+    getRoundSchedules(club.id).then((items) => {
+      setScheduledRounds(items)
+      setSelectedRoundId((current) => {
+        if (current && items.some((item) => item.id === current)) return current
+        return getUpcomingRound(items)?.id ?? items[0]?.id ?? null
+      })
+    })
   }, [club?.id, roundRefreshKey])
 
   useEffect(() => {
-    if (!club?.id || !upcomingRound?.id) {
+    if (!club?.id || !selectedRoundId) {
       setRoundAttendance({})
       return
     }
-    getRoundAttendanceMap(club.id, upcomingRound.id)
+    getRoundAttendanceMap(club.id, selectedRoundId)
       .then(setRoundAttendance)
       .catch(() => setRoundAttendance({}))
-  }, [club?.id, upcomingRound?.id, roundRefreshKey])
+  }, [club?.id, selectedRoundId, roundRefreshKey])
 
   useEffect(() => {
     if (!club?.id) return
@@ -268,10 +276,8 @@ export default function HomeScreen() {
   }).slice(-10)
 
   const recent3 = rounds.slice(0, 3)
-  const nextRound = upcomingRound
+  const nextRound = scheduledRounds.find((item) => item.id === selectedRoundId) ?? scheduledRounds[0] ?? null
   const isAdmin = club?.role === 'admin'
-  const myAttendanceKey = myUserId ?? '__me__'
-  const myAttendance = roundAttendance[myAttendanceKey] ?? '미정'
   const roundGroups = nextRound?.groups ?? []
   const assignedGroups = roundGroups.filter((group) => group.members.length > 0)
   const assignedMemberIds = new Set(assignedGroups.flatMap((group) => group.members.map((member) => member.userId)))
@@ -295,9 +301,37 @@ export default function HomeScreen() {
   const canOpenGroupResult = hasUpcomingRound && hasAssignedGroups
   const roundCollapsedSummary = !nextRound
     ? '현재 예정된 라운딩이 없습니다'
+    : scheduledRounds.length > 1
+      ? `${scheduledRounds.length}개 일정 · ${nextRound.date} · ${roundCourseName}`
     : hasAssignedGroups
       ? `${nextRound.date} · ${roundCourseName} · ${teeTime} · ${myRoundGroup?.name ?? allGroupSummary}`
       : `${nextRound.date} · ${roundCourseName} · ${teeTime} · ${allGroupSummary}`
+  const roundSummaryFor = (round: ScheduledRound) => {
+    const groups = round.groups ?? []
+    const assigned = groups.filter((group) => group.members.length > 0)
+    const myGroup = groups.find((group) =>
+      group.members.some((member) => member.userId === myUserId || member.name === myName)
+    ) ?? null
+    const courseName = round.courseName || (round.course && round.course !== '미정' ? round.course : '골프장 미정')
+    const courseSummary = myGroup
+      ? `${myGroup.frontLayoutName ?? '전반 미정'} / ${myGroup.backLayoutName ?? '후반 미정'}`
+      : (groups[0]?.frontLayoutName || groups[0]?.backLayoutName)
+        ? `${groups[0].frontLayoutName ?? '전반 미정'} / ${groups[0].backLayoutName ?? '후반 미정'}`
+        : (round.layoutName ?? '코스 미정')
+    const time = myGroup?.time || round.time || '티오프 미정'
+    const groupSummary = assigned.length > 0 ? (myGroup?.name ?? `${assigned.length}개 조 편성`) : '조 미편성'
+    return { courseName, courseSummary, time, groupSummary, hasGroups: assigned.length > 0 }
+  }
+  const attendanceMembers = useMemo(() => {
+    const statusOrder: Record<RoundAttendanceLabel, number> = { 참석: 0, 미정: 1, 불참: 2 }
+    return [...(clubMembers ?? [])].sort((a, b) => {
+      if (a.userId === myUserId) return -1
+      if (b.userId === myUserId) return 1
+      const statusDiff = statusOrder[roundAttendance[a.userId] ?? '미정'] - statusOrder[roundAttendance[b.userId] ?? '미정']
+      if (statusDiff !== 0) return statusDiff
+      return a.name.localeCompare(b.name, 'ko-KR')
+    })
+  }, [clubMembers, myUserId, roundAttendance])
   const recentRoundSummary = (() => {
     const recentRound = recent3[0]
     if (!recentRound || !myName) return { value: '-', sub: '기록 없음' }
@@ -363,11 +397,6 @@ export default function HomeScreen() {
         .catch(() => {})
     }
   }
-  const applyRoundAttendance = () => {
-    if (!myUserId || !canApplyRound) return
-    const next = nextAttendance(roundAttendance[myUserId] ?? '미정')
-    saveRoundAttendance(myUserId, next)
-  }
   const applyMemberAttendance = (userId: string) => {
     if (!canApplyRound) return
     const next = nextAttendance(roundAttendance[userId] ?? '미정')
@@ -377,6 +406,12 @@ export default function HomeScreen() {
     if (mode === 'attendance' && !canOpenAttendance) return
     if (mode === 'groups' && !canOpenGroupResult) return
     setRoundSheetMode(mode)
+    setAttendanceSheetOpen(true)
+  }
+  const openRoundSheetFor = (round: ScheduledRound) => {
+    const hasGroups = round.groups.some((group) => group.members.length > 0)
+    setSelectedRoundId(round.id)
+    setRoundSheetMode(hasGroups ? 'groups' : 'attendance')
     setAttendanceSheetOpen(true)
   }
 
@@ -488,41 +523,6 @@ export default function HomeScreen() {
               <View style={s.protoTopRow}>
                 <Text style={s.protoTitle}>예정된 라운드</Text>
                 <View style={s.roundHeaderActions}>
-                  <TouchableOpacity
-                    style={[
-                      s.roundHeaderBtn,
-                      myAttendance === '미정' && s.roundHeaderBtnPending,
-                      myAttendance === '참석' && s.roundHeaderBtnYes,
-                      myAttendance === '불참' && s.roundHeaderBtnNo,
-                      !canApplyRound && s.roundHeaderBtnDisabled,
-                    ]}
-                    onPress={applyRoundAttendance}
-                    disabled={!canApplyRound}
-                  >
-                    <Text style={[
-                      s.roundHeaderBtnText,
-                      myAttendance === '미정' && s.roundHeaderBtnTextPending,
-                      myAttendance === '참석' && s.roundHeaderBtnTextYes,
-                      myAttendance === '불참' && s.roundHeaderBtnTextNo,
-                      !canApplyRound && s.roundHeaderBtnTextDisabled,
-                    ]}>
-                      {hasAssignedGroups ? '마감' : myAttendance}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[s.roundHeaderBtn, !canOpenAttendance && s.roundHeaderBtnDisabled]}
-                    onPress={() => openRoundSheet('attendance')}
-                    disabled={!canOpenAttendance}
-                  >
-                    <Text style={[s.roundHeaderBtnText, !canOpenAttendance && s.roundHeaderBtnTextDisabled]}>명단</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[s.roundHeaderBtn, !canOpenGroupResult && s.roundHeaderBtnDisabled]}
-                    onPress={() => openRoundSheet('groups')}
-                    disabled={!canOpenGroupResult}
-                  >
-                    <Text style={[s.roundHeaderBtnText, !canOpenGroupResult && s.roundHeaderBtnTextDisabled]}>조편성</Text>
-                  </TouchableOpacity>
                   <TouchableOpacity style={s.recordToggleBtn} onPress={() => setShowUpcomingCard((v) => !v)}>
                     <Text style={s.recordToggleText}>{showUpcomingCard ? '접기' : '펼치기'}</Text>
                   </TouchableOpacity>
@@ -533,22 +533,50 @@ export default function HomeScreen() {
                   <Text style={s.protoSub}>
                     {hasUpcomingRound ? '총무가 등록한 일정입니다.' : '현재 예정된 라운딩이 없습니다'}
                   </Text>
-                  <TouchableOpacity
-                    style={[s.roundRow, !hasUpcomingRound && s.roundRowDisabled]}
-                    onPress={() => openRoundSheet(canOpenGroupResult ? 'groups' : 'attendance')}
-                    disabled={!canOpenAttendance}
-                  >
-                    <View style={{ flex: 1 }}>
-                      {nextRound ? (
-                        <>
-                          <Text style={s.roundCourse}>{nextRound.date} · {roundCourseName} · {roundCourseSummary}</Text>
-                          <Text style={s.roundInfoText}>{teeTime} · {hasAssignedGroups ? (myRoundGroup?.name ?? allGroupSummary) : '조 미편성'}</Text>
-                        </>
-                      ) : (
-                        <Text style={s.roundCourse}>현재 예정된 라운딩이 없습니다</Text>
-                      )}
+                  {scheduledRounds.length > 0 ? (
+                    <View style={s.roundList}>
+                      {scheduledRounds.map((round) => {
+                        const summary = roundSummaryFor(round)
+                        const selected = round.id === selectedRoundId
+                        return (
+                          <TouchableOpacity
+                            key={round.id}
+                            style={[
+                              s.roundRow,
+                              summary.hasGroups ? s.roundRowGroupReady : s.roundRowAttendanceReady,
+                              selected && s.roundRowSelected,
+                            ]}
+                            onPress={() => openRoundSheetFor(round)}
+                            activeOpacity={0.84}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <View style={s.roundLine}>
+                                <Text style={s.roundCourse} numberOfLines={1}>
+                                  {round.date} · {summary.courseName} · {summary.courseSummary}
+                                </Text>
+                                <View style={[
+                                  s.roundStageBadge,
+                                  summary.hasGroups ? s.roundStageDone : s.roundStagePending,
+                                ]}>
+                                  <Text style={[
+                                    s.roundStageText,
+                                    summary.hasGroups ? s.roundStageTextDone : s.roundStageTextPending,
+                                  ]}>
+                                    {summary.hasGroups ? '조편성 완료' : '참석 확인중'}
+                                  </Text>
+                                </View>
+                              </View>
+                              <Text style={s.roundInfoText}>{summary.time} · {summary.groupSummary}</Text>
+                            </View>
+                          </TouchableOpacity>
+                        )
+                      })}
                     </View>
-                  </TouchableOpacity>
+                  ) : (
+                    <View style={[s.roundRow, s.roundRowDisabled]}>
+                      <Text style={s.roundCourse}>현재 예정된 라운딩이 없습니다</Text>
+                    </View>
+                  )}
                 </>
               ) : (
                 <TouchableOpacity
@@ -639,16 +667,18 @@ export default function HomeScreen() {
                   </ScrollView>
                 ) : (
                   <ScrollView style={{ marginTop: 8, maxHeight: 420 }}>
-                    {(clubMembers ?? []).map((member) => {
+                    {attendanceMembers.map((member) => {
                       const status = roundAttendance[member.userId] ?? '미정'
+                      const canToggleStatus = canApplyRound && (isAdmin || member.userId === myUserId)
                       return (
                         <View key={member.userId} style={s.attendanceMemberRow}>
-                          <Text style={s.attendanceMemberName}>{member.name}</Text>
-                          {isAdmin ? (
+                          <Text style={s.attendanceMemberName}>
+                            {member.userId === myUserId ? `${member.name} (나)` : member.name}
+                          </Text>
+                          {canToggleStatus ? (
                             <TouchableOpacity
                               style={[
                                 s.attendanceBtn,
-                                !canApplyRound && s.attendanceBtnDisabled,
                                 status === '참석' && s.attendanceYes,
                                 status === '불참' && s.attendanceNo,
                               ]}
@@ -669,7 +699,7 @@ export default function HomeScreen() {
                           ) : (
                             <View style={[
                               s.attendanceBtn,
-                              !canApplyRound && s.attendanceBtnDisabled,
+                              s.attendanceBtnDisabled,
                               status === '참석' && s.attendanceYes,
                               status === '불참' && s.attendanceNo,
                             ]}>
@@ -1207,38 +1237,33 @@ const s = StyleSheet.create({
   feeMemberStatusPaid: { color: C.green },
   feeMemberStatusPartial: { color: C.warn },
   feeMemberStatusUnpaid: { color: '#d65b4a' },
+  roundList: { gap: 8 },
   roundRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
     paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: C.border,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 14,
+    backgroundColor: C.card,
   },
+  roundRowAttendanceReady: { borderColor: '#d8e2d8' },
+  roundRowGroupReady: { borderColor: C.green, backgroundColor: '#f6fbf7' },
+  roundRowSelected: { borderWidth: 2, borderColor: C.green },
   roundRowDisabled: { opacity: 0.65 },
-  roundDate: { fontSize: 12, color: C.muted, fontWeight: '600' },
-  roundCourse: { fontSize: 14, color: C.text, fontWeight: '800', marginTop: 4 },
-  roundInfoStack: { marginTop: 10, gap: 4 },
+  roundLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  roundCourse: { flex: 1, fontSize: 14, color: C.text, fontWeight: '800' },
   roundInfoText: { fontSize: 12, color: C.text, fontWeight: '700' },
-  roundLink: { fontSize: 12, color: C.green, fontWeight: '800' },
-  roundLinkDisabled: { color: C.muted },
   roundHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1 },
-  roundHeaderBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: C.greenLight,
-  },
-  roundHeaderBtnPending: { backgroundColor: '#f3f5f3' },
-  roundHeaderBtnYes: { backgroundColor: C.greenLight },
-  roundHeaderBtnNo: { backgroundColor: '#fdeeee' },
-  roundHeaderBtnDisabled: { backgroundColor: '#f3f5f3', opacity: 0.65 },
-  roundHeaderBtnText: { fontSize: 10, color: C.green, fontWeight: '900' },
-  roundHeaderBtnTextPending: { color: C.muted },
-  roundHeaderBtnTextYes: { color: C.green },
-  roundHeaderBtnTextNo: { color: '#d65b4a' },
-  roundHeaderBtnTextDisabled: { color: C.muted },
+  roundStageBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
+  roundStagePending: { backgroundColor: '#f3f5f3' },
+  roundStageDone: { backgroundColor: C.greenLight },
+  roundStageText: { fontSize: 10, fontWeight: '900' },
+  roundStageTextPending: { color: C.muted },
+  roundStageTextDone: { color: C.green },
   roundCollapsedBox: {
     paddingVertical: 12,
     paddingHorizontal: 12,
