@@ -538,6 +538,33 @@ export default function RoundSchedulePrototypeScreen() {
     }
   }
 
+  async function handleFinishRound() {
+    if (!club?.id) return
+    if (!draft.date.trim()) return Alert.alert('확인', '라운드 날짜를 입력해 주세요')
+
+    setSaving(true)
+    try {
+      const next = await upsertRoundSchedule(club.id, {
+        id: draft.id,
+        date: draft.date,
+        courseId: draft.courseId,
+        courseName: draft.courseName?.trim() || undefined,
+        status: 'finished',
+        attendanceMode: draft.attendanceMode,
+        note: draft.note.trim(),
+        groups: draft.groups.map((group, index) => ({
+          ...group,
+          name: group.name || `${index + 1}조`,
+          time: group.time.trim(),
+        })),
+      })
+      setItems(next)
+      setEditorOpen(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <View style={s.screen}>
       <ScrollView contentContainerStyle={s.content}>
@@ -751,6 +778,9 @@ export default function RoundSchedulePrototypeScreen() {
               )}
               <TouchableOpacity style={s.saveButton} onPress={handleSave} disabled={saving} activeOpacity={0.86}>
                 <Text style={s.saveButtonText}>{saving ? '저장 중...' : '저장'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.finishButton} onPress={handleFinishRound} disabled={saving} activeOpacity={0.86}>
+                <Text style={s.finishButtonText}>라운드 종료</Text>
               </TouchableOpacity>
             </View>
               </>
@@ -1324,6 +1354,15 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   saveButtonText: { fontSize: 16, fontWeight: '900', color: C.accentText },
+  finishButton: {
+    flex: 1,
+    borderRadius: 18,
+    backgroundColor: C.greenDark,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  finishButtonText: { fontSize: 16, fontWeight: '900', color: '#fff' },
   pickerBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(16, 24, 18, 0.24)',

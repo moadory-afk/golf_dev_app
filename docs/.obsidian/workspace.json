@@ -70,8 +70,7 @@
               "title": "북마크"
             }
           }
-        ],
-        "currentTab": 1
+        ]
       }
     ],
     "direction": "horizontal",
@@ -182,11 +181,16 @@
   },
   "active": "2cf3f70f690cbc02",
   "lastOpenFiles": [
+    "무제.canvas",
+    "02_ui/Record.md",
+    "07_AI/Codex.md",
+    "06_Architecture/Screen Flow.md",
+    "08_Sprint/Sprint 2.md",
+    "00_Dashboard/Decisions.md",
+    "DASHBOARD.md",
     "06_Architecture/Navigation.md",
     "PROJECT_CONSTITUTION.md",
-    "DASHBOARD.md",
     "START HERE.md",
-    "무제.canvas",
     "무제 2.canvas",
     "AI_WORKFLOW.md",
     "README.md",
@@ -195,23 +199,17 @@
     "Excalidraw",
     "01_Product/Roadmap.md",
     "03_Features/ERD.md",
-    "00_Dashboard/Decisions.md",
     "02_ui/Fee.md",
     "02_ui/Fee Policy.md",
     "00_Dashboard/Roadmap.md",
     "00_Dashboard/Home.md",
     "무제 1.canvas",
-    "08_Sprint/Sprint 2.md",
     "08_Sprint/Development Approval.md",
     "02_ui/Fee Prototype Plan.md",
     "03_Features/Fee Management.md",
     "06_Architecture/Club Structure.md",
-    "07_AI/Codex.md",
     "08_Sprint/Sprint 1.md",
     "10_Release/Fee Release Checklist.md",
-    "02_ui/Fee Detail.md",
-    "02_ui/Treasury.md",
-    "02_ui/Fee Main.md",
     "Templates",
     "01_Product",
     "templates/새 텍스트 문서.txt",

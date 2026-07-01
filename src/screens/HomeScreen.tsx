@@ -112,10 +112,11 @@ export default function HomeScreen() {
       return
     }
     getRoundSchedules(club.id).then((items) => {
-      setScheduledRounds(items)
+      const activeItems = items.filter((item) => item.status !== 'finished')
+      setScheduledRounds(activeItems)
       setSelectedRoundId((current) => {
-        if (current && items.some((item) => item.id === current)) return current
-        return getUpcomingRound(items)?.id ?? items[0]?.id ?? null
+        if (current && activeItems.some((item) => item.id === current)) return current
+        return getUpcomingRound(activeItems)?.id ?? activeItems[0]?.id ?? null
       })
     })
   }, [club?.id, roundRefreshKey])
