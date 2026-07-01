@@ -1,7 +1,9 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
+import { supabase } from './supabase'
 
 export type RoundScheduleStatus = 'planned' | 'recruiting' | 'closed' | 'finished'
 export type RoundAttendanceMode = 'member' | 'manager'
+export type RoundAttendanceStatus = 'attending' | 'pending' | 'absent'
+export type RoundAttendanceLabel = '참석' | '미정' | '불참'
 
 export type ScheduledRoundGroupMember = {
   userId: string
@@ -36,140 +38,268 @@ export type ScheduledRound = {
   groups: ScheduledRoundGroup[]
 }
 
-type StoredRound = Partial<ScheduledRound> & {
+type ScheduleRow = {
   id: string
-  date: string
+  round_date: string
+  course_id?: string | null
+  course_name?: string | null
+  layout_id?: string | null
+  layout_name?: string | null
+  tee_time?: string | null
+  note?: string | null
+  status?: RoundScheduleStatus | null
+  attendance_mode?: RoundAttendanceMode | null
+  created_at?: string | null
+  updated_at?: string | null
 }
 
-function storageKey(clubId: string) {
-  return `@gogopar_round_schedules:${clubId}`
+type GroupRow = {
+  id: string
+  schedule_id: string
+  group_no: number
+  group_name?: string | null
+  tee_time?: string | null
+  front_layout_id?: string | null
+  front_layout_name?: string | null
+  back_layout_id?: string | null
+  back_layout_name?: string | null
 }
 
-function courseLabel(courseName?: string, layoutName?: string, legacyCourse?: string) {
+type GroupMemberRow = {
+  group_id: string
+  member_user_id: string
+  member_name: string
+}
+
+function courseLabel(courseName?: string | null, layoutName?: string | null) {
   if (courseName && layoutName) return `${courseName} · ${layoutName}`
   if (courseName) return courseName
-  return legacyCourse?.trim() || '미정'
+  return '미정'
 }
 
-function leadTime(groups: ScheduledRoundGroup[], legacyTime?: string) {
-  const firstTime = groups
-    .map((group) => group.time)
-    .find((value) => value && value.trim())
-  return firstTime ?? legacyTime?.trim() ?? ''
+function leadTime(groups: ScheduledRoundGroup[], fallback?: string | null) {
+  const firstGroupTime = groups.map((group) => group.time).find((value) => value.trim())
+  return firstGroupTime ?? fallback?.trim() ?? ''
 }
 
-function normalizeGroup(group: Partial<ScheduledRoundGroup> | undefined, index: number): ScheduledRoundGroup | null {
-  if (!group?.id) return null
+function attendanceToDb(status: RoundAttendanceLabel): RoundAttendanceStatus {
+  if (status === '참석') return 'attending'
+  if (status === '불참') return 'absent'
+  return 'pending'
+}
+
+function attendanceFromDb(status?: string | null): RoundAttendanceLabel {
+  if (status === 'attending') return '참석'
+  if (status === 'absent') return '불참'
+  return '미정'
+}
+
+function normalizeSchedule(row: ScheduleRow, groups: ScheduledRoundGroup[]): ScheduledRound {
   return {
-    id: group.id,
-    name: group.name?.trim() || `${index + 1}조`,
-    time: group.time?.trim() || '',
-    frontLayoutId: group.frontLayoutId,
-    frontLayoutName: group.frontLayoutName,
-    backLayoutId: group.backLayoutId,
-    backLayoutName: group.backLayoutName,
-    members: (group.members ?? [])
-      .filter((member): member is ScheduledRoundGroupMember => !!member?.userId && !!member?.name)
-      .map((member) => ({ userId: member.userId, name: member.name })),
-  }
-}
-
-function normalizeItem(item: StoredRound): ScheduledRound {
-  const groups = (item.groups ?? [])
-    .map((group, index) => normalizeGroup(group, index))
-    .filter((group): group is ScheduledRoundGroup => !!group)
-
-  return {
-    id: item.id,
-    date: item.date,
-    time: leadTime(groups, item.time),
-    course: courseLabel(item.courseName, item.layoutName, item.course),
-    note: item.note ?? '',
-    createdAt: item.createdAt ?? new Date().toISOString(),
-    updatedAt: item.updatedAt ?? new Date().toISOString(),
-    courseId: item.courseId,
-    courseName: item.courseName,
-    layoutId: item.layoutId,
-    layoutName: item.layoutName,
-    status: item.status ?? 'planned',
-    attendanceMode: item.attendanceMode ?? 'member',
+    id: row.id,
+    date: row.round_date,
+    time: leadTime(groups, row.tee_time),
+    course: courseLabel(row.course_name, row.layout_name),
+    note: row.note ?? '',
+    createdAt: row.created_at ?? new Date().toISOString(),
+    updatedAt: row.updated_at ?? new Date().toISOString(),
+    courseId: row.course_id ?? undefined,
+    courseName: row.course_name ?? undefined,
+    layoutId: row.layout_id ?? undefined,
+    layoutName: row.layout_name ?? undefined,
+    status: row.status ?? 'planned',
+    attendanceMode: row.attendance_mode ?? 'member',
     groups,
   }
 }
 
-function normalize(items: StoredRound[]) {
-  return items
-    .map(normalizeItem)
-    .sort((a, b) => {
-      const left = `${a.date} ${a.time || '99:99'}`
-      const right = `${b.date} ${b.time || '99:99'}`
-      return left.localeCompare(right)
-    })
-}
-
 export async function getRoundSchedules(clubId: string): Promise<ScheduledRound[]> {
-  const raw = await AsyncStorage.getItem(storageKey(clubId))
-  if (!raw) return []
-  try {
-    return normalize(JSON.parse(raw) as StoredRound[])
-  } catch {
-    return []
+  const { data: schedules, error } = await supabase
+    .from('club_round_schedules')
+    .select('id, round_date, course_id, course_name, layout_id, layout_name, tee_time, note, status, attendance_mode, created_at, updated_at')
+    .eq('club_id', clubId)
+    .order('round_date', { ascending: true })
+  if (error) throw error
+  if (!schedules?.length) return []
+
+  const scheduleIds = schedules.map((item) => item.id)
+  const [{ data: groups, error: groupError }, { data: members, error: memberError }] = await Promise.all([
+    supabase
+      .from('club_round_groups')
+      .select('id, schedule_id, group_no, group_name, tee_time, front_layout_id, front_layout_name, back_layout_id, back_layout_name')
+      .in('schedule_id', scheduleIds)
+      .order('group_no', { ascending: true }),
+    supabase
+      .from('club_round_group_members')
+      .select('group_id, member_user_id, member_name')
+      .in('schedule_id', scheduleIds)
+      .order('sort_order', { ascending: true }),
+  ])
+  if (groupError) throw groupError
+  if (memberError) throw memberError
+
+  const membersByGroup = new Map<string, ScheduledRoundGroupMember[]>()
+  for (const member of (members ?? []) as GroupMemberRow[]) {
+    const list = membersByGroup.get(member.group_id) ?? []
+    list.push({ userId: member.member_user_id, name: member.member_name })
+    membersByGroup.set(member.group_id, list)
   }
+
+  const groupsBySchedule = new Map<string, ScheduledRoundGroup[]>()
+  for (const group of (groups ?? []) as GroupRow[]) {
+    const list = groupsBySchedule.get(group.schedule_id) ?? []
+    list.push({
+      id: group.id,
+      name: group.group_name?.trim() || `${group.group_no}조`,
+      time: group.tee_time?.trim() || '',
+      frontLayoutId: group.front_layout_id ?? undefined,
+      frontLayoutName: group.front_layout_name ?? undefined,
+      backLayoutId: group.back_layout_id ?? undefined,
+      backLayoutName: group.back_layout_name ?? undefined,
+      members: membersByGroup.get(group.id) ?? [],
+    })
+    groupsBySchedule.set(group.schedule_id, list)
+  }
+
+  return (schedules as ScheduleRow[])
+    .map((row) => normalizeSchedule(row, groupsBySchedule.get(row.id) ?? []))
+    .sort((a, b) => `${a.date} ${a.time || '99:99'}`.localeCompare(`${b.date} ${b.time || '99:99'}`))
 }
 
 export async function saveRoundSchedules(clubId: string, items: ScheduledRound[]): Promise<void> {
-  await AsyncStorage.setItem(storageKey(clubId), JSON.stringify(normalize(items)))
+  for (const item of items) {
+    await upsertRoundSchedule(clubId, item)
+  }
 }
 
 export async function upsertRoundSchedule(
   clubId: string,
   input: Omit<ScheduledRound, 'id' | 'createdAt' | 'updatedAt' | 'time' | 'course'> & { id?: string | null }
 ): Promise<ScheduledRound[]> {
-  const current = await getRoundSchedules(clubId)
-  const now = new Date().toISOString()
-  const nextGroups = input.groups.length > 0
-    ? input.groups
-    : [{ id: `group-${Date.now()}`, name: '1조', time: '', members: [] }]
-
-  const nextItem: ScheduledRound = {
-    id: input.id ?? `round-schedule-${Date.now()}`,
-    date: input.date,
-    courseId: input.courseId,
-    courseName: input.courseName,
-    layoutId: input.layoutId,
-    layoutName: input.layoutName,
+  const schedulePayload = {
+    club_id: clubId,
+    round_date: input.date,
+    course_id: input.courseId ?? null,
+    course_name: input.courseName ?? null,
+    layout_id: input.layoutId ?? null,
+    layout_name: input.layoutName ?? null,
+    tee_time: leadTime(input.groups),
+    note: input.note ?? '',
     status: input.status,
-    attendanceMode: input.attendanceMode,
-    groups: nextGroups.map((group, index) => ({
-      id: group.id,
-      name: group.name?.trim() || `${index + 1}조`,
-      time: group.time?.trim() || '',
-      frontLayoutId: group.frontLayoutId,
-      frontLayoutName: group.frontLayoutName,
-      backLayoutId: group.backLayoutId,
-      backLayoutName: group.backLayoutName,
-      members: group.members ?? [],
-    })),
-    time: leadTime(nextGroups),
-    course: courseLabel(input.courseName, input.layoutName),
-    note: input.note,
-    createdAt: input.id ? (current.find((item) => item.id === input.id)?.createdAt ?? now) : now,
-    updatedAt: now,
+    attendance_mode: input.attendanceMode,
+    updated_at: new Date().toISOString(),
   }
 
-  const next = current.some((item) => item.id === nextItem.id)
-    ? current.map((item) => (item.id === nextItem.id ? nextItem : item))
-    : [...current, nextItem]
+  const { data: schedule, error } = input.id
+    ? await supabase
+        .from('club_round_schedules')
+        .update(schedulePayload)
+        .eq('id', input.id)
+        .select('id')
+        .single()
+    : await supabase
+        .from('club_round_schedules')
+        .insert(schedulePayload)
+        .select('id')
+        .single()
+  if (error) throw error
 
-  await saveRoundSchedules(clubId, next)
-  return normalize(next)
+  const scheduleId = schedule.id
+  await supabase.from('club_round_groups').delete().eq('schedule_id', scheduleId)
+
+  const groups = input.groups.length > 0
+    ? input.groups
+    : [{ id: '', name: '1조', time: '', members: [] }]
+
+  const groupPayloads = groups.map((group, index) => ({
+    club_id: clubId,
+    schedule_id: scheduleId,
+    group_no: index + 1,
+    group_name: group.name?.trim() || `${index + 1}조`,
+    tee_time: group.time?.trim() || null,
+    front_layout_id: group.frontLayoutId ?? null,
+    front_layout_name: group.frontLayoutName ?? null,
+    back_layout_id: group.backLayoutId ?? null,
+    back_layout_name: group.backLayoutName ?? null,
+  }))
+
+  if (groupPayloads.length > 0) {
+    const { data: insertedGroups, error: groupError } = await supabase
+      .from('club_round_groups')
+      .insert(groupPayloads)
+      .select('id, group_no')
+    if (groupError) throw groupError
+
+    const memberPayloads = (insertedGroups ?? []).flatMap((group: { id: string; group_no: number }) => {
+      const source = groups[group.group_no - 1]
+      return (source?.members ?? []).map((member, memberIndex) => ({
+        club_id: clubId,
+        schedule_id: scheduleId,
+        group_id: group.id,
+        member_user_id: member.userId,
+        member_name: member.name,
+        sort_order: memberIndex,
+      }))
+    })
+
+    if (memberPayloads.length > 0) {
+      const { error: memberError } = await supabase
+        .from('club_round_group_members')
+        .insert(memberPayloads)
+      if (memberError) throw memberError
+    }
+  }
+
+  return getRoundSchedules(clubId)
 }
 
 export async function deleteRoundSchedule(clubId: string, id: string): Promise<ScheduledRound[]> {
-  const current = await getRoundSchedules(clubId)
-  const next = current.filter((item) => item.id !== id)
-  await saveRoundSchedules(clubId, next)
-  return normalize(next)
+  const { error } = await supabase
+    .from('club_round_schedules')
+    .delete()
+    .eq('club_id', clubId)
+    .eq('id', id)
+  if (error) throw error
+  return getRoundSchedules(clubId)
+}
+
+export async function getRoundAttendanceMap(
+  clubId: string,
+  scheduleId: string
+): Promise<Record<string, RoundAttendanceLabel>> {
+  const { data, error } = await supabase
+    .from('club_round_attendances')
+    .select('member_user_id, status')
+    .eq('club_id', clubId)
+    .eq('schedule_id', scheduleId)
+  if (error) throw error
+
+  return Object.fromEntries(
+    (data ?? []).map((row: { member_user_id: string; status: string }) => [
+      row.member_user_id,
+      attendanceFromDb(row.status),
+    ])
+  )
+}
+
+export async function updateRoundAttendance(
+  clubId: string,
+  scheduleId: string,
+  memberUserId: string,
+  status: RoundAttendanceLabel
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser()
+  const { error } = await supabase
+    .from('club_round_attendances')
+    .upsert({
+      club_id: clubId,
+      schedule_id: scheduleId,
+      member_user_id: memberUserId,
+      status: attendanceToDb(status),
+      updated_at: new Date().toISOString(),
+      updated_by: user?.id ?? null,
+    }, { onConflict: 'schedule_id,member_user_id' })
+  if (error) throw error
 }
 
 export function getUpcomingRound(items: ScheduledRound[]): ScheduledRound | null {

@@ -512,6 +512,9 @@ export interface FeeMemberStatusItem {
   amountPaid: number
   status: FeePaymentStatus
   updatedAt: string
+  cycleLabel?: string
+  feeYear?: number
+  feeMonth?: number | null
 }
 
 export interface TreasuryEntryItem {
@@ -778,8 +781,8 @@ async function ensureFeeStatusesForCycle(clubId: string, cycle: ClubFeeCycle, po
         cycle_id: cycle.id,
         member_user_id: member.userId,
         amount_due: policy.defaultAmount,
-        amount_paid: 0,
-        status: 'unpaid',
+        amount_paid: policy.defaultAmount,
+        status: 'paid',
       }))
     )
   if (insertError) throw insertError
@@ -887,6 +890,25 @@ export async function getFeeMemberHistory(clubId: string, memberUserId: string):
 
   const clubMembers = await getClubMembers(clubId)
   const name = clubMembers.find((member) => member.userId === memberUserId)?.name ?? '(이름 없음)'
+  const cycleIds = [...new Set((data ?? []).map((row: any) => row.cycle_id).filter(Boolean))]
+  const cycleMap = new Map<string, { label: string; feeYear: number; feeMonth: number | null }>()
+
+  if (cycleIds.length > 0) {
+    const { data: cycles, error: cycleError } = await supabase
+      .from('club_fee_cycles')
+      .select('id, label, fee_year, fee_month')
+      .in('id', cycleIds)
+    if (cycleError) throw cycleError
+
+    for (const cycle of cycles ?? []) {
+      cycleMap.set(cycle.id, {
+        label: cycle.label,
+        feeYear: cycle.fee_year,
+        feeMonth: cycle.fee_month,
+      })
+    }
+  }
+
   return (data ?? []).map((row: any) => ({
     id: row.id,
     cycleId: row.cycle_id,
@@ -896,6 +918,9 @@ export async function getFeeMemberHistory(clubId: string, memberUserId: string):
     amountPaid: row.amount_paid ?? 0,
     status: row.status ?? 'unpaid',
     updatedAt: row.updated_at ?? '',
+    cycleLabel: cycleMap.get(row.cycle_id)?.label,
+    feeYear: cycleMap.get(row.cycle_id)?.feeYear,
+    feeMonth: cycleMap.get(row.cycle_id)?.feeMonth,
   }))
 }
 
