@@ -54,6 +54,7 @@ export default function HomeScreen() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [roundRefreshKey, setRoundRefreshKey] = useState(0)
   const roundRealtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const roundRealtimeKey = useRef(`home-${Date.now()}-${Math.random().toString(36).slice(2)}`)
   const { activeClub: club, clubsLoaded } = useClub()
 
   // 클럽 로드 완료 후 소속 클럽 없으면 Club 탭으로 자동 이동
@@ -140,7 +141,7 @@ export default function HomeScreen() {
     }
 
     const channel = supabase
-      .channel(`club-rounds:${club.id}`)
+      .channel(`club-rounds:${club.id}:${roundRealtimeKey.current}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'club_round_schedules', filter: `club_id=eq.${club.id}` }, queueRoundRefresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'club_round_attendances', filter: `club_id=eq.${club.id}` }, queueRoundRefresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'club_round_groups', filter: `club_id=eq.${club.id}` }, queueRoundRefresh)
