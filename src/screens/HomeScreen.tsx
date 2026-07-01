@@ -301,44 +301,42 @@ export default function HomeScreen() {
 
         <View style={s.content}>
           {/* 상단 요약 카드 */}
-          {myEntries.length > 0 && (
-            <View style={s.statsRow}>
-              <TouchableOpacity style={s.statCard} onPress={() => setPersonalDetail('handicap')}>
-                <Text style={s.statLabel}>핸디캡</Text>
-                <Text style={s.statValue}>{myHandicap !== null ? diffText(myHandicap) : '-'}</Text>
-                <Text style={s.statSub}>최근 {handicapBasis}경기</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.statCard} onPress={() => setPersonalDetail('average')}>
-                <Text style={s.statLabel}>평균</Text>
-                <Text style={s.statValue}>{myAverage !== null ? `${myAverage}타` : '-'}</Text>
-                <Text style={s.statSub}>전체 경기 평균</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.statCard} onPress={() => setPersonalDetail('best')}>
-                <Text style={s.statLabel}>베스트</Text>
-                <Text style={[s.statValue, { color: C.gold }]}>{myBest ? `${myBest.total}타` : '-'}</Text>
-                <Text style={s.statSub}>{myBest?.courseName.slice(0, 5) ?? ''}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={s.statCard}
-                onPress={() => recent3[0] && setRecentRoundOpen(true)}
-                disabled={!recent3[0]}
-              >
-                <Text style={s.statLabel}>최근라운드</Text>
-                <Text style={s.statValue}>{recentRoundSummary.value}</Text>
-                <Text style={s.statSub}>{recentRoundSummary.sub}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.statCard} onPress={() => setH2hPlayer(myName)}>
-                <Text style={s.statLabel}>상대전적</Text>
-                <Text style={s.statValue}>{diffText(headToHeadHandicapDiff)}타</Text>
-                <Text style={s.statSub}>핸디차이</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.statCard} onPress={() => setPersonalDetail('records')}>
-                <Text style={s.statLabel}>보유기록</Text>
-                <Text style={s.statValue}>{ginnessRecords.length}개</Text>
-                <Text style={s.statSub}>클럽 기준</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          <View style={s.statsRow}>
+            <TouchableOpacity style={s.statCard} onPress={() => setPersonalDetail('handicap')}>
+              <Text style={s.statLabel}>핸디캡</Text>
+              <Text style={s.statValue}>{myHandicap !== null ? diffText(myHandicap) : '-'}</Text>
+              <Text style={s.statSub}>최근 {handicapBasis}경기</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.statCard} onPress={() => setPersonalDetail('average')}>
+              <Text style={s.statLabel}>평균</Text>
+              <Text style={s.statValue}>{myAverage !== null ? `${myAverage}타` : '-'}</Text>
+              <Text style={s.statSub}>전체 경기 평균</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.statCard} onPress={() => setPersonalDetail('best')}>
+              <Text style={s.statLabel}>베스트</Text>
+              <Text style={[s.statValue, { color: C.gold }]}>{myBest ? `${myBest.total}타` : '-'}</Text>
+              <Text style={s.statSub}>{myBest?.courseName.slice(0, 5) ?? ''}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.statCard}
+              onPress={() => recent3[0] && setRecentRoundOpen(true)}
+              disabled={!recent3[0]}
+            >
+              <Text style={s.statLabel}>최근라운드</Text>
+              <Text style={s.statValue}>{recentRoundSummary.value}</Text>
+              <Text style={s.statSub}>{recentRoundSummary.sub}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.statCard} onPress={() => setH2hPlayer(myName)}>
+              <Text style={s.statLabel}>상대전적</Text>
+              <Text style={s.statValue}>{diffText(headToHeadHandicapDiff)}타</Text>
+              <Text style={s.statSub}>핸디차이</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.statCard} onPress={() => setPersonalDetail('records')}>
+              <Text style={s.statLabel}>보유기록</Text>
+              <Text style={s.statValue}>{ginnessRecords.length}개</Text>
+              <Text style={s.statSub}>클럽 기준</Text>
+            </TouchableOpacity>
+          </View>
 
           {/* 핸디캡 추이 */}
           {handicapTrend.length >= 2 && (

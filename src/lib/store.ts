@@ -307,7 +307,7 @@ export async function getMyClub(): Promise<ClubInfo | null> {
     subtitle: club.subtitle ?? '',
     inviteCode: club.invite_code,
     role: membership.role as 'admin' | 'member',
-    icon: club.icon ?? '⛳',
+    icon: '⛳',
   }
 }
 
@@ -338,7 +338,7 @@ export async function getMyClubs(): Promise<ClubInfo[]> {
       subtitle: club.subtitle ?? '',
       inviteCode: club.invite_code,
       role: membership.role as 'admin' | 'member',
-      icon: club.icon ?? '⛳',
+      icon: '⛳',
     }
   })
 }
@@ -369,7 +369,7 @@ export async function createClub(name: string, subtitle: string, icon?: string):
     subtitle: club.subtitle ?? '',
     inviteCode: club.invite_code,
     role: 'admin',
-    icon: club.icon ?? icon ?? '⛳',
+    icon: icon ?? '⛳',
   }
 }
 
@@ -399,7 +399,7 @@ export async function joinClub(inviteCode: string): Promise<ClubInfo> {
     subtitle: club.subtitle ?? '',
     inviteCode: club.invite_code,
     role: 'member',
-    icon: club.icon ?? '⛳',
+    icon: '⛳',
   }
 }
 

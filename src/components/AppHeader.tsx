@@ -108,6 +108,7 @@ const s = StyleSheet.create({
   greeting: { color: 'rgba(255,255,255,0.7)', fontSize: 14, marginBottom: 8 },
   greetingName: { color: '#fff', fontSize: 14, fontWeight: '800' },
   identityRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  right: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   clubBadge: {
     backgroundColor: isTurf ? 'rgba(198,255,58,0.12)' : 'rgba(255,255,255,0.15)', borderRadius: 12,
     paddingHorizontal: 10, paddingVertical: 4, maxWidth: 150,

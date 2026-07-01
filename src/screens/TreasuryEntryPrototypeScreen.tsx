@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { C } from '../theme'
 import type { RootStackParamList, RootStackProps } from '../navigation/types'
-import { createTreasuryEntry, updateTreasuryEntry } from '../lib/store'
+import { createTreasuryEntry, updateTreasuryEntry, type TreasuryEntryType } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
@@ -77,8 +77,9 @@ export default function TreasuryEntryPrototypeScreen({ route }: RootStackProps<'
     setSaving(true)
 
     try {
+      const entryType: TreasuryEntryType = isIncome ? 'income' : 'expense'
       const payload = {
-        type: isIncome ? 'income' : 'expense',
+        type: entryType,
         title: title.trim(),
         amount: amountNumber,
         entryDate,
