@@ -8,8 +8,8 @@ import { useState, useCallback, useEffect } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { getClubMembers, getRounds, playerTotal, totalPar, computeHandicaps, shortName, type SavedRound } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
+import { useUserProfile } from '../lib/UserProfileContext'
 import { useAsync } from '../lib/useAsync'
-import { supabase } from '../lib/supabase'
 import { C } from '../theme'
 import { AppHeader } from '../components/AppHeader'
 import { Icon } from '../components/Icon'
@@ -70,16 +70,11 @@ export default function ClubScreen() {
   const [clubInfoOpen, setClubInfoOpen] = useState(false)
   const [showHallCriteria, setShowHallCriteria] = useState(false)
   const [manageMenuOpen, setManageMenuOpen] = useState(false)
-  const [myName, setMyName] = useState<string | null>(null)
+  const { name: myName } = useUserProfile()
 
   const [handicapBasis, setHandicapBasis] = useState(5)
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) return
-      const { data: profile } = await supabase.from('profiles').select('name').eq('id', data.user.id).single()
-      setMyName(profile?.name ?? data.user?.user_metadata?.name ?? null)
-    })
     AsyncStorage.getItem('@gogopar_handicap_basis').then(v => {
       if (v === '3' || v === '5' || v === '10') setHandicapBasis(Number(v))
     })
@@ -97,7 +92,6 @@ export default function ClubScreen() {
     }
   }
 
-  const userInitial = (myName ?? '?').slice(0, 1)
   const handicaps = computeHandicaps(rounds, handicapBasis)
   const sortedRounds = [...rounds].sort((a, b) => a.date.localeCompare(b.date))
 

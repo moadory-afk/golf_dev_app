@@ -6,11 +6,11 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useState, useCallback, useEffect } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { supabase } from '../lib/supabase'
 import { AppHeader } from '../components/AppHeader'
 import Svg, { Polyline, Circle, Line, Text as SvgText, G } from 'react-native-svg'
 import { getRounds, getRound, playerTotal, totalPar, getHandicapsForRound, computeHandicaps, shortName, type SavedRound } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
+import { useUserProfile } from '../lib/UserProfileContext'
 import { useAsync } from '../lib/useAsync'
 import { C } from '../theme'
 import { EmojiIcon } from '../components/EmojiIcon'
@@ -131,7 +131,7 @@ export default function HistoryScreen() {
   const nav = useNavigation<Nav>()
   const [tab, setTab] = useState<Tab>('byPlayer')
   const [refreshKey, setRefreshKey] = useState(0)
-  const [myName, setMyName] = useState<string | null>(null)
+  const { name: myName } = useUserProfile()
   const [handicapBasis, setHandicapBasis] = useState(5)
   const { activeClub, clubsLoaded } = useClub()
   const { data, loading } = useAsync(
@@ -145,17 +145,10 @@ export default function HistoryScreen() {
   useFocusEffect(useCallback(() => { setRefreshKey((k) => k + 1) }, []))
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) return
-      const { data: profile } = await supabase.from('profiles').select('name').eq('id', data.user.id).single()
-      setMyName(profile?.name ?? data.user?.user_metadata?.name ?? null)
-    })
     AsyncStorage.getItem('@gogopar_handicap_basis').then(v => {
       if (v === '3' || v === '5' || v === '10') setHandicapBasis(Number(v))
     })
   }, [])
-
-  const userInitial = (myName ?? '?').slice(0, 1)
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>

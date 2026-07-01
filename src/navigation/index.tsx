@@ -5,6 +5,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { C, isTurf } from '../theme'
 import { Icon, type IconName } from '../components/Icon'
 import { ClubProvider, useClub } from '../lib/ClubContext'
+import { UserProfileProvider } from '../lib/UserProfileContext'
 import HomeScreen from '../screens/HomeScreen'
 import ClubScreen from '../screens/ClubScreen'
 import HistoryScreen from '../screens/HistoryScreen'
@@ -163,9 +164,11 @@ function NavigationStack() {
 
 export default function Navigation() {
   return (
-    <ClubProvider>
-      <NavigationStack />
-    </ClubProvider>
+    <UserProfileProvider>
+      <ClubProvider>
+        <NavigationStack />
+      </ClubProvider>
+    </UserProfileProvider>
   )
 }
 

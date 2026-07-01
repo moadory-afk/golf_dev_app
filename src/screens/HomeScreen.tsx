@@ -16,6 +16,7 @@ import {
   type ScheduledRound,
 } from '../lib/roundSchedule'
 import { useClub } from '../lib/ClubContext'
+import { useUserProfile } from '../lib/UserProfileContext'
 import { useAsync } from '../lib/useAsync'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
@@ -75,7 +76,7 @@ export default function HomeScreen() {
     [club?.id, refreshKey],
   )
   const rounds = data ?? []
-  const [myName, setMyName] = useState<string | null>(null)
+  const { name: myName, userId: myUserId } = useUserProfile()
   const [personalDetail, setPersonalDetail] = useState<PersonalDetailType | null>(null)
   const [h2hPlayer, setH2hPlayer] = useState<string | null>(null)
   const [recentRoundOpen, setRecentRoundOpen] = useState(false)
@@ -83,7 +84,6 @@ export default function HomeScreen() {
   const [showUpcomingCard, setShowUpcomingCard] = useState(false)
   const [attendanceSheetOpen, setAttendanceSheetOpen] = useState(false)
   const [roundSheetMode, setRoundSheetMode] = useState<'attendance' | 'groups'>('attendance')
-  const [myUserId, setMyUserId] = useState<string | null>(null)
   const [showFeeCard, setShowFeeCard] = useState(true)
   const [scheduledRounds, setScheduledRounds] = useState<ScheduledRound[]>([])
   const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null)
@@ -99,12 +99,6 @@ export default function HomeScreen() {
   )
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) return
-      setMyUserId(data.user.id)
-      const { data: profile } = await supabase.from('profiles').select('name').eq('id', data.user.id).single()
-      setMyName(profile?.name ?? data.user?.user_metadata?.name ?? data.user?.email ?? null)
-    })
     AsyncStorage.getItem('@gogopar_handicap_basis').then(v => {
       if (v === '3' || v === '5' || v === '10') setHandicapBasis(Number(v))
     })
