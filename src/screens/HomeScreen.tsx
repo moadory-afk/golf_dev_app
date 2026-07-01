@@ -319,7 +319,10 @@ export default function HomeScreen() {
         ? `${groups[0].frontLayoutName ?? '전반 미정'} / ${groups[0].backLayoutName ?? '후반 미정'}`
         : (round.layoutName ?? '코스 미정')
     const time = myGroup?.time || round.time || '티오프 미정'
-    const groupSummary = assigned.length > 0 ? (myGroup?.name ?? `${assigned.length}개 조 편성`) : '조 미편성'
+    const groupTimes = assigned.map((group) => group.time).filter(Boolean)
+    const groupSummary = assigned.length > 0
+      ? `${assigned.length}조${groupTimes.length > 0 ? ` (${groupTimes.join(', ')})` : ''}`
+      : '조 미편성'
     return { courseName, courseSummary, time, groupSummary, hasGroups: assigned.length > 0 }
   }
   const attendanceMembers = useMemo(() => {
@@ -428,7 +431,7 @@ export default function HomeScreen() {
           type={personalDetail} myName={myName} rounds={rounds}
           handicaps={handicaps} myRecords={myRecords}
           winCount={winCount} singleBirdieMap={singleBirdieMap} singleParMap={singleParMap}
-          onClose={() => setPersonalDetail(null)} basis={handicapBasis}
+          onClose={() => setPersonalDetail(null)} basis={handicapBasis} handicapTrend={handicapTrend}
         />
       )}
       {recentRoundOpen && recent3[0] && myName && (
@@ -480,33 +483,6 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* 핸디캡 추이 */}
-          {handicapTrend.length >= 2 && (
-            <View style={s.card}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 14 }}>
-                <Icon name="trend" size={16} color={C.green} />
-                <Text style={[s.cardTitle, { marginBottom: 0 }]}>핸디캡 추이 (5경기 슬라이딩)</Text>
-              </View>
-              <View style={s.trendWrap}>
-                {handicapTrend.map((h, i) => {
-                  const min = Math.min(...handicapTrend)
-                  const max = Math.max(...handicapTrend)
-                  const range = max - min || 1
-                  const heightPct = 1 - (h - min) / range
-                  const barH = 10 + heightPct * 46
-                  const isLast = i === handicapTrend.length - 1
-                  return (
-                    <View key={i} style={s.trendCol}>
-                      <Text style={[s.trendCurrent, { color: isLast ? C.green : C.muted }]}>{diffText(h)}</Text>
-                      <View style={[s.trendBar, { height: barH, backgroundColor: isLast ? C.green : C.greenLight, borderColor: isLast ? C.green : C.border }]} />
-                    </View>
-                  )
-                })}
-              </View>
-              <Text style={s.trendLabel}>← 과거  최근 →</Text>
-            </View>
-          )}
-
           {/* 클럽 없음 안내 */}
           {!club && !loading && (
             <View style={s.noClubCard}>
@@ -530,9 +506,6 @@ export default function HomeScreen() {
               </View>
               {showUpcomingCard ? (
                 <>
-                  <Text style={s.protoSub}>
-                    {hasUpcomingRound ? '총무가 등록한 일정입니다.' : '현재 예정된 라운딩이 없습니다'}
-                  </Text>
                   {scheduledRounds.length > 0 ? (
                     <View style={s.roundList}>
                       {scheduledRounds.map((round) => {
@@ -552,7 +525,7 @@ export default function HomeScreen() {
                             <View style={{ flex: 1 }}>
                               <View style={s.roundLine}>
                                 <Text style={s.roundCourse} numberOfLines={1}>
-                                  {round.date} · {summary.courseName} · {summary.courseSummary}
+                                  {round.date} · {summary.courseName}
                                 </Text>
                                 <View style={[
                                   s.roundStageBadge,
@@ -566,7 +539,7 @@ export default function HomeScreen() {
                                   </Text>
                                 </View>
                               </View>
-                              <Text style={s.roundInfoText}>{summary.time} · {summary.groupSummary}</Text>
+                              <Text style={s.roundInfoText}>{summary.groupSummary}</Text>
                             </View>
                           </TouchableOpacity>
                         )
@@ -643,11 +616,7 @@ export default function HomeScreen() {
                           <Text style={s.groupSummaryCourse}>
                             {group.frontLayoutName ?? '전반 미정'} / {group.backLayoutName ?? '후반 미정'}
                           </Text>
-                          <View style={s.groupMemberList}>
-                            {group.members.map((member) => (
-                              <Text key={member.userId} style={s.groupMemberName}>{member.name}</Text>
-                            ))}
-                          </View>
+                          <Text style={s.groupMemberName}>{group.members.map((member) => member.name).join(', ')}</Text>
                         </View>
                       ))}
                       <View style={[s.groupSummaryCard, s.unassignedCard]}>
@@ -655,13 +624,9 @@ export default function HomeScreen() {
                           <Text style={s.groupSummaryTitle}>미참가</Text>
                           <Text style={s.groupSummaryTime}>{unassignedMembers.length}명</Text>
                         </View>
-                        <View style={s.groupMemberList}>
-                          {unassignedMembers.length > 0
-                            ? unassignedMembers.map((member) => (
-                                <Text key={member.userId} style={s.unassignedMemberName}>{member.name}</Text>
-                              ))
-                            : <Text style={s.groupSummaryMembers}>미참가 회원 없음</Text>}
-                        </View>
+                        {unassignedMembers.length > 0
+                          ? <Text style={s.unassignedMemberName}>{unassignedMembers.map((member) => member.name).join(', ')}</Text>
+                          : <Text style={s.groupSummaryMembers}>미참가 회원 없음</Text>}
                       </View>
                     </View>
                   </ScrollView>
@@ -906,13 +871,13 @@ function HeadToHeadModal({ player, rounds, handicaps: _handicaps, onClose, basis
 
 // ─── 개인 상세 모달 ───────────────────────────────────────────────────────────
 
-function PersonalDetailModal({ type, myName, rounds, handicaps, myRecords, winCount, singleBirdieMap, singleParMap, onClose, basis = 5 }: {
+function PersonalDetailModal({ type, myName, rounds, handicaps, myRecords, winCount, singleBirdieMap, singleParMap, onClose, basis = 5, handicapTrend = [] }: {
   type: PersonalDetailType; myName: string; rounds: SavedRound[]
   handicaps: Map<string, number>; myRecords: string[]
   winCount: Map<string, number>
   singleBirdieMap: Map<string, { count: number; date: string; courseName: string }>
   singleParMap: Map<string, { count: number; date: string; courseName: string }>
-  onClose: () => void; basis?: number
+  onClose: () => void; basis?: number; handicapTrend?: number[]
 }) {
   const myRounds = rounds
     .filter((r) => r.players.some((p) => p.name === myName))
@@ -1010,6 +975,31 @@ function PersonalDetailModal({ type, myName, rounds, handicaps, myRecords, winCo
             <TouchableOpacity style={s.closeBtn} onPress={onClose}><Text style={s.closeBtnText}>닫기</Text></TouchableOpacity>
           </View>
           <ScrollView>
+            {type === 'handicap' && handicapTrend.length >= 2 && (
+              <View style={s.modalTrendBox}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+                  <Icon name="trend" size={16} color={C.green} />
+                  <Text style={[s.cardTitle, { marginBottom: 0 }]}>핸디캡 추이 (5경기 슬라이딩)</Text>
+                </View>
+                <View style={s.trendWrap}>
+                  {handicapTrend.map((h, i) => {
+                    const min = Math.min(...handicapTrend)
+                    const max = Math.max(...handicapTrend)
+                    const range = max - min || 1
+                    const heightPct = 1 - (h - min) / range
+                    const barH = 10 + heightPct * 46
+                    const isLast = i === handicapTrend.length - 1
+                    return (
+                      <View key={i} style={s.trendCol}>
+                        <Text style={[s.trendCurrent, { color: isLast ? C.green : C.muted }]}>{diffText(h)}</Text>
+                        <View style={[s.trendBar, { height: barH, backgroundColor: isLast ? C.green : C.greenLight, borderColor: isLast ? C.green : C.border }]} />
+                      </View>
+                    )
+                  })}
+                </View>
+                <Text style={s.trendLabel}>← 과거  최근 →</Text>
+              </View>
+            )}
             <View style={s.tableHeader}>
               {headers.map((h, i) => <Text key={i} style={[s.th, { flex: flexes[i] ?? 1, textAlign: i >= 2 ? 'right' : 'left' }]}>{h}</Text>)}
             </View>
@@ -1089,6 +1079,7 @@ const s = StyleSheet.create({
   trendBar: { width: '100%', borderRadius: 4, borderWidth: 1 },
   trendCurrent: { fontSize: 10, fontWeight: '800', color: C.green, marginBottom: 3 },
   trendLabel: { fontSize: 10, color: C.muted, textAlign: 'right', marginTop: 4 },
+  modalTrendBox: { paddingBottom: 14, marginBottom: 10, borderBottomWidth: 1, borderBottomColor: C.border },
 
   // 카드
   card: {

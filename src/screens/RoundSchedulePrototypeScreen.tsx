@@ -1,8 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Alert, Image, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import * as ImagePicker from 'expo-image-picker'
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import DateField, { todayLocal } from '../components/DateField'
 import { Icon } from '../components/Icon'
 import { useNavigation } from '@react-navigation/native'
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useClub } from '../lib/ClubContext'
 import {
   deleteRoundSchedule,
@@ -16,11 +20,24 @@ import {
   type ScheduledRoundGroup,
   type ScheduledRoundGroupMember,
 } from '../lib/roundSchedule'
-import { getClubMembers, getCourseLayouts, getGolfCourses, type CourseLayout, type GolfCourse } from '../lib/store'
+import { completeRound, getClubMembers, getCourseLayouts, getGolfCourses, saveRound, type CourseLayout, type GolfCourse } from '../lib/store'
+import { AWARD_CONFIG_KEY, AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
+import { recognizeScorecard, mergeScorecards, type RecognizedScorecard } from '../features/ocr'
+import { findBestOcrMatch } from '../lib/nameMatch'
 import { supabase } from '../lib/supabase'
 import { C } from '../theme'
+import type { RootStackParamList } from '../navigation/types'
+
+type Nav = NativeStackNavigationProp<RootStackParamList>
 
 type ClubMember = { userId: string; name: string; role: string }
+type RoundEditorTab = 'basic' | 'score' | 'award'
+
+const ROUND_EDITOR_TABS: Array<{ value: RoundEditorTab; label: string }> = [
+  { value: 'basic', label: '기본' },
+  { value: 'score', label: '스코어' },
+  { value: 'award', label: '시상' },
+]
 
 type Draft = {
   id: string | null
@@ -38,11 +55,6 @@ const STATUS_OPTIONS: Array<{ value: RoundScheduleStatus; label: string }> = [
   { value: 'recruiting', label: '모집중' },
   { value: 'closed', label: '마감' },
   { value: 'finished', label: '종료' },
-]
-
-const ATTENDANCE_OPTIONS: Array<{ value: RoundAttendanceMode; label: string }> = [
-  { value: 'member', label: '회원 직접 선택' },
-  { value: 'manager', label: '총무만 입력' },
 ]
 
 function createGroup(order: number): ScheduledRoundGroup {
@@ -95,7 +107,7 @@ function normalizeTimeInput(value: string) {
 }
 
 export default function RoundSchedulePrototypeScreen() {
-  const nav = useNavigation()
+  const nav = useNavigation<Nav>()
   const { activeClub: club } = useClub()
 
   useLayoutEffect(() => {
@@ -106,16 +118,36 @@ export default function RoundSchedulePrototypeScreen() {
   const [layouts, setLayouts] = useState<CourseLayout[]>([])
   const [clubMembers, setClubMembers] = useState<ClubMember[]>([])
   const [editorOpen, setEditorOpen] = useState(false)
+  const [editorTab, setEditorTab] = useState<RoundEditorTab>('basic')
+  const [awardCount, setAwardCount] = useState(2)
+  const [selectedAwardItems, setSelectedAwardItems] = useState<string[]>(['medal', 'birdieKing', 'last'])
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState<Draft>(createEmptyDraft())
   const [coursePickerOpen, setCoursePickerOpen] = useState(false)
   const [layoutPickerTarget, setLayoutPickerTarget] = useState<{ groupId: string; side: 'front' | 'back' } | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [attendanceMap, setAttendanceMap] = useState<Record<string, RoundAttendanceLabel>>({})
+  const [scoreGroupId, setScoreGroupId] = useState<string | null>(null)
+  const [scorePhotoUris, setScorePhotoUris] = useState<string[]>([])
+  const [scoreOcrBusy, setScoreOcrBusy] = useState(false)
+  const [scoreSaveBusy, setScoreSaveBusy] = useState(false)
+  const [scoreOcrResult, setScoreOcrResult] = useState<RecognizedScorecard | null>(null)
+  const [scoreOcrError, setScoreOcrError] = useState('')
   const realtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     getGolfCourses().then(setCourses).catch(() => setCourses([]))
+  }, [])
+
+  useEffect(() => {
+    AsyncStorage.getItem(AWARD_CONFIG_KEY).then((value) => {
+      if (!value) return
+      try {
+        const config = JSON.parse(value)
+        if (typeof config.count === 'number') setAwardCount(config.count)
+        if (Array.isArray(config.items)) setSelectedAwardItems(config.items)
+      } catch {}
+    })
   }, [])
 
   useEffect(() => {
@@ -178,6 +210,10 @@ export default function RoundSchedulePrototypeScreen() {
       return left - right || a.name.localeCompare(b.name, 'ko-KR')
     })
   }, [clubMembers, attendanceMap])
+  const selectedScoreGroup = useMemo(
+    () => draft.groups.find((group) => group.id === scoreGroupId) ?? null,
+    [draft.groups, scoreGroupId],
+  )
 
   function attendanceColor(status: RoundAttendanceLabel) {
     if (status === '참석') return C.green
@@ -188,6 +224,7 @@ export default function RoundSchedulePrototypeScreen() {
   function openCreate() {
     setDraft(createEmptyDraft())
     setLayouts([])
+    setEditorTab('basic')
     setEditorOpen(true)
   }
 
@@ -202,7 +239,152 @@ export default function RoundSchedulePrototypeScreen() {
       note: item.note,
       groups: item.groups.length > 0 ? item.groups : [createGroup(1)],
     })
+    setEditorTab('basic')
     setEditorOpen(true)
+  }
+
+  function toggleAwardItem(id: string) {
+    setSelectedAwardItems((current) => (
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    ))
+  }
+
+  function randomizeAwardItems() {
+    const items = AWARD_CATEGORIES.flatMap((category) => category.items)
+    const shuffled = [...items].sort(() => Math.random() - 0.5)
+    setSelectedAwardItems(shuffled.slice(0, awardCount).map((item) => item.id))
+  }
+
+  async function saveAwardConfig() {
+    const items = fillToCount(selectedAwardItems, awardCount)
+    await AsyncStorage.setItem(AWARD_CONFIG_KEY, JSON.stringify({ count: awardCount, items }))
+    setSelectedAwardItems(items)
+    Alert.alert('저장 완료', '시상룰을 저장했습니다.')
+  }
+
+  function openScoreUpload(groupId: string) {
+    setScoreGroupId(groupId)
+    setScorePhotoUris([])
+    setScoreOcrResult(null)
+    setScoreOcrError('')
+  }
+
+  function closeScoreUpload() {
+    setScoreGroupId(null)
+    setScorePhotoUris([])
+    setScoreOcrResult(null)
+    setScoreOcrError('')
+  }
+
+  async function takeScorePhoto() {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync()
+    if (status !== 'granted') {
+      Alert.alert('권한 필요', '카메라 접근 권한이 필요합니다.')
+      return
+    }
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.9 })
+    if (!result.canceled && result.assets.length > 0) {
+      setScorePhotoUris((current) => [...current, ...result.assets.map((asset) => asset.uri)])
+      setScoreOcrResult(null)
+      setScoreOcrError('')
+    }
+  }
+
+  async function pickScorePhotos() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (status !== 'granted') {
+      Alert.alert('권한 필요', '사진 접근 권한이 필요합니다.')
+      return
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.9,
+      allowsMultipleSelection: true,
+    })
+    if (!result.canceled && result.assets.length > 0) {
+      setScorePhotoUris((current) => [...current, ...result.assets.map((asset) => asset.uri)])
+      setScoreOcrResult(null)
+      setScoreOcrError('')
+    }
+  }
+
+  async function runScoreOcr() {
+    if (scorePhotoUris.length === 0) return
+    setScoreOcrBusy(true)
+    setScoreOcrResult(null)
+    setScoreOcrError('')
+    try {
+      const cards = await Promise.all(scorePhotoUris.map((uri) => recognizeScorecard(uri)))
+      setScoreOcrResult(mergeScorecards(cards, selectedScoreGroup?.frontLayoutName, selectedScoreGroup?.backLayoutName))
+    } catch (error) {
+      setScoreOcrError(`인식 오류: ${String(error)}`)
+    } finally {
+      setScoreOcrBusy(false)
+    }
+  }
+
+  function scoreParsForGroup(group: ScheduledRoundGroup) {
+    const front = layouts.find((layout) => layout.id === group.frontLayoutId)?.pars ?? []
+    const back = layouts.find((layout) => layout.id === group.backLayoutId)?.pars ?? []
+    const pars = [...front, ...back].slice(0, 18)
+    return pars.length === 18 ? pars : Array.from({ length: 18 }, () => 4)
+  }
+
+  function scorePlayersForGroup(group: ScheduledRoundGroup, result: RecognizedScorecard) {
+    const pars = scoreParsForGroup(group)
+    const ocrNames = result.players.map((player) => player.name)
+    const used = new Set<number>()
+    return group.members.flatMap((member) => {
+      const idx = findBestOcrMatch(member.name, ocrNames, used)
+      if (idx < 0) return []
+      used.add(idx)
+      return [{
+        name: member.name,
+        strokes: result.players[idx].diffs.map((diff, holeIndex) => Math.max(1, pars[holeIndex] + (diff ?? 0))),
+      }]
+    })
+  }
+
+  async function saveScoreResult() {
+    if (!club?.id || !selectedScoreGroup || !scoreOcrResult) return
+    setScoreSaveBusy(true)
+    try {
+      const photoData: string[] = []
+      if (Platform.OS !== 'web') {
+        for (const uri of scorePhotoUris) {
+          try {
+            const result = await manipulateAsync(uri, [{ resize: { width: 800 } }], {
+              compress: 0.6,
+              format: SaveFormat.JPEG,
+              base64: true,
+            })
+            if (result.base64) photoData.push(`data:image/jpeg;base64,${result.base64}`)
+          } catch {}
+        }
+      }
+      const players = scorePlayersForGroup(selectedScoreGroup, scoreOcrResult)
+      if (players.length === 0) {
+        Alert.alert('저장 불가', '조 멤버와 매칭된 OCR 결과가 없습니다.')
+        return
+      }
+      const saved = await saveRound({
+        date: draft.date,
+        courseName: draft.courseName ?? selectedScoreGroup.frontLayoutName ?? '이름 없는 코스',
+        golfCourseId: draft.courseId,
+        pars: scoreParsForGroup(selectedScoreGroup),
+        players,
+        photoData,
+        clubId: club.id,
+      })
+      await completeRound(saved.id)
+      closeScoreUpload()
+      setEditorOpen(false)
+      nav.navigate('RoundDetail', { id: saved.id })
+    } catch (error) {
+      Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
+    } finally {
+      setScoreSaveBusy(false)
+    }
   }
 
   function updateGroup(groupId: string, patch: Partial<ScheduledRoundGroup>) {
@@ -411,6 +593,21 @@ export default function RoundSchedulePrototypeScreen() {
               </TouchableOpacity>
             </View>
 
+            <View style={s.editorTabRow}>
+              {ROUND_EDITOR_TABS.map((tab) => (
+                <TouchableOpacity
+                  key={tab.value}
+                  style={[s.editorTabButton, editorTab === tab.value && s.editorTabButtonActive]}
+                  onPress={() => setEditorTab(tab.value)}
+                  activeOpacity={0.86}
+                >
+                  <Text style={[s.editorTabText, editorTab === tab.value && s.editorTabTextActive]}>{tab.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {editorTab === 'basic' ? (
+              <>
             <ScrollView contentContainerStyle={s.formBody}>
               <View style={s.fieldGroup}>
                 <Text style={s.fieldLabel}>라운드 날짜</Text>
@@ -423,38 +620,6 @@ export default function RoundSchedulePrototypeScreen() {
                   <Text style={[s.selectorText, !draft.courseName && s.selectorPlaceholder]}>{draft.courseName ?? '골프장 선택'}</Text>
                   <Icon name="chevronRight" size={18} color={C.muted} />
                 </TouchableOpacity>
-              </View>
-
-              <View style={s.fieldGroup}>
-                <Text style={s.fieldLabel}>진행 상태</Text>
-                <View style={s.segmentRow}>
-                  {STATUS_OPTIONS.map((option) => (
-                    <TouchableOpacity
-                      key={option.value}
-                      style={[s.segmentButton, draft.status === option.value && s.segmentButtonActive]}
-                      onPress={() => setDraft((current) => ({ ...current, status: option.value }))}
-                      activeOpacity={0.86}
-                    >
-                      <Text style={[s.segmentText, draft.status === option.value && s.segmentTextActive]}>{option.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              <View style={s.fieldGroup}>
-                <Text style={s.fieldLabel}>참석 입력 방식</Text>
-                <View style={s.attendanceColumn}>
-                  {ATTENDANCE_OPTIONS.map((option) => (
-                    <TouchableOpacity
-                      key={option.value}
-                      style={[s.radioCard, draft.attendanceMode === option.value && s.radioCardActive]}
-                      onPress={() => setDraft((current) => ({ ...current, attendanceMode: option.value }))}
-                      activeOpacity={0.86}
-                    >
-                      <Text style={[s.radioTitle, draft.attendanceMode === option.value && s.radioTitleActive]}>{option.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
               </View>
 
               <View style={s.fieldGroup}>
@@ -587,6 +752,185 @@ export default function RoundSchedulePrototypeScreen() {
                 <Text style={s.saveButtonText}>{saving ? '저장 중...' : '저장'}</Text>
               </TouchableOpacity>
             </View>
+              </>
+            ) : editorTab === 'score' ? (
+              <ScrollView contentContainerStyle={s.scoreBody}>
+                {draft.groups.some((group) => group.members.length > 0) ? (
+                  draft.groups.map((group, index) => {
+                    const disabled = group.members.length === 0
+                    return (
+                      <TouchableOpacity
+                        key={group.id}
+                        style={[s.scoreGroupCard, disabled && s.scoreGroupCardDisabled]}
+                        onPress={() => {
+                          if (disabled) return
+                          openScoreUpload(group.id)
+                        }}
+                        disabled={disabled}
+                        activeOpacity={0.86}
+                      >
+                        <View style={s.scoreGroupIcon}>
+                          <Icon name="camera" size={18} color={C.green} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.scoreGroupTitle}>{group.name || `${index + 1}조`}</Text>
+                          <Text style={s.scoreGroupMeta}>
+                            {group.time?.trim() ? group.time : '티오프 미정'} · {group.frontLayoutName ?? '전반 미정'} / {group.backLayoutName ?? '후반 미정'}
+                          </Text>
+                          <Text style={s.scoreGroupMembers}>
+                            {group.members.length > 0 ? group.members.map((member) => member.name).join(', ') : '배정된 회원 없음'}
+                          </Text>
+                        </View>
+                        <Icon name="chevronRight" size={16} color={disabled ? C.border : C.muted} />
+                      </TouchableOpacity>
+                    )
+                  })
+                ) : (
+                  <View style={s.editorPlaceholder}>
+                    <Icon name="camera" size={28} color={C.green} />
+                    <Text style={s.editorPlaceholderTitle}>조편성 후 입력</Text>
+                    <Text style={s.editorPlaceholderDesc}>조별 멤버를 배정하면 조별 스코어카드 사진 업로드를 시작할 수 있습니다.</Text>
+                  </View>
+                )}
+              </ScrollView>
+            ) : (
+              <ScrollView contentContainerStyle={s.awardBody}>
+                <Text style={s.fieldLabel}>시상 인원</Text>
+                <View style={s.awardChipRow}>
+                  {[1, 2, 3, 4, 5].map((count) => (
+                    <TouchableOpacity
+                      key={count}
+                      style={[s.awardChip, awardCount === count && s.awardChipActive]}
+                      onPress={() => setAwardCount(count)}
+                      activeOpacity={0.86}
+                    >
+                      <Text style={[s.awardChipText, awardCount === count && s.awardChipTextActive]}>{count}명</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <View style={s.inlineHeader}>
+                  <Text style={s.fieldLabel}>시상 항목</Text>
+                  <TouchableOpacity style={s.addGroupButton} onPress={randomizeAwardItems} activeOpacity={0.86}>
+                    <Text style={s.addGroupText}>랜덤</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {AWARD_CATEGORIES.map((category) => (
+                  <View key={category.label} style={s.awardCategory}>
+                    <Text style={s.awardCategoryTitle}>{category.label}</Text>
+                    <View style={s.awardChipRow}>
+                      {category.items.map((item) => {
+                        const selected = selectedAwardItems.includes(item.id)
+                        return (
+                          <View key={item.id} style={[s.awardOption, selected && s.awardOptionActive]}>
+                            <TouchableOpacity style={s.awardOptionMain} onPress={() => toggleAwardItem(item.id)} activeOpacity={0.86}>
+                              <Text style={[s.awardChipText, selected && s.awardChipTextActive]}>{item.icon} {item.label}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={s.awardInfoButton}
+                              onPress={() => Alert.alert(item.label, item.detail)}
+                              hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+                            >
+                              <Text style={[s.awardInfoText, selected && s.awardChipTextActive]}>ⓘ</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )
+                      })}
+                    </View>
+                  </View>
+                ))}
+
+                <TouchableOpacity style={s.saveButton} onPress={saveAwardConfig} activeOpacity={0.86}>
+                  <Text style={s.saveButtonText}>시상룰 저장</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal transparent animationType="fade" visible={!!scoreGroupId} onRequestClose={closeScoreUpload}>
+        <View style={s.pickerBackdrop}>
+          <View style={s.pickerCard}>
+            <View style={s.pickerHeader}>
+              <Text style={s.pickerTitle}>{selectedScoreGroup?.name ?? '조'} 스코어</Text>
+              <TouchableOpacity onPress={closeScoreUpload} activeOpacity={0.84}>
+                <Text style={s.pickerClose}>닫기</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={s.scoreUploadBody}>
+              {selectedScoreGroup && (
+                <View style={s.scoreUploadGroupBox}>
+                  <Text style={s.scoreUploadGroupTitle}>{selectedScoreGroup.members.map((member) => member.name).join(', ')}</Text>
+                  <Text style={s.scoreGroupMeta}>
+                    {selectedScoreGroup.time?.trim() ? selectedScoreGroup.time : '티오프 미정'} · {selectedScoreGroup.frontLayoutName ?? '전반 미정'} / {selectedScoreGroup.backLayoutName ?? '후반 미정'}
+                  </Text>
+                </View>
+              )}
+
+              <View style={s.scoreUploadActions}>
+                <TouchableOpacity style={s.scoreUploadButton} onPress={takeScorePhoto} disabled={scoreOcrBusy} activeOpacity={0.86}>
+                  <Text style={s.scoreUploadButtonText}>사진 찍기</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.scoreUploadButton} onPress={pickScorePhotos} disabled={scoreOcrBusy} activeOpacity={0.86}>
+                  <Text style={s.scoreUploadButtonText}>갤러리</Text>
+                </TouchableOpacity>
+              </View>
+
+              {scorePhotoUris.length > 0 && (
+                <View style={s.scorePhotoSection}>
+                  <Text style={s.scorePhotoCount}>선택된 사진 {scorePhotoUris.length}장</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {scorePhotoUris.map((uri, index) => (
+                      <TouchableOpacity
+                        key={`${uri}-${index}`}
+                        onPress={() => {
+                          setScorePhotoUris((current) => current.filter((_, photoIndex) => photoIndex !== index))
+                          setScoreOcrResult(null)
+                          setScoreOcrError('')
+                        }}
+                        activeOpacity={0.84}
+                      >
+                        <Image source={{ uri }} style={s.scorePhotoThumb} />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {scorePhotoUris.length > 0 && !scoreOcrResult && (
+                <TouchableOpacity style={[s.scoreOcrButton, scoreOcrBusy && { opacity: 0.6 }]} onPress={runScoreOcr} disabled={scoreOcrBusy} activeOpacity={0.86}>
+                  {scoreOcrBusy ? <ActivityIndicator color="#fff" /> : <Text style={s.scoreOcrButtonText}>{scorePhotoUris.length}장 인식 시작</Text>}
+                </TouchableOpacity>
+              )}
+
+              {scoreOcrError !== '' && <Text style={s.scoreOcrError}>{scoreOcrError}</Text>}
+
+              {scoreOcrResult && (
+                <View style={s.scoreOcrResult}>
+                  <Text style={s.scoreOcrResultTitle}>인식 결과</Text>
+                  {scoreOcrResult.players.map((player, index) => {
+                    const total = player.diffs.reduce<number>((sum, diff, holeIndex) => sum + ((scoreOcrResult.pars[holeIndex] ?? 4) + (diff ?? 0)), 0)
+                    return (
+                      <View key={`${player.name}-${index}`} style={s.scoreOcrRow}>
+                        <Text style={s.scoreOcrName}>{player.name || `플레이어 ${index + 1}`}</Text>
+                        <Text style={s.scoreOcrTotal}>{total}타</Text>
+                      </View>
+                    )
+                  })}
+                  <TouchableOpacity
+                    style={[s.scoreSaveButton, scoreSaveBusy && { opacity: 0.6 }]}
+                    onPress={saveScoreResult}
+                    disabled={scoreSaveBusy}
+                    activeOpacity={0.86}
+                  >
+                    {scoreSaveBusy ? <ActivityIndicator color={C.accentText} /> : <Text style={s.scoreSaveButtonText}>스코어 저장</Text>}
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -729,6 +1073,134 @@ const s = StyleSheet.create({
   },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   modalTitle: { fontSize: 24, fontWeight: '900', color: C.text },
+  editorTabRow: {
+    flexDirection: 'row',
+    gap: 8,
+    borderRadius: 999,
+    backgroundColor: '#eef2ee',
+    padding: 4,
+    marginBottom: 14,
+  },
+  editorTabButton: {
+    flex: 1,
+    alignItems: 'center',
+    borderRadius: 999,
+    paddingVertical: 10,
+  },
+  editorTabButtonActive: { backgroundColor: C.accent },
+  editorTabText: { fontSize: 13, fontWeight: '900', color: C.muted },
+  editorTabTextActive: { color: C.accentText },
+  editorPlaceholder: {
+    minHeight: 260,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: '#f8fbf8',
+    padding: 24,
+  },
+  editorPlaceholderTitle: { fontSize: 18, fontWeight: '900', color: C.text },
+  editorPlaceholderDesc: { fontSize: 13, lineHeight: 20, color: C.muted, textAlign: 'center' },
+  scoreBody: { gap: 10, paddingBottom: 20 },
+  scoreGroupCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: '#fff',
+    padding: 14,
+  },
+  scoreGroupCardDisabled: { opacity: 0.55 },
+  scoreGroupIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.greenLight,
+  },
+  scoreGroupTitle: { fontSize: 16, fontWeight: '900', color: C.text },
+  scoreGroupMeta: { fontSize: 12, fontWeight: '700', color: C.muted, marginTop: 4 },
+  scoreGroupMembers: { fontSize: 13, fontWeight: '800', color: C.text, marginTop: 6, lineHeight: 18 },
+  scoreUploadBody: { gap: 12, paddingBottom: 4 },
+  scoreUploadGroupBox: {
+    borderRadius: 16,
+    backgroundColor: '#f8fbf8',
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 14,
+  },
+  scoreUploadGroupTitle: { fontSize: 14, fontWeight: '900', color: C.text, lineHeight: 20 },
+  scoreUploadActions: { flexDirection: 'row', gap: 10 },
+  scoreUploadButton: {
+    flex: 1,
+    borderRadius: 14,
+    backgroundColor: C.greenLight,
+    alignItems: 'center',
+    paddingVertical: 13,
+  },
+  scoreUploadButtonText: { fontSize: 14, fontWeight: '900', color: C.green },
+  scorePhotoSection: { gap: 8 },
+  scorePhotoCount: { fontSize: 12, fontWeight: '800', color: C.muted },
+  scorePhotoThumb: { width: 94, height: 72, borderRadius: 12, marginRight: 8, backgroundColor: C.border },
+  scoreOcrButton: {
+    borderRadius: 16,
+    backgroundColor: C.green,
+    alignItems: 'center',
+    paddingVertical: 14,
+  },
+  scoreOcrButtonText: { fontSize: 14, fontWeight: '900', color: '#fff' },
+  scoreOcrError: { fontSize: 13, fontWeight: '700', color: '#d65b4a', lineHeight: 19 },
+  scoreOcrResult: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: C.greenLight,
+    backgroundColor: '#f8fff8',
+    padding: 14,
+  },
+  scoreOcrResultTitle: { fontSize: 13, fontWeight: '900', color: C.muted, marginBottom: 8 },
+  scoreOcrRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderTopWidth: 1, borderTopColor: C.border },
+  scoreOcrName: { fontSize: 14, fontWeight: '800', color: C.text },
+  scoreOcrTotal: { fontSize: 14, fontWeight: '900', color: C.green },
+  scoreSaveButton: {
+    borderRadius: 14,
+    backgroundColor: C.accent,
+    alignItems: 'center',
+    paddingVertical: 13,
+    marginTop: 12,
+  },
+  scoreSaveButtonText: { fontSize: 14, fontWeight: '900', color: C.accentText },
+  awardBody: { gap: 14, paddingBottom: 20 },
+  awardChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  awardChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  awardChipActive: { backgroundColor: C.accent, borderColor: C.accent },
+  awardChipText: { fontSize: 13, fontWeight: '800', color: C.text },
+  awardChipTextActive: { color: C.accentText },
+  awardCategory: { gap: 8 },
+  awardCategoryTitle: { fontSize: 13, fontWeight: '800', color: C.muted },
+  awardOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: '#fff',
+  },
+  awardOptionActive: { backgroundColor: C.accent, borderColor: C.accent },
+  awardOptionMain: { paddingLeft: 12, paddingRight: 4, paddingVertical: 9 },
+  awardInfoButton: { paddingLeft: 2, paddingRight: 10, paddingVertical: 9 },
+  awardInfoText: { fontSize: 13, fontWeight: '900', color: C.muted },
   closeButton: {
     borderRadius: 999,
     backgroundColor: '#eef2ee',
@@ -753,37 +1225,6 @@ const s = StyleSheet.create({
   selectorDisabled: { opacity: 0.45 },
   selectorText: { fontSize: 16, color: C.text, fontWeight: '700', flex: 1 },
   selectorPlaceholder: { color: C.muted, fontWeight: '600' },
-  segmentRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  segmentButton: {
-    minWidth: 72,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: C.border,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    backgroundColor: '#fff',
-  },
-  segmentButtonActive: {
-    backgroundColor: C.accent,
-    borderColor: C.accent,
-  },
-  segmentText: { fontSize: 13, fontWeight: '800', color: C.muted, textAlign: 'center' },
-  segmentTextActive: { color: C.accentText },
-  attendanceColumn: { gap: 8 },
-  radioCard: {
-    borderWidth: 1.5,
-    borderColor: C.border,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#fff',
-  },
-  radioCardActive: {
-    borderColor: C.green,
-    backgroundColor: '#eef9f1',
-  },
-  radioTitle: { fontSize: 15, fontWeight: '800', color: C.text },
-  radioTitleActive: { color: C.greenDark },
   inlineHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   addGroupButton: {
     flexDirection: 'row',

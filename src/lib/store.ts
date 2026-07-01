@@ -168,7 +168,7 @@ export async function saveRound(input: {
       .eq('club_id', input.clubId)
       .eq('date', date)
     const existingRow = ((sameDay ?? []) as RoundRow[]).find((r) =>
-      (r.players ?? []).some((p) => incomingNames.has(p.name))
+      r.course_name === input.courseName || (r.players ?? []).some((p) => incomingNames.has(p.name))
     )
     if (existingRow) {
       const existing = fromRow(existingRow)

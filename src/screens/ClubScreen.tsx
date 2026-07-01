@@ -69,7 +69,7 @@ export default function ClubScreen() {
   const [rankingType, setRankingType] = useState<RankingType | null>(null)
   const [clubInfoOpen, setClubInfoOpen] = useState(false)
   const [showHallCriteria, setShowHallCriteria] = useState(false)
-  const [clubTab, setClubTab] = useState<'club' | 'manage'>('club')
+  const [manageMenuOpen, setManageMenuOpen] = useState(false)
   const [myName, setMyName] = useState<string | null>(null)
 
   const [handicapBasis, setHandicapBasis] = useState(5)
@@ -321,39 +321,66 @@ export default function ClubScreen() {
           onInvite={handleInviteMember}
         />
       )}
+      {manageMenuOpen && isManagerView && (
+        <Modal transparent animationType="fade" onRequestClose={() => setManageMenuOpen(false)}>
+          <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setManageMenuOpen(false)}>
+            <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+              <View style={s.modalHeader}>
+                <Text style={s.modalTitle}>관리 메뉴</Text>
+                <TouchableOpacity style={s.closeBtn} onPress={() => setManageMenuOpen(false)}>
+                  <Text style={s.closeBtnText}>닫기</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={s.managementModalBody}>
+                {managementMenus.map((menu) => (
+                  <TouchableOpacity
+                    key={menu.key}
+                    style={[s.managementModalRow, menu.featured && s.managementCardFeatured]}
+                    onPress={() => {
+                      setManageMenuOpen(false)
+                      menu.onPress()
+                    }}
+                    activeOpacity={0.86}
+                  >
+                    <View style={[s.managementIcon, menu.featured && s.managementIconFeatured]}>
+                      <Icon
+                        name={menu.icon}
+                        size={20}
+                        color={menu.featured ? C.accentText : C.greenDark}
+                        strokeWidth={2}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.managementTitle}>{menu.title}</Text>
+                      <Text style={s.managementSubtitle}>{menu.subtitle}</Text>
+                    </View>
+                    <Icon name="chevronRight" size={16} color={C.muted} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+      )}
 
       <ScrollView
         style={{ flex: 1 }}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} tintColor={C.green} />}
       >
-        {/* 헤더 (공용) — 클럽명 오른쪽 멤버 버튼 */}
-        <AppHeader myName={myName} />
+        {/* 헤더 (공용) – 클럽명 오른쪽 멤버 버튼 */}
+        <AppHeader
+          myName={myName}
+          rightExtra={isManagerView ? (
+            <TouchableOpacity style={s.headerIconButton} onPress={() => setManageMenuOpen(true)} activeOpacity={0.82}>
+              <Icon name="settings" size={19} color="rgba(255,255,255,0.9)" strokeWidth={2.2} />
+            </TouchableOpacity>
+          ) : undefined}
+        />
 
         <View style={s.content}>
           {club && (
             <>
-              {isManagerView && (
-                <View style={s.clubTabBar}>
-                  <TouchableOpacity
-                    style={[s.clubTabBtn, clubTab === 'club' && s.clubTabBtnActive]}
-                    onPress={() => setClubTab('club')}
-                    activeOpacity={0.84}
-                  >
-                    <Text style={[s.clubTabText, clubTab === 'club' && s.clubTabTextActive]}>클럽</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[s.clubTabBtn, clubTab === 'manage' && s.clubTabBtnActive]}
-                    onPress={() => setClubTab('manage')}
-                    activeOpacity={0.84}
-                  >
-                    <Text style={[s.clubTabText, clubTab === 'manage' && s.clubTabTextActive]}>관리</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {(!isManagerView || clubTab === 'club') && (
-                <>
-                  <Text style={s.pageSectionTitle}>클럽 관리</Text>
+              <Text style={s.pageSectionTitle}>클럽 관리</Text>
 
                   <View style={s.clubHeroCard}>
                     <Image source={{ uri: CLUB_HERO_IMAGE }} style={s.clubHeroImage} resizeMode="cover" />
@@ -425,38 +452,6 @@ export default function ClubScreen() {
                       <Text style={s.criteriaCollapsedText}>우승, 스코어, 성장, 참가 기록을 기준으로 선정합니다.</Text>
                     )}
                   </View>
-                </>
-              )}
-
-              {isManagerView && clubTab === 'manage' && (
-                <>
-                  <Text style={s.pageSectionTitle}>관리 메뉴</Text>
-                  <View style={s.managementGrid}>
-                    {managementMenus.map((menu) => (
-                      <TouchableOpacity
-                        key={menu.key}
-                        style={[s.managementCard, menu.featured && s.managementCardFeatured]}
-                        onPress={menu.onPress}
-                        activeOpacity={0.86}
-                      >
-                        <View style={[s.managementIcon, menu.featured && s.managementIconFeatured]}>
-                          <Icon
-                            name={menu.icon}
-                            size={22}
-                            color={menu.featured ? C.accentText : C.greenDark}
-                            strokeWidth={2}
-                          />
-                        </View>
-                        <Text style={s.managementTitle}>{menu.title}</Text>
-                        <Text style={s.managementSubtitle}>{menu.subtitle}</Text>
-                        <View style={s.managementArrowWrap}>
-                          <Icon name="chevronRight" size={16} color={C.muted} />
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </>
-              )}
             </>
           )}
 
@@ -634,11 +629,16 @@ const s = StyleSheet.create({
     color: C.text,
     marginBottom: 12,
   },
-  clubTabBar: { flexDirection: 'row', backgroundColor: C.greenLight, borderRadius: 999, padding: 4, marginBottom: 16 },
-  clubTabBtn: { flex: 1, alignItems: 'center', borderRadius: 999, paddingVertical: 9 },
-  clubTabBtnActive: { backgroundColor: C.card, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
-  clubTabText: { fontSize: 13, fontWeight: '800', color: C.muted },
-  clubTabTextActive: { color: C.green },
+  headerIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.24)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   clubHeroCard: {
     backgroundColor: C.card,
     borderRadius: 20,
@@ -672,24 +672,16 @@ const s = StyleSheet.create({
     backgroundColor: '#f7faf7',
   },
   clubInfoBtnText: { fontSize: 13, fontWeight: '800', color: C.text },
-  managementGrid: {
+  managementModalBody: { gap: 10, paddingBottom: 4 },
+  managementModalRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: 12,
-    marginBottom: 14,
-  },
-  managementCard: {
-    width: '47.5%',
-    minHeight: 172,
     backgroundColor: C.card,
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: 16,
+    padding: 14,
     borderWidth: 1,
     borderColor: C.border,
-    shadowColor: '#1a6b44',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 2,
   },
   managementCardFeatured: {
     borderColor: '#94bb36',
@@ -702,19 +694,12 @@ const s = StyleSheet.create({
     backgroundColor: C.greenLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 18,
   },
   managementIconFeatured: {
     backgroundColor: C.accent,
   },
   managementTitle: { fontSize: 18, fontWeight: '900', color: C.text },
   managementSubtitle: { fontSize: 13, color: C.muted, lineHeight: 19, marginTop: 10 },
-  managementArrowWrap: {
-    marginTop: 'auto',
-    alignSelf: 'flex-end',
-    paddingTop: 16,
-  },
-
   emptyCard: { backgroundColor: C.card, borderRadius: 20, padding: 32, alignItems: 'center', marginBottom: 14 },
   goProfileBtn: { marginTop: 16, paddingVertical: 10, paddingHorizontal: 24, backgroundColor: C.green, borderRadius: 20 },
   goProfileBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
