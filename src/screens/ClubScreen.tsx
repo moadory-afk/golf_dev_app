@@ -284,7 +284,7 @@ export default function ClubScreen() {
     },
     {
       key: 'roundSchedule',
-      title: '라운드 일정',
+      title: '라운드 관리',
       subtitle: '날짜, 시간, 골프장 정보를 등록하고 예정 라운드를 관리합니다',
       icon: 'flag' as const,
       onPress: () => nav.navigate('RoundSchedulePrototype', { returnToManageMenu: true }),

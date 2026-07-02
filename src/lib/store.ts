@@ -48,6 +48,7 @@ export interface SavedRound {
   photoData: string[]
   settlement?: SettlementConfig
   golfCourseId?: string
+  scheduleId?: string
   isComplete: boolean
 }
 
@@ -62,6 +63,7 @@ interface RoundRow {
   photo_data?: string[]
   settlement?: SettlementConfig
   golf_course_id?: string
+  schedule_id?: string
   is_complete?: boolean
 }
 
@@ -77,6 +79,7 @@ function fromRow(row: RoundRow): SavedRound {
     photoData: row.photo_data ?? [],
     settlement: row.settlement,
     golfCourseId: row.golf_course_id,
+    scheduleId: row.schedule_id,
     isComplete: row.is_complete ?? false,
   }
 }
@@ -168,6 +171,7 @@ export async function saveRound(input: {
   clubId?: string
   settlement?: SettlementConfig
   golfCourseId?: string
+  scheduleId?: string
 }): Promise<SavedRound> {
   const user = await getUser()
   if (!user) throw new Error('로그인이 필요합니다.')
@@ -196,6 +200,7 @@ export async function saveRound(input: {
         handicaps: await computeHandicapSnapshot(input.clubId, date, players, 5, existing.id),
       }
       if (input.settlement) payload.settlement = input.settlement
+      if (input.scheduleId) payload.schedule_id = input.scheduleId
       if (input.photoData && input.photoData.length > 0)
         payload.photo_data = [...existing.photoData, ...input.photoData]
       const { data, error } = await supabase
@@ -218,6 +223,7 @@ export async function saveRound(input: {
   if (input.clubId) payload.club_id = input.clubId
   if (input.settlement) payload.settlement = input.settlement
   if (input.golfCourseId) payload.golf_course_id = input.golfCourseId
+  if (input.scheduleId) payload.schedule_id = input.scheduleId
   const { data, error } = await supabase.from('rounds').insert(payload).select().single()
   if (error) throw error
   return fromRow(data)

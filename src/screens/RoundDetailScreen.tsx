@@ -3,6 +3,7 @@ import { useRoute, useNavigation } from '@react-navigation/native'
 import { useState, useEffect, useRef } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { getClubAwardConfig, getClubAwardSnapshots, getRound, getRounds, deleteRound, updateRoundSettlement, playerTotal, totalPar, getHandicapsForRound, shortName, saveClubAwardSnapshots } from '../lib/store'
+import { getRoundSchedules } from '../lib/roundSchedule'
 import { AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
 import { computeClubAwardResults } from '../lib/awardResults'
 import { calcSettlement, holeNetForPlayer, fmtKRW } from '../features/settlement'
@@ -209,13 +210,22 @@ export default function RoundDetailScreen() {
     if (!activeClub) return []
     return getRounds(activeClub.id)
   }, [activeClub?.id])
+  const { data: roundSchedules } = useAsync(async () => {
+    if (!activeClub) return []
+    return getRoundSchedules(activeClub.id)
+  }, [activeClub?.id])
   const { data: clubAwardSnapshots } = useAsync(() => getClubAwardSnapshots(route.params.id), [route.params.id, recalcKey])
 
   useEffect(() => {
     if (!activeClub?.id || !round || !allRounds || !awardConfigLoaded || !clubAwardSnapshots || clubAwardSnapshots.length > 0 || awardSnapshotSaving.current) return
+    if (round.scheduleId && !roundSchedules) return
     awardSnapshotSaving.current = true
-    const itemIds = awardConfig
-      ? fillToCount(awardConfig.items, awardConfig.count)
+    const scheduleAwardConfig = round.scheduleId
+      ? roundSchedules?.find((item) => item.id === round.scheduleId)?.awardConfig
+      : null
+    const effectiveAwardConfig = scheduleAwardConfig ?? awardConfig
+    const itemIds = effectiveAwardConfig
+      ? fillToCount(effectiveAwardConfig.items, effectiveAwardConfig.count)
       : ['medal', 'birdieKing', 'parKing', ...(round.shinperioHoles.length > 0 ? ['shin1'] : []), 'last']
     const snapshots = computeClubAwardResults(itemIds, round, getHandicapsForRound(round, allRounds ?? [], handicapBasis), totalPar(round.pars))
     saveClubAwardSnapshots(activeClub.id, round.id, snapshots)
@@ -224,13 +234,17 @@ export default function RoundDetailScreen() {
         if (isAdmin) Alert.alert('시상 스냅샷 저장 실패', error instanceof Error ? error.message : String(error))
       })
       .finally(() => { awardSnapshotSaving.current = false })
-  }, [activeClub?.id, round, clubAwardSnapshots, awardConfig, awardConfigLoaded, allRounds, handicapBasis, isAdmin])
+  }, [activeClub?.id, round, clubAwardSnapshots, awardConfig, awardConfigLoaded, allRounds, roundSchedules, handicapBasis, isAdmin])
 
   if (loading) return <View style={s.center}><Text style={s.muted}>불러오는 중...</Text></View>
   if (!round) return <View style={s.center}><Text style={s.muted}>라운드를 찾을 수 없습니다.</Text></View>
 
   const par = totalPar(round.pars)
   const handicaps = getHandicapsForRound(round, allRounds ?? [], handicapBasis)
+  const scheduleAwardConfig = round.scheduleId
+    ? roundSchedules?.find((item) => item.id === round.scheduleId)?.awardConfig
+    : null
+  const effectiveAwardConfig = scheduleAwardConfig ?? awardConfig
 
   const regularRank = round.players
     .map((p) => {
@@ -569,8 +583,8 @@ export default function RoundDetailScreen() {
 
         // 클럽 시상 카드 (정산 유무와 무관하게 항상 표시)
         // count에 맞게 ranked 항목(shin1→2, regular1→2→3) 자동 보완
-        const itemIds: string[] = awardConfig
-          ? fillToCount(awardConfig.items, awardConfig.count)
+        const itemIds: string[] = effectiveAwardConfig
+          ? fillToCount(effectiveAwardConfig.items, effectiveAwardConfig.count)
           : ['medal', 'birdieKing', 'parKing', ...(round.shinperioHoles.length > 0 ? ['shin1'] : []), 'last']
         const _usedWinners = new Set<string>()
         const awardResults = itemIds

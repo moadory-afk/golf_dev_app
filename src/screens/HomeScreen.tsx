@@ -24,6 +24,7 @@ import { UserAvatarBtn } from '../components/UserAvatar'
 import { AppHeader } from '../components/AppHeader'
 import { EmojiIcon } from '../components/EmojiIcon'
 import { Icon } from '../components/Icon'
+import { AWARD_CATEGORIES } from '../lib/awardConfig'
 import type { RootStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
@@ -36,6 +37,14 @@ function formatShortDate(input: string) {
   if (input.includes('T')) return input.slice(5, 10).replace('-', '.')
   if (input.includes('-')) return input.slice(5).replace('-', '.')
   return input
+}
+
+const AWARD_LABELS = new Map(AWARD_CATEGORIES.flatMap((category) => category.items).map((item) => [item.id, item.label]))
+
+function awardSummaryFor(round?: ScheduledRound | null) {
+  const items = round?.awardConfig?.items ?? []
+  if (items.length === 0) return '시상 미설정'
+  return items.map((id) => AWARD_LABELS.get(id) ?? id).join(', ')
 }
 
 function getWinner(r: SavedRound, handicaps: Map<string, number>): string | null {
@@ -82,7 +91,7 @@ export default function HomeScreen() {
   const [h2hPlayer, setH2hPlayer] = useState<string | null>(null)
   const [recentRoundOpen, setRecentRoundOpen] = useState(false)
   const [roundAttendance, setRoundAttendance] = useState<Record<string, RoundAttendanceLabel>>({})
-  const [showUpcomingCard, setShowUpcomingCard] = useState(false)
+  const [showUpcomingCard, setShowUpcomingCard] = useState(true)
   const [attendanceSheetOpen, setAttendanceSheetOpen] = useState(false)
   const [roundSheetMode, setRoundSheetMode] = useState<'attendance' | 'groups'>('attendance')
   const [showFeeCard, setShowFeeCard] = useState(true)
@@ -536,6 +545,7 @@ export default function HomeScreen() {
                                 </View>
                               </View>
                               <Text style={s.roundInfoText}>{summary.groupSummary}</Text>
+                              <Text style={s.roundAwardText}>시상: {awardSummaryFor(round)}</Text>
                             </View>
                           </TouchableOpacity>
                         )
@@ -603,6 +613,10 @@ export default function HomeScreen() {
                 {roundSheetMode === 'groups' && canOpenGroupResult ? (
                   <ScrollView style={{ marginTop: 8, maxHeight: 500 }}>
                     <View style={s.groupSection}>
+                      <View style={s.awardSummaryBox}>
+                        <Text style={s.awardSummaryLabel}>클럽시상</Text>
+                        <Text style={s.awardSummaryText}>{awardSummaryFor(nextRound)}</Text>
+                      </View>
                       {assignedGroups.map((group) => (
                         <View key={group.id} style={s.groupSummaryCard}>
                           <View style={s.groupSummaryHeader}>
@@ -1244,6 +1258,7 @@ const s = StyleSheet.create({
   roundLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   roundCourse: { flex: 1, fontSize: 14, color: C.text, fontWeight: '800' },
   roundInfoText: { fontSize: 12, color: C.text, fontWeight: '700' },
+  roundAwardText: { marginTop: 3, fontSize: 11, color: C.muted, fontWeight: '700' },
   roundHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1 },
   roundStageBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
   roundStagePending: { backgroundColor: '#f3f5f3' },
@@ -1284,6 +1299,16 @@ const s = StyleSheet.create({
   attendanceSummaryText: { fontSize: 11, color: C.muted, fontWeight: '700' },
   groupSection: { marginTop: 14, gap: 10 },
   groupSectionTitle: { fontSize: 14, color: C.text, fontWeight: '800' },
+  awardSummaryBox: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: '#f6fbf7',
+    gap: 4,
+  },
+  awardSummaryLabel: { fontSize: 12, color: C.green, fontWeight: '900' },
+  awardSummaryText: { fontSize: 13, color: C.text, fontWeight: '800', lineHeight: 19 },
   groupSummaryCard: {
     borderWidth: 1,
     borderColor: C.border,

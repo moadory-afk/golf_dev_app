@@ -49,6 +49,7 @@ type Draft = {
   attendanceMode: RoundAttendanceMode
   note: string
   moneyConfig?: ScheduledRound['moneyConfig']
+  awardConfig?: ScheduledRound['awardConfig']
   groups: ScheduledRoundGroup[]
 }
 
@@ -80,6 +81,7 @@ function createEmptyDraft(): Draft {
     attendanceMode: 'member',
     note: '',
     moneyConfig: null,
+    awardConfig: null,
     groups: [createGroup(1)],
   }
 }
@@ -221,7 +223,9 @@ export default function RoundSchedulePrototypeScreen() {
   }, [draft.courseId])
 
   const sortedItems = useMemo(
-    () => [...items].sort((a, b) => `${a.date} ${a.time || '99:99'}`.localeCompare(`${b.date} ${b.time || '99:99'}`)),
+    () => items
+      .filter((item) => item.status !== 'closed' && item.status !== 'finished')
+      .sort((a, b) => `${a.date} ${a.time || '99:99'}`.localeCompare(`${b.date} ${b.time || '99:99'}`)),
     [items]
   )
   const sortedClubMembers = useMemo(() => {
@@ -246,6 +250,11 @@ export default function RoundSchedulePrototypeScreen() {
   function openCreate() {
     setDraft(createEmptyDraft())
     setMoneyGroupIds([])
+    setAwardCount(2)
+    setSelectedAwardItems(['medal', 'birdieKing', 'last'])
+    setStrokeFee('3000')
+    setBirdieBonus(5000)
+    setBaepanOn(true)
     setLayouts([])
     setEditorTab('basic')
     setEditorOpen(true)
@@ -257,10 +266,17 @@ export default function RoundSchedulePrototypeScreen() {
       setStrokeFee(String(item.moneyConfig.strokeFee))
       setBirdieBonus(item.moneyConfig.birdieBonus)
       if (item.moneyConfig.baepanConditions) setBaepanOn(item.moneyConfig.baepanConditions.strokeOverpar)
+    } else {
+      setStrokeFee('3000')
+      setBirdieBonus(5000)
+      setBaepanOn(true)
     }
     if (item.awardConfig) {
       setAwardCount(item.awardConfig.count)
       setSelectedAwardItems(item.awardConfig.items)
+    } else {
+      setAwardCount(2)
+      setSelectedAwardItems(['medal', 'birdieKing', 'last'])
     }
     setDraft({
       id: item.id,
@@ -271,6 +287,7 @@ export default function RoundSchedulePrototypeScreen() {
       attendanceMode: item.attendanceMode,
       note: item.note,
       moneyConfig: item.moneyConfig ?? null,
+      awardConfig: item.awardConfig ?? null,
       groups: item.groups.length > 0 ? item.groups : [createGroup(1)],
     })
     setMoneyGroupIds(item.groups
@@ -284,9 +301,11 @@ export default function RoundSchedulePrototypeScreen() {
   }
 
   function toggleAwardItem(id: string) {
-    setSelectedAwardItems((current) => (
-      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
-    ))
+    setSelectedAwardItems((current) => {
+      if (current.includes(id)) return current.filter((item) => item !== id)
+      if (current.length >= awardCount) return [...current.slice(1), id]
+      return [...current, id]
+    })
   }
 
   function randomizeAwardItems() {
@@ -299,8 +318,10 @@ export default function RoundSchedulePrototypeScreen() {
     if (!club?.id) return Alert.alert('확인', '클럽 정보를 불러온 뒤 다시 시도해 주세요.')
     setAwardSaving(true)
     try {
-      const items = fillToCount(selectedAwardItems, awardCount)
+      const awardItems = fillToCount(selectedAwardItems, awardCount)
+      const awardConfig = { count: awardCount, items: awardItems }
       if (draft.id) {
+        const currentSchedule = items.find((item) => item.id === draft.id)
         const next = await upsertRoundSchedule(club.id, {
           id: draft.id,
           date: draft.date,
@@ -310,7 +331,8 @@ export default function RoundSchedulePrototypeScreen() {
           attendanceMode: draft.attendanceMode,
           note: draft.note.trim(),
           moneyGroupIds,
-          awardConfig: { count: awardCount, items },
+          moneyConfig: draft.moneyConfig ?? currentSchedule?.moneyConfig ?? null,
+          awardConfig,
           groups: draft.groups.map((group, index) => ({
             ...group,
             name: group.name || `${index + 1}조`,
@@ -318,10 +340,11 @@ export default function RoundSchedulePrototypeScreen() {
           })),
         })
         setItems(next)
+        setDraft((current) => ({ ...current, awardConfig }))
       } else {
-        await saveClubAwardConfig(club.id, { count: awardCount, items })
+        await saveClubAwardConfig(club.id, awardConfig)
       }
-      setSelectedAwardItems(items)
+      setSelectedAwardItems(awardItems)
       Alert.alert('저장 완료', '시상룰을 저장했습니다.')
     } catch (error) {
       Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
@@ -340,6 +363,7 @@ export default function RoundSchedulePrototypeScreen() {
           birdieBonus,
           baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
         }
+        const currentSchedule = items.find((item) => item.id === draft.id)
         setDraft((current) => ({ ...current, moneyConfig }))
         const next = await upsertRoundSchedule(club.id, {
           id: draft.id,
@@ -351,6 +375,7 @@ export default function RoundSchedulePrototypeScreen() {
           note: draft.note.trim(),
           moneyGroupIds,
           moneyConfig,
+          awardConfig: draft.awardConfig ?? currentSchedule?.awardConfig ?? null,
           groups: draft.groups.map((group, index) => ({
             ...group,
             name: group.name || `${index + 1}조`,
@@ -359,12 +384,14 @@ export default function RoundSchedulePrototypeScreen() {
         })
         setItems(next)
       }
-      await saveClubSettlement(club.id, {
-        participants: [],
-        strokeFee: parseInt(strokeFee, 10) || 3000,
-        birdieBonus,
-        baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
-      })
+      if (!draft.id) {
+        await saveClubSettlement(club.id, {
+          participants: [],
+          strokeFee: parseInt(strokeFee, 10) || 3000,
+          birdieBonus,
+          baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
+        })
+      }
       Alert.alert('저장 완료', '머니게임 기준을 저장했습니다.')
     } catch (error) {
       Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
@@ -487,15 +514,12 @@ export default function RoundSchedulePrototypeScreen() {
         return
       }
       const selectedGroupIndex = draft.groups.findIndex((group) => group.id === selectedScoreGroup.id)
-      const moneyConfig = draft.id
-        ? (items.find((item) => item.id === draft.id)?.moneyConfig ?? draft.moneyConfig)
-        : draft.moneyConfig
       const settlement = selectedGroupIndex >= 0 && moneyGroupIds.includes(moneyGroupKey(selectedGroupIndex))
         ? {
             participants: players.map((player) => player.name),
-            strokeFee: moneyConfig?.strokeFee ?? parseInt(strokeFee, 10) || 3000,
-            birdieBonus: moneyConfig?.birdieBonus ?? birdieBonus,
-            baepanConditions: moneyConfig?.baepanConditions ?? { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
+            strokeFee: parseInt(strokeFee, 10) || 3000,
+            birdieBonus,
+            baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
           }
         : undefined
       const saved = await saveRound({
@@ -507,8 +531,13 @@ export default function RoundSchedulePrototypeScreen() {
         photoData,
         clubId: club.id,
         settlement,
+        scheduleId: draft.id ?? undefined,
       })
       await completeRound(saved.id)
+      const itemIds = fillToCount(selectedAwardItems, awardCount)
+      const handicaps = new Map(Object.entries(saved.handicaps ?? {}))
+      const awards = computeClubAwardResults(itemIds, saved, handicaps, totalPar(saved.pars))
+      await saveClubAwardSnapshots(club.id, saved.id, awards)
       closeScoreUpload()
       setEditorOpen(false)
       nav.navigate('RoundDetail', { id: saved.id })
@@ -714,6 +743,40 @@ export default function RoundSchedulePrototypeScreen() {
         const awards = computeClubAwardResults(itemIds, finishedRound, handicaps, totalPar(finishedRound.pars))
         await saveClubAwardSnapshots(club.id, finishedRound.id, awards)
       }
+      setEditorOpen(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleConfirmRound() {
+    if (!club?.id) return
+    if (!draft.date.trim()) return Alert.alert('확인', '라운드 날짜를 입력해 주세요.')
+
+    setSaving(true)
+    try {
+      const next = await upsertRoundSchedule(club.id, {
+        id: draft.id,
+        date: draft.date,
+        courseId: draft.courseId,
+        courseName: draft.courseName?.trim() || undefined,
+        status: 'closed',
+        attendanceMode: draft.attendanceMode,
+        note: draft.note.trim(),
+        moneyGroupIds,
+        moneyConfig: {
+          strokeFee: parseInt(strokeFee, 10) || 3000,
+          birdieBonus,
+          baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
+        },
+        awardConfig: { count: awardCount, items: fillToCount(selectedAwardItems, awardCount) },
+        groups: draft.groups.map((group, index) => ({
+          ...group,
+          name: group.name || `${index + 1}조`,
+          time: group.time.trim(),
+        })),
+      })
+      setItems(next)
       setEditorOpen(false)
     } finally {
       setSaving(false)
@@ -937,6 +1000,9 @@ export default function RoundSchedulePrototypeScreen() {
               <TouchableOpacity style={s.finishButton} onPress={handleFinishRound} disabled={saving} activeOpacity={0.86}>
                 <Text style={s.finishButtonText}>라운드 종료</Text>
               </TouchableOpacity>
+              <TouchableOpacity style={s.confirmButton} onPress={handleConfirmRound} disabled={saving} activeOpacity={0.86}>
+                <Text style={s.confirmButtonText}>확정</Text>
+              </TouchableOpacity>
             </View>
               </>
             ) : editorTab === 'score' ? (
@@ -987,7 +1053,10 @@ export default function RoundSchedulePrototypeScreen() {
                     <TouchableOpacity
                       key={count}
                       style={[s.awardChip, awardCount === count && s.awardChipActive]}
-                      onPress={() => setAwardCount(count)}
+                      onPress={() => {
+                        setAwardCount(count)
+                        setSelectedAwardItems((current) => current.slice(0, count))
+                      }}
                       activeOpacity={0.86}
                     >
                       <Text style={[s.awardChipText, awardCount === count && s.awardChipTextActive]}>{count}명</Text>
@@ -1622,7 +1691,7 @@ const s = StyleSheet.create({
   memberChipText: { fontSize: 13, fontWeight: '800', color: C.text },
   memberChipTextActive: { color: C.accentText },
   memberChipTextDisabled: { color: '#9aa09c' },
-  footer: { flexDirection: 'row', gap: 12, marginTop: 12 },
+  footer: { flexDirection: 'row', gap: 8, marginTop: 12 },
   deleteButton: {
     flex: 1,
     borderRadius: 18,
@@ -1650,6 +1719,15 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   finishButtonText: { fontSize: 16, fontWeight: '900', color: '#fff' },
+  confirmButton: {
+    flex: 1,
+    borderRadius: 18,
+    backgroundColor: '#edf5ee',
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmButtonText: { fontSize: 16, fontWeight: '900', color: C.greenDark },
   pickerBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(16, 24, 18, 0.24)',
