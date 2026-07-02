@@ -9,7 +9,7 @@ import { useState, useCallback, useEffect } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as ImageManipulator from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
-import { getClubMembers, getRounds, playerTotal, totalPar, computeHandicaps, shortName, updateClubSettings, type ClubInfo, type SavedRound } from '../lib/store'
+import { DEFAULT_LOTTO_AWARD_CONFIG, getClubLottoAwardConfig, getClubMembers, getRounds, playerTotal, totalPar, computeHandicaps, saveClubLottoAwardConfig, shortName, updateClubSettings, type ClubInfo, type LottoAwardConfig, type SavedRound } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
 import { useUserProfile } from '../lib/UserProfileContext'
 import { useAsync } from '../lib/useAsync'
@@ -33,6 +33,10 @@ const RECENT_NOTICES = [
 ]
 
 function diffText(d: number) { return d > 0 ? `+${d}` : `${d}` }
+
+function formatWon(value: number) {
+  return `${Math.max(0, Math.round(value)).toLocaleString('ko-KR')}원`
+}
 
 // 공동 수상자 포맷: 3명 이하 전원, 4명 이상 "A 외 N명"
 function formatWinners(names: string[], value: string): string {
@@ -67,6 +71,10 @@ export default function ClubScreen() {
     () => (club ? getClubMembers(club.id) : Promise.resolve([])),
     [refreshKey, club?.id],
   )
+  const { data: lottoAwardConfig } = useAsync(
+    () => (club ? getClubLottoAwardConfig(club.id) : Promise.resolve(DEFAULT_LOTTO_AWARD_CONFIG)),
+    [refreshKey, club?.id],
+  )
   const rounds = data ?? []
   const members = clubMembers ?? []
   const adminMembers = members.filter((member) => member.role === 'admin')
@@ -75,6 +83,7 @@ export default function ClubScreen() {
   const [clubInfoOpen, setClubInfoOpen] = useState(false)
   const [showHallCriteria, setShowHallCriteria] = useState(false)
   const [manageMenuOpen, setManageMenuOpen] = useState(false)
+  const [lottoAwardOpen, setLottoAwardOpen] = useState(false)
   const { name: myName } = useUserProfile()
 
   const [handicapBasis, setHandicapBasis] = useState(5)
@@ -299,6 +308,13 @@ export default function ClubScreen() {
       onPress: () => nav.navigate('RoundSchedulePrototype', { returnToManageMenu: true }),
     },
     {
+      key: 'lottoAward',
+      title: 'Lotto 시상 기준',
+      subtitle: '적중 개수별 시상금과 이월 여부를 설정합니다',
+      icon: 'trophy' as const,
+      onPress: () => setLottoAwardOpen(true),
+    },
+    {
       key: 'notice',
       title: '공지 관리',
       subtitle: '공지 등록과 게시 상태를 관리합니다',
@@ -336,6 +352,17 @@ export default function ClubScreen() {
             nav.navigate('Members', { clubId: club.id })
           }}
           onInvite={handleInviteMember}
+        />
+      )}
+      {lottoAwardOpen && club && (
+        <LottoAwardConfigModal
+          config={lottoAwardConfig ?? DEFAULT_LOTTO_AWARD_CONFIG}
+          onClose={() => setLottoAwardOpen(false)}
+          onSave={async (config) => {
+            await saveClubLottoAwardConfig(club.id, config)
+            setRefreshKey((key) => key + 1)
+            setLottoAwardOpen(false)
+          }}
         />
       )}
       {manageMenuOpen && isManagerView && (
@@ -759,6 +786,80 @@ function RankingModal({ config, onClose }: {
   )
 }
 
+function LottoAwardConfigModal({
+  config,
+  onClose,
+  onSave,
+}: {
+  config: LottoAwardConfig
+  onClose: () => void
+  onSave: (config: LottoAwardConfig) => Promise<void>
+}) {
+  const [prize3, setPrize3] = useState(String(config.prizes['3'] ?? 0))
+  const [prize4, setPrize4] = useState(String(config.prizes['4'] ?? 0))
+  const [prize5, setPrize5] = useState(String(config.prizes['5'] ?? 0))
+  const [prize6, setPrize6] = useState(String(config.prizes['6'] ?? 0))
+  const [rollover, setRollover] = useState(config.rollover)
+  const [saving, setSaving] = useState(false)
+  const parseMoney = (value: string) => Number(value.replace(/[^0-9]/g, '')) || 0
+  const save = async () => {
+    setSaving(true)
+    try {
+      await onSave({
+        prizes: {
+          '3': parseMoney(prize3),
+          '4': parseMoney(prize4),
+          '5': parseMoney(prize5),
+          '6': parseMoney(prize6),
+        },
+        rollover,
+        carryoverAmount: config.carryoverAmount ?? 0,
+      })
+    } catch (error) {
+      Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+          <View style={s.modalHeader}>
+            <Text style={s.modalTitle}>Lotto 시상 기준</Text>
+            <TouchableOpacity style={s.closeBtn} onPress={onClose}>
+              <Text style={s.closeBtnText}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={s.lottoAwardSummary}>현재 누적 당첨금 {formatWon(config.carryoverAmount ?? 0)}</Text>
+          {([
+            ['3', prize3, setPrize3],
+            ['4', prize4, setPrize4],
+            ['5', prize5, setPrize5],
+            ['6', prize6, setPrize6],
+          ] as const).map(([count, value, setter]) => (
+            <View key={count} style={s.lottoAwardInputRow}>
+              <Text style={s.lottoAwardInputLabel}>{count}개 적중</Text>
+              <TextInput value={value} onChangeText={setter} keyboardType="numeric" placeholder="0" style={s.lottoAwardInput} />
+              <Text style={s.lottoAwardUnit}>원</Text>
+            </View>
+          ))}
+          <TouchableOpacity style={s.lottoRolloverRow} onPress={() => setRollover((value) => !value)} activeOpacity={0.82}>
+            <Text style={s.lottoRolloverText}>미당첨 시 이월</Text>
+            <View style={[s.lottoSwitch, rollover && s.lottoSwitchOn]}>
+              <Text style={[s.lottoSwitchText, rollover && s.lottoSwitchTextOn]}>{rollover ? 'ON' : 'OFF'}</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity style={[s.infoActionBtn, saving && { opacity: 0.6 }]} onPress={save} disabled={saving}>
+            {saving ? <ActivityIndicator color={C.green} /> : <Text style={s.infoActionText}>저장</Text>}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  )
+}
+
 const s = StyleSheet.create({
   header: {
     backgroundColor: C.greenDark, paddingBottom: 20, paddingHorizontal: 20,
@@ -1015,6 +1116,36 @@ const s = StyleSheet.create({
   infoActionBtn: { flex: 1, borderRadius: 14, backgroundColor: C.greenLight, paddingVertical: 11, alignItems: 'center', marginTop: 10 },
   infoActionText: { fontSize: 13, fontWeight: '800', color: C.green },
   ruleDesc: { fontSize: 13, color: C.text, lineHeight: 20, marginBottom: 8 },
+  lottoAwardSummary: { fontSize: 14, fontWeight: '900', color: C.green, marginBottom: 12 },
+  lottoAwardInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    marginBottom: 8,
+    backgroundColor: '#fff',
+  },
+  lottoAwardInputLabel: { width: 72, fontSize: 13, fontWeight: '800', color: C.text },
+  lottoAwardInput: { flex: 1, fontSize: 16, fontWeight: '900', color: C.text, paddingVertical: 10, textAlign: 'right' },
+  lottoAwardUnit: { fontSize: 12, fontWeight: '800', color: C.muted },
+  lottoRolloverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    backgroundColor: '#f2f4f6',
+    marginTop: 4,
+  },
+  lottoRolloverText: { fontSize: 13, fontWeight: '900', color: C.text },
+  lottoSwitch: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5, backgroundColor: '#d7dcd8' },
+  lottoSwitchOn: { backgroundColor: C.green },
+  lottoSwitchText: { fontSize: 11, fontWeight: '900', color: C.muted },
+  lottoSwitchTextOn: { color: '#fff' },
   closeBtn: { backgroundColor: C.green, borderRadius: 20, paddingVertical: 5, paddingHorizontal: 14 },
   closeBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   tableHeader: { flexDirection: 'row', borderBottomWidth: 1.5, borderBottomColor: C.border, paddingBottom: 7, marginBottom: 2 },

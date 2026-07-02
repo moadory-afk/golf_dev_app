@@ -263,7 +263,7 @@ export default function HomeScreen() {
         setMyLottoPurchases(next)
       })
       .catch(() => setMyLottoPurchases({}))
-  }, [myUserId, scheduledRounds])
+  }, [myUserId, scheduledRounds, roundRefreshKey])
 
   useEffect(() => {
     if (!club?.id) return
@@ -636,6 +636,9 @@ export default function HomeScreen() {
         getRoundLottoEntries(round.id),
       ])
       setLottoSelection(saved?.selectedHoles ?? emptyLottoSelection())
+      if (saved) {
+        setMyLottoPurchases((current) => ({ ...current, [round.id]: saved.selectedHoles }))
+      }
       setLottoDraw(draw)
       setLottoEntries(entries)
     } catch {
@@ -784,7 +787,7 @@ export default function HomeScreen() {
                     const assignedToGroup = round.groups.some((group) =>
                       group.members.some((member) => member.userId === myUserId || member.name === myName)
                     )
-                    const canUseTodayPlayerActions = assignedToGroup || myRoundAttendance[round.id] === '참석'
+                    const canUseTodayPlayerActions = isAdmin || assignedToGroup || myRoundAttendance[round.id] === '참석'
                     return (
                       <View
                         key={round.id}
@@ -1260,6 +1263,7 @@ function LottoSelectionModal({
   const isDrafter = !!myUserId && draw?.drafterUserId === myUserId
   const isCompleted = draw?.drawStatus === 'COMPLETED'
   const selectedHoleList = [...selection.par3, ...selection.par4, ...selection.par5].sort((a, b) => a - b)
+  const isPurchased = selectedHoleList.length === 6
   const resultRows = selectedHoleList.map((hole) => draw?.drawnScores?.[String(hole)]).filter((item): item is RoundLottoDrawScore => !!item)
   const hitCount = resultRows.filter((row) => myStrokes?.[row.hole - 1] === row.score).length
   const allResultRows = Object.values(draw?.drawnScores ?? {}).sort((a, b) => a.hole - b.hole)
@@ -1305,19 +1309,6 @@ function LottoSelectionModal({
             )
           })}
         </View>
-        <View style={s.lottoStatusRow}>
-          <Text style={s.lottoStatusLabel}>적중</Text>
-          {holes.map((hole) => {
-            const selected = selectedHoleList.includes(hole)
-            const row = draw?.drawnScores?.[String(hole)]
-            const hit = !isPlaying && selected && !!row && myStrokes?.[hole - 1] === row.score
-            return (
-              <Text key={hole} style={[s.lottoStatusCell, selected && s.lottoStatusSelectedCell, hit && s.lottoStatusHitText]}>
-                {selected ? (isPlaying ? '-' : hit ? 'O' : 'X') : ''}
-              </Text>
-            )
-          })}
-        </View>
       </View>
     )
   }
@@ -1342,43 +1333,83 @@ function LottoSelectionModal({
             </View>
           ) : (
             <>
-              <View style={s.lottoCounterRow}>
-                <Text style={[s.lottoCounter, selection.par3.length === 1 && s.lottoCounterDone]}>파3 {selection.par3.length}/1</Text>
-                <Text style={[s.lottoCounter, selection.par4.length === 3 && s.lottoCounterDone]}>파4 {selection.par4.length}/3</Text>
-                <Text style={[s.lottoCounter, selection.par5.length === 2 && s.lottoCounterDone]}>파5 {selection.par5.length}/2</Text>
-              </View>
-              <ScrollView style={s.lottoBody}>
-                {groups.map((group) => (
-                  <View key={group.key} style={s.lottoGroup}>
-                    <View style={s.lottoGroupHeader}>
-                      <Text style={s.lottoGroupTitle}>{group.label}</Text>
-                      <Text style={s.lottoGroupLimit}>{selection[group.key].length}/{group.limit}</Text>
-                    </View>
-                    <View style={s.lottoHoleGrid}>
-                      {group.holes.map((hole) => {
-                        const selected = selection[group.key].includes(hole)
-                        return (
-                          <TouchableOpacity
-                            key={hole}
-                            style={[s.lottoHoleBtn, selected && s.lottoHoleBtnActive]}
-                            onPress={() => onToggle(group.key, hole)}
-                            activeOpacity={0.82}
-                          >
-                            <Text style={[s.lottoHoleText, selected && s.lottoHoleTextActive]}>{hole}H</Text>
-                          </TouchableOpacity>
-                        )
-                      })}
-                    </View>
+              {isPurchased ? (
+                <View style={s.lottoPurchaseBox}>
+                  <Text style={s.lottoPurchaseTitle}>구매 및 추첨 결과</Text>
+                  <View style={s.lottoPurchaseHoles}>
+                    {selectedHoleList.map((hole) => {
+                      const row = draw?.drawnScores?.[String(hole)]
+                      const hit = isCompleted && !isPlaying && !!row && myStrokes?.[hole - 1] === row.score
+                      const missed = isCompleted && !isPlaying && !!row && myStrokes?.[hole - 1] !== row.score
+                      return (
+                        <View
+                          key={hole}
+                          style={[
+                            s.lottoPurchaseHole,
+                            hit && s.lottoPurchaseHoleHit,
+                            missed && s.lottoPurchaseHoleMiss,
+                          ]}
+                        >
+                          <Text style={[
+                            s.lottoPurchaseMark,
+                            hit && s.lottoPurchaseMarkHit,
+                            missed && s.lottoPurchaseMarkMiss,
+                          ]}>
+                            {isCompleted && !isPlaying ? (hit ? 'O' : 'X') : '-'}
+                          </Text>
+                          <Text style={[
+                            s.lottoPurchaseHoleText,
+                            hit && s.lottoPurchaseTextHit,
+                            missed && s.lottoPurchaseTextMiss,
+                          ]}>
+                            {hole}H
+                          </Text>
+                        </View>
+                      )
+                    })}
                   </View>
-                ))}
-              </ScrollView>
-              <TouchableOpacity
-                style={[s.lottoSaveBtn, (!ready || saving) && s.lottoSaveBtnDisabled]}
-                onPress={onSave}
-                disabled={!ready || saving}
-              >
-                {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.lottoSaveText}>구매 완료</Text>}
-              </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  <View style={s.lottoCounterRow}>
+                    <Text style={[s.lottoCounter, selection.par3.length === 1 && s.lottoCounterDone]}>파3 {selection.par3.length}/1</Text>
+                    <Text style={[s.lottoCounter, selection.par4.length === 3 && s.lottoCounterDone]}>파4 {selection.par4.length}/3</Text>
+                    <Text style={[s.lottoCounter, selection.par5.length === 2 && s.lottoCounterDone]}>파5 {selection.par5.length}/2</Text>
+                  </View>
+                  <ScrollView style={s.lottoBody}>
+                    {groups.map((group) => (
+                      <View key={group.key} style={s.lottoGroup}>
+                        <View style={s.lottoGroupHeader}>
+                          <Text style={s.lottoGroupTitle}>{group.label}</Text>
+                          <Text style={s.lottoGroupLimit}>{selection[group.key].length}/{group.limit}</Text>
+                        </View>
+                        <View style={s.lottoHoleGrid}>
+                          {group.holes.map((hole) => {
+                            const selected = selection[group.key].includes(hole)
+                            return (
+                              <TouchableOpacity
+                                key={hole}
+                                style={[s.lottoHoleBtn, selected && s.lottoHoleBtnActive]}
+                                onPress={() => onToggle(group.key, hole)}
+                                activeOpacity={0.82}
+                              >
+                                <Text style={[s.lottoHoleText, selected && s.lottoHoleTextActive]}>{hole}H</Text>
+                              </TouchableOpacity>
+                            )
+                          })}
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                  <TouchableOpacity
+                    style={[s.lottoSaveBtn, (!ready || saving) && s.lottoSaveBtnDisabled]}
+                    onPress={onSave}
+                    disabled={!ready || saving}
+                  >
+                    {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.lottoSaveText}>구매 완료</Text>}
+                  </TouchableOpacity>
+                </>
+              )}
               <View style={s.lottoDrawBox}>
                 <Text style={s.lottoDrawTitle}>추첨 상태</Text>
                 {isCompleted ? (
@@ -2148,6 +2179,27 @@ const s = StyleSheet.create({
   lottoHoleBtnActive: { backgroundColor: C.greenLight, borderColor: C.green },
   lottoHoleText: { fontSize: 12, fontWeight: '900', color: C.muted },
   lottoHoleTextActive: { color: C.green },
+  lottoPurchaseBox: { borderWidth: 1, borderColor: C.border, backgroundColor: '#f6f7f6', borderRadius: 14, padding: 12 },
+  lottoPurchaseTitle: { fontSize: 13, fontWeight: '900', color: C.text, marginBottom: 8 },
+  lottoPurchaseHoles: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  lottoPurchaseHole: {
+    minWidth: 42,
+    alignItems: 'center',
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 9,
+    backgroundColor: '#eef0ee',
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  lottoPurchaseHoleHit: { backgroundColor: C.greenLight, borderColor: C.green },
+  lottoPurchaseHoleMiss: { backgroundColor: '#fff8f6', borderColor: '#d65b4a' },
+  lottoPurchaseMark: { fontSize: 10, fontWeight: '900', color: C.muted, lineHeight: 12 },
+  lottoPurchaseMarkHit: { color: C.green },
+  lottoPurchaseMarkMiss: { color: '#d65b4a' },
+  lottoPurchaseHoleText: { fontSize: 12, fontWeight: '900', color: C.muted, marginTop: 1 },
+  lottoPurchaseTextHit: { color: C.green },
+  lottoPurchaseTextMiss: { color: '#d65b4a' },
   lottoSaveBtn: { marginTop: 12, borderRadius: 14, paddingVertical: 13, alignItems: 'center', backgroundColor: C.green },
   lottoSaveBtnDisabled: { opacity: 0.45 },
   lottoSaveText: { fontSize: 13, fontWeight: '900', color: '#fff' },
@@ -2183,7 +2235,6 @@ const s = StyleSheet.create({
   lottoStatusHole: { fontSize: 11, color: C.text },
   lottoStatusSelectedCell: { backgroundColor: '#fff8f6' },
   lottoStatusSelectedText: { color: '#d65b4a', fontWeight: '900' },
-  lottoStatusHitText: { color: C.green, fontWeight: '900' },
   lottoResultGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
   lottoResultCard: {
     width: '48%',

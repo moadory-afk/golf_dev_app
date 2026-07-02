@@ -24,6 +24,18 @@ export interface ClubAwardConfig {
   items: string[]
 }
 
+export interface LottoAwardConfig {
+  prizes: Record<'3' | '4' | '5' | '6', number>
+  rollover: boolean
+  carryoverAmount: number
+}
+
+export const DEFAULT_LOTTO_AWARD_CONFIG: LottoAwardConfig = {
+  prizes: { '3': 0, '4': 0, '5': 0, '6': 0 },
+  rollover: true,
+  carryoverAmount: 0,
+}
+
 export interface ClubAwardSnapshotInput {
   awardKey: string
   icon: string
@@ -578,6 +590,29 @@ export async function getClubAwardConfig(clubId: string): Promise<ClubAwardConfi
 
 export async function saveClubAwardConfig(clubId: string, config: ClubAwardConfig): Promise<void> {
   const { error } = await supabase.from('clubs').update({ award_config: config }).eq('id', clubId).select('id').single()
+  if (error) throw error
+}
+
+export async function getClubLottoAwardConfig(clubId: string): Promise<LottoAwardConfig> {
+  const { data, error } = await supabase
+    .from('clubs')
+    .select('lotto_award_config')
+    .eq('id', clubId)
+    .maybeSingle()
+  if (error) throw error
+  const config = data?.lotto_award_config as Partial<LottoAwardConfig> | null
+  return {
+    prizes: {
+      ...DEFAULT_LOTTO_AWARD_CONFIG.prizes,
+      ...(config?.prizes ?? {}),
+    },
+    rollover: config?.rollover ?? DEFAULT_LOTTO_AWARD_CONFIG.rollover,
+    carryoverAmount: config?.carryoverAmount ?? DEFAULT_LOTTO_AWARD_CONFIG.carryoverAmount,
+  }
+}
+
+export async function saveClubLottoAwardConfig(clubId: string, config: LottoAwardConfig): Promise<void> {
+  const { error } = await supabase.from('clubs').update({ lotto_award_config: config }).eq('id', clubId).select('id').single()
   if (error) throw error
 }
 
@@ -1366,17 +1401,20 @@ export async function saveRoundLottoDrawResult(
   drawnScores: Record<string, RoundLottoDrawScore>,
 ): Promise<void> {
   const now = new Date().toISOString()
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('round_lotto_draws')
-    .upsert({
-      club_id: clubId,
-      schedule_id: scheduleId,
+    .update({
       drawn_scores: drawnScores,
       draw_status: 'COMPLETED',
       drawn_at: now,
       updated_at: now,
-    }, { onConflict: 'schedule_id' })
+    })
+    .eq('club_id', clubId)
+    .eq('schedule_id', scheduleId)
+    .select('schedule_id')
+    .maybeSingle()
   if (error) throw error
+  if (!data) throw new Error('로또 추첨자가 먼저 지정되어야 합니다.')
 }
 
 export async function saveRoundLottoDrafter(clubId: string, scheduleId: string, drafterUserId: string | null): Promise<void> {
