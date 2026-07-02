@@ -1,8 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Alert, Image, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Alert, Image, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import DateField, { todayLocal } from '../components/DateField'
 import { Icon } from '../components/Icon'
 import { useNavigation } from '@react-navigation/native'
@@ -20,8 +19,9 @@ import {
   type ScheduledRoundGroup,
   type ScheduledRoundGroupMember,
 } from '../lib/roundSchedule'
-import { completeRound, getClubMembers, getCourseLayouts, getGolfCourses, saveRound, type CourseLayout, type GolfCourse } from '../lib/store'
-import { AWARD_CONFIG_KEY, AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
+import { completeRound, getClubAwardConfig, getClubMembers, getClubSettlement, getCourseLayouts, getGolfCourses, getRounds, saveClubAwardConfig, saveClubAwardSnapshots, saveClubSettlement, saveRound, totalPar, type CourseLayout, type GolfCourse } from '../lib/store'
+import { AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
+import { computeClubAwardResults } from '../lib/awardResults'
 import { recognizeScorecard, mergeScorecards, type RecognizedScorecard } from '../features/ocr'
 import { findBestOcrMatch } from '../lib/nameMatch'
 import { supabase } from '../lib/supabase'
@@ -107,6 +107,10 @@ function normalizeTimeInput(value: string) {
   return only
 }
 
+function moneyGroupKey(index: number) {
+  return `group-${index + 1}`
+}
+
 export default function RoundSchedulePrototypeScreen() {
   const nav = useNavigation<Nav>()
   const { activeClub: club } = useClub()
@@ -122,6 +126,12 @@ export default function RoundSchedulePrototypeScreen() {
   const [editorTab, setEditorTab] = useState<RoundEditorTab>('basic')
   const [awardCount, setAwardCount] = useState(2)
   const [selectedAwardItems, setSelectedAwardItems] = useState<string[]>(['medal', 'birdieKing', 'last'])
+  const [awardSaving, setAwardSaving] = useState(false)
+  const [strokeFee, setStrokeFee] = useState('3000')
+  const [birdieBonus, setBirdieBonus] = useState<5000 | 10000>(5000)
+  const [baepanOn, setBaepanOn] = useState(true)
+  const [moneyGroupIds, setMoneyGroupIds] = useState<string[]>([])
+  const [moneySaving, setMoneySaving] = useState(false)
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState<Draft>(createEmptyDraft())
   const [coursePickerOpen, setCoursePickerOpen] = useState(false)
@@ -135,20 +145,10 @@ export default function RoundSchedulePrototypeScreen() {
   const [scoreOcrResult, setScoreOcrResult] = useState<RecognizedScorecard | null>(null)
   const [scoreOcrError, setScoreOcrError] = useState('')
   const realtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const realtimeKey = useRef(`schedule-${Date.now()}-${Math.random().toString(36).slice(2)}`)
 
   useEffect(() => {
     getGolfCourses().then(setCourses).catch(() => setCourses([]))
-  }, [])
-
-  useEffect(() => {
-    AsyncStorage.getItem(AWARD_CONFIG_KEY).then((value) => {
-      if (!value) return
-      try {
-        const config = JSON.parse(value)
-        if (typeof config.count === 'number') setAwardCount(config.count)
-        if (Array.isArray(config.items)) setSelectedAwardItems(config.items)
-      } catch {}
-    })
   }, [])
 
   useEffect(() => {
@@ -156,6 +156,25 @@ export default function RoundSchedulePrototypeScreen() {
     getRoundSchedules(club.id).then(setItems)
     getClubMembers(club.id).then(setClubMembers).catch(() => setClubMembers([]))
   }, [club?.id, refreshKey])
+
+  useEffect(() => {
+    if (!club?.id) return
+    getClubAwardConfig(club.id).then((config) => {
+      if (!config) return
+      if (typeof config.count === 'number') setAwardCount(config.count)
+      if (Array.isArray(config.items)) setSelectedAwardItems(config.items)
+    }).catch(() => {})
+  }, [club?.id])
+
+  useEffect(() => {
+    if (!club?.id) return
+    getClubSettlement(club.id).then((config) => {
+      if (!config) return
+      setStrokeFee(String(config.strokeFee))
+      setBirdieBonus(config.birdieBonus)
+      if (config.baepanConditions) setBaepanOn(config.baepanConditions.strokeOverpar)
+    }).catch(() => {})
+  }, [club?.id])
 
   useEffect(() => {
     if (!club?.id || !draft.id || !editorOpen) {
@@ -178,7 +197,7 @@ export default function RoundSchedulePrototypeScreen() {
     }
 
     const channel = supabase
-      .channel(`round-schedule-screen:${club.id}`)
+      .channel(`round-schedule-screen:${club.id}:${realtimeKey.current}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'club_round_schedules', filter: `club_id=eq.${club.id}` }, queueRefresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'club_round_attendances', filter: `club_id=eq.${club.id}` }, queueRefresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'club_round_groups', filter: `club_id=eq.${club.id}` }, queueRefresh)
@@ -224,12 +243,14 @@ export default function RoundSchedulePrototypeScreen() {
 
   function openCreate() {
     setDraft(createEmptyDraft())
+    setMoneyGroupIds([])
     setLayouts([])
     setEditorTab('basic')
     setEditorOpen(true)
   }
 
   function openEdit(item: ScheduledRound) {
+    const savedMoneyGroups = item.moneyGroupIds ?? []
     setDraft({
       id: item.id,
       date: item.date,
@@ -240,6 +261,12 @@ export default function RoundSchedulePrototypeScreen() {
       note: item.note,
       groups: item.groups.length > 0 ? item.groups : [createGroup(1)],
     })
+    setMoneyGroupIds(item.groups
+      .map((group, index) => {
+        const key = moneyGroupKey(index)
+        return savedMoneyGroups.includes(key) || savedMoneyGroups.includes(group.id) ? key : null
+      })
+      .filter((key): key is string => key !== null))
     setEditorTab('basic')
     setEditorOpen(true)
   }
@@ -257,10 +284,54 @@ export default function RoundSchedulePrototypeScreen() {
   }
 
   async function saveAwardConfig() {
-    const items = fillToCount(selectedAwardItems, awardCount)
-    await AsyncStorage.setItem(AWARD_CONFIG_KEY, JSON.stringify({ count: awardCount, items }))
-    setSelectedAwardItems(items)
-    Alert.alert('저장 완료', '시상룰을 저장했습니다.')
+    if (!club?.id) return Alert.alert('확인', '클럽 정보를 불러온 뒤 다시 시도해 주세요.')
+    setAwardSaving(true)
+    try {
+      const items = fillToCount(selectedAwardItems, awardCount)
+      await saveClubAwardConfig(club.id, { count: awardCount, items })
+      setSelectedAwardItems(items)
+      Alert.alert('저장 완료', '시상룰을 저장했습니다.')
+    } catch (error) {
+      Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
+    } finally {
+      setAwardSaving(false)
+    }
+  }
+
+  async function saveMoneyGameConfig() {
+    if (!club?.id) return
+    setMoneySaving(true)
+    try {
+      if (draft.id) {
+        const next = await upsertRoundSchedule(club.id, {
+          id: draft.id,
+          date: draft.date,
+          courseId: draft.courseId,
+          courseName: draft.courseName?.trim() || undefined,
+          status: draft.status,
+          attendanceMode: draft.attendanceMode,
+          note: draft.note.trim(),
+          moneyGroupIds,
+          groups: draft.groups.map((group, index) => ({
+            ...group,
+            name: group.name || `${index + 1}조`,
+            time: group.time.trim(),
+          })),
+        })
+        setItems(next)
+      }
+      await saveClubSettlement(club.id, {
+        participants: [],
+        strokeFee: parseInt(strokeFee, 10) || 3000,
+        birdieBonus,
+        baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
+      })
+      Alert.alert('저장 완료', '머니게임 기준을 저장했습니다.')
+    } catch (error) {
+      Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
+    } finally {
+      setMoneySaving(false)
+    }
   }
 
   function openScoreUpload(groupId: string) {
@@ -275,6 +346,14 @@ export default function RoundSchedulePrototypeScreen() {
     setScorePhotoUris([])
     setScoreOcrResult(null)
     setScoreOcrError('')
+  }
+
+  function toggleMoneyGroup(groupId: string) {
+    setMoneyGroupIds((current) => (
+      current.includes(groupId)
+        ? current.filter((id) => id !== groupId)
+        : [...current, groupId]
+    ))
   }
 
   async function takeScorePhoto() {
@@ -368,6 +447,15 @@ export default function RoundSchedulePrototypeScreen() {
         Alert.alert('저장 불가', '조 멤버와 매칭된 OCR 결과가 없습니다.')
         return
       }
+      const selectedGroupIndex = draft.groups.findIndex((group) => group.id === selectedScoreGroup.id)
+      const settlement = selectedGroupIndex >= 0 && moneyGroupIds.includes(moneyGroupKey(selectedGroupIndex))
+        ? {
+            participants: players.map((player) => player.name),
+            strokeFee: parseInt(strokeFee, 10) || 3000,
+            birdieBonus,
+            baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
+          }
+        : undefined
       const saved = await saveRound({
         date: draft.date,
         courseName: draft.courseName ?? selectedScoreGroup.frontLayoutName ?? '이름 없는 코스',
@@ -376,6 +464,7 @@ export default function RoundSchedulePrototypeScreen() {
         players,
         photoData,
         clubId: club.id,
+        settlement,
       })
       await completeRound(saved.id)
       closeScoreUpload()
@@ -509,6 +598,7 @@ export default function RoundSchedulePrototypeScreen() {
         status: draft.status,
         attendanceMode: draft.attendanceMode,
         note: draft.note.trim(),
+        moneyGroupIds,
         groups: draft.groups.map((group, index) => ({
           ...group,
           name: `${index + 1}조`,
@@ -552,6 +642,7 @@ export default function RoundSchedulePrototypeScreen() {
         status: 'finished',
         attendanceMode: draft.attendanceMode,
         note: draft.note.trim(),
+        moneyGroupIds,
         groups: draft.groups.map((group, index) => ({
           ...group,
           name: group.name || `${index + 1}조`,
@@ -559,6 +650,19 @@ export default function RoundSchedulePrototypeScreen() {
         })),
       })
       setItems(next)
+      const rounds = await getRounds(club.id)
+      const finishedRound = rounds.find((round) =>
+        round.date === draft.date && (!draft.courseName || round.courseName === draft.courseName)
+      )
+      if (finishedRound) {
+        const config = await getClubAwardConfig(club.id)
+        const itemIds = config
+          ? fillToCount(config.items, config.count)
+          : fillToCount(selectedAwardItems, awardCount)
+        const handicaps = new Map(Object.entries(finishedRound.handicaps ?? {}))
+        const awards = computeClubAwardResults(itemIds, finishedRound, handicaps, totalPar(finishedRound.pars))
+        await saveClubAwardSnapshots(club.id, finishedRound.id, awards)
+      }
       setEditorOpen(false)
     } finally {
       setSaving(false)
@@ -872,17 +976,101 @@ export default function RoundSchedulePrototypeScreen() {
                   </View>
                 ))}
 
-                <TouchableOpacity style={s.saveButton} onPress={saveAwardConfig} activeOpacity={0.86}>
-                  <Text style={s.saveButtonText}>시상룰 저장</Text>
+                <TouchableOpacity
+                  style={[s.saveButton, awardSaving && { opacity: 0.6 }]}
+                  onPress={saveAwardConfig}
+                  disabled={awardSaving}
+                  activeOpacity={0.86}
+                >
+                  {awardSaving ? <ActivityIndicator color={C.accentText} /> : <Text style={s.saveButtonText}>시상룰 저장</Text>}
                 </TouchableOpacity>
               </ScrollView>
             ) : (
-              <ScrollView contentContainerStyle={s.scoreBody}>
-                <View style={s.editorPlaceholder}>
-                  <Icon name="settings" size={28} color={C.green} />
-                  <Text style={s.editorPlaceholderTitle}>머니게임</Text>
-                  <Text style={s.editorPlaceholderDesc}>게임룰 기능을 이곳으로 이동할 예정입니다.</Text>
+              <ScrollView contentContainerStyle={s.awardBody}>
+                <View style={s.fieldGroup}>
+                  <Text style={s.fieldLabel}>타당 금액</Text>
+                  <View style={s.moneyInputRow}>
+                    <TextInput
+                      value={strokeFee}
+                      onChangeText={(value) => setStrokeFee(value.replace(/[^0-9]/g, '').slice(0, 6))}
+                      keyboardType="numeric"
+                      style={s.moneyInput}
+                      placeholder="3000"
+                      placeholderTextColor={C.muted}
+                    />
+                    <Text style={s.moneyUnit}>원</Text>
+                  </View>
                 </View>
+
+                <View style={s.fieldGroup}>
+                  <Text style={s.fieldLabel}>버디 보너스</Text>
+                  <View style={s.awardChipRow}>
+                    {([5000, 10000] as const).map((value) => (
+                      <TouchableOpacity
+                        key={value}
+                        style={[s.awardChip, birdieBonus === value && s.awardChipActive]}
+                        onPress={() => setBirdieBonus(value)}
+                        activeOpacity={0.86}
+                      >
+                        <Text style={[s.awardChipText, birdieBonus === value && s.awardChipTextActive]}>
+                          {value.toLocaleString('ko-KR')}원
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={s.moneySwitchRow}>
+                  <View>
+                    <Text style={s.fieldLabel}>배판 조건</Text>
+                    <Text style={s.moneyHelpText}>
+                      적용 시 아래 조건에서 배판으로 계산합니다.{'\n'}파3: 더블 이상{'\n'}파4/파5: 트리플 이상{'\n'}동타: 2명 이상
+                    </Text>
+                  </View>
+                  <Switch
+                    value={baepanOn}
+                    onValueChange={setBaepanOn}
+                    trackColor={{ false: C.border, true: C.green }}
+                    thumbColor="#fff"
+                  />
+                </View>
+
+                <View style={s.fieldGroup}>
+                  <Text style={s.fieldLabel}>적용 조 선택</Text>
+                  {draft.groups.map((group, index) => {
+                    const groupKey = moneyGroupKey(index)
+                    const active = moneyGroupIds.includes(groupKey)
+                    return (
+                      <TouchableOpacity
+                        key={group.id}
+                        style={[s.moneyGroupCard, active && s.moneyGroupCardActive]}
+                        onPress={() => toggleMoneyGroup(groupKey)}
+                        activeOpacity={0.86}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.moneyGroupTitle}>{group.name || `${index + 1}조`}</Text>
+                          <Text style={s.moneyGroupMeta}>
+                            {group.time?.trim() ? group.time : '티오프 미정'} · {group.members.length > 0 ? group.members.map((member) => member.name).join(', ') : '배정 회원 없음'}
+                          </Text>
+                        </View>
+                        <View style={[s.moneyGroupBadge, active && s.moneyGroupBadgeActive]}>
+                          <Text style={[s.moneyGroupBadgeText, active && s.moneyGroupBadgeTextActive]}>
+                            {active ? '적용' : '미적용'}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    )
+                  })}
+                </View>
+
+                <TouchableOpacity
+                  style={[s.saveButton, moneySaving && { opacity: 0.6 }]}
+                  onPress={saveMoneyGameConfig}
+                  disabled={moneySaving}
+                  activeOpacity={0.86}
+                >
+                  {moneySaving ? <ActivityIndicator color={C.accentText} /> : <Text style={s.saveButtonText}>머니게임 저장</Text>}
+                </TouchableOpacity>
               </ScrollView>
             )}
           </View>
@@ -1241,6 +1429,54 @@ const s = StyleSheet.create({
   awardOptionMain: { paddingLeft: 12, paddingRight: 4, paddingVertical: 9 },
   awardInfoButton: { paddingLeft: 2, paddingRight: 10, paddingVertical: 9 },
   awardInfoText: { fontSize: 13, fontWeight: '900', color: C.muted },
+  moneyInputRow: {
+    minHeight: 54,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  moneyInput: { flex: 1, fontSize: 18, fontWeight: '900', color: C.text, paddingVertical: 12 },
+  moneyUnit: { fontSize: 14, fontWeight: '800', color: C.muted },
+  moneySwitchRow: {
+    minHeight: 64,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 16,
+    backgroundColor: '#fff',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  moneyHelpText: { fontSize: 12, fontWeight: '700', color: C.muted, marginTop: 4 },
+  moneyGroupCard: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 16,
+    backgroundColor: '#fff',
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  moneyGroupCardActive: { borderColor: C.green, backgroundColor: '#f5fff7' },
+  moneyGroupTitle: { fontSize: 15, fontWeight: '900', color: C.text },
+  moneyGroupMeta: { fontSize: 12, fontWeight: '700', color: C.muted, marginTop: 5, lineHeight: 18 },
+  moneyGroupBadge: {
+    borderRadius: 999,
+    backgroundColor: '#eef2ee',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  moneyGroupBadgeActive: { backgroundColor: C.accent },
+  moneyGroupBadgeText: { fontSize: 12, fontWeight: '900', color: C.muted },
+  moneyGroupBadgeTextActive: { color: C.accentText },
   closeButton: {
     borderRadius: 999,
     backgroundColor: '#eef2ee',

@@ -35,6 +35,7 @@ export type ScheduledRound = {
   layoutName?: string
   status: RoundScheduleStatus
   attendanceMode: RoundAttendanceMode
+  moneyGroupIds?: string[]
   groups: ScheduledRoundGroup[]
 }
 
@@ -49,6 +50,7 @@ type ScheduleRow = {
   note?: string | null
   status?: RoundScheduleStatus | null
   attendance_mode?: RoundAttendanceMode | null
+  money_group_ids?: string[] | null
   created_at?: string | null
   updated_at?: string | null
 }
@@ -109,6 +111,7 @@ function normalizeSchedule(row: ScheduleRow, groups: ScheduledRoundGroup[]): Sch
     layoutName: row.layout_name ?? undefined,
     status: row.status ?? 'planned',
     attendanceMode: row.attendance_mode ?? 'member',
+    moneyGroupIds: row.money_group_ids ?? [],
     groups,
   }
 }
@@ -116,7 +119,7 @@ function normalizeSchedule(row: ScheduleRow, groups: ScheduledRoundGroup[]): Sch
 export async function getRoundSchedules(clubId: string): Promise<ScheduledRound[]> {
   const { data: schedules, error } = await supabase
     .from('club_round_schedules')
-    .select('id, round_date, course_id, course_name, layout_id, layout_name, tee_time, note, status, attendance_mode, created_at, updated_at')
+    .select('id, round_date, course_id, course_name, layout_id, layout_name, tee_time, note, status, attendance_mode, money_group_ids, created_at, updated_at')
     .eq('club_id', clubId)
     .order('round_date', { ascending: true })
   if (error) throw error
@@ -187,6 +190,7 @@ export async function upsertRoundSchedule(
     note: input.note ?? '',
     status: input.status,
     attendance_mode: input.attendanceMode,
+    money_group_ids: input.moneyGroupIds ?? [],
     updated_at: new Date().toISOString(),
   }
 

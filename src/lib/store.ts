@@ -19,6 +19,24 @@ export interface SettlementConfig {
   baepanConditions?: BaepanConditions
 }
 
+export interface ClubAwardConfig {
+  count: number
+  items: string[]
+}
+
+export interface ClubAwardSnapshotInput {
+  awardKey: string
+  icon: string
+  label: string
+  winner: string
+  detail: string
+}
+
+export interface ClubAwardSnapshot extends ClubAwardSnapshotInput {
+  id: string
+  sortOrder: number
+}
+
 export interface SavedRound {
   id: string
   date: string
@@ -464,8 +482,71 @@ export async function getClubSettlement(clubId: string): Promise<SettlementConfi
 }
 
 export async function saveClubSettlement(clubId: string, config: SettlementConfig | null): Promise<void> {
-  const { error } = await supabase.from('clubs').update({ settlement: config }).eq('id', clubId)
+  const { error } = await supabase.from('clubs').update({ settlement: config }).eq('id', clubId).select('id').single()
   if (error) throw error
+}
+
+export async function getClubAwardConfig(clubId: string): Promise<ClubAwardConfig | null> {
+  const { data, error } = await supabase
+    .from('clubs')
+    .select('award_config')
+    .eq('id', clubId)
+    .maybeSingle()
+  if (error) throw error
+  return (data?.award_config as ClubAwardConfig | null) ?? null
+}
+
+export async function saveClubAwardConfig(clubId: string, config: ClubAwardConfig): Promise<void> {
+  const { error } = await supabase.from('clubs').update({ award_config: config }).eq('id', clubId).select('id').single()
+  if (error) throw error
+}
+
+export async function saveClubAwardSnapshots(
+  clubId: string,
+  roundId: string,
+  awards: ClubAwardSnapshotInput[],
+): Promise<void> {
+  const { error: deleteError } = await supabase
+    .from('round_award_snapshots')
+    .delete()
+    .eq('round_id', roundId)
+    .eq('award_type', 'club')
+  if (deleteError) throw deleteError
+  if (awards.length === 0) return
+
+  const { error } = await supabase.from('round_award_snapshots').insert(
+    awards.map((award, index) => ({
+      club_id: clubId,
+      round_id: roundId,
+      award_type: 'club',
+      award_key: award.awardKey,
+      award_label: award.label,
+      icon: award.icon,
+      winner: award.winner,
+      detail: award.detail,
+      sort_order: index,
+    })),
+  )
+  if (error) throw error
+}
+
+export async function getClubAwardSnapshots(roundId: string): Promise<ClubAwardSnapshot[]> {
+  const { data, error } = await supabase
+    .from('round_award_snapshots')
+    .select('id, award_key, award_label, icon, winner, detail, sort_order')
+    .eq('round_id', roundId)
+    .eq('award_type', 'club')
+    .order('sort_order', { ascending: true })
+  if (error) throw error
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    awardKey: row.award_key,
+    icon: row.icon ?? '',
+    label: row.award_label,
+    winner: row.winner,
+    detail: row.detail ?? '',
+    sortOrder: row.sort_order ?? 0,
+  }))
 }
 
 export type FeeMode = 'monthly' | 'yearly'

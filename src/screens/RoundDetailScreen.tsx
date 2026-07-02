@@ -2,8 +2,8 @@ import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Alert, Image, Pla
 import { useRoute, useNavigation } from '@react-navigation/native'
 import { useState, useEffect } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { getRound, getRounds, deleteRound, updateRoundSettlement, playerTotal, totalPar, getHandicapsForRound, shortName } from '../lib/store'
-import { AWARD_CONFIG_KEY, AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
+import { getClubAwardConfig, getClubAwardSnapshots, getRound, getRounds, deleteRound, updateRoundSettlement, playerTotal, totalPar, getHandicapsForRound, shortName } from '../lib/store'
+import { AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
 import { calcSettlement, holeNetForPlayer, fmtKRW } from '../features/settlement'
 import { useAsync } from '../lib/useAsync'
 import { useClub } from '../lib/ClubContext'
@@ -191,16 +191,18 @@ export default function RoundDetailScreen() {
     AsyncStorage.getItem('@gogopar_handicap_basis').then(v => {
       if (v === '3' || v === '5' || v === '10') setHandicapBasis(Number(v) as 3 | 5 | 10)
     })
-    AsyncStorage.getItem(AWARD_CONFIG_KEY).then(v => {
-      if (v) { try { setAwardConfig(JSON.parse(v)) } catch {} }
-    })
   }, [])
+  useEffect(() => {
+    if (!activeClub?.id) return
+    getClubAwardConfig(activeClub.id).then(setAwardConfig).catch(() => {})
+  }, [activeClub?.id])
   const isAdmin = activeClub?.role === 'admin'
   const { data: round, loading } = useAsync(() => getRound(route.params.id), [route.params.id, recalcKey])
   const { data: allRounds } = useAsync(async () => {
     if (!activeClub) return []
     return getRounds(activeClub.id)
   }, [activeClub?.id])
+  const { data: clubAwardSnapshots } = useAsync(() => getClubAwardSnapshots(route.params.id), [route.params.id, recalcKey])
 
   if (loading) return <View style={s.center}><Text style={s.muted}>불러오는 중...</Text></View>
   if (!round) return <View style={s.center}><Text style={s.muted}>라운드를 찾을 수 없습니다.</Text></View>
@@ -556,15 +558,23 @@ export default function RoundDetailScreen() {
             return r
           })
           .filter((r): r is AwardResult => r !== null)
+        const displayAwardResults: AwardResult[] = clubAwardSnapshots && clubAwardSnapshots.length > 0
+          ? clubAwardSnapshots.map((award) => ({
+              icon: award.icon,
+              label: award.label,
+              winner: award.winner,
+              detail: award.detail,
+            }))
+          : awardResults
         const clubAwardCard = (
           <View style={s.card}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
               <Icon name="trophy" size={16} color={C.text} />
               <Text style={[s.cardTitle, { marginBottom: 0 }]}>클럽 시상</Text>
             </View>
-            {awardResults.length === 0
+            {displayAwardResults.length === 0
               ? <Text style={s.muted}>설정된 시상 항목이 없습니다</Text>
-              : awardResults.map((award, i) => (
+              : displayAwardResults.map((award, i) => (
                 <View key={award.label + i} style={[s.awardRow, i === 0 && { borderTopWidth: 0 }]}>
                   <View style={s.awardIconWrap}>
                     <Text style={{ fontSize: 20 }}>{award.icon}</Text>
@@ -585,7 +595,7 @@ export default function RoundDetailScreen() {
           return (
             <>
               <View style={s.card}>
-                <Text style={s.cardTitle}>개별 시상</Text>
+                <Text style={s.cardTitle}>머니게임</Text>
                 <Text style={s.muted}>이 라운드에는 정산 설정이 없습니다.{'\n'}스코어 입력 시 정산 설정을 추가하세요.</Text>
               </View>
               {clubAwardCard}
@@ -618,7 +628,7 @@ export default function RoundDetailScreen() {
             {/* 개별 시상 */}
             <View style={s.card}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <Text style={[s.cardTitle, { marginBottom: 0 }]}>개별 시상</Text>
+                <Text style={[s.cardTitle, { marginBottom: 0 }]}>머니게임</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <TouchableOpacity style={s.holeDetailBtn} onPress={() => setShowHoleDetail(v => !v)}>
                     <Text style={s.holeDetailBtnText}>{showHoleDetail ? '홀별 내역 ▲' : '홀별 내역 ▼'}</Text>
