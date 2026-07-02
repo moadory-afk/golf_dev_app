@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
-import { Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Alert, Image, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import * as ImagePicker from 'expo-image-picker'
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { C } from '../theme'
@@ -37,11 +39,14 @@ type TransactionDraft = {
   customDetail: string
   amount: string
   memo: string
+  proofText: string
+  receiptImages: string[]
   entryDate: string
 }
 
-const INCOME_DETAILS = ['회비', '찬조금', '기타'] as const
-const EXPENSE_DETAILS = ['캐디피', '식사', '간식', '숙소', '기타'] as const
+const DIRECT_DETAIL = '직접입력'
+const INCOME_DETAILS = ['회비', '찬조금', DIRECT_DETAIL] as const
+const EXPENSE_DETAILS = ['캐디피', '식사', '간식', '숙소', DIRECT_DETAIL] as const
 
 const FALLBACK_MEMBERS: FeeMemberStatusItem[] = [
   { id: 'mock-1', cycleId: 'mock-cycle', userId: 'mock-user-1', name: '정재룡', amountDue: 100000, amountPaid: 100000, status: 'paid', updatedAt: '2026-06-29T08:30:18.441+00:00' },
@@ -170,6 +175,8 @@ export default function FeePrototypeScreen() {
     customDetail: '',
     amount: '',
     memo: '',
+    proofText: '',
+    receiptImages: [],
     entryDate: todayLocal(),
   })
 
@@ -262,6 +269,19 @@ export default function FeePrototypeScreen() {
     if (transactionFilter === 'expense') return monthlyItems.filter((item) => item.type === 'expense')
     return monthlyItems
   }, [transactionItems, transactionFilter, treasuryMonthOffset])
+  const transactionDetailOptions = useMemo(() => {
+    const defaults = transactionDraft.type === 'income' ? INCOME_DETAILS : EXPENSE_DETAILS
+    const defaultSet = new Set<string>(defaults)
+    const customDetails = transactionItems
+      .filter((item) => item.type === transactionDraft.type)
+      .map((item) => item.title.trim())
+      .filter((title) => title && !defaultSet.has(title))
+    return [
+      ...defaults.filter((detail) => detail !== DIRECT_DETAIL),
+      ...Array.from(new Set(customDetails)),
+      DIRECT_DETAIL,
+    ]
+  }, [transactionDraft.type, transactionItems])
 
   const paymentSummary = useMemo(() => {
     const totalDue = members.reduce((sum, member) => sum + member.amountDue, 0)
@@ -419,10 +439,12 @@ export default function FeePrototypeScreen() {
       setTransactionDraft({
         id: item.id,
         type: item.type,
-        detail: isDefaultDetail ? item.title : '기타',
+        detail: isDefaultDetail ? item.title : DIRECT_DETAIL,
         customDetail: isDefaultDetail ? '' : item.title,
         amount: item.amount.toLocaleString('ko-KR'),
         memo: item.memo ?? '',
+        proofText: item.proofText ?? '',
+        receiptImages: item.receiptImages ?? [],
         entryDate: item.entryDate,
       })
     } else {
@@ -433,6 +455,8 @@ export default function FeePrototypeScreen() {
         customDetail: '',
         amount: '',
         memo: '',
+        proofText: '',
+        receiptImages: [],
         entryDate: todayLocal(),
       })
     }
@@ -442,7 +466,7 @@ export default function FeePrototypeScreen() {
   async function saveTransactionDraft() {
     const amount = Number(transactionDraft.amount.replace(/[^0-9]/g, ''))
     if (!amount) return
-    const finalDetail = transactionDraft.detail === '기타' && transactionDraft.customDetail.trim()
+    const finalDetail = transactionDraft.detail === DIRECT_DETAIL && transactionDraft.customDetail.trim()
       ? transactionDraft.customDetail.trim()
       : transactionDraft.detail
 
@@ -454,6 +478,8 @@ export default function FeePrototypeScreen() {
       amount,
       entryDate: transactionDraft.entryDate,
       memo: transactionDraft.memo,
+      proofText: transactionDraft.proofText,
+      receiptImages: transactionDraft.receiptImages,
     }
 
     if (usingFallback) {
@@ -474,6 +500,8 @@ export default function FeePrototypeScreen() {
         amount,
         entryDate: transactionDraft.entryDate,
         memo: transactionDraft.memo,
+        proofText: transactionDraft.proofText,
+        receiptImages: transactionDraft.receiptImages,
       })
     } else {
       await createTreasuryEntry(club.id, {
@@ -482,11 +510,50 @@ export default function FeePrototypeScreen() {
         amount,
         entryDate: transactionDraft.entryDate,
         memo: transactionDraft.memo,
+        proofText: transactionDraft.proofText,
+        receiptImages: transactionDraft.receiptImages,
       })
     }
 
     setTransactionEditorOpen(false)
     setRefreshKey((value) => value + 1)
+  }
+
+  async function addReceiptImage(uri: string) {
+    const result = await manipulateAsync(uri, [{ resize: { width: 900 } }], {
+      compress: 0.55,
+      format: SaveFormat.JPEG,
+      base64: true,
+    })
+    if (!result.base64) return
+    setTransactionDraft((current) => ({
+      ...current,
+      receiptImages: [...current.receiptImages, `data:image/jpeg;base64,${result.base64}`],
+    }))
+  }
+
+  async function takeReceiptPhoto() {
+    const permission = await ImagePicker.requestCameraPermissionsAsync()
+    if (!permission.granted) return Alert.alert('권한 필요', '카메라 접근 권한이 필요합니다.')
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.6 })
+    if (!result.canceled && result.assets[0]?.uri) await addReceiptImage(result.assets[0].uri)
+  }
+
+  async function pickReceiptImage() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!permission.granted) return Alert.alert('권한 필요', '사진 접근 권한이 필요합니다.')
+    const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.6, allowsMultipleSelection: true })
+    if (result.canceled) return
+    for (const asset of result.assets) {
+      if (asset.uri) await addReceiptImage(asset.uri)
+    }
+  }
+
+  function removeReceiptImage(index: number) {
+    setTransactionDraft((current) => ({
+      ...current,
+      receiptImages: current.receiptImages.filter((_, itemIndex) => itemIndex !== index),
+    }))
   }
 
   async function deleteTransactionDraft() {
@@ -588,7 +655,7 @@ export default function FeePrototypeScreen() {
                     <View style={s.transactionTopRow}>
                       <Text style={s.transactionDate}>{formatShortDate(item.entryDate)}</Text>
                       <Text style={s.transactionTitle}>
-                        {item.title === '기타' && item.memo ? item.memo : item.title}
+                        {item.title === DIRECT_DETAIL && item.memo ? item.memo : item.title}
                       </Text>
                     </View>
                   </View>
@@ -860,21 +927,21 @@ export default function FeePrototypeScreen() {
               <View style={s.policySection}>
                 <Text style={s.policySectionTitle}>세부항목</Text>
                 <View style={s.detailGrid}>
-                  {(transactionDraft.type === 'income' ? INCOME_DETAILS : EXPENSE_DETAILS).map((detail) => (
+                  {transactionDetailOptions.map((detail) => (
                     <TouchableOpacity
                       key={detail}
                       style={[s.detailChip, transactionDraft.detail === detail && s.detailChipActive]}
                       onPress={() => setTransactionDraft((current) => ({
                         ...current,
                         detail,
-                        customDetail: detail === '기타' ? current.customDetail : '',
+                        customDetail: detail === DIRECT_DETAIL ? current.customDetail : '',
                       }))}
                     >
                       <Text style={[s.detailChipText, transactionDraft.detail === detail && s.detailChipTextActive]}>{detail}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
-                {transactionDraft.detail === '기타' ? (
+                {transactionDraft.detail === DIRECT_DETAIL ? (
                   <TextInput
                     style={[s.policyInput, { marginTop: 10 }]}
                     value={transactionDraft.customDetail}
@@ -900,13 +967,41 @@ export default function FeePrototypeScreen() {
               <View style={s.policySection}>
                 <Text style={s.policySectionTitle}>비고</Text>
                 <TextInput
-                  style={[s.policyInput, s.memoInput]}
+                  style={s.policyInput}
                   value={transactionDraft.memo}
                   onChangeText={(value) => setTransactionDraft((current) => ({ ...current, memo: value }))}
                   placeholder="비고 입력"
                   placeholderTextColor={C.muted}
-                  multiline
                 />
+              </View>
+
+              <View style={s.policySection}>
+                <Text style={s.policySectionTitle}>증빙</Text>
+                <TextInput
+                  style={s.policyInput}
+                  value={transactionDraft.proofText}
+                  onChangeText={(value) => setTransactionDraft((current) => ({ ...current, proofText: value }))}
+                  placeholder="증빙 내용 입력"
+                  placeholderTextColor={C.muted}
+                />
+                <View style={s.receiptActionRow}>
+                  <TouchableOpacity style={s.receiptActionBtn} onPress={takeReceiptPhoto} activeOpacity={0.86}>
+                    <Text style={s.receiptActionText}>사진찍기</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={s.receiptActionBtn} onPress={pickReceiptImage} activeOpacity={0.86}>
+                    <Text style={s.receiptActionText}>업로드</Text>
+                  </TouchableOpacity>
+                </View>
+                {transactionDraft.receiptImages.length > 0 ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.receiptPreviewRow}>
+                    {transactionDraft.receiptImages.map((uri, index) => (
+                      <TouchableOpacity key={`${uri.slice(0, 24)}-${index}`} onPress={() => removeReceiptImage(index)} activeOpacity={0.86}>
+                        <Image source={{ uri }} style={s.receiptPreview} />
+                        <Text style={s.receiptRemoveText}>삭제</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                ) : null}
               </View>
             </ScrollView>
 
@@ -1144,7 +1239,19 @@ const s = StyleSheet.create({
   detailChipActive: { backgroundColor: C.accent, borderColor: C.accent },
   detailChipText: { fontSize: 12, fontWeight: '700', color: C.muted },
   detailChipTextActive: { color: C.accentText },
-  memoInput: { minHeight: 96, paddingTop: 12, textAlignVertical: 'top' as const },
+  receiptActionRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  receiptActionBtn: {
+    flex: 1,
+    borderRadius: 14,
+    backgroundColor: C.greenLight,
+    paddingVertical: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  receiptActionText: { color: C.green, fontSize: 12, fontWeight: '900' },
+  receiptPreviewRow: { gap: 10, marginTop: 12, paddingBottom: 2 },
+  receiptPreview: { width: 74, height: 74, borderRadius: 12, backgroundColor: C.border },
+  receiptRemoveText: { marginTop: 4, textAlign: 'center', fontSize: 11, fontWeight: '800', color: C.danger },
   editorActionRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
   editorDeleteBtn: {
     flex: 1,

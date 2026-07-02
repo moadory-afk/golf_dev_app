@@ -49,6 +49,7 @@ export interface SavedRound {
   settlement?: SettlementConfig
   golfCourseId?: string
   scheduleId?: string
+  holeLabels?: string[]
   isComplete: boolean
 }
 
@@ -64,6 +65,7 @@ interface RoundRow {
   settlement?: SettlementConfig
   golf_course_id?: string
   schedule_id?: string
+  hole_labels?: string[]
   is_complete?: boolean
 }
 
@@ -80,6 +82,7 @@ function fromRow(row: RoundRow): SavedRound {
     settlement: row.settlement,
     golfCourseId: row.golf_course_id,
     scheduleId: row.schedule_id,
+    holeLabels: row.hole_labels ?? undefined,
     isComplete: row.is_complete ?? false,
   }
 }
@@ -92,7 +95,7 @@ async function getUser() {
 export async function getRounds(clubId: string): Promise<SavedRound[]> {
   const { data, error } = await supabase
     .from('rounds')
-    .select('id, date, course_name, pars, shinperio_holes, players, handicaps, is_complete')
+    .select('id, date, course_name, pars, shinperio_holes, players, handicaps, settlement, golf_course_id, schedule_id, hole_labels, is_complete')
     .eq('club_id', clubId)
     .order('date', { ascending: false })
   if (error) throw error
@@ -149,7 +152,7 @@ async function computeHandicapSnapshot(
 ): Promise<Record<string, number>> {
   const { data, error } = await supabase
     .from('rounds')
-    .select('id, date, course_name, pars, shinperio_holes, players, handicaps, is_complete')
+    .select('id, date, course_name, pars, shinperio_holes, players, handicaps, schedule_id, hole_labels, is_complete')
     .eq('club_id', clubId)
     .lt('date', date)
     .order('date', { ascending: true })
@@ -172,6 +175,7 @@ export async function saveRound(input: {
   settlement?: SettlementConfig
   golfCourseId?: string
   scheduleId?: string
+  holeLabels?: string[]
 }): Promise<SavedRound> {
   const user = await getUser()
   if (!user) throw new Error('로그인이 필요합니다.')
@@ -199,8 +203,19 @@ export async function saveRound(input: {
         players,
         handicaps: await computeHandicapSnapshot(input.clubId, date, players, 5, existing.id),
       }
-      if (input.settlement) payload.settlement = input.settlement
+      if (input.settlement) {
+        payload.settlement = existing.settlement
+          ? {
+              ...input.settlement,
+              participants: Array.from(new Set([
+                ...existing.settlement.participants,
+                ...input.settlement.participants,
+              ])),
+            }
+          : input.settlement
+      }
       if (input.scheduleId) payload.schedule_id = input.scheduleId
+      if (input.holeLabels) payload.hole_labels = input.holeLabels
       if (input.photoData && input.photoData.length > 0)
         payload.photo_data = [...existing.photoData, ...input.photoData]
       const { data, error } = await supabase
@@ -224,6 +239,7 @@ export async function saveRound(input: {
   if (input.settlement) payload.settlement = input.settlement
   if (input.golfCourseId) payload.golf_course_id = input.golfCourseId
   if (input.scheduleId) payload.schedule_id = input.scheduleId
+  if (input.holeLabels) payload.hole_labels = input.holeLabels
   const { data, error } = await supabase.from('rounds').insert(payload).select().single()
   if (error) throw error
   return fromRow(data)
@@ -237,6 +253,7 @@ export async function createRoundDraft(input: {
   clubId?: string
   settlement?: SettlementConfig
   golfCourseId?: string
+  holeLabels?: string[]
 }): Promise<SavedRound> {
   const user = await getUser()
   if (!user) throw new Error('로그인이 필요합니다.')
@@ -257,6 +274,7 @@ export async function createRoundDraft(input: {
   if (input.clubId) payload.club_id = input.clubId
   if (input.settlement) payload.settlement = input.settlement
   if (input.golfCourseId) payload.golf_course_id = input.golfCourseId
+  if (input.holeLabels) payload.hole_labels = input.holeLabels
   const { data, error } = await supabase.from('rounds').insert(payload).select().single()
   if (error) throw error
   return fromRow(data)
@@ -264,7 +282,7 @@ export async function createRoundDraft(input: {
 
 export async function updateRound(
   id: string,
-  input: { courseName: string; pars: number[]; players: PlayerScore[]; date?: string; photoData?: string[]; settlement?: SettlementConfig; golfCourseId?: string }
+  input: { courseName: string; pars: number[]; players: PlayerScore[]; date?: string; photoData?: string[]; settlement?: SettlementConfig; golfCourseId?: string; holeLabels?: string[] }
 ): Promise<SavedRound> {
   const current = await getRound(id)
   const date = input.date ?? current?.date ?? new Date().toISOString().slice(0, 10)
@@ -279,6 +297,7 @@ export async function updateRound(
   if (input.photoData && input.photoData.length > 0) payload.photo_data = input.photoData
   if (input.settlement !== undefined) payload.settlement = input.settlement
   if (input.golfCourseId) payload.golf_course_id = input.golfCourseId
+  if (input.holeLabels) payload.hole_labels = input.holeLabels
   const { data, error } = await supabase.from('rounds').update(payload).eq('id', id).select().single()
   if (error) throw error
   return fromRow(data)
@@ -612,6 +631,8 @@ export interface TreasuryEntryItem {
   amount: number
   entryDate: string
   memo: string
+  proofText?: string
+  receiptImages?: string[]
 }
 
 export interface FeeDashboardData {
@@ -916,7 +937,7 @@ export async function getFeeDashboard(clubId: string): Promise<FeeDashboardData>
       getCycleMemberStatuses(clubId, cycle.id),
       supabase
         .from('club_treasury_entries')
-        .select('id, club_id, entry_type, title, amount, entry_date, memo')
+        .select('id, club_id, entry_type, title, amount, entry_date, memo, proof_text, receipt_images')
         .eq('club_id', clubId)
         .order('entry_date', { ascending: false })
         .order('created_at', { ascending: false })
@@ -932,6 +953,8 @@ export async function getFeeDashboard(clubId: string): Promise<FeeDashboardData>
       amount: row.amount ?? 0,
       entryDate: row.entry_date,
       memo: row.memo ?? '',
+      proofText: row.proof_text ?? '',
+      receiptImages: row.receipt_images ?? [],
     }))
 
     return { connectionReady: true, policy, cycle, members, treasuryEntries }
@@ -1060,7 +1083,7 @@ export async function updateFeeMemberPayment(
 export async function getTreasuryEntries(clubId: string): Promise<TreasuryEntryItem[]> {
   const { data, error } = await supabase
     .from('club_treasury_entries')
-    .select('id, club_id, entry_type, title, amount, entry_date, memo')
+    .select('id, club_id, entry_type, title, amount, entry_date, memo, proof_text, receipt_images')
     .eq('club_id', clubId)
     .order('entry_date', { ascending: false })
     .order('created_at', { ascending: false })
@@ -1073,12 +1096,14 @@ export async function getTreasuryEntries(clubId: string): Promise<TreasuryEntryI
     amount: row.amount ?? 0,
     entryDate: row.entry_date,
     memo: row.memo ?? '',
+    proofText: row.proof_text ?? '',
+    receiptImages: row.receipt_images ?? [],
   }))
 }
 
 export async function createTreasuryEntry(
   clubId: string,
-  input: { type: TreasuryEntryType; title: string; amount: number; entryDate?: string; memo?: string }
+  input: { type: TreasuryEntryType; title: string; amount: number; entryDate?: string; memo?: string; proofText?: string; receiptImages?: string[] }
 ): Promise<void> {
   const user = await getUser()
   const { error } = await supabase
@@ -1090,6 +1115,8 @@ export async function createTreasuryEntry(
       amount: input.amount,
       entry_date: input.entryDate ?? new Date().toISOString().slice(0, 10),
       memo: input.memo ?? '',
+      proof_text: input.proofText ?? '',
+      receipt_images: input.receiptImages ?? [],
       created_by: user?.id ?? null,
     })
   if (error) throw error
@@ -1097,7 +1124,7 @@ export async function createTreasuryEntry(
 
 export async function updateTreasuryEntry(
   entryId: string,
-  input: { type: TreasuryEntryType; title: string; amount: number; entryDate?: string; memo?: string }
+  input: { type: TreasuryEntryType; title: string; amount: number; entryDate?: string; memo?: string; proofText?: string; receiptImages?: string[] }
 ): Promise<void> {
   const { error } = await supabase
     .from('club_treasury_entries')
@@ -1107,6 +1134,8 @@ export async function updateTreasuryEntry(
       amount: input.amount,
       entry_date: input.entryDate ?? new Date().toISOString().slice(0, 10),
       memo: input.memo ?? '',
+      proof_text: input.proofText ?? '',
+      receipt_images: input.receiptImages ?? [],
     })
     .eq('id', entryId)
   if (error) throw error
@@ -1150,6 +1179,28 @@ export async function deleteRound(id: string): Promise<void> {
 }
 
 // ─── Golf Course DB ──────────────────────────────────────────────────────────
+
+export async function deleteRoundsBySchedule(scheduleId: string): Promise<void> {
+  const { data: rounds, error: findError } = await supabase
+    .from('rounds')
+    .select('id')
+    .eq('schedule_id', scheduleId)
+  if (findError) throw findError
+  const roundIds = (rounds ?? []).map((round) => round.id)
+  if (roundIds.length === 0) return
+
+  const { error: snapshotError } = await supabase
+    .from('round_award_snapshots')
+    .delete()
+    .in('round_id', roundIds)
+  if (snapshotError) throw snapshotError
+
+  const { error } = await supabase
+    .from('rounds')
+    .delete()
+    .in('id', roundIds)
+  if (error) throw error
+}
 
 export interface GolfCourse {
   id: string

@@ -186,6 +186,7 @@ export default function RoundDetailScreen() {
   const [showShinDropdown, setShowShinDropdown] = useState(false)
   const [showRegularDropdown, setShowRegularDropdown] = useState(false)
   const [showHoleDetail, setShowHoleDetail] = useState(false)
+  const [scoreSectionIndex, setScoreSectionIndex] = useState(0)
   const [awardConfig, setAwardConfig] = useState<{ count: number; items: string[] } | null>(null)
   const [awardConfigLoaded, setAwardConfigLoaded] = useState(false)
   const awardSnapshotSaving = useRef(false)
@@ -241,6 +242,35 @@ export default function RoundDetailScreen() {
 
   const par = totalPar(round.pars)
   const handicaps = getHandicapsForRound(round, allRounds ?? [], handicapBasis)
+  const scoreSections = (() => {
+    const labels = round.holeLabels
+    if (labels?.length === round.pars.length) {
+      const sections: Array<{ name: string; start: number; end: number }> = []
+      labels.forEach((label, index) => {
+        const name = label.replace(/\d+$/, '').trim() || '코스'
+        const last = sections[sections.length - 1]
+        if (last?.name === name) last.end = index + 1
+        else sections.push({ name, start: index, end: index + 1 })
+      })
+      return sections
+    }
+    const coursePart = round.courseName.split(/\s+/).find((part) => part.includes('+')) ?? ''
+    const courseNames = coursePart.split('+').map((name) => name.trim()).filter(Boolean)
+    if (courseNames.length > 1 && round.pars.length % courseNames.length === 0) {
+      const holesPerCourse = round.pars.length / courseNames.length
+      return courseNames.map((name, index) => ({
+        name,
+        start: index * holesPerCourse,
+        end: (index + 1) * holesPerCourse,
+      }))
+    }
+    const midpoint = Math.ceil(round.pars.length / 2)
+    return [
+      { name: '전반', start: 0, end: midpoint },
+      { name: '후반', start: midpoint, end: round.pars.length },
+    ].filter((section) => section.start < section.end)
+  })()
+  const scoreSection = scoreSections[Math.min(scoreSectionIndex, scoreSections.length - 1)] ?? scoreSections[0]
   const scheduleAwardConfig = round.scheduleId
     ? roundSchedules?.find((item) => item.id === round.scheduleId)?.awardConfig
     : null
@@ -508,57 +538,61 @@ export default function RoundDetailScreen() {
 
       {mode === 'score' && (
         <View style={s.card}>
-          <Text style={s.cardTitle}>홀별 스코어 (파 대비)</Text>
+          <Text style={s.cardTitle}>홀별 스코어</Text>
+          <View style={s.scoreSectionTabs}>
+            {scoreSections.map((section, index) => (
+              <TouchableOpacity
+                key={`${section.name}-${section.start}`}
+                style={[s.scoreSectionTab, index === scoreSectionIndex && s.scoreSectionTabActive]}
+                onPress={() => setScoreSectionIndex(index)}
+                activeOpacity={0.86}
+              >
+                <Text style={[s.scoreSectionTabText, index === scoreSectionIndex && s.scoreSectionTabTextActive]}>
+                  {section.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View>
               {/* 헤더 */}
               <View style={{ flexDirection: 'row' }}>
                 <Text style={s.hName} />
-                {round.pars.slice(0, 9).map((_, i) => <Text key={i} style={s.hCell}>{i + 1}</Text>)}
-                <Text style={[s.hSub, { color: C.green }]}>OUT</Text>
-                {round.pars.slice(9).map((_, i) => <Text key={i + 9} style={s.hCell}>{i + 10}</Text>)}
-                <Text style={[s.hSub, { color: C.green }]}>IN</Text>
+                {round.pars.slice(scoreSection.start, scoreSection.end).map((_, i) => (
+                  <Text key={i} style={s.hCell}>{i + 1}</Text>
+                ))}
+                <Text style={[s.hSub, { color: C.green }]}>{scoreSection.name}</Text>
                 <Text style={[s.hSub, { color: C.text }]}>TOT</Text>
               </View>
               {/* 파 */}
               <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: C.border, marginBottom: 2 }}>
                 <Text style={[s.hName, { fontWeight: '700', color: C.muted }]}>파</Text>
-                {round.pars.slice(0, 9).map((p, i) => <Text key={i} style={[s.hCell, { color: C.muted }]}>{p}</Text>)}
-                <Text style={[s.hSub, { color: C.green, fontWeight: '700' }]}>{round.pars.slice(0, 9).reduce((a, b) => a + b, 0)}</Text>
-                {round.pars.slice(9).map((p, i) => <Text key={i + 9} style={[s.hCell, { color: C.muted }]}>{p}</Text>)}
-                <Text style={[s.hSub, { color: C.green, fontWeight: '700' }]}>{round.pars.slice(9).reduce((a, b) => a + b, 0)}</Text>
+                {round.pars.slice(scoreSection.start, scoreSection.end).map((p, i) => (
+                  <Text key={i} style={[s.hCell, { color: C.muted }]}>{p}</Text>
+                ))}
+                <Text style={[s.hSub, { color: C.green, fontWeight: '700' }]}>
+                  {round.pars.slice(scoreSection.start, scoreSection.end).reduce((a, b) => a + b, 0)}
+                </Text>
                 <Text style={[s.hSub, { color: C.green, fontWeight: '700' }]}>{par}</Text>
               </View>
               {/* 플레이어 */}
               {round.players.map((player) => {
-                const front = player.strokes.slice(0, 9)
-                const back = player.strokes.slice(9)
-                const fp = round.pars.slice(0, 9)
-                const bp = round.pars.slice(9)
-                const outD = front.reduce((a, b, i) => a + b - fp[i], 0)
-                const inD = back.reduce((a, b, i) => a + b - bp[i], 0)
+                const sectionStrokes = player.strokes.slice(scoreSection.start, scoreSection.end)
+                const sectionPars = round.pars.slice(scoreSection.start, scoreSection.end)
+                const sectionDiff = sectionStrokes.reduce((a, b, i) => a + b - sectionPars[i], 0)
                 const totD = playerTotal(player.strokes) - par
                 return (
                   <View key={player.name} style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: C.border }}>
                     <Text style={[s.hName, { fontWeight: '600' }]}>{shortName(player.name)}</Text>
-                    {front.map((stroke, i) => {
-                      const d = stroke - fp[i]
+                    {sectionStrokes.map((stroke, i) => {
+                      const d = stroke - sectionPars[i]
                       return (
                         <Text key={i} style={[s.hCell, { color: scoreColor(d), fontWeight: scoreFontWeight(d) }]}>
                           {diffText(d)}
                         </Text>
                       )
                     })}
-                    <Text style={[s.hSub, { fontWeight: '700', color: outD <= 0 ? C.green : C.warn }]}>{diffText(outD)}</Text>
-                    {back.map((stroke, i) => {
-                      const d = stroke - bp[i]
-                      return (
-                        <Text key={i + 9} style={[s.hCell, { color: scoreColor(d), fontWeight: scoreFontWeight(d) }]}>
-                          {diffText(d)}
-                        </Text>
-                      )
-                    })}
-                    <Text style={[s.hSub, { fontWeight: '700', color: inD <= 0 ? C.green : C.warn }]}>{diffText(inD)}</Text>
+                    <Text style={[s.hSub, { fontWeight: '700', color: sectionDiff <= 0 ? C.green : C.warn }]}>{diffText(sectionDiff)}</Text>
                     <Text style={[s.hSub, { fontWeight: '700', color: totD <= 0 ? C.green : C.warn }]}>{diffText(totD)}</Text>
                   </View>
                 )
@@ -783,6 +817,11 @@ const s = StyleSheet.create({
   hName: { width: 54, fontSize: 12, color: C.text, paddingVertical: 7, paddingLeft: 2 },
   hCell: { width: 30, textAlign: 'center', fontSize: 12, paddingVertical: 7 },
   hSub: { width: 36, textAlign: 'center', fontSize: 12, fontWeight: '700', paddingVertical: 7 },
+  scoreSectionTabs: { flexDirection: 'row', gap: 8, marginBottom: 12, flexWrap: 'wrap' },
+  scoreSectionTab: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: '#f3f5f3' },
+  scoreSectionTabActive: { backgroundColor: C.greenLight },
+  scoreSectionTabText: { fontSize: 12, fontWeight: '800', color: C.muted },
+  scoreSectionTabTextActive: { color: C.green },
   legend: { flexDirection: 'row', gap: 10, marginTop: 10, flexWrap: 'wrap' },
   legendItem: { fontSize: 10, fontWeight: '600' },
   btn: { backgroundColor: C.green, borderRadius: 50, paddingVertical: 14, alignItems: 'center' },

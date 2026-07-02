@@ -47,6 +47,10 @@ function awardSummaryFor(round?: ScheduledRound | null) {
   return items.map((id) => AWARD_LABELS.get(id) ?? id).join(', ')
 }
 
+function isVisibleUpcomingRound(round: ScheduledRound) {
+  return String(round.status).trim() !== 'finished'
+}
+
 function getWinner(r: SavedRound, handicaps: Map<string, number>): string | null {
   const best = Math.min(...r.players.map((p) => playerTotal(p.strokes)))
   const medalWinner = r.players.find((p) => playerTotal(p.strokes) === best)?.name
@@ -121,7 +125,7 @@ export default function HomeScreen() {
       return
     }
     getRoundSchedules(club.id).then((items) => {
-      const activeItems = items.filter((item) => item.status !== 'finished')
+      const activeItems = items.filter(isVisibleUpcomingRound)
       setScheduledRounds(activeItems)
       setSelectedRoundId((current) => {
         if (current && activeItems.some((item) => item.id === current)) return current
@@ -281,7 +285,8 @@ export default function HomeScreen() {
   }).slice(-10)
 
   const recent3 = rounds.slice(0, 3)
-  const nextRound = scheduledRounds.find((item) => item.id === selectedRoundId) ?? scheduledRounds[0] ?? null
+  const visibleScheduledRounds = scheduledRounds.filter(isVisibleUpcomingRound)
+  const nextRound = visibleScheduledRounds.find((item) => item.id === selectedRoundId) ?? visibleScheduledRounds[0] ?? null
   const isAdmin = club?.role === 'admin'
   const roundGroups = nextRound?.groups ?? []
   const assignedGroups = roundGroups.filter((group) => group.members.length > 0)
@@ -306,8 +311,8 @@ export default function HomeScreen() {
   const canOpenGroupResult = hasUpcomingRound && hasAssignedGroups
   const roundCollapsedSummary = !nextRound
     ? '현재 예정된 라운딩이 없습니다'
-    : scheduledRounds.length > 1
-      ? `${scheduledRounds.length}개 일정 · ${nextRound.date} · ${roundCourseName}`
+    : visibleScheduledRounds.length > 1
+      ? `${visibleScheduledRounds.length}개 일정 · ${nextRound.date} · ${roundCourseName}`
     : hasAssignedGroups
       ? `${nextRound.date} · ${roundCourseName} · ${teeTime} · ${myRoundGroup?.name ?? allGroupSummary}`
       : `${nextRound.date} · ${roundCourseName} · ${teeTime} · ${allGroupSummary}`
@@ -511,9 +516,9 @@ export default function HomeScreen() {
               </View>
               {showUpcomingCard ? (
                 <>
-                  {scheduledRounds.length > 0 ? (
+                  {visibleScheduledRounds.length > 0 ? (
                     <View style={s.roundList}>
-                      {scheduledRounds.map((round) => {
+                      {visibleScheduledRounds.map((round) => {
                         const summary = roundSummaryFor(round)
                         const selected = round.id === selectedRoundId
                         return (

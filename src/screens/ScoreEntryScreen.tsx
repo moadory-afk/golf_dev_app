@@ -54,7 +54,7 @@ export default function ScoreEntryScreen() {
     createRoundDraft({
       courseName, date, pars,
       players: players.map((p) => ({ name: p.name, strokes: p.strokes })),
-      golfCourseId, settlement, clubId: activeClub?.id,
+      golfCourseId, settlement, holeLabels, clubId: activeClub?.id,
     }).then((saved) => {
       roundIdRef.current = saved.id
       setAutoSaveStatus('saved')
@@ -72,7 +72,7 @@ export default function ScoreEntryScreen() {
         await updateRound(id, {
           courseName, date, pars,
           players: players.map((p) => ({ name: p.name, strokes: p.strokes })),
-          golfCourseId, settlement,
+          golfCourseId, settlement, holeLabels,
         })
         setAutoSaveStatus('saved')
       } catch { setAutoSaveStatus('error') }
@@ -199,6 +199,7 @@ export default function ScoreEntryScreen() {
           courseName, date, pars,
           players: players.map((p) => ({ name: p.name, strokes: p.strokes })),
           golfCourseId, settlement,
+          holeLabels,
           photoData: photoData.length > 0 ? photoData : undefined,
         })
         await completeRound(id)
@@ -207,7 +208,7 @@ export default function ScoreEntryScreen() {
         const input = {
           courseName, date, pars,
           players: players.map((p) => ({ name: p.name, strokes: p.strokes })),
-          golfCourseId, settlement, clubId: activeClub?.id,
+          golfCourseId, settlement, holeLabels, clubId: activeClub?.id,
           photoData: photoData.length > 0 ? photoData : undefined,
         }
         const saved = editId ? await updateRound(editId, input) : await saveRound(input)

@@ -19,7 +19,7 @@ import {
   type ScheduledRoundGroup,
   type ScheduledRoundGroupMember,
 } from '../lib/roundSchedule'
-import { completeRound, getClubAwardConfig, getClubMembers, getClubSettlement, getCourseLayouts, getGolfCourses, getRounds, saveClubAwardConfig, saveClubAwardSnapshots, saveClubSettlement, saveRound, totalPar, type CourseLayout, type GolfCourse } from '../lib/store'
+import { completeRound, deleteRoundsBySchedule, getClubAwardConfig, getClubMembers, getClubSettlement, getCourseLayouts, getGolfCourses, getRounds, saveClubAwardConfig, saveClubAwardSnapshots, saveClubSettlement, saveRound, totalPar, type CourseLayout, type GolfCourse } from '../lib/store'
 import { AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
 import { computeClubAwardResults } from '../lib/awardResults'
 import { recognizeScorecard, mergeScorecards, type RecognizedScorecard } from '../features/ocr'
@@ -139,6 +139,7 @@ export default function RoundSchedulePrototypeScreen() {
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState<Draft>(createEmptyDraft())
   const [coursePickerOpen, setCoursePickerOpen] = useState(false)
+  const [courseSearch, setCourseSearch] = useState('')
   const [layoutPickerTarget, setLayoutPickerTarget] = useState<{ groupId: string; side: 'front' | 'back' } | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [attendanceMap, setAttendanceMap] = useState<Record<string, RoundAttendanceLabel>>({})
@@ -224,10 +225,17 @@ export default function RoundSchedulePrototypeScreen() {
 
   const sortedItems = useMemo(
     () => items
-      .filter((item) => item.status !== 'closed' && item.status !== 'finished')
+      .filter((item) => item.status !== 'closed')
       .sort((a, b) => `${a.date} ${a.time || '99:99'}`.localeCompare(`${b.date} ${b.time || '99:99'}`)),
     [items]
   )
+  const filteredCourses = useMemo(() => {
+    const keyword = courseSearch.trim().toLowerCase()
+    if (!keyword) return courses
+    return courses.filter((course) =>
+      `${course.name} ${course.region}`.toLowerCase().includes(keyword)
+    )
+  }, [courses, courseSearch])
   const sortedClubMembers = useMemo(() => {
     const order: Record<RoundAttendanceLabel, number> = { 참석: 0, 미정: 1, 불참: 2 }
     return [...clubMembers].sort((a, b) => {
@@ -476,6 +484,15 @@ export default function RoundSchedulePrototypeScreen() {
     return pars.length === 18 ? pars : Array.from({ length: 18 }, () => 4)
   }
 
+  function scoreHoleLabelsForGroup(group: ScheduledRoundGroup) {
+    const front = layouts.find((layout) => layout.id === group.frontLayoutId)
+    const back = layouts.find((layout) => layout.id === group.backLayoutId)
+    const labels = [front, back].filter((layout): layout is CourseLayout => !!layout).flatMap((layout) =>
+      Array.from({ length: layout.holes }, (_, index) => `${layout.name}${index + 1}`)
+    )
+    return labels.length === 18 ? labels : undefined
+  }
+
   function scorePlayersForGroup(group: ScheduledRoundGroup, result: RecognizedScorecard) {
     const pars = scoreParsForGroup(group)
     const ocrNames = result.players.map((player) => player.name)
@@ -527,6 +544,7 @@ export default function RoundSchedulePrototypeScreen() {
         courseName: draft.courseName ?? selectedScoreGroup.frontLayoutName ?? '이름 없는 코스',
         golfCourseId: draft.courseId,
         pars: scoreParsForGroup(selectedScoreGroup),
+        holeLabels: scoreHoleLabelsForGroup(selectedScoreGroup),
         players,
         photoData,
         clubId: club.id,
@@ -588,6 +606,7 @@ export default function RoundSchedulePrototypeScreen() {
       }))
       setLayouts([])
       setCoursePickerOpen(false)
+      setCourseSearch('')
       return
     }
 
@@ -604,6 +623,7 @@ export default function RoundSchedulePrototypeScreen() {
       })),
     }))
     setCoursePickerOpen(false)
+    setCourseSearch('')
   }
 
   function selectLayout(layout: CourseLayout | null) {
@@ -697,6 +717,7 @@ export default function RoundSchedulePrototypeScreen() {
 
     setSaving(true)
     try {
+      await deleteRoundsBySchedule(draft.id)
       const next = await deleteRoundSchedule(club.id, draft.id)
       setItems(next)
       setEditorOpen(false)
@@ -734,14 +755,52 @@ export default function RoundSchedulePrototypeScreen() {
       })
       setItems(next)
       const rounds = await getRounds(club.id)
-      const finishedRound = rounds.find((round) =>
+      const finishedRound = rounds.find((round) => draft.id && round.scheduleId === draft.id) ?? rounds.find((round) =>
         round.date === draft.date && (!draft.courseName || round.courseName === draft.courseName)
       )
       if (finishedRound) {
+        await completeRound(finishedRound.id)
         const itemIds = fillToCount(selectedAwardItems, awardCount)
         const handicaps = new Map(Object.entries(finishedRound.handicaps ?? {}))
         const awards = computeClubAwardResults(itemIds, finishedRound, handicaps, totalPar(finishedRound.pars))
         await saveClubAwardSnapshots(club.id, finishedRound.id, awards)
+      } else {
+        const members = draft.groups.flatMap((group) => group.members)
+        const uniqueMembers = Array.from(new Map(members.map((member) => [member.userId || member.name, member])).values())
+        if (uniqueMembers.length === 0) {
+          Alert.alert('확인', '조편성된 회원이 없어 파 기록을 만들 수 없습니다.')
+          return
+        }
+        const baseGroup = draft.groups.find((group) => group.members.length > 0) ?? draft.groups[0]
+        const pars = baseGroup ? scoreParsForGroup(baseGroup) : Array.from({ length: 18 }, () => 4)
+        const moneyParticipants = draft.groups
+          .filter((_, index) => moneyGroupIds.includes(moneyGroupKey(index)))
+          .flatMap((group) => group.members.map((member) => member.name))
+        const settlement = moneyParticipants.length > 0
+          ? {
+              participants: Array.from(new Set(moneyParticipants)),
+              strokeFee: parseInt(strokeFee, 10) || 3000,
+              birdieBonus,
+              baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
+            }
+          : undefined
+        const saved = await saveRound({
+          date: draft.date,
+          courseName: draft.courseName ?? baseGroup?.frontLayoutName ?? '이름 없는 코스',
+          golfCourseId: draft.courseId,
+          pars,
+          holeLabels: baseGroup ? scoreHoleLabelsForGroup(baseGroup) : undefined,
+          players: uniqueMembers.map((member) => ({ name: member.name, strokes: [...pars] })),
+          clubId: club.id,
+          settlement,
+          scheduleId: draft.id ?? undefined,
+        })
+        await completeRound(saved.id)
+        const itemIds = fillToCount(selectedAwardItems, awardCount)
+        const handicaps = new Map(Object.entries(saved.handicaps ?? {}))
+        const awards = computeClubAwardResults(itemIds, saved, handicaps, totalPar(saved.pars))
+        await saveClubAwardSnapshots(club.id, saved.id, awards)
+        Alert.alert('완료', '저장된 스코어가 없어 전체 파 기록으로 종료했습니다.')
       }
       setEditorOpen(false)
     } finally {
@@ -1282,12 +1341,22 @@ export default function RoundSchedulePrototypeScreen() {
         </View>
       </Modal>
 
-      <Modal transparent animationType="fade" visible={coursePickerOpen} onRequestClose={() => setCoursePickerOpen(false)}>
-        <PickerShell title="골프장 선택" onClose={() => setCoursePickerOpen(false)}>
+      <Modal transparent animationType="fade" visible={coursePickerOpen} onRequestClose={() => { setCoursePickerOpen(false); setCourseSearch('') }}>
+        <PickerShell title="골프장 선택" onClose={() => { setCoursePickerOpen(false); setCourseSearch('') }}>
+          <TextInput
+            style={s.pickerSearchInput}
+            value={courseSearch}
+            onChangeText={setCourseSearch}
+            placeholder="골프장명 또는 지역 검색"
+            placeholderTextColor={C.muted}
+            autoCapitalize="none"
+          />
           <TouchableOpacity style={s.pickerRow} onPress={() => selectCourse(null)} activeOpacity={0.84}>
             <Text style={s.pickerRowText}>미정</Text>
           </TouchableOpacity>
-          {courses.map((course) => (
+          {filteredCourses.length === 0 ? (
+            <Text style={s.pickerEmptyText}>검색 결과가 없습니다</Text>
+          ) : filteredCourses.map((course) => (
             <TouchableOpacity key={course.id} style={s.pickerRow} onPress={() => selectCourse(course)} activeOpacity={0.84}>
               <Text style={s.pickerRowText}>{course.name}</Text>
               <Text style={s.pickerRowMeta}>{course.region}</Text>
@@ -1747,6 +1816,18 @@ const s = StyleSheet.create({
   pickerTitle: { fontSize: 22, fontWeight: '900', color: C.text },
   pickerClose: { fontSize: 14, fontWeight: '800', color: C.green },
   pickerBody: { gap: 10, paddingBottom: 4 },
+  pickerSearchInput: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    fontWeight: '700',
+    color: C.text,
+    backgroundColor: '#f8fbf8',
+  },
+  pickerEmptyText: { textAlign: 'center', color: C.muted, fontSize: 13, fontWeight: '700', paddingVertical: 16 },
   pickerRow: {
     borderRadius: 16,
     borderWidth: 1,
