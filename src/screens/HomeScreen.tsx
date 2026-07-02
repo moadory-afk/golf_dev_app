@@ -6,7 +6,7 @@ import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { getCourseLayouts, getPersonalRoundStat, getRoundLottoEntry, getRounds, getClubMembers, getFeeDashboard, getFeeMemberHistory, playerTotal, savePersonalRoundStat, saveRoundLottoEntry, totalPar, computeHandicaps, shortName, type CourseLayout, type PersonalRoundFir, type PersonalRoundHoleStat, type SavedRound } from '../lib/store'
+import { getCourseLayouts, getPersonalRoundStat, getRoundLottoDraw, getRoundLottoEntries, getRoundLottoEntry, getRounds, getClubMembers, getFeeDashboard, getFeeMemberHistory, playerTotal, savePersonalRoundStat, saveRoundLottoDrawResult, saveRoundLottoEntry, totalPar, computeHandicaps, shortName, type CourseLayout, type PersonalRoundFir, type PersonalRoundHoleStat, type RoundLottoDraw, type RoundLottoDrawScore, type RoundLottoEntry, type SavedRound } from '../lib/store'
 import {
   getRoundAttendanceMap,
   getRoundSchedules,
@@ -30,6 +30,7 @@ import type { RootStackParamList } from '../navigation/types'
 type Nav = NativeStackNavigationProp<RootStackParamList>
 type PersonalDetailType = 'handicap' | 'average' | 'best' | 'wins' | 'singleBirdie' | 'records'
 type LottoSelection = { par3: number[]; par4: number[]; par5: number[] }
+type LottoAwardRow = { userId: string; name: string; hits: number; total: number; hasScore: boolean; winner: boolean }
 
 function diffText(d: number) { return d > 0 ? `+${d}` : `${d}` }
 
@@ -70,6 +71,45 @@ function parsForScheduledRound(round: ScheduledRound, layouts: CourseLayout[], u
 }
 
 const emptyLottoSelection = (): LottoSelection => ({ par3: [], par4: [], par5: [] })
+
+function weightedLottoScore(par: number): { score: number; label: string } {
+  const rand = Math.random()
+  const weights = par === 3
+    ? [
+        { limit: 0.1, diff: -1, label: '버디' },
+        { limit: 0.6, diff: 0, label: '파' },
+        { limit: 0.9, diff: 1, label: '보기' },
+        { limit: 1, diff: 2, label: '더블+' },
+      ]
+    : [
+        { limit: 0.1, diff: -1, label: '버디' },
+        { limit: 0.6, diff: 0, label: '파' },
+        { limit: 0.85, diff: 1, label: '보기' },
+        { limit: 0.95, diff: 2, label: '더블' },
+        { limit: 1, diff: par, label: '양파+' },
+      ]
+  const result = weights.find((item) => rand <= item.limit) ?? weights[weights.length - 1]
+  return { score: Math.max(1, par + result.diff), label: result.label }
+}
+
+function generateLottoDrawScores(pars: number[]): Record<string, RoundLottoDrawScore> {
+  return Object.fromEntries(pars.slice(0, 18).map((par, index) => {
+    const hole = index + 1
+    const result = weightedLottoScore(par)
+    return [String(hole), { hole, par, score: result.score, label: result.label }]
+  }))
+}
+
+function scoreName(score: number | undefined, par: number) {
+  if (!score) return '경기 후 반영'
+  const diff = score - par
+  if (diff <= -1) return '버디'
+  if (diff === 0) return '파'
+  if (diff === 1) return '보기'
+  if (diff === 2) return '더블'
+  if (score >= par * 2) return '양파'
+  return '트리플'
+}
 
 const AWARD_LABELS = new Map(AWARD_CATEGORIES.flatMap((category) => category.items).map((item) => [item.id, item.label]))
 
@@ -141,8 +181,11 @@ export default function HomeScreen() {
   const [lottoRound, setLottoRound] = useState<ScheduledRound | null>(null)
   const [lottoPars, setLottoPars] = useState<number[]>([])
   const [lottoSelection, setLottoSelection] = useState<LottoSelection>(emptyLottoSelection)
+  const [lottoDraw, setLottoDraw] = useState<RoundLottoDraw | null>(null)
+  const [lottoEntries, setLottoEntries] = useState<RoundLottoEntry[]>([])
   const [lottoLoading, setLottoLoading] = useState(false)
   const [lottoSaving, setLottoSaving] = useState(false)
+  const [lottoDrawSaving, setLottoDrawSaving] = useState(false)
   const onRefresh = useCallback(() => {
     setRefreshKey((k) => k + 1)
     setRoundRefreshKey((k) => k + 1)
@@ -443,6 +486,30 @@ export default function HomeScreen() {
     if (!myHasUnpaidFee) return '오늘 기준 완납'
     return `오늘 기준 ${myUnpaidFeeLabels.join(',')} 미납`
   })()
+  const lottoMyStrokes = (() => {
+    if (!lottoRound || !myName) return null
+    const round = rounds.find((item) => item.scheduleId === lottoRound.id)
+    const player = round?.players.find((item) => item.name === myName)
+    return player?.strokes ?? null
+  })()
+  const lottoRoundRecord = lottoRound ? rounds.find((item) => item.scheduleId === lottoRound.id) : undefined
+  const lottoAwardRows = (() => {
+    if (!lottoRound || !lottoDraw?.drawnScores) return []
+    const rows = lottoEntries.map((entry) => {
+      const member = (clubMembers ?? []).find((item) => item.userId === entry.userId)
+      const name = member?.name ?? '이름 없음'
+      const selectedHoles = [...entry.selectedHoles.par3, ...entry.selectedHoles.par4, ...entry.selectedHoles.par5].sort((a, b) => a - b)
+      const player = lottoRoundRecord?.players.find((item) => item.name === name)
+      const hits = player
+        ? selectedHoles.filter((hole) => player.strokes[hole - 1] === lottoDraw.drawnScores?.[String(hole)]?.score).length
+        : 0
+      return { userId: entry.userId, name, hits, total: selectedHoles.length, hasScore: !!player, winner: false }
+    })
+    const maxHits = Math.max(0, ...rows.filter((row) => row.hasScore).map((row) => row.hits))
+    return rows
+      .map((row) => ({ ...row, winner: !!lottoRoundRecord && maxHits > 0 && row.hits === maxHits }))
+      .sort((a, b) => Number(b.winner) - Number(a.winner) || b.hits - a.hits || a.name.localeCompare(b.name))
+  })()
   const nextAttendance = (value: RoundAttendanceLabel) => {
     const order: RoundAttendanceLabel[] = ['미정', '참석', '불참']
     return order[(order.indexOf(value) + 1) % order.length]
@@ -527,11 +594,19 @@ export default function HomeScreen() {
     try {
       const layouts = round.courseId ? await getCourseLayouts(round.courseId) : []
       setLottoPars(parsForScheduledRound(round, layouts, myUserId, myName))
-      const saved = await getRoundLottoEntry(round.id, myUserId)
+      const [saved, draw, entries] = await Promise.all([
+        getRoundLottoEntry(round.id, myUserId),
+        getRoundLottoDraw(round.id),
+        getRoundLottoEntries(round.id),
+      ])
       setLottoSelection(saved?.selectedHoles ?? emptyLottoSelection())
+      setLottoDraw(draw)
+      setLottoEntries(entries)
     } catch {
       setLottoPars(Array.from({ length: 18 }, () => 4))
       setLottoSelection(emptyLottoSelection())
+      setLottoDraw(null)
+      setLottoEntries([])
     } finally {
       setLottoLoading(false)
     }
@@ -564,6 +639,22 @@ export default function HomeScreen() {
       Alert.alert('오류', e instanceof Error ? e.message : String(e))
     } finally {
       setLottoSaving(false)
+    }
+  }
+  const runLottoDraw = async () => {
+    if (!club?.id || !myUserId || !lottoRound) return
+    if (lottoDraw?.drafterUserId !== myUserId) return
+    setLottoDrawSaving(true)
+    try {
+      const drawnScores = generateLottoDrawScores(lottoPars.length === 18 ? lottoPars : Array.from({ length: 18 }, () => 4))
+      await saveRoundLottoDrawResult(club.id, lottoRound.id, drawnScores)
+      const nextDraw = await getRoundLottoDraw(lottoRound.id)
+      setLottoDraw(nextDraw)
+      Alert.alert('추첨 완료', '로또 추첨 결과를 저장했습니다.')
+    } catch (e: unknown) {
+      Alert.alert('오류', e instanceof Error ? e.message : String(e))
+    } finally {
+      setLottoDrawSaving(false)
     }
   }
 
@@ -880,11 +971,18 @@ export default function HomeScreen() {
             round={lottoRound}
             pars={lottoPars}
             selection={lottoSelection}
+            draw={lottoDraw}
+            myUserId={myUserId}
+            myStrokes={lottoMyStrokes}
+            awardRows={lottoAwardRows}
+            awardReady={!!lottoRoundRecord}
             loading={lottoLoading}
             saving={lottoSaving}
+            drawSaving={lottoDrawSaving}
             ready={isLottoReady}
             onToggle={toggleLottoHole}
             onSave={saveLottoSelection}
+            onDraw={runLottoDraw}
             onClose={() => setLottoRound(null)}
           />
 
@@ -1073,28 +1171,100 @@ function LottoSelectionModal({
   round,
   pars,
   selection,
+  draw,
+  myUserId,
+  myStrokes,
+  awardRows,
+  awardReady,
   loading,
   saving,
+  drawSaving,
   ready,
   onToggle,
   onSave,
+  onDraw,
   onClose,
 }: {
   round: ScheduledRound | null
   pars: number[]
   selection: LottoSelection
+  draw: RoundLottoDraw | null
+  myUserId: string | null
+  myStrokes: number[] | null
+  awardRows: LottoAwardRow[]
+  awardReady: boolean
   loading: boolean
   saving: boolean
+  drawSaving: boolean
   ready: boolean
   onToggle: (parKey: keyof LottoSelection, hole: number) => void
   onSave: () => void
+  onDraw: () => void
   onClose: () => void
 }) {
+  const isDrafter = !!myUserId && draw?.drafterUserId === myUserId
+  const isCompleted = draw?.drawStatus === 'COMPLETED'
+  const selectedHoleList = [...selection.par3, ...selection.par4, ...selection.par5].sort((a, b) => a - b)
+  const resultRows = selectedHoleList.map((hole) => draw?.drawnScores?.[String(hole)]).filter((item): item is RoundLottoDrawScore => !!item)
+  const hitCount = resultRows.filter((row) => myStrokes?.[row.hole - 1] === row.score).length
+  const allResultRows = Object.values(draw?.drawnScores ?? {}).sort((a, b) => a.hole - b.hole)
+  const hasWinner = awardRows.some((row) => row.winner)
   const groups: Array<{ key: keyof LottoSelection; label: string; limit: number; holes: number[] }> = [
     { key: 'par3', label: '파 3', limit: 1, holes: pars.map((par, index) => par === 3 ? index + 1 : null).filter((hole): hole is number => !!hole) },
     { key: 'par4', label: '파 4', limit: 3, holes: pars.map((par, index) => par === 4 ? index + 1 : null).filter((hole): hole is number => !!hole) },
     { key: 'par5', label: '파 5', limit: 2, holes: pars.map((par, index) => par === 5 ? index + 1 : null).filter((hole): hole is number => !!hole) },
   ]
+  const renderStatusTable = (start: number) => {
+    const holes = Array.from({ length: 9 }, (_, index) => start + index)
+    return (
+      <View style={s.lottoStatusTable}>
+        <View style={s.lottoStatusRow}>
+          <Text style={s.lottoStatusLabel}></Text>
+          {holes.map((hole) => {
+            const selected = selectedHoleList.includes(hole)
+            return <Text key={hole} style={[s.lottoStatusCell, s.lottoStatusHole, selected && s.lottoStatusSelectedText]}>{hole}</Text>
+          })}
+        </View>
+        <View style={s.lottoStatusRow}>
+          <Text style={s.lottoStatusLabel}>추첨</Text>
+          {holes.map((hole) => {
+            const selected = selectedHoleList.includes(hole)
+            const row = draw?.drawnScores?.[String(hole)]
+            return (
+              <Text key={hole} style={[s.lottoStatusCell, selected && s.lottoStatusSelectedCell, selected && s.lottoStatusSelectedText]}>
+                {row ? scoreName(row.score, row.par) : '-'}
+              </Text>
+            )
+          })}
+        </View>
+        <View style={s.lottoStatusRow}>
+          <Text style={s.lottoStatusLabel}>내 타수</Text>
+          {holes.map((hole) => {
+            const selected = selectedHoleList.includes(hole)
+            const row = draw?.drawnScores?.[String(hole)]
+            return (
+              <Text key={hole} style={[s.lottoStatusCell, selected && s.lottoStatusSelectedCell, selected && s.lottoStatusSelectedText]}>
+                {row ? scoreName(myStrokes?.[hole - 1], row.par) : '-'}
+              </Text>
+            )
+          })}
+        </View>
+        <View style={s.lottoStatusRow}>
+          <Text style={s.lottoStatusLabel}>적중</Text>
+          {holes.map((hole) => {
+            const selected = selectedHoleList.includes(hole)
+            const row = draw?.drawnScores?.[String(hole)]
+            const hit = selected && !!row && myStrokes?.[hole - 1] === row.score
+            return (
+              <Text key={hole} style={[s.lottoStatusCell, selected && s.lottoStatusSelectedCell, hit && s.lottoStatusHitText]}>
+                {selected ? (hit ? 'O' : '-') : ''}
+              </Text>
+            )
+          })}
+        </View>
+      </View>
+    )
+  }
 
   return (
     <Modal transparent animationType="fade" visible={!!round} onRequestClose={onClose}>
@@ -1153,6 +1323,57 @@ function LottoSelectionModal({
               >
                 {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.lottoSaveText}>참여 확정</Text>}
               </TouchableOpacity>
+              <View style={s.lottoDrawBox}>
+                <Text style={s.lottoDrawTitle}>추첨 상태</Text>
+                {isCompleted ? (
+                  <>
+                    <Text style={s.lottoDrawDoneText}>
+                      추첨 완료 · {myStrokes ? `${hitCount}/${resultRows.length}개 적중` : '결과 저장됨'}
+                    </Text>
+                    {allResultRows.length > 0 && (
+                      <View style={s.lottoStatusBox}>
+                        {renderStatusTable(1)}
+                        {renderStatusTable(10)}
+                      </View>
+                    )}
+                    <View style={s.lottoAwardBox}>
+                      <Text style={s.lottoAwardTitle}>로또 당첨 및 시상</Text>
+                      {!awardReady ? (
+                        <Text style={s.lottoDrawWaitText}>스코어 입력 후 당첨자를 확인할 수 있습니다.</Text>
+                      ) : awardRows.length === 0 ? (
+                        <Text style={s.lottoDrawWaitText}>참여 확정한 회원이 없습니다.</Text>
+                      ) : !hasWinner ? (
+                        <Text style={s.lottoDrawWaitText}>적중자가 없습니다.</Text>
+                      ) : (
+                        <View style={s.lottoAwardList}>
+                          {awardRows.map((row) => (
+                            <View key={row.userId} style={[s.lottoAwardRow, row.winner && s.lottoAwardWinnerRow]}>
+                              <View style={{ flex: 1 }}>
+                                <Text style={[s.lottoAwardName, row.winner && s.lottoAwardWinnerText]}>{row.name}</Text>
+                                <Text style={s.lottoAwardMeta}>{row.hasScore ? `${row.hits}/${row.total}개 적중` : '스코어 입력 전'}</Text>
+                              </View>
+                              {row.winner && <Text style={s.lottoAwardBadge}>당첨</Text>}
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  </>
+                ) : isDrafter ? (
+                  <TouchableOpacity
+                    style={[s.lottoDrawBtn, drawSaving && { opacity: 0.6 }]}
+                    onPress={onDraw}
+                    disabled={drawSaving}
+                    activeOpacity={0.86}
+                  >
+                    {drawSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.lottoDrawBtnText}>로또 추첨 시작</Text>}
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={s.lottoDrawWaitText}>
+                    {draw?.drafterUserId ? '추첨 대기 중...' : '추첨자가 아직 지정되지 않았습니다.'}
+                  </Text>
+                )}
+              </View>
             </>
           )}
         </TouchableOpacity>
@@ -1871,6 +2092,94 @@ const s = StyleSheet.create({
   lottoSaveBtn: { marginTop: 12, borderRadius: 14, paddingVertical: 13, alignItems: 'center', backgroundColor: C.green },
   lottoSaveBtnDisabled: { opacity: 0.45 },
   lottoSaveText: { fontSize: 13, fontWeight: '900', color: '#fff' },
+  lottoDrawBox: { marginTop: 12, borderTopWidth: 1, borderTopColor: C.border, paddingTop: 12 },
+  lottoDrawTitle: { fontSize: 12, fontWeight: '900', color: C.muted, marginBottom: 8 },
+  lottoDrawBtn: { borderRadius: 14, paddingVertical: 13, alignItems: 'center', backgroundColor: '#d65b4a' },
+  lottoDrawBtnText: { fontSize: 13, fontWeight: '900', color: '#fff' },
+  lottoDrawWaitText: { fontSize: 13, fontWeight: '800', color: C.muted },
+  lottoDrawDoneText: { fontSize: 13, fontWeight: '900', color: C.green },
+  lottoStatusBox: { gap: 12, marginTop: 10 },
+  lottoStatusTable: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    backgroundColor: '#fff',
+  },
+  lottoStatusRow: { flexDirection: 'row', alignItems: 'center', minHeight: 30 },
+  lottoStatusLabel: { width: 42, fontSize: 11, fontWeight: '900', color: C.text },
+  lottoStatusCell: {
+    flex: 1,
+    minHeight: 24,
+    borderRadius: 8,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    fontSize: 10,
+    fontWeight: '800',
+    color: C.muted,
+    paddingVertical: 5,
+    overflow: 'hidden',
+  },
+  lottoStatusHole: { fontSize: 11, color: C.text },
+  lottoStatusSelectedCell: { backgroundColor: '#fff8f6' },
+  lottoStatusSelectedText: { color: '#d65b4a', fontWeight: '900' },
+  lottoStatusHitText: { color: C.green, fontWeight: '900' },
+  lottoResultGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  lottoResultCard: {
+    width: '48%',
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 14,
+    padding: 10,
+    backgroundColor: '#fff',
+  },
+  lottoResultCardHit: { borderColor: '#d65b4a', backgroundColor: '#fff8f6' },
+  lottoResultHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  lottoResultHole: { fontSize: 14, fontWeight: '900', color: C.text },
+  lottoResultPar: { fontSize: 11, fontWeight: '800', color: C.muted },
+  lottoHitBadge: { fontSize: 10, fontWeight: '900', color: '#fff', backgroundColor: '#d65b4a', borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 },
+  lottoResultCompare: { gap: 2, marginTop: 5 },
+  lottoResultLabel: { fontSize: 10, fontWeight: '900', color: C.muted },
+  lottoResultPending: { fontSize: 12, fontWeight: '800', color: C.muted },
+  lottoResultMyScore: { fontSize: 13, fontWeight: '900', color: C.text },
+  lottoResultScore: { fontSize: 13, fontWeight: '900', color: '#d65b4a' },
+  lottoAllResultBox: { marginTop: 12, borderTopWidth: 1, borderTopColor: C.border, paddingTop: 12 },
+  lottoAllResultTitle: { fontSize: 12, fontWeight: '900', color: C.text, marginBottom: 8 },
+  lottoAllResultGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  lottoAllResultCell: {
+    width: '31%',
+    borderRadius: 12,
+    paddingVertical: 8,
+    alignItems: 'center',
+    backgroundColor: '#f6f7f6',
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  lottoAllResultCellActive: { backgroundColor: '#fff8f6', borderColor: '#d65b4a' },
+  lottoAllResultHole: { fontSize: 11, fontWeight: '900', color: C.muted },
+  lottoAllResultScore: { fontSize: 13, fontWeight: '900', color: C.text, marginTop: 2 },
+  lottoAllResultLabel: { fontSize: 10, fontWeight: '800', color: C.muted, marginTop: 1 },
+  lottoAllResultTextActive: { color: '#d65b4a' },
+  lottoAwardBox: { marginTop: 12, borderTopWidth: 1, borderTopColor: C.border, paddingTop: 12 },
+  lottoAwardTitle: { fontSize: 12, fontWeight: '900', color: C.text, marginBottom: 8 },
+  lottoAwardList: { gap: 7 },
+  lottoAwardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    backgroundColor: '#fff',
+  },
+  lottoAwardWinnerRow: { borderColor: '#d65b4a', backgroundColor: '#fff8f6' },
+  lottoAwardName: { fontSize: 13, fontWeight: '900', color: C.text },
+  lottoAwardWinnerText: { color: '#d65b4a' },
+  lottoAwardMeta: { fontSize: 11, fontWeight: '800', color: C.muted, marginTop: 2 },
+  lottoAwardBadge: { fontSize: 11, fontWeight: '900', color: '#fff', backgroundColor: '#d65b4a', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
   recentRoundScoreBox: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 16, marginBottom: 14 },
   recentRoundScore: { fontSize: 30, fontWeight: '900', color: C.text },
   recentRoundDiff: { fontSize: 15, fontWeight: '800', marginBottom: 4 },

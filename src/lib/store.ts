@@ -67,6 +67,25 @@ export interface RoundLottoEntry {
   updatedAt?: string
 }
 
+export type RoundLottoDrawStatus = 'PENDING' | 'COMPLETED'
+
+export interface RoundLottoDraw {
+  clubId: string
+  scheduleId: string
+  drafterUserId: string | null
+  drawStatus: RoundLottoDrawStatus
+  drawnScores?: Record<string, RoundLottoDrawScore> | null
+  drawnAt?: string | null
+  updatedAt?: string
+}
+
+export interface RoundLottoDrawScore {
+  hole: number
+  par: number
+  score: number
+  label: string
+}
+
 export interface SavedRound {
   id: string
   date: string
@@ -1294,6 +1313,21 @@ export async function getRoundLottoEntry(scheduleId: string, userId: string): Pr
   }
 }
 
+export async function getRoundLottoEntries(scheduleId: string): Promise<RoundLottoEntry[]> {
+  const { data, error } = await supabase
+    .from('round_lotto_entries')
+    .select('club_id, schedule_id, user_id, selected_holes, updated_at')
+    .eq('schedule_id', scheduleId)
+  if (error) throw error
+  return (data ?? []).map((row) => ({
+    clubId: row.club_id,
+    scheduleId: row.schedule_id,
+    userId: row.user_id,
+    selectedHoles: row.selected_holes ?? { par3: [], par4: [], par5: [] },
+    updatedAt: row.updated_at ?? undefined,
+  }))
+}
+
 export async function saveRoundLottoEntry(input: RoundLottoEntry): Promise<void> {
   const { error } = await supabase
     .from('round_lotto_entries')
@@ -1304,6 +1338,57 @@ export async function saveRoundLottoEntry(input: RoundLottoEntry): Promise<void>
       selected_holes: input.selectedHoles,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'schedule_id,user_id' })
+  if (error) throw error
+}
+
+export async function getRoundLottoDraw(scheduleId: string): Promise<RoundLottoDraw | null> {
+  const { data, error } = await supabase
+    .from('round_lotto_draws')
+    .select('club_id, schedule_id, drafter_user_id, draw_status, drawn_scores, drawn_at, updated_at')
+    .eq('schedule_id', scheduleId)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  return {
+    clubId: data.club_id,
+    scheduleId: data.schedule_id,
+    drafterUserId: data.drafter_user_id ?? null,
+    drawStatus: data.draw_status ?? 'PENDING',
+    drawnScores: data.drawn_scores ?? null,
+    drawnAt: data.drawn_at ?? null,
+    updatedAt: data.updated_at ?? undefined,
+  }
+}
+
+export async function saveRoundLottoDrawResult(
+  clubId: string,
+  scheduleId: string,
+  drawnScores: Record<string, RoundLottoDrawScore>,
+): Promise<void> {
+  const now = new Date().toISOString()
+  const { error } = await supabase
+    .from('round_lotto_draws')
+    .upsert({
+      club_id: clubId,
+      schedule_id: scheduleId,
+      drawn_scores: drawnScores,
+      draw_status: 'COMPLETED',
+      drawn_at: now,
+      updated_at: now,
+    }, { onConflict: 'schedule_id' })
+  if (error) throw error
+}
+
+export async function saveRoundLottoDrafter(clubId: string, scheduleId: string, drafterUserId: string | null): Promise<void> {
+  const { error } = await supabase
+    .from('round_lotto_draws')
+    .upsert({
+      club_id: clubId,
+      schedule_id: scheduleId,
+      drafter_user_id: drafterUserId,
+      draw_status: 'PENDING',
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'schedule_id' })
   if (error) throw error
 }
 

@@ -19,7 +19,7 @@ import {
   type ScheduledRoundGroup,
   type ScheduledRoundGroupMember,
 } from '../lib/roundSchedule'
-import { completeRound, deleteRoundsBySchedule, getClubAwardConfig, getClubMembers, getClubSettlement, getCourseLayouts, getGolfCourses, getRounds, saveClubAwardConfig, saveClubAwardSnapshots, saveClubSettlement, saveRound, totalPar, type CourseLayout, type GolfCourse } from '../lib/store'
+import { completeRound, deleteRoundsBySchedule, getClubAwardConfig, getClubMembers, getClubSettlement, getCourseLayouts, getGolfCourses, getRoundLottoDraw, getRounds, saveClubAwardConfig, saveClubAwardSnapshots, saveClubSettlement, saveRound, saveRoundLottoDrafter, totalPar, type CourseLayout, type GolfCourse } from '../lib/store'
 import { AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
 import { computeClubAwardResults } from '../lib/awardResults'
 import { recognizeScorecard, mergeScorecards, type RecognizedScorecard } from '../features/ocr'
@@ -136,6 +136,8 @@ export default function RoundSchedulePrototypeScreen() {
   const [baepanOn, setBaepanOn] = useState(true)
   const [moneyGroupIds, setMoneyGroupIds] = useState<string[]>([])
   const [moneySaving, setMoneySaving] = useState(false)
+  const [lottoDrafterUserId, setLottoDrafterUserId] = useState<string | null>(null)
+  const [lottoDrafterSaving, setLottoDrafterSaving] = useState(false)
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState<Draft>(createEmptyDraft())
   const [coursePickerOpen, setCoursePickerOpen] = useState(false)
@@ -263,6 +265,7 @@ export default function RoundSchedulePrototypeScreen() {
     setStrokeFee('3000')
     setBirdieBonus(5000)
     setBaepanOn(true)
+    setLottoDrafterUserId(null)
     setLayouts([])
     setEditorTab('basic')
     setEditorOpen(true)
@@ -304,6 +307,10 @@ export default function RoundSchedulePrototypeScreen() {
         return savedMoneyGroups.includes(key) || savedMoneyGroups.includes(group.id) ? key : null
       })
       .filter((key): key is string => key !== null))
+    setLottoDrafterUserId(null)
+    getRoundLottoDraw(item.id)
+      .then((draw) => setLottoDrafterUserId(draw?.drafterUserId ?? null))
+      .catch(() => setLottoDrafterUserId(null))
     setEditorTab('basic')
     setEditorOpen(true)
   }
@@ -405,6 +412,19 @@ export default function RoundSchedulePrototypeScreen() {
       Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
     } finally {
       setMoneySaving(false)
+    }
+  }
+
+  async function saveLottoDrafter() {
+    if (!club?.id || !draft.id) return
+    setLottoDrafterSaving(true)
+    try {
+      await saveRoundLottoDrafter(club.id, draft.id, lottoDrafterUserId)
+      Alert.alert('저장 완료', '로또 추첨자를 저장했습니다.')
+    } catch (error) {
+      Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
+    } finally {
+      setLottoDrafterSaving(false)
     }
   }
 
@@ -1242,6 +1262,46 @@ export default function RoundSchedulePrototypeScreen() {
                   })}
                 </View>
 
+                <View style={s.fieldGroup}>
+                  <Text style={s.fieldLabel}>로또 추첨자</Text>
+                  {!draft.id ? (
+                    <Text style={s.moneyHelpText}>일정을 먼저 저장한 뒤 추첨자를 지정할 수 있습니다.</Text>
+                  ) : (
+                    <>
+                      <View style={s.lottoDrafterGrid}>
+                        <TouchableOpacity
+                          style={[s.lottoDrafterChip, !lottoDrafterUserId && s.lottoDrafterChipActive]}
+                          onPress={() => setLottoDrafterUserId(null)}
+                          activeOpacity={0.86}
+                        >
+                          <Text style={[s.lottoDrafterText, !lottoDrafterUserId && s.lottoDrafterTextActive]}>미지정</Text>
+                        </TouchableOpacity>
+                        {clubMembers.map((member) => {
+                          const active = lottoDrafterUserId === member.userId
+                          return (
+                            <TouchableOpacity
+                              key={member.userId}
+                              style={[s.lottoDrafterChip, active && s.lottoDrafterChipActive]}
+                              onPress={() => setLottoDrafterUserId(member.userId)}
+                              activeOpacity={0.86}
+                            >
+                              <Text style={[s.lottoDrafterText, active && s.lottoDrafterTextActive]}>{member.name}</Text>
+                            </TouchableOpacity>
+                          )
+                        })}
+                      </View>
+                      <TouchableOpacity
+                        style={[s.lottoDrafterSaveBtn, lottoDrafterSaving && { opacity: 0.6 }]}
+                        onPress={saveLottoDrafter}
+                        disabled={lottoDrafterSaving}
+                        activeOpacity={0.86}
+                      >
+                        {lottoDrafterSaving ? <ActivityIndicator color={C.accentText} /> : <Text style={s.saveButtonText}>추첨자 저장</Text>}
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
+
                 <TouchableOpacity
                   style={[s.saveButton, moneySaving && { opacity: 0.6 }]}
                   onPress={saveMoneyGameConfig}
@@ -1666,6 +1726,25 @@ const s = StyleSheet.create({
   moneyGroupBadgeActive: { backgroundColor: C.accent },
   moneyGroupBadgeText: { fontSize: 12, fontWeight: '900', color: C.muted },
   moneyGroupBadgeTextActive: { color: C.accentText },
+  lottoDrafterGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  lottoDrafterChip: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#f3f5f3',
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  lottoDrafterChipActive: { backgroundColor: C.greenLight, borderColor: C.green },
+  lottoDrafterText: { fontSize: 12, fontWeight: '900', color: C.muted },
+  lottoDrafterTextActive: { color: C.green },
+  lottoDrafterSaveBtn: {
+    marginTop: 12,
+    backgroundColor: C.accent,
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
   closeButton: {
     borderRadius: 999,
     backgroundColor: '#eef2ee',
