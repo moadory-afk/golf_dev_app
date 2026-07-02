@@ -72,6 +72,11 @@ function parsForScheduledRound(round: ScheduledRound, layouts: CourseLayout[], u
 
 const emptyLottoSelection = (): LottoSelection => ({ par3: [], par4: [], par5: [] })
 
+function lottoPurchaseSummary(selection?: LottoSelection) {
+  if (!selection) return ''
+  return [...selection.par3, ...selection.par4, ...selection.par5].sort((a, b) => a - b).join(',')
+}
+
 function weightedLottoScore(par: number): { score: number; label: string } {
   const rand = Math.random()
   const weights = par === 3
@@ -168,6 +173,7 @@ export default function HomeScreen() {
   const [h2hPlayer, setH2hPlayer] = useState<string | null>(null)
   const [recentRoundOpen, setRecentRoundOpen] = useState(false)
   const [roundAttendance, setRoundAttendance] = useState<Record<string, RoundAttendanceLabel>>({})
+  const [myRoundAttendance, setMyRoundAttendance] = useState<Record<string, RoundAttendanceLabel>>({})
   const [showUpcomingCard, setShowUpcomingCard] = useState(true)
   const [attendanceSheetOpen, setAttendanceSheetOpen] = useState(false)
   const [roundSheetMode, setRoundSheetMode] = useState<'attendance' | 'groups'>('attendance')
@@ -183,6 +189,7 @@ export default function HomeScreen() {
   const [lottoSelection, setLottoSelection] = useState<LottoSelection>(emptyLottoSelection)
   const [lottoDraw, setLottoDraw] = useState<RoundLottoDraw | null>(null)
   const [lottoEntries, setLottoEntries] = useState<RoundLottoEntry[]>([])
+  const [myLottoPurchases, setMyLottoPurchases] = useState<Record<string, LottoSelection>>({})
   const [lottoLoading, setLottoLoading] = useState(false)
   const [lottoSaving, setLottoSaving] = useState(false)
   const [lottoDrawSaving, setLottoDrawSaving] = useState(false)
@@ -228,6 +235,35 @@ export default function HomeScreen() {
       .then(setRoundAttendance)
       .catch(() => setRoundAttendance({}))
   }, [club?.id, selectedRoundId, roundRefreshKey])
+
+  useEffect(() => {
+    if (!club?.id || !myUserId || scheduledRounds.length === 0) {
+      setMyRoundAttendance({})
+      return
+    }
+    Promise.all(scheduledRounds.map(async (round) => {
+      const map = await getRoundAttendanceMap(club.id, round.id)
+      return [round.id, map[myUserId] ?? '미정'] as const
+    }))
+      .then((items) => setMyRoundAttendance(Object.fromEntries(items)))
+      .catch(() => setMyRoundAttendance({}))
+  }, [club?.id, myUserId, scheduledRounds, roundRefreshKey])
+
+  useEffect(() => {
+    if (!myUserId || scheduledRounds.length === 0) {
+      setMyLottoPurchases({})
+      return
+    }
+    Promise.all(scheduledRounds.map((round) => getRoundLottoEntry(round.id, myUserId)))
+      .then((items) => {
+        const next: Record<string, LottoSelection> = {}
+        items.forEach((entry) => {
+          if (entry) next[entry.scheduleId] = entry.selectedHoles
+        })
+        setMyLottoPurchases(next)
+      })
+      .catch(() => setMyLottoPurchases({}))
+  }, [myUserId, scheduledRounds])
 
   useEffect(() => {
     if (!club?.id) return
@@ -633,8 +669,9 @@ export default function HomeScreen() {
         userId: myUserId,
         selectedHoles: lottoSelection,
       })
+      setMyLottoPurchases((current) => ({ ...current, [lottoRound.id]: lottoSelection }))
       setLottoRound(null)
-      Alert.alert('저장 완료', '로또 홀 선택을 저장했습니다.')
+      Alert.alert('구매 완료', 'Lotto 6/18 구매가 완료되었습니다.')
     } catch (e: unknown) {
       Alert.alert('오류', e instanceof Error ? e.message : String(e))
     } finally {
@@ -743,6 +780,11 @@ export default function HomeScreen() {
                 <View style={s.roundList}>
                   {todayScheduledRounds.map((round) => {
                     const summary = roundSummaryFor(round)
+                    const purchaseSummary = lottoPurchaseSummary(myLottoPurchases[round.id])
+                    const assignedToGroup = round.groups.some((group) =>
+                      group.members.some((member) => member.userId === myUserId || member.name === myName)
+                    )
+                    const canUseTodayPlayerActions = assignedToGroup || myRoundAttendance[round.id] === '참석'
                     return (
                       <View
                         key={round.id}
@@ -759,12 +801,25 @@ export default function HomeScreen() {
                           </View>
                           <Text style={s.roundInfoText}>{summary.groupSummary}</Text>
                           <Text style={s.roundAwardText}>시상계획: {awardSummaryFor(round)}</Text>
+                          {!!purchaseSummary && (
+                            <Text style={s.roundLottoPurchaseText}>구매현황 : {purchaseSummary} 구매 완료</Text>
+                          )}
                           <View style={s.todayActionRow}>
-                            <TouchableOpacity style={s.todayActionBtn} onPress={() => openPersonalInput(round)} activeOpacity={0.82}>
-                              <Text style={s.todayActionText}>My Score</Text>
+                            <TouchableOpacity
+                              style={[s.todayActionBtn, !canUseTodayPlayerActions && s.todayActionBtnDisabled]}
+                              onPress={() => openPersonalInput(round)}
+                              disabled={!canUseTodayPlayerActions}
+                              activeOpacity={0.82}
+                            >
+                              <Text style={[s.todayActionText, !canUseTodayPlayerActions && s.todayActionTextDisabled]}>My Score</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={s.todayActionBtn} onPress={() => openLottoSelection(round)} activeOpacity={0.82}>
-                              <Text style={s.todayActionText}>Lotto 6/18</Text>
+                            <TouchableOpacity
+                              style={[s.todayActionBtn, !canUseTodayPlayerActions && s.todayActionBtnDisabled]}
+                              onPress={() => openLottoSelection(round)}
+                              disabled={!canUseTodayPlayerActions}
+                              activeOpacity={0.82}
+                            >
+                              <Text style={[s.todayActionText, !canUseTodayPlayerActions && s.todayActionTextDisabled]}>Lotto 6/18</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={s.todayActionBtn} onPress={() => openRoundSheetFor(round)} activeOpacity={0.82}>
                               <Text style={s.todayActionText}>조편성 결과</Text>
@@ -1322,7 +1377,7 @@ function LottoSelectionModal({
                 onPress={onSave}
                 disabled={!ready || saving}
               >
-                {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.lottoSaveText}>참여 확정</Text>}
+                {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.lottoSaveText}>구매 완료</Text>}
               </TouchableOpacity>
               <View style={s.lottoDrawBox}>
                 <Text style={s.lottoDrawTitle}>추첨 상태</Text>
@@ -1909,12 +1964,15 @@ const s = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: C.greenLight,
   },
+  todayActionBtnDisabled: { backgroundColor: '#f1f3f1', opacity: 0.75 },
   todayActionText: { fontSize: 11, fontWeight: '900', color: C.green },
+  todayActionTextDisabled: { color: C.muted },
   roundRowDisabled: { opacity: 0.65 },
   roundLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   roundCourse: { flex: 1, fontSize: 14, color: C.text, fontWeight: '800' },
   roundInfoText: { fontSize: 12, color: C.text, fontWeight: '700' },
   roundAwardText: { marginTop: 3, fontSize: 12, color: '#d65b4a', fontWeight: '800' },
+  roundLottoPurchaseText: { marginTop: 3, fontSize: 12, color: C.green, fontWeight: '900' },
   roundHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1 },
   roundStageBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
   roundStagePending: { backgroundColor: '#f3f5f3' },

@@ -184,18 +184,33 @@ export default function HistoryScreen() {
 
 // ─── 라운딩별 ────────────────────────────────────────────────────────────────
 
+function currentMonthKey() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+function shiftMonthKey(key: string, offset: number) {
+  const [year, month] = key.split('-').map(Number)
+  const next = new Date(year, month - 1 + offset, 1)
+  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`
+}
+
+function monthLabel(key: string) {
+  const [year, month] = key.split('-')
+  return `${year}년 ${Number(month)}월`
+}
+
 function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicapBasis?: number }) {
   const nav = useNavigation<Nav>()
-  const currentYear = new Date().getFullYear()
-  const [year, setYear] = useState(currentYear)
+  const [month, setMonth] = useState(currentMonthKey())
 
   if (rounds.length === 0) return <Text style={s.muted}>아직 라운드 기록이 없습니다.</Text>
 
-  const years = [...new Set(rounds.map((r) => Number(r.date.slice(0, 4))))].sort((a, b) => b - a)
-  const minYear = Math.min(...years)
-  const maxYear = Math.max(...years)
+  const months = [...new Set(rounds.map((r) => r.date.slice(0, 7)))].sort((a, b) => b.localeCompare(a))
+  const minMonth = months[months.length - 1]
+  const maxMonth = months[0]
   const filtered = rounds
-    .filter((r) => r.date.startsWith(String(year)))
+    .filter((r) => r.date.startsWith(month))
     .sort((a, b) => {
       if (!a.isComplete && b.isComplete) return -1
       if (a.isComplete && !b.isComplete) return 1
@@ -206,24 +221,24 @@ function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicap
     <>
       <View style={s.yearNav}>
         <TouchableOpacity
-          style={[s.yearBtn, year <= minYear && { opacity: 0.35 }]}
-          onPress={() => setYear((y) => y - 1)}
-          disabled={year <= minYear}
+          style={[s.yearBtn, month <= minMonth && { opacity: 0.35 }]}
+          onPress={() => setMonth((value) => shiftMonthKey(value, -1))}
+          disabled={month <= minMonth}
         >
           <Text style={s.yearBtnText}>‹</Text>
         </TouchableOpacity>
-        <Text style={s.yearText}>{year}년</Text>
+        <Text style={s.yearText}>{monthLabel(month)}</Text>
         <TouchableOpacity
-          style={[s.yearBtn, year >= maxYear && { opacity: 0.35 }]}
-          onPress={() => setYear((y) => y + 1)}
-          disabled={year >= maxYear}
+          style={[s.yearBtn, month >= maxMonth && { opacity: 0.35 }]}
+          onPress={() => setMonth((value) => shiftMonthKey(value, 1))}
+          disabled={month >= maxMonth}
         >
           <Text style={s.yearBtnText}>›</Text>
         </TouchableOpacity>
       </View>
 
       {filtered.length === 0 ? (
-        <Text style={s.muted}>{year}년 라운드 기록이 없습니다.</Text>
+        <Text style={s.muted}>{monthLabel(month)} 라운드 기록이 없습니다.</Text>
       ) : (
         filtered.map((r) => {
           const par = totalPar(r.pars)
