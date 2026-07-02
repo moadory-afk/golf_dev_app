@@ -101,7 +101,7 @@ function generateLottoDrawScores(pars: number[]): Record<string, RoundLottoDrawS
 }
 
 function scoreName(score: number | undefined, par: number) {
-  if (!score) return '경기 후 반영'
+  if (!score) return '-'
   const diff = score - par
   if (diff <= -1) return '버디'
   if (diff === 0) return '파'
@@ -761,13 +761,13 @@ export default function HomeScreen() {
                           <Text style={s.roundAwardText}>시상계획: {awardSummaryFor(round)}</Text>
                           <View style={s.todayActionRow}>
                             <TouchableOpacity style={s.todayActionBtn} onPress={() => openPersonalInput(round)} activeOpacity={0.82}>
-                              <Text style={s.todayActionText}>내 경기 입력</Text>
+                              <Text style={s.todayActionText}>My Score</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={s.todayActionBtn} onPress={() => openLottoSelection(round)} activeOpacity={0.82}>
-                              <Text style={s.todayActionText}>로또 홀 선택</Text>
+                              <Text style={s.todayActionText}>Lotto 6/18</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={s.todayActionBtn} onPress={() => openRoundSheetFor(round)} activeOpacity={0.82}>
-                              <Text style={s.todayActionText}>조편성 확인</Text>
+                              <Text style={s.todayActionText}>조편성 결과</Text>
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -1209,6 +1209,7 @@ function LottoSelectionModal({
   const hitCount = resultRows.filter((row) => myStrokes?.[row.hole - 1] === row.score).length
   const allResultRows = Object.values(draw?.drawnScores ?? {}).sort((a, b) => a.hole - b.hole)
   const hasWinner = awardRows.some((row) => row.winner)
+  const isPlaying = !myStrokes
   const groups: Array<{ key: keyof LottoSelection; label: string; limit: number; holes: number[] }> = [
     { key: 'par3', label: '파 3', limit: 1, holes: pars.map((par, index) => par === 3 ? index + 1 : null).filter((hole): hole is number => !!hole) },
     { key: 'par4', label: '파 4', limit: 3, holes: pars.map((par, index) => par === 4 ? index + 1 : null).filter((hole): hole is number => !!hole) },
@@ -1238,7 +1239,7 @@ function LottoSelectionModal({
           })}
         </View>
         <View style={s.lottoStatusRow}>
-          <Text style={s.lottoStatusLabel}>내 타수</Text>
+          <Text style={s.lottoStatusLabel}>결과</Text>
           {holes.map((hole) => {
             const selected = selectedHoleList.includes(hole)
             const row = draw?.drawnScores?.[String(hole)]
@@ -1254,10 +1255,10 @@ function LottoSelectionModal({
           {holes.map((hole) => {
             const selected = selectedHoleList.includes(hole)
             const row = draw?.drawnScores?.[String(hole)]
-            const hit = selected && !!row && myStrokes?.[hole - 1] === row.score
+            const hit = !isPlaying && selected && !!row && myStrokes?.[hole - 1] === row.score
             return (
               <Text key={hole} style={[s.lottoStatusCell, selected && s.lottoStatusSelectedCell, hit && s.lottoStatusHitText]}>
-                {selected ? (hit ? 'O' : '-') : ''}
+                {selected ? (isPlaying ? '-' : hit ? 'O' : 'X') : ''}
               </Text>
             )
           })}
@@ -1328,7 +1329,7 @@ function LottoSelectionModal({
                 {isCompleted ? (
                   <>
                     <Text style={s.lottoDrawDoneText}>
-                      추첨 완료 · {myStrokes ? `${hitCount}/${resultRows.length}개 적중` : '결과 저장됨'}
+                      추첨상태 : {isPlaying ? '경기중' : `추첨완료 · ${hitCount}/${resultRows.length}개 적중`}
                     </Text>
                     {allResultRows.length > 0 && (
                       <View style={s.lottoStatusBox}>
