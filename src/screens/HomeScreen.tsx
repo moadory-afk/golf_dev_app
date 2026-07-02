@@ -6,7 +6,7 @@ import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { getCourseLayouts, getPersonalRoundStat, getRounds, getClubMembers, getFeeDashboard, getFeeMemberHistory, playerTotal, savePersonalRoundStat, totalPar, computeHandicaps, shortName, type CourseLayout, type PersonalRoundFir, type PersonalRoundHoleStat, type SavedRound } from '../lib/store'
+import { getCourseLayouts, getPersonalRoundStat, getRoundLottoEntry, getRounds, getClubMembers, getFeeDashboard, getFeeMemberHistory, playerTotal, savePersonalRoundStat, saveRoundLottoEntry, totalPar, computeHandicaps, shortName, type CourseLayout, type PersonalRoundFir, type PersonalRoundHoleStat, type SavedRound } from '../lib/store'
 import {
   getRoundAttendanceMap,
   getRoundSchedules,
@@ -29,6 +29,7 @@ import type { RootStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
 type PersonalDetailType = 'handicap' | 'average' | 'best' | 'wins' | 'singleBirdie' | 'records'
+type LottoSelection = { par3: number[]; par4: number[]; par5: number[] }
 
 function diffText(d: number) { return d > 0 ? `+${d}` : `${d}` }
 
@@ -67,6 +68,8 @@ function parsForScheduledRound(round: ScheduledRound, layouts: CourseLayout[], u
   const pars = [...front, ...back].slice(0, 18)
   return pars.length === 18 ? pars : Array.from({ length: 18 }, () => 4)
 }
+
+const emptyLottoSelection = (): LottoSelection => ({ par3: [], par4: [], par5: [] })
 
 const AWARD_LABELS = new Map(AWARD_CATEGORIES.flatMap((category) => category.items).map((item) => [item.id, item.label]))
 
@@ -135,6 +138,11 @@ export default function HomeScreen() {
   const [personalPage, setPersonalPage] = useState(0)
   const [personalLoading, setPersonalLoading] = useState(false)
   const [personalSaving, setPersonalSaving] = useState(false)
+  const [lottoRound, setLottoRound] = useState<ScheduledRound | null>(null)
+  const [lottoPars, setLottoPars] = useState<number[]>([])
+  const [lottoSelection, setLottoSelection] = useState<LottoSelection>(emptyLottoSelection)
+  const [lottoLoading, setLottoLoading] = useState(false)
+  const [lottoSaving, setLottoSaving] = useState(false)
   const onRefresh = useCallback(() => {
     setRefreshKey((k) => k + 1)
     setRoundRefreshKey((k) => k + 1)
@@ -509,6 +517,55 @@ export default function HomeScreen() {
       setPersonalSaving(false)
     }
   }
+  const openLottoSelection = async (round: ScheduledRound) => {
+    if (!club?.id || !myUserId) {
+      Alert.alert('확인', '로그인 정보가 필요합니다.')
+      return
+    }
+    setLottoRound(round)
+    setLottoLoading(true)
+    try {
+      const layouts = round.courseId ? await getCourseLayouts(round.courseId) : []
+      setLottoPars(parsForScheduledRound(round, layouts, myUserId, myName))
+      const saved = await getRoundLottoEntry(round.id, myUserId)
+      setLottoSelection(saved?.selectedHoles ?? emptyLottoSelection())
+    } catch {
+      setLottoPars(Array.from({ length: 18 }, () => 4))
+      setLottoSelection(emptyLottoSelection())
+    } finally {
+      setLottoLoading(false)
+    }
+  }
+  const toggleLottoHole = (parKey: keyof LottoSelection, hole: number) => {
+    const limits: Record<keyof LottoSelection, number> = { par3: 1, par4: 3, par5: 2 }
+    setLottoSelection((current) => {
+      const selected = current[parKey]
+      if (selected.includes(hole)) {
+        return { ...current, [parKey]: selected.filter((item) => item !== hole) }
+      }
+      if (selected.length >= limits[parKey]) return current
+      return { ...current, [parKey]: [...selected, hole].sort((a, b) => a - b) }
+    })
+  }
+  const isLottoReady = lottoSelection.par3.length === 1 && lottoSelection.par4.length === 3 && lottoSelection.par5.length === 2
+  const saveLottoSelection = async () => {
+    if (!club?.id || !myUserId || !lottoRound || !isLottoReady) return
+    setLottoSaving(true)
+    try {
+      await saveRoundLottoEntry({
+        clubId: club.id,
+        scheduleId: lottoRound.id,
+        userId: myUserId,
+        selectedHoles: lottoSelection,
+      })
+      setLottoRound(null)
+      Alert.alert('저장 완료', '로또 홀 선택을 저장했습니다.')
+    } catch (e: unknown) {
+      Alert.alert('오류', e instanceof Error ? e.message : String(e))
+    } finally {
+      setLottoSaving(false)
+    }
+  }
 
   // 클럽 로딩 전: 빈 화면 (모든 hook 호출 후)
   if (!clubsLoaded) return <View style={{ flex: 1, backgroundColor: C.bg }} />
@@ -615,7 +672,7 @@ export default function HomeScreen() {
                             <TouchableOpacity style={s.todayActionBtn} onPress={() => openPersonalInput(round)} activeOpacity={0.82}>
                               <Text style={s.todayActionText}>내 경기 입력</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={s.todayActionBtn} onPress={() => Alert.alert('준비 중', '로또 홀 선택은 다음 단계에서 연결합니다.')} activeOpacity={0.82}>
+                            <TouchableOpacity style={s.todayActionBtn} onPress={() => openLottoSelection(round)} activeOpacity={0.82}>
                               <Text style={s.todayActionText}>로또 홀 선택</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={s.todayActionBtn} onPress={() => openRoundSheetFor(round)} activeOpacity={0.82}>
@@ -819,6 +876,17 @@ export default function HomeScreen() {
             onSave={savePersonalInput}
             onClose={() => setPersonalInputRound(null)}
           />
+          <LottoSelectionModal
+            round={lottoRound}
+            pars={lottoPars}
+            selection={lottoSelection}
+            loading={lottoLoading}
+            saving={lottoSaving}
+            ready={isLottoReady}
+            onToggle={toggleLottoHole}
+            onSave={saveLottoSelection}
+            onClose={() => setLottoRound(null)}
+          />
 
           {/* 기록 없음 */}
           {club && !loading && rounds.length === 0 && (
@@ -998,6 +1066,98 @@ function CounterRow({ label, value, min, onChange }: { label: string; value: num
         </TouchableOpacity>
       </View>
     </View>
+  )
+}
+
+function LottoSelectionModal({
+  round,
+  pars,
+  selection,
+  loading,
+  saving,
+  ready,
+  onToggle,
+  onSave,
+  onClose,
+}: {
+  round: ScheduledRound | null
+  pars: number[]
+  selection: LottoSelection
+  loading: boolean
+  saving: boolean
+  ready: boolean
+  onToggle: (parKey: keyof LottoSelection, hole: number) => void
+  onSave: () => void
+  onClose: () => void
+}) {
+  const groups: Array<{ key: keyof LottoSelection; label: string; limit: number; holes: number[] }> = [
+    { key: 'par3', label: '파 3', limit: 1, holes: pars.map((par, index) => par === 3 ? index + 1 : null).filter((hole): hole is number => !!hole) },
+    { key: 'par4', label: '파 4', limit: 3, holes: pars.map((par, index) => par === 4 ? index + 1 : null).filter((hole): hole is number => !!hole) },
+    { key: 'par5', label: '파 5', limit: 2, holes: pars.map((par, index) => par === 5 ? index + 1 : null).filter((hole): hole is number => !!hole) },
+  ]
+
+  return (
+    <Modal transparent animationType="fade" visible={!!round} onRequestClose={onClose}>
+      <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity style={[s.modalCard, s.lottoModalCard]} activeOpacity={1} onPress={() => {}}>
+          <View style={s.modalHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.modalTitle}>로또 홀 선택</Text>
+              <Text style={s.personalModalSub}>{round ? `${round.date} · ${round.courseName ?? round.course}` : ''}</Text>
+            </View>
+            <TouchableOpacity style={s.closeBtn} onPress={onClose}>
+              <Text style={s.closeBtnText}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+          {loading ? (
+            <View style={s.personalLoadingBox}>
+              <ActivityIndicator color={C.green} />
+              <Text style={s.muted}>불러오는 중</Text>
+            </View>
+          ) : (
+            <>
+              <View style={s.lottoCounterRow}>
+                <Text style={[s.lottoCounter, selection.par3.length === 1 && s.lottoCounterDone]}>파3 {selection.par3.length}/1</Text>
+                <Text style={[s.lottoCounter, selection.par4.length === 3 && s.lottoCounterDone]}>파4 {selection.par4.length}/3</Text>
+                <Text style={[s.lottoCounter, selection.par5.length === 2 && s.lottoCounterDone]}>파5 {selection.par5.length}/2</Text>
+              </View>
+              <ScrollView style={s.lottoBody}>
+                {groups.map((group) => (
+                  <View key={group.key} style={s.lottoGroup}>
+                    <View style={s.lottoGroupHeader}>
+                      <Text style={s.lottoGroupTitle}>{group.label}</Text>
+                      <Text style={s.lottoGroupLimit}>{selection[group.key].length}/{group.limit}</Text>
+                    </View>
+                    <View style={s.lottoHoleGrid}>
+                      {group.holes.map((hole) => {
+                        const selected = selection[group.key].includes(hole)
+                        return (
+                          <TouchableOpacity
+                            key={hole}
+                            style={[s.lottoHoleBtn, selected && s.lottoHoleBtnActive]}
+                            onPress={() => onToggle(group.key, hole)}
+                            activeOpacity={0.82}
+                          >
+                            <Text style={[s.lottoHoleText, selected && s.lottoHoleTextActive]}>{hole}H</Text>
+                          </TouchableOpacity>
+                        )
+                      })}
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+              <TouchableOpacity
+                style={[s.lottoSaveBtn, (!ready || saving) && s.lottoSaveBtnDisabled]}
+                onPress={onSave}
+                disabled={!ready || saving}
+              >
+                {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.lottoSaveText}>참여 확정</Text>}
+              </TouchableOpacity>
+            </>
+          )}
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
   )
 }
 
@@ -1676,6 +1836,41 @@ const s = StyleSheet.create({
   personalNavText: { fontSize: 13, fontWeight: '900', color: C.muted },
   personalSaveBtn: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: 'center', backgroundColor: C.green },
   personalSaveText: { fontSize: 13, fontWeight: '900', color: '#fff' },
+  lottoModalCard: { maxHeight: '82%' },
+  lottoCounterRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  lottoCounter: {
+    flex: 1,
+    textAlign: 'center',
+    borderRadius: 999,
+    paddingVertical: 7,
+    backgroundColor: '#f2f4f6',
+    color: C.muted,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  lottoCounterDone: { backgroundColor: C.greenLight, color: C.green },
+  lottoBody: { maxHeight: 430 },
+  lottoGroup: { borderTopWidth: 1, borderTopColor: C.border, paddingTop: 12, marginBottom: 14 },
+  lottoGroupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  lottoGroupTitle: { fontSize: 14, fontWeight: '900', color: C.text },
+  lottoGroupLimit: { fontSize: 12, fontWeight: '900', color: C.muted },
+  lottoHoleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  lottoHoleBtn: {
+    width: 52,
+    height: 38,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f6f7f6',
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  lottoHoleBtnActive: { backgroundColor: C.greenLight, borderColor: C.green },
+  lottoHoleText: { fontSize: 12, fontWeight: '900', color: C.muted },
+  lottoHoleTextActive: { color: C.green },
+  lottoSaveBtn: { marginTop: 12, borderRadius: 14, paddingVertical: 13, alignItems: 'center', backgroundColor: C.green },
+  lottoSaveBtnDisabled: { opacity: 0.45 },
+  lottoSaveText: { fontSize: 13, fontWeight: '900', color: '#fff' },
   recentRoundScoreBox: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 16, marginBottom: 14 },
   recentRoundScore: { fontSize: 30, fontWeight: '900', color: C.text },
   recentRoundDiff: { fontSize: 15, fontWeight: '800', marginBottom: 4 },

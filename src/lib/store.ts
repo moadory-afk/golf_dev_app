@@ -55,6 +55,18 @@ export interface PersonalRoundStat {
   updatedAt?: string
 }
 
+export interface RoundLottoEntry {
+  clubId: string
+  scheduleId: string
+  userId: string
+  selectedHoles: {
+    par3: number[]
+    par4: number[]
+    par5: number[]
+  }
+  updatedAt?: string
+}
+
 export interface SavedRound {
   id: string
   date: string
@@ -1259,6 +1271,37 @@ export async function savePersonalRoundStat(input: PersonalRoundStat): Promise<v
       schedule_id: input.scheduleId,
       user_id: input.userId,
       hole_stats: holeStats,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'schedule_id,user_id' })
+  if (error) throw error
+}
+
+export async function getRoundLottoEntry(scheduleId: string, userId: string): Promise<RoundLottoEntry | null> {
+  const { data, error } = await supabase
+    .from('round_lotto_entries')
+    .select('club_id, schedule_id, user_id, selected_holes, updated_at')
+    .eq('schedule_id', scheduleId)
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  return {
+    clubId: data.club_id,
+    scheduleId: data.schedule_id,
+    userId: data.user_id,
+    selectedHoles: data.selected_holes ?? { par3: [], par4: [], par5: [] },
+    updatedAt: data.updated_at ?? undefined,
+  }
+}
+
+export async function saveRoundLottoEntry(input: RoundLottoEntry): Promise<void> {
+  const { error } = await supabase
+    .from('round_lotto_entries')
+    .upsert({
+      club_id: input.clubId,
+      schedule_id: input.scheduleId,
+      user_id: input.userId,
+      selected_holes: input.selectedHoles,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'schedule_id,user_id' })
   if (error) throw error
