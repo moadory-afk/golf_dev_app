@@ -675,11 +675,9 @@ function ClubInfoModal({
             </View>
           )}
 
-          <View style={s.clubInfoStats}>
-            <Text style={s.clubInfoStat}>회원 {memberCount}명</Text>
-            <Text style={s.clubInfoStat}>운영진 {admins.length}명</Text>
-            <Text style={s.clubInfoStat}>내 역할 {role}</Text>
-          </View>
+          <Text style={s.clubInfoStatsText}>
+            회원 {memberCount}명 · 운영진 {admins.length}명 · 내 역할 {role}
+          </Text>
 
           <View style={s.infoSection}>
             <Text style={s.infoSectionTitle}>멤버</Text>
@@ -1004,8 +1002,7 @@ const s = StyleSheet.create({
     minWidth: 70,
   },
   clubEditText: { fontSize: 12, fontWeight: '800', color: C.green },
-  clubInfoStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
-  clubInfoStat: { backgroundColor: C.greenLight, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, fontWeight: '800', color: C.green },
+  clubInfoStatsText: { fontSize: 12, fontWeight: '800', color: C.muted, marginBottom: 14 },
   infoSection: { paddingTop: 12, marginTop: 4 },
   infoSectionTitle: { fontSize: 15, fontWeight: '900', color: C.text },
   infoDivider: { height: 1, backgroundColor: C.border, marginTop: 10, marginBottom: 10 },

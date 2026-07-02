@@ -1,12 +1,12 @@
 ﻿import {
-  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal,
+  ActivityIndicator, Alert, ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { getRounds, getClubMembers, getFeeDashboard, getFeeMemberHistory, playerTotal, totalPar, computeHandicaps, shortName, type SavedRound } from '../lib/store'
+import { getCourseLayouts, getPersonalRoundStat, getRounds, getClubMembers, getFeeDashboard, getFeeMemberHistory, playerTotal, savePersonalRoundStat, totalPar, computeHandicaps, shortName, type CourseLayout, type PersonalRoundFir, type PersonalRoundHoleStat, type SavedRound } from '../lib/store'
 import {
   getRoundAttendanceMap,
   getRoundSchedules,
@@ -39,6 +39,35 @@ function formatShortDate(input: string) {
   return input
 }
 
+function todayKey() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function defaultHoleStats(pars: number[]): PersonalRoundHoleStat[] {
+  return Array.from({ length: 18 }, (_, index) => ({
+    hole: index + 1,
+    par: pars[index] ?? 4,
+    fir: null,
+    putts: 2,
+    penalties: 0,
+  }))
+}
+
+function parsForScheduledRound(round: ScheduledRound, layouts: CourseLayout[], userId?: string | null, name?: string | null) {
+  const group = round.groups.find((item) =>
+    item.members.some((member) => member.userId === userId || member.name === name)
+  ) ?? round.groups.find((item) => item.members.length > 0) ?? round.groups[0]
+  if (!group) return Array.from({ length: 18 }, () => 4)
+  const front = layouts.find((layout) => layout.id === group.frontLayoutId)?.pars ?? []
+  const back = layouts.find((layout) => layout.id === group.backLayoutId)?.pars ?? []
+  const pars = [...front, ...back].slice(0, 18)
+  return pars.length === 18 ? pars : Array.from({ length: 18 }, () => 4)
+}
+
 const AWARD_LABELS = new Map(AWARD_CATEGORIES.flatMap((category) => category.items).map((item) => [item.id, item.label]))
 
 function awardSummaryFor(round?: ScheduledRound | null) {
@@ -48,7 +77,8 @@ function awardSummaryFor(round?: ScheduledRound | null) {
 }
 
 function isVisibleUpcomingRound(round: ScheduledRound) {
-  return String(round.status).trim() !== 'finished'
+  const status = String(round.status).trim()
+  return status !== 'closed' && status !== 'finished'
 }
 
 function getWinner(r: SavedRound, handicaps: Map<string, number>): string | null {
@@ -98,9 +128,13 @@ export default function HomeScreen() {
   const [showUpcomingCard, setShowUpcomingCard] = useState(true)
   const [attendanceSheetOpen, setAttendanceSheetOpen] = useState(false)
   const [roundSheetMode, setRoundSheetMode] = useState<'attendance' | 'groups'>('attendance')
-  const [showFeeCard, setShowFeeCard] = useState(true)
   const [scheduledRounds, setScheduledRounds] = useState<ScheduledRound[]>([])
   const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null)
+  const [personalInputRound, setPersonalInputRound] = useState<ScheduledRound | null>(null)
+  const [personalHoleStats, setPersonalHoleStats] = useState<PersonalRoundHoleStat[]>([])
+  const [personalPage, setPersonalPage] = useState(0)
+  const [personalLoading, setPersonalLoading] = useState(false)
+  const [personalSaving, setPersonalSaving] = useState(false)
   const onRefresh = useCallback(() => {
     setRefreshKey((k) => k + 1)
     setRoundRefreshKey((k) => k + 1)
@@ -286,7 +320,13 @@ export default function HomeScreen() {
 
   const recent3 = rounds.slice(0, 3)
   const visibleScheduledRounds = scheduledRounds.filter(isVisibleUpcomingRound)
-  const nextRound = visibleScheduledRounds.find((item) => item.id === selectedRoundId) ?? visibleScheduledRounds[0] ?? null
+  const today = todayKey()
+  const todayScheduledRounds = visibleScheduledRounds.filter((item) => item.date === today)
+  const upcomingScheduledRounds = todayScheduledRounds.length > 0
+    ? []
+    : visibleScheduledRounds.filter((item) => item.date > today)
+  const activeScheduledRounds = todayScheduledRounds.length > 0 ? todayScheduledRounds : upcomingScheduledRounds
+  const nextRound = activeScheduledRounds.find((item) => item.id === selectedRoundId) ?? activeScheduledRounds[0] ?? null
   const isAdmin = club?.role === 'admin'
   const roundGroups = nextRound?.groups ?? []
   const assignedGroups = roundGroups.filter((group) => group.members.length > 0)
@@ -311,8 +351,8 @@ export default function HomeScreen() {
   const canOpenGroupResult = hasUpcomingRound && hasAssignedGroups
   const roundCollapsedSummary = !nextRound
     ? '현재 예정된 라운딩이 없습니다'
-    : visibleScheduledRounds.length > 1
-      ? `${visibleScheduledRounds.length}개 일정 · ${nextRound.date} · ${roundCourseName}`
+    : activeScheduledRounds.length > 1
+      ? `${activeScheduledRounds.length}개 일정 · ${nextRound.date} · ${roundCourseName}`
     : hasAssignedGroups
       ? `${nextRound.date} · ${roundCourseName} · ${teeTime} · ${myRoundGroup?.name ?? allGroupSummary}`
       : `${nextRound.date} · ${roundCourseName} · ${teeTime} · ${allGroupSummary}`
@@ -427,6 +467,48 @@ export default function HomeScreen() {
     setRoundSheetMode(hasGroups ? 'groups' : 'attendance')
     setAttendanceSheetOpen(true)
   }
+  const openPersonalInput = async (round: ScheduledRound) => {
+    if (!club?.id || !myUserId) {
+      Alert.alert('확인', '로그인 정보가 필요합니다.')
+      return
+    }
+    setPersonalInputRound(round)
+    setPersonalPage(0)
+    setPersonalLoading(true)
+    try {
+      const layouts = round.courseId ? await getCourseLayouts(round.courseId) : []
+      const baseStats = defaultHoleStats(parsForScheduledRound(round, layouts, myUserId, myName))
+      const saved = await getPersonalRoundStat(round.id, myUserId)
+      setPersonalHoleStats(saved?.holeStats?.length === 18 ? saved.holeStats : baseStats)
+    } catch {
+      setPersonalHoleStats(defaultHoleStats(Array.from({ length: 18 }, () => 4)))
+    } finally {
+      setPersonalLoading(false)
+    }
+  }
+  const updatePersonalHole = (hole: number, patch: Partial<PersonalRoundHoleStat>) => {
+    setPersonalHoleStats((current) =>
+      current.map((item) => item.hole === hole ? { ...item, ...patch } : item)
+    )
+  }
+  const savePersonalInput = async () => {
+    if (!club?.id || !myUserId || !personalInputRound) return
+    setPersonalSaving(true)
+    try {
+      await savePersonalRoundStat({
+        clubId: club.id,
+        scheduleId: personalInputRound.id,
+        userId: myUserId,
+        holeStats: personalHoleStats,
+      })
+      setPersonalInputRound(null)
+      Alert.alert('저장 완료', '내 경기 입력을 저장했습니다.')
+    } catch (e: unknown) {
+      Alert.alert('오류', e instanceof Error ? e.message : String(e))
+    } finally {
+      setPersonalSaving(false)
+    }
+  }
 
   // 클럽 로딩 전: 빈 화면 (모든 hook 호출 후)
   if (!clubsLoaded) return <View style={{ flex: 1, backgroundColor: C.bg }} />
@@ -505,104 +587,129 @@ export default function HomeScreen() {
           )}
 
           <View style={s.protoSection}>
-            <View style={s.protoCard}>
-              <View style={s.protoTopRow}>
-                <Text style={s.protoTitle}>예정된 라운드</Text>
-                <View style={s.roundHeaderActions}>
-                  <TouchableOpacity style={s.recordToggleBtn} onPress={() => setShowUpcomingCard((v) => !v)}>
-                    <Text style={s.recordToggleText}>{showUpcomingCard ? '접기' : '펼치기'}</Text>
-                  </TouchableOpacity>
+            {todayScheduledRounds.length > 0 ? (
+              <View style={s.protoCard}>
+                <View style={s.protoTopRow}>
+                  <Text style={s.protoTitle}>오늘의 라운딩</Text>
+                </View>
+                <View style={s.roundList}>
+                  {todayScheduledRounds.map((round) => {
+                    const summary = roundSummaryFor(round)
+                    return (
+                      <View
+                        key={round.id}
+                        style={[s.roundRow, summary.hasGroups ? s.roundRowGroupReady : s.roundRowAttendanceReady, s.todayRoundRow]}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <View style={s.roundLine}>
+                            <Text style={s.roundCourse} numberOfLines={1}>
+                              {round.date} · {summary.courseName}
+                            </Text>
+                            <View style={[s.roundStageBadge, s.todayRoundBadge]}>
+                              <Text style={s.todayRoundBadgeText}>진행일</Text>
+                            </View>
+                          </View>
+                          <Text style={s.roundInfoText}>{summary.groupSummary}</Text>
+                          <Text style={s.roundAwardText}>시상계획: {awardSummaryFor(round)}</Text>
+                          <View style={s.todayActionRow}>
+                            <TouchableOpacity style={s.todayActionBtn} onPress={() => openPersonalInput(round)} activeOpacity={0.82}>
+                              <Text style={s.todayActionText}>내 경기 입력</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={s.todayActionBtn} onPress={() => Alert.alert('준비 중', '로또 홀 선택은 다음 단계에서 연결합니다.')} activeOpacity={0.82}>
+                              <Text style={s.todayActionText}>로또 홀 선택</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={s.todayActionBtn} onPress={() => openRoundSheetFor(round)} activeOpacity={0.82}>
+                              <Text style={s.todayActionText}>조편성 확인</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      </View>
+                    )
+                  })}
                 </View>
               </View>
-              {showUpcomingCard ? (
-                <>
-                  {visibleScheduledRounds.length > 0 ? (
-                    <View style={s.roundList}>
-                      {visibleScheduledRounds.map((round) => {
-                        const summary = roundSummaryFor(round)
-                        const selected = round.id === selectedRoundId
-                        return (
-                          <TouchableOpacity
-                            key={round.id}
-                            style={[
-                              s.roundRow,
-                              summary.hasGroups ? s.roundRowGroupReady : s.roundRowAttendanceReady,
-                              selected && s.roundRowSelected,
-                            ]}
-                            onPress={() => openRoundSheetFor(round)}
-                            activeOpacity={0.84}
-                          >
-                            <View style={{ flex: 1 }}>
-                              <View style={s.roundLine}>
-                                <Text style={s.roundCourse} numberOfLines={1}>
-                                  {round.date} · {summary.courseName}
-                                </Text>
-                                <View style={[
-                                  s.roundStageBadge,
-                                  summary.hasGroups ? s.roundStageDone : s.roundStagePending,
-                                ]}>
-                                  <Text style={[
-                                    s.roundStageText,
-                                    summary.hasGroups ? s.roundStageTextDone : s.roundStageTextPending,
-                                  ]}>
-                                    {summary.hasGroups ? '조편성 완료' : '참석 확인중'}
+            ) : (
+              <View style={s.protoCard}>
+                <View style={s.protoTopRow}>
+                  <Text style={s.protoTitle}>예정된 라운드</Text>
+                  <View style={s.roundHeaderActions}>
+                    <TouchableOpacity style={s.recordToggleBtn} onPress={() => setShowUpcomingCard((v) => !v)}>
+                      <Text style={s.recordToggleText}>{showUpcomingCard ? '접기' : '펼치기'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                {showUpcomingCard ? (
+                  <>
+                    {upcomingScheduledRounds.length > 0 ? (
+                      <View style={s.roundList}>
+                        {upcomingScheduledRounds.map((round) => {
+                          const summary = roundSummaryFor(round)
+                          const selected = round.id === selectedRoundId
+                          return (
+                            <TouchableOpacity
+                              key={round.id}
+                              style={[
+                                s.roundRow,
+                                summary.hasGroups ? s.roundRowGroupReady : s.roundRowAttendanceReady,
+                                selected && s.roundRowSelected,
+                              ]}
+                              onPress={() => openRoundSheetFor(round)}
+                              activeOpacity={0.84}
+                            >
+                              <View style={{ flex: 1 }}>
+                                <View style={s.roundLine}>
+                                  <Text style={s.roundCourse} numberOfLines={1}>
+                                    {round.date} · {summary.courseName}
                                   </Text>
+                                  <View style={[
+                                    s.roundStageBadge,
+                                    summary.hasGroups ? s.roundStageDone : s.roundStagePending,
+                                  ]}>
+                                    <Text style={[
+                                      s.roundStageText,
+                                      summary.hasGroups ? s.roundStageTextDone : s.roundStageTextPending,
+                                    ]}>
+                                      {summary.hasGroups ? '조편성 완료' : '참석 확인중'}
+                                    </Text>
+                                  </View>
                                 </View>
+                                <Text style={s.roundInfoText}>{summary.groupSummary}</Text>
+                                <Text style={s.roundAwardText}>시상계획: {awardSummaryFor(round)}</Text>
                               </View>
-                              <Text style={s.roundInfoText}>{summary.groupSummary}</Text>
-                              <Text style={s.roundAwardText}>시상: {awardSummaryFor(round)}</Text>
-                            </View>
-                          </TouchableOpacity>
-                        )
-                      })}
-                    </View>
-                  ) : (
-                    <View style={[s.roundRow, s.roundRowDisabled]}>
-                      <Text style={s.roundCourse}>현재 예정된 라운딩이 없습니다</Text>
-                    </View>
-                  )}
-                </>
-              ) : (
-                <TouchableOpacity
-                  style={[s.roundCollapsedBox, !hasUpcomingRound && s.roundRowDisabled]}
-                  onPress={() => openRoundSheet(canOpenGroupResult ? 'groups' : 'attendance')}
-                  disabled={!canOpenAttendance}
-                >
-                  <Text style={s.roundCollapsedText}>
-                    {roundCollapsedSummary}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
+                            </TouchableOpacity>
+                          )
+                        })}
+                      </View>
+                    ) : (
+                      <View style={[s.roundRow, s.roundRowDisabled]}>
+                        <Text style={s.roundCourse}>현재 예정된 라운딩이 없습니다</Text>
+                      </View>
+                    )}
+                  </>
+                ) : (
+                  <TouchableOpacity
+                    style={[s.roundCollapsedBox, !hasUpcomingRound && s.roundRowDisabled]}
+                    onPress={() => openRoundSheet(canOpenGroupResult ? 'groups' : 'attendance')}
+                    disabled={!canOpenAttendance}
+                  >
+                    <Text style={s.roundCollapsedText}>
+                      {roundCollapsedSummary}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
 
             <View style={s.protoCard}>
               <View style={s.protoTopRow}>
                 <Text style={s.protoTitle}>회비관리 현황</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <TouchableOpacity style={s.recordToggleBtn} onPress={() => setShowFeeCard((v) => !v)}>
-                    <Text style={s.recordToggleText}>{showFeeCard ? '접기' : '펼치기'}</Text>
-                  </TouchableOpacity>
-                </View>
               </View>
-              {showFeeCard ? (
-                <>
-                  <View style={s.feeSummaryBox}>
-                    <View style={s.feeSummaryRow}>
-                      <Text style={s.feeSummaryLabel}>납부 현황</Text>
-                      <Text style={[s.feeSummaryValue, myHasUnpaidFee && s.feeSummaryValueWarn]}>
-                        {feeStatusSummary}
-                      </Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity style={s.feeActionBtn} onPress={() => nav.navigate('FeePrototype')}>
-                    <Text style={s.feeActionText}>회비관리 현황 확인 →</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <View style={s.feeCollapsedBox}>
-                  <Text style={s.feeCollapsedText}>{feeStatusSummary}</Text>
-                </View>
-              )}
+              <View style={s.feeInlineRow}>
+                <Text style={[s.feeStatusText, myHasUnpaidFee && s.feeStatusTextWarn]}>{feeStatusSummary}</Text>
+                <TouchableOpacity style={s.feeLinkBtn} onPress={() => nav.navigate('FeePrototype')}>
+                  <Text style={s.feeLinkText}>관리현황 확인 →</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
 
@@ -701,6 +808,18 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </Modal>
 
+          <PersonalRoundInputModal
+            round={personalInputRound}
+            stats={personalHoleStats}
+            page={personalPage}
+            loading={personalLoading}
+            saving={personalSaving}
+            onChangePage={setPersonalPage}
+            onChangeHole={updatePersonalHole}
+            onSave={savePersonalInput}
+            onClose={() => setPersonalInputRound(null)}
+          />
+
           {/* 기록 없음 */}
           {club && !loading && rounds.length === 0 && (
             <View style={s.emptyCard}>
@@ -716,6 +835,171 @@ export default function HomeScreen() {
 }
 
 // ─── 상대 전적 모달 ───────────────────────────────────────────────────────────
+
+function PersonalRoundInputModal({
+  round,
+  stats,
+  page,
+  loading,
+  saving,
+  onChangePage,
+  onChangeHole,
+  onSave,
+  onClose,
+}: {
+  round: ScheduledRound | null
+  stats: PersonalRoundHoleStat[]
+  page: number
+  loading: boolean
+  saving: boolean
+  onChangePage: (page: number) => void
+  onChangeHole: (hole: number, patch: Partial<PersonalRoundHoleStat>) => void
+  onSave: () => void
+  onClose: () => void
+}) {
+  const currentStat = stats[page]
+  const maxPage = 17
+  const completed = stats.filter((item) => item.fir || item.par === 3 || item.putts !== 2 || item.penalties > 0).length
+
+  return (
+    <Modal transparent animationType="fade" visible={!!round} onRequestClose={onClose}>
+      <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity style={[s.modalCard, s.personalModalCard]} activeOpacity={1} onPress={() => {}}>
+          <View style={s.modalHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.modalTitle}>내 경기 입력</Text>
+              <Text style={s.personalModalSub}>{round ? `${round.date} · ${round.courseName ?? round.course}` : ''}</Text>
+            </View>
+            <TouchableOpacity style={s.closeBtn} onPress={onClose}>
+              <Text style={s.closeBtnText}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+
+          {loading ? (
+            <View style={s.personalLoadingBox}>
+              <ActivityIndicator color={C.green} />
+              <Text style={s.muted}>불러오는 중</Text>
+            </View>
+          ) : (
+            <>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.personalPageScroll} contentContainerStyle={s.personalPageTabs}>
+                {stats.map((stat, index) => (
+                  <TouchableOpacity
+                    key={stat.hole}
+                    style={[s.personalPageTab, page === index && s.personalPageTabActive]}
+                    onPress={() => onChangePage(index)}
+                    activeOpacity={0.82}
+                  >
+                    <Text style={[s.personalPageTabText, page === index && s.personalPageTabTextActive]}>
+                      {stat.hole}H
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <Text style={s.personalProgress}>입력 {completed}/18홀</Text>
+              <ScrollView style={s.personalHoleScroll}>
+                {currentStat ? (
+                  <PersonalHoleCard
+                    stat={currentStat}
+                    onChange={(patch) => onChangeHole(currentStat.hole, patch)}
+                  />
+                ) : null}
+              </ScrollView>
+              <View style={s.personalFooter}>
+                <TouchableOpacity
+                  style={[s.personalNavBtn, page === 0 && s.personalNavBtnDisabled]}
+                  onPress={() => onChangePage(Math.max(0, page - 1))}
+                  disabled={page === 0}
+                >
+                  <Text style={s.personalNavText}>이전</Text>
+                </TouchableOpacity>
+                {page < maxPage ? (
+                  <TouchableOpacity style={s.personalSaveBtn} onPress={() => onChangePage(page + 1)}>
+                    <Text style={s.personalSaveText}>다음</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity style={[s.personalSaveBtn, saving && { opacity: 0.6 }]} onPress={onSave} disabled={saving}>
+                    {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.personalSaveText}>저장 완료</Text>}
+                  </TouchableOpacity>
+                )}
+              </View>
+            </>
+          )}
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  )
+}
+
+function PersonalHoleCard({ stat, onChange }: {
+  stat: PersonalRoundHoleStat
+  onChange: (patch: Partial<PersonalRoundHoleStat>) => void
+}) {
+  const firDisabled = stat.par === 3
+  return (
+    <View style={s.personalHoleCard}>
+      <View style={s.personalHoleHeader}>
+        <Text style={s.personalHoleTitle}>{stat.hole}H</Text>
+        <Text style={s.personalHolePar}>Par {stat.par}</Text>
+      </View>
+      <Text style={s.personalFieldLabel}>FIR</Text>
+      {firDisabled ? (
+        <View style={s.firDisabledBox}>
+          <Text style={s.personalDisabledText}>파3는 FIR 기록 대상이 아닙니다.</Text>
+        </View>
+      ) : (
+        <FirPicker value={stat.fir} onChange={(fir) => onChange({ fir })} />
+      )}
+      <CounterRow label="퍼팅수" value={stat.putts} min={0} onChange={(putts) => onChange({ putts })} />
+      <CounterRow label="패널티" value={stat.penalties} min={0} onChange={(penalties) => onChange({ penalties })} />
+    </View>
+  )
+}
+
+function FirPicker({ value, onChange }: { value: PersonalRoundFir; onChange: (value: PersonalRoundFir) => void }) {
+  const firButton = (label: string, nextValue: PersonalRoundFir, style?: object) => (
+    <TouchableOpacity
+      style={[s.firButton, style, value === nextValue && s.firButtonActive]}
+      onPress={() => onChange(nextValue)}
+      activeOpacity={0.82}
+    >
+      <Text style={[s.firButtonText, value === nextValue && s.firButtonTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  )
+
+  return (
+    <View style={s.firWrap}>
+      {firButton('상', 'long', s.firTop)}
+      <View style={s.firMiddle}>
+        {firButton('OB', 'left_ob', s.firSide)}
+        {firButton('중', 'center', s.firCenter)}
+        {firButton('OB', 'right_ob', s.firSide)}
+      </View>
+      {firButton('하', 'short', s.firBottom)}
+      <View style={s.firExtraRow}>
+        {firButton('OB(기타)', 'other_ob', s.firExtra)}
+        {firButton('해저드', 'hazard', s.firHazard)}
+      </View>
+    </View>
+  )
+}
+
+function CounterRow({ label, value, min, onChange }: { label: string; value: number; min: number; onChange: (value: number) => void }) {
+  return (
+    <View style={s.counterRow}>
+      <Text style={s.personalFieldLabel}>{label}</Text>
+      <View style={s.counterControl}>
+        <TouchableOpacity style={s.counterBtn} onPress={() => onChange(Math.max(min, value - 1))}>
+          <Text style={s.counterBtnText}>-</Text>
+        </TouchableOpacity>
+        <Text style={s.counterValue}>{value}</Text>
+        <TouchableOpacity style={s.counterBtn} onPress={() => onChange(value + 1)}>
+          <Text style={s.counterBtnText}>+</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  )
+}
 
 function RecentRoundModal({ round, myName, onClose }: { round: SavedRound; myName: string; onClose: () => void }) {
   const player = round.players.find((p) => p.name === myName)
@@ -1179,7 +1463,7 @@ const s = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  protoTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  protoTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 },
   protoTitle: { fontSize: 15, fontWeight: '800', color: C.text, flex: 1 },
   protoBadge: {
     backgroundColor: C.greenLight,
@@ -1197,38 +1481,11 @@ const s = StyleSheet.create({
   },
   protoMetaLabel: { fontSize: 11, color: C.muted, fontWeight: '700' },
   protoMetaValue: { fontSize: 12, color: C.text, fontWeight: '700', textAlign: 'right', flex: 1 },
-  feeSummaryBox: {
-    marginTop: 10,
-    padding: 12,
-    borderRadius: 14,
-    backgroundColor: '#f6fbf7',
-  },
-  feeSummaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-    paddingVertical: 4,
-  },
-  feeSummaryLabel: { fontSize: 11, color: C.muted, fontWeight: '700' },
-  feeSummaryValue: { fontSize: 12, color: C.text, fontWeight: '800', textAlign: 'right', flex: 1 },
-  feeSummaryValueWarn: { color: C.warn },
-  feeCollapsedBox: {
-    marginTop: 6,
-    padding: 12,
-    borderRadius: 14,
-    backgroundColor: '#f6fbf7',
-  },
-  feeCollapsedText: { fontSize: 14, fontWeight: '800', color: C.text },
-  feeCollapsedSub: { fontSize: 12, fontWeight: '700', color: C.green, marginTop: 4 },
-  feeActionBtn: {
-    marginTop: 12,
-    paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: C.greenLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  feeActionText: { color: C.green, fontWeight: '800', fontSize: 13 },
+  feeInlineRow: { marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  feeStatusText: { flex: 1, fontSize: 14, fontWeight: '900', color: C.text },
+  feeStatusTextWarn: { color: C.warn },
+  feeLinkBtn: { paddingVertical: 4 },
+  feeLinkText: { color: C.green, fontWeight: '800', fontSize: 13 },
   feeMemberRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1256,14 +1513,26 @@ const s = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: C.card,
   },
-  roundRowAttendanceReady: { borderColor: '#d8e2d8' },
+  roundRowAttendanceReady: { borderColor: C.green, backgroundColor: '#f6fbf7' },
   roundRowGroupReady: { borderColor: C.green, backgroundColor: '#f6fbf7' },
   roundRowSelected: { borderWidth: 2, borderColor: C.green },
+  todayRoundRow: { borderColor: '#d65b4a', backgroundColor: '#fff8f6' },
+  todayRoundBadge: { backgroundColor: '#f8d6cf', borderWidth: 1, borderColor: '#d65b4a' },
+  todayRoundBadgeText: { fontSize: 11, fontWeight: '900', color: '#b94b3d' },
+  todayActionRow: { flexDirection: 'row', gap: 6, marginTop: 10 },
+  todayActionBtn: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 9,
+    alignItems: 'center',
+    backgroundColor: C.greenLight,
+  },
+  todayActionText: { fontSize: 11, fontWeight: '900', color: C.green },
   roundRowDisabled: { opacity: 0.65 },
   roundLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   roundCourse: { flex: 1, fontSize: 14, color: C.text, fontWeight: '800' },
   roundInfoText: { fontSize: 12, color: C.text, fontWeight: '700' },
-  roundAwardText: { marginTop: 3, fontSize: 11, color: C.muted, fontWeight: '700' },
+  roundAwardText: { marginTop: 3, fontSize: 12, color: '#d65b4a', fontWeight: '800' },
   roundHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1 },
   roundStageBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
   roundStagePending: { backgroundColor: '#f3f5f3' },
@@ -1312,8 +1581,8 @@ const s = StyleSheet.create({
     backgroundColor: '#f6fbf7',
     gap: 4,
   },
-  awardSummaryLabel: { fontSize: 12, color: C.green, fontWeight: '900' },
-  awardSummaryText: { fontSize: 13, color: C.text, fontWeight: '800', lineHeight: 19 },
+  awardSummaryLabel: { fontSize: 12, color: '#d65b4a', fontWeight: '900' },
+  awardSummaryText: { fontSize: 13, color: '#d65b4a', fontWeight: '800', lineHeight: 19 },
   groupSummaryCard: {
     borderWidth: 1,
     borderColor: C.border,
@@ -1360,6 +1629,53 @@ const s = StyleSheet.create({
   modalTitle: { fontSize: 15, fontWeight: '700', color: C.text, flex: 1, marginRight: 8 },
   closeBtn: { backgroundColor: C.green, borderRadius: 20, paddingVertical: 5, paddingHorizontal: 14 },
   closeBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  personalModalCard: { maxHeight: '88%' },
+  personalModalSub: { fontSize: 12, color: C.muted, marginTop: 3 },
+  personalLoadingBox: { paddingVertical: 30, alignItems: 'center', gap: 10 },
+  personalPageScroll: { marginBottom: 8 },
+  personalPageTabs: { flexDirection: 'row', gap: 6, paddingRight: 4 },
+  personalPageTab: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 6, backgroundColor: '#f2f4f6', borderWidth: 1, borderColor: C.border },
+  personalPageTabActive: { backgroundColor: C.greenLight, borderColor: C.green },
+  personalPageTabText: { fontSize: 11, fontWeight: '800', color: C.muted },
+  personalPageTabTextActive: { color: C.green },
+  personalProgress: { fontSize: 12, fontWeight: '800', color: C.muted, marginBottom: 8 },
+  personalHoleScroll: { maxHeight: 520 },
+  personalHoleCard: { borderWidth: 1, borderColor: C.border, borderRadius: 14, padding: 12, marginBottom: 10, backgroundColor: '#fff' },
+  personalHoleHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  personalHoleTitle: { fontSize: 15, fontWeight: '900', color: C.text },
+  personalHolePar: { fontSize: 12, fontWeight: '800', color: C.muted },
+  personalFieldLabel: { fontSize: 12, fontWeight: '900', color: C.text },
+  firDisabledBox: {
+    minHeight: 164,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  personalDisabledText: { fontSize: 12, color: C.muted, fontWeight: '800' },
+  firWrap: { alignItems: 'center', marginTop: 8, gap: 5 },
+  firMiddle: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  firExtraRow: { flexDirection: 'row', gap: 6, marginTop: 4 },
+  firButton: { minWidth: 54, minHeight: 34, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f3f5f3', borderWidth: 1, borderColor: C.border, paddingHorizontal: 10 },
+  firButtonActive: { backgroundColor: C.greenLight, borderColor: C.green },
+  firButtonText: { fontSize: 12, fontWeight: '900', color: C.muted },
+  firButtonTextActive: { color: C.green },
+  firTop: { borderTopLeftRadius: 28, borderTopRightRadius: 28, width: 86 },
+  firBottom: { borderBottomLeftRadius: 28, borderBottomRightRadius: 28, width: 86 },
+  firSide: { backgroundColor: '#fff2ef', borderColor: '#f0cbc4' },
+  firCenter: { width: 76, minHeight: 42 },
+  firExtra: { minWidth: 92 },
+  firHazard: { minWidth: 82, backgroundColor: '#eef6ff', borderColor: '#cfe1f5' },
+  counterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
+  counterControl: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  counterBtn: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: C.greenLight },
+  counterBtnText: { fontSize: 18, fontWeight: '900', color: C.green },
+  counterValue: { minWidth: 22, textAlign: 'center', fontSize: 15, fontWeight: '900', color: C.text },
+  personalFooter: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  personalNavBtn: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: 'center', backgroundColor: '#f2f4f6' },
+  personalNavBtnDisabled: { opacity: 0.4 },
+  personalNavText: { fontSize: 13, fontWeight: '900', color: C.muted },
+  personalSaveBtn: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: 'center', backgroundColor: C.green },
+  personalSaveText: { fontSize: 13, fontWeight: '900', color: '#fff' },
   recentRoundScoreBox: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 16, marginBottom: 14 },
   recentRoundScore: { fontSize: 30, fontWeight: '900', color: C.text },
   recentRoundDiff: { fontSize: 15, fontWeight: '800', marginBottom: 4 },

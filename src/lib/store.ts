@@ -37,6 +37,24 @@ export interface ClubAwardSnapshot extends ClubAwardSnapshotInput {
   sortOrder: number
 }
 
+export type PersonalRoundFir = 'long' | 'center' | 'short' | 'left_ob' | 'right_ob' | 'other_ob' | 'hazard' | null
+
+export interface PersonalRoundHoleStat {
+  hole: number
+  par: number
+  fir: PersonalRoundFir
+  putts: number
+  penalties: number
+}
+
+export interface PersonalRoundStat {
+  clubId: string
+  scheduleId: string
+  userId: string
+  holeStats: PersonalRoundHoleStat[]
+  updatedAt?: string
+}
+
 export interface SavedRound {
   id: string
   date: string
@@ -1205,6 +1223,44 @@ export async function deleteRoundsBySchedule(scheduleId: string): Promise<void> 
     .from('rounds')
     .delete()
     .in('id', roundIds)
+  if (error) throw error
+}
+
+export async function getPersonalRoundStat(scheduleId: string, userId: string): Promise<PersonalRoundStat | null> {
+  const { data, error } = await supabase
+    .from('personal_round_stats')
+    .select('club_id, schedule_id, user_id, hole_stats, updated_at')
+    .eq('schedule_id', scheduleId)
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  return {
+    clubId: data.club_id,
+    scheduleId: data.schedule_id,
+    userId: data.user_id,
+    holeStats: data.hole_stats ?? [],
+    updatedAt: data.updated_at ?? undefined,
+  }
+}
+
+export async function savePersonalRoundStat(input: PersonalRoundStat): Promise<void> {
+  const holeStats = input.holeStats.map(({ hole, par, fir, putts, penalties }) => ({
+    hole,
+    par,
+    fir,
+    putts,
+    penalties,
+  }))
+  const { error } = await supabase
+    .from('personal_round_stats')
+    .upsert({
+      club_id: input.clubId,
+      schedule_id: input.scheduleId,
+      user_id: input.userId,
+      hole_stats: holeStats,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'schedule_id,user_id' })
   if (error) throw error
 }
 
