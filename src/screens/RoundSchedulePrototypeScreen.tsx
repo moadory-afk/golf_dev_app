@@ -48,6 +48,7 @@ type Draft = {
   status: RoundScheduleStatus
   attendanceMode: RoundAttendanceMode
   note: string
+  moneyConfig?: ScheduledRound['moneyConfig']
   groups: ScheduledRoundGroup[]
 }
 
@@ -78,6 +79,7 @@ function createEmptyDraft(): Draft {
     status: 'planned',
     attendanceMode: 'member',
     note: '',
+    moneyConfig: null,
     groups: [createGroup(1)],
   }
 }
@@ -251,6 +253,15 @@ export default function RoundSchedulePrototypeScreen() {
 
   function openEdit(item: ScheduledRound) {
     const savedMoneyGroups = item.moneyGroupIds ?? []
+    if (item.moneyConfig) {
+      setStrokeFee(String(item.moneyConfig.strokeFee))
+      setBirdieBonus(item.moneyConfig.birdieBonus)
+      if (item.moneyConfig.baepanConditions) setBaepanOn(item.moneyConfig.baepanConditions.strokeOverpar)
+    }
+    if (item.awardConfig) {
+      setAwardCount(item.awardConfig.count)
+      setSelectedAwardItems(item.awardConfig.items)
+    }
     setDraft({
       id: item.id,
       date: item.date,
@@ -259,6 +270,7 @@ export default function RoundSchedulePrototypeScreen() {
       status: item.status,
       attendanceMode: item.attendanceMode,
       note: item.note,
+      moneyConfig: item.moneyConfig ?? null,
       groups: item.groups.length > 0 ? item.groups : [createGroup(1)],
     })
     setMoneyGroupIds(item.groups
@@ -288,7 +300,27 @@ export default function RoundSchedulePrototypeScreen() {
     setAwardSaving(true)
     try {
       const items = fillToCount(selectedAwardItems, awardCount)
-      await saveClubAwardConfig(club.id, { count: awardCount, items })
+      if (draft.id) {
+        const next = await upsertRoundSchedule(club.id, {
+          id: draft.id,
+          date: draft.date,
+          courseId: draft.courseId,
+          courseName: draft.courseName?.trim() || undefined,
+          status: draft.status,
+          attendanceMode: draft.attendanceMode,
+          note: draft.note.trim(),
+          moneyGroupIds,
+          awardConfig: { count: awardCount, items },
+          groups: draft.groups.map((group, index) => ({
+            ...group,
+            name: group.name || `${index + 1}조`,
+            time: group.time.trim(),
+          })),
+        })
+        setItems(next)
+      } else {
+        await saveClubAwardConfig(club.id, { count: awardCount, items })
+      }
       setSelectedAwardItems(items)
       Alert.alert('저장 완료', '시상룰을 저장했습니다.')
     } catch (error) {
@@ -303,6 +335,12 @@ export default function RoundSchedulePrototypeScreen() {
     setMoneySaving(true)
     try {
       if (draft.id) {
+        const moneyConfig = {
+          strokeFee: parseInt(strokeFee, 10) || 3000,
+          birdieBonus,
+          baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
+        }
+        setDraft((current) => ({ ...current, moneyConfig }))
         const next = await upsertRoundSchedule(club.id, {
           id: draft.id,
           date: draft.date,
@@ -312,6 +350,7 @@ export default function RoundSchedulePrototypeScreen() {
           attendanceMode: draft.attendanceMode,
           note: draft.note.trim(),
           moneyGroupIds,
+          moneyConfig,
           groups: draft.groups.map((group, index) => ({
             ...group,
             name: group.name || `${index + 1}조`,
@@ -448,12 +487,15 @@ export default function RoundSchedulePrototypeScreen() {
         return
       }
       const selectedGroupIndex = draft.groups.findIndex((group) => group.id === selectedScoreGroup.id)
+      const moneyConfig = draft.id
+        ? (items.find((item) => item.id === draft.id)?.moneyConfig ?? draft.moneyConfig)
+        : draft.moneyConfig
       const settlement = selectedGroupIndex >= 0 && moneyGroupIds.includes(moneyGroupKey(selectedGroupIndex))
         ? {
             participants: players.map((player) => player.name),
-            strokeFee: parseInt(strokeFee, 10) || 3000,
-            birdieBonus,
-            baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
+            strokeFee: moneyConfig?.strokeFee ?? parseInt(strokeFee, 10) || 3000,
+            birdieBonus: moneyConfig?.birdieBonus ?? birdieBonus,
+            baepanConditions: moneyConfig?.baepanConditions ?? { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
           }
         : undefined
       const saved = await saveRound({
@@ -599,6 +641,12 @@ export default function RoundSchedulePrototypeScreen() {
         attendanceMode: draft.attendanceMode,
         note: draft.note.trim(),
         moneyGroupIds,
+        moneyConfig: {
+          strokeFee: parseInt(strokeFee, 10) || 3000,
+          birdieBonus,
+          baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
+        },
+        awardConfig: { count: awardCount, items: fillToCount(selectedAwardItems, awardCount) },
         groups: draft.groups.map((group, index) => ({
           ...group,
           name: `${index + 1}조`,
@@ -643,6 +691,12 @@ export default function RoundSchedulePrototypeScreen() {
         attendanceMode: draft.attendanceMode,
         note: draft.note.trim(),
         moneyGroupIds,
+        moneyConfig: {
+          strokeFee: parseInt(strokeFee, 10) || 3000,
+          birdieBonus,
+          baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
+        },
+        awardConfig: { count: awardCount, items: fillToCount(selectedAwardItems, awardCount) },
         groups: draft.groups.map((group, index) => ({
           ...group,
           name: group.name || `${index + 1}조`,
@@ -655,10 +709,7 @@ export default function RoundSchedulePrototypeScreen() {
         round.date === draft.date && (!draft.courseName || round.courseName === draft.courseName)
       )
       if (finishedRound) {
-        const config = await getClubAwardConfig(club.id)
-        const itemIds = config
-          ? fillToCount(config.items, config.count)
-          : fillToCount(selectedAwardItems, awardCount)
+        const itemIds = fillToCount(selectedAwardItems, awardCount)
         const handicaps = new Map(Object.entries(finishedRound.handicaps ?? {}))
         const awards = computeClubAwardResults(itemIds, finishedRound, handicaps, totalPar(finishedRound.pars))
         await saveClubAwardSnapshots(club.id, finishedRound.id, awards)

@@ -1,9 +1,12 @@
 import { supabase } from './supabase'
+import type { SettlementConfig } from './store'
 
 export type RoundScheduleStatus = 'planned' | 'recruiting' | 'closed' | 'finished'
 export type RoundAttendanceMode = 'member' | 'manager'
 export type RoundAttendanceStatus = 'attending' | 'pending' | 'absent'
 export type RoundAttendanceLabel = '참석' | '미정' | '불참'
+export type ScheduleAwardConfig = { count: number; items: string[] }
+export type ScheduleMoneyConfig = Omit<SettlementConfig, 'participants'>
 
 export type ScheduledRoundGroupMember = {
   userId: string
@@ -36,6 +39,8 @@ export type ScheduledRound = {
   status: RoundScheduleStatus
   attendanceMode: RoundAttendanceMode
   moneyGroupIds?: string[]
+  moneyConfig?: ScheduleMoneyConfig | null
+  awardConfig?: ScheduleAwardConfig | null
   groups: ScheduledRoundGroup[]
 }
 
@@ -51,6 +56,8 @@ type ScheduleRow = {
   status?: RoundScheduleStatus | null
   attendance_mode?: RoundAttendanceMode | null
   money_group_ids?: string[] | null
+  money_config?: ScheduleMoneyConfig | null
+  award_config?: ScheduleAwardConfig | null
   created_at?: string | null
   updated_at?: string | null
 }
@@ -112,6 +119,8 @@ function normalizeSchedule(row: ScheduleRow, groups: ScheduledRoundGroup[]): Sch
     status: row.status ?? 'planned',
     attendanceMode: row.attendance_mode ?? 'member',
     moneyGroupIds: row.money_group_ids ?? [],
+    moneyConfig: row.money_config ?? null,
+    awardConfig: row.award_config ?? null,
     groups,
   }
 }
@@ -119,7 +128,7 @@ function normalizeSchedule(row: ScheduleRow, groups: ScheduledRoundGroup[]): Sch
 export async function getRoundSchedules(clubId: string): Promise<ScheduledRound[]> {
   const { data: schedules, error } = await supabase
     .from('club_round_schedules')
-    .select('id, round_date, course_id, course_name, layout_id, layout_name, tee_time, note, status, attendance_mode, money_group_ids, created_at, updated_at')
+    .select('id, round_date, course_id, course_name, layout_id, layout_name, tee_time, note, status, attendance_mode, money_group_ids, money_config, award_config, created_at, updated_at')
     .eq('club_id', clubId)
     .order('round_date', { ascending: true })
   if (error) throw error
@@ -191,6 +200,8 @@ export async function upsertRoundSchedule(
     status: input.status,
     attendance_mode: input.attendanceMode,
     money_group_ids: input.moneyGroupIds ?? [],
+    money_config: input.moneyConfig ?? null,
+    award_config: input.awardConfig ?? null,
     updated_at: new Date().toISOString(),
   }
 

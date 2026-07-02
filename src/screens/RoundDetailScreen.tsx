@@ -1,9 +1,10 @@
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Alert, Image, Platform } from 'react-native'
 import { useRoute, useNavigation } from '@react-navigation/native'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { getClubAwardConfig, getClubAwardSnapshots, getRound, getRounds, deleteRound, updateRoundSettlement, playerTotal, totalPar, getHandicapsForRound, shortName } from '../lib/store'
+import { getClubAwardConfig, getClubAwardSnapshots, getRound, getRounds, deleteRound, updateRoundSettlement, playerTotal, totalPar, getHandicapsForRound, shortName, saveClubAwardSnapshots } from '../lib/store'
 import { AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
+import { computeClubAwardResults } from '../lib/awardResults'
 import { calcSettlement, holeNetForPlayer, fmtKRW } from '../features/settlement'
 import { useAsync } from '../lib/useAsync'
 import { useClub } from '../lib/ClubContext'
@@ -185,6 +186,8 @@ export default function RoundDetailScreen() {
   const [showRegularDropdown, setShowRegularDropdown] = useState(false)
   const [showHoleDetail, setShowHoleDetail] = useState(false)
   const [awardConfig, setAwardConfig] = useState<{ count: number; items: string[] } | null>(null)
+  const [awardConfigLoaded, setAwardConfigLoaded] = useState(false)
+  const awardSnapshotSaving = useRef(false)
   const { activeClub } = useClub()
 
   useEffect(() => {
@@ -194,7 +197,11 @@ export default function RoundDetailScreen() {
   }, [])
   useEffect(() => {
     if (!activeClub?.id) return
-    getClubAwardConfig(activeClub.id).then(setAwardConfig).catch(() => {})
+    setAwardConfigLoaded(false)
+    getClubAwardConfig(activeClub.id)
+      .then(setAwardConfig)
+      .catch(() => {})
+      .finally(() => setAwardConfigLoaded(true))
   }, [activeClub?.id])
   const isAdmin = activeClub?.role === 'admin'
   const { data: round, loading } = useAsync(() => getRound(route.params.id), [route.params.id, recalcKey])
@@ -203,6 +210,21 @@ export default function RoundDetailScreen() {
     return getRounds(activeClub.id)
   }, [activeClub?.id])
   const { data: clubAwardSnapshots } = useAsync(() => getClubAwardSnapshots(route.params.id), [route.params.id, recalcKey])
+
+  useEffect(() => {
+    if (!activeClub?.id || !round || !allRounds || !awardConfigLoaded || !clubAwardSnapshots || clubAwardSnapshots.length > 0 || awardSnapshotSaving.current) return
+    awardSnapshotSaving.current = true
+    const itemIds = awardConfig
+      ? fillToCount(awardConfig.items, awardConfig.count)
+      : ['medal', 'birdieKing', 'parKing', ...(round.shinperioHoles.length > 0 ? ['shin1'] : []), 'last']
+    const snapshots = computeClubAwardResults(itemIds, round, getHandicapsForRound(round, allRounds ?? [], handicapBasis), totalPar(round.pars))
+    saveClubAwardSnapshots(activeClub.id, round.id, snapshots)
+      .then(() => setRecalcKey((key) => key + 1))
+      .catch((error) => {
+        if (isAdmin) Alert.alert('시상 스냅샷 저장 실패', error instanceof Error ? error.message : String(error))
+      })
+      .finally(() => { awardSnapshotSaving.current = false })
+  }, [activeClub?.id, round, clubAwardSnapshots, awardConfig, awardConfigLoaded, allRounds, handicapBasis, isAdmin])
 
   if (loading) return <View style={s.center}><Text style={s.muted}>불러오는 중...</Text></View>
   if (!round) return <View style={s.center}><Text style={s.muted}>라운드를 찾을 수 없습니다.</Text></View>
