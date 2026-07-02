@@ -314,6 +314,7 @@ export interface ClubInfo {
   id: string
   name: string
   subtitle: string
+  coverImage: string
   inviteCode: string
   role: 'admin' | 'member'
   icon: string
@@ -338,7 +339,7 @@ export async function getMyClub(): Promise<ClubInfo | null> {
 
   const { data: club } = await supabase
     .from('clubs')
-    .select('id, name, subtitle, invite_code')
+    .select('id, name, subtitle, cover_image, invite_code')
     .eq('id', membership.club_id)
     .maybeSingle()
 
@@ -348,6 +349,7 @@ export async function getMyClub(): Promise<ClubInfo | null> {
     id: club.id,
     name: club.name,
     subtitle: club.subtitle ?? '',
+    coverImage: club.cover_image ?? '',
     inviteCode: club.invite_code,
     role: membership.role as 'admin' | 'member',
     icon: '⛳',
@@ -368,7 +370,7 @@ export async function getMyClubs(): Promise<ClubInfo[]> {
   const clubIds = memberships.map((m) => m.club_id)
   const { data: clubs } = await supabase
     .from('clubs')
-    .select('id, name, subtitle, invite_code')
+    .select('id, name, subtitle, cover_image, invite_code')
     .in('id', clubIds)
 
   if (!clubs) return []
@@ -379,6 +381,7 @@ export async function getMyClubs(): Promise<ClubInfo[]> {
       id: club.id,
       name: club.name,
       subtitle: club.subtitle ?? '',
+      coverImage: club.cover_image ?? '',
       inviteCode: club.invite_code,
       role: membership.role as 'admin' | 'member',
       icon: '⛳',
@@ -410,6 +413,7 @@ export async function createClub(name: string, subtitle: string, icon?: string):
     id: club.id,
     name: club.name,
     subtitle: club.subtitle ?? '',
+    coverImage: club.cover_image ?? '',
     inviteCode: club.invite_code,
     role: 'admin',
     icon: icon ?? '⛳',
@@ -422,7 +426,7 @@ export async function joinClub(inviteCode: string): Promise<ClubInfo> {
 
   const { data: club, error: findError } = await supabase
     .from('clubs')
-    .select('id, name, subtitle, invite_code')
+    .select('id, name, subtitle, cover_image, invite_code')
     .eq('invite_code', inviteCode.toUpperCase())
     .maybeSingle()
   if (findError) throw findError
@@ -440,6 +444,7 @@ export async function joinClub(inviteCode: string): Promise<ClubInfo> {
     id: club.id,
     name: club.name,
     subtitle: club.subtitle ?? '',
+    coverImage: club.cover_image ?? '',
     inviteCode: club.invite_code,
     role: 'member',
     icon: '⛳',
@@ -490,9 +495,10 @@ export async function updateMemberRole(clubId: string, userId: string, role: 'ad
   if (error) throw new Error(error.message)
 }
 
-export async function updateClubSettings(clubId: string, name: string, subtitle: string, icon?: string): Promise<void> {
-  // icon 컬럼은 Supabase에 추가 후 활성화: ALTER TABLE clubs ADD COLUMN icon TEXT DEFAULT '⛳';
-  const { error } = await supabase.from('clubs').update({ name, subtitle }).eq('id', clubId)
+export async function updateClubSettings(clubId: string, name: string, subtitle: string, coverImage?: string): Promise<void> {
+  const payload: { name: string; subtitle: string; cover_image?: string } = { name, subtitle }
+  if (coverImage !== undefined) payload.cover_image = coverImage
+  const { error } = await supabase.from('clubs').update(payload).eq('id', clubId)
   if (error) throw error
 }
 

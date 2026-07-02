@@ -1,5 +1,5 @@
 import {
-  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Image, Share, Alert,
+  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Image, Share, Alert, TextInput, ActivityIndicator,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CommonActions, useNavigation, useRoute } from '@react-navigation/native'
@@ -7,7 +7,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import type { RouteProp } from '@react-navigation/native'
 import { useState, useCallback, useEffect } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { getClubMembers, getRounds, playerTotal, totalPar, computeHandicaps, shortName, type SavedRound } from '../lib/store'
+import * as ImageManipulator from 'expo-image-manipulator'
+import * as ImagePicker from 'expo-image-picker'
+import { getClubMembers, getRounds, playerTotal, totalPar, computeHandicaps, shortName, updateClubSettings, type ClubInfo, type SavedRound } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
 import { useUserProfile } from '../lib/UserProfileContext'
 import { useAsync } from '../lib/useAsync'
@@ -56,7 +58,7 @@ export default function ClubScreen() {
   const nav = useNavigation<Nav>()
   const route = useRoute<ClubRoute>()
   const [refreshKey, setRefreshKey] = useState(0)
-  const { activeClub: club } = useClub()
+  const { activeClub: club, myClubs, setActiveClub, refreshClubs } = useClub()
   const { data, loading } = useAsync(
     () => (club ? getRounds(club.id) : Promise.resolve([])),
     [refreshKey, club?.id],
@@ -93,6 +95,13 @@ export default function ClubScreen() {
     } catch {
       Alert.alert('초대코드', club.inviteCode)
     }
+  }
+
+  async function handleSaveClubInfo(name: string, subtitle: string, coverImage?: string) {
+    if (!club) return
+    await updateClubSettings(club.id, name, subtitle, coverImage)
+    await refreshClubs()
+    setRefreshKey((k) => k + 1)
   }
 
   const handicaps = computeHandicaps(rounds, handicapBasis)
@@ -312,12 +321,16 @@ export default function ClubScreen() {
       )}
       {clubInfoOpen && club && (
         <ClubInfoModal
-          clubName={club.name}
-          subtitle={club.subtitle?.trim() ? club.subtitle : '골프의 모든 경험을 하나로.'}
-          role={club.role === 'admin' ? '관리자' : '일반회원'}
+          club={club}
+          clubs={myClubs}
           memberCount={members.length}
           admins={adminMembers}
           onClose={() => setClubInfoOpen(false)}
+          onSelectClub={(nextClub) => {
+            setActiveClub(nextClub)
+            setRefreshKey((k) => k + 1)
+          }}
+          onSaveClub={handleSaveClubInfo}
           onMembers={() => {
             setClubInfoOpen(false)
             nav.navigate('Members', { clubId: club.id })
@@ -387,7 +400,7 @@ export default function ClubScreen() {
               <Text style={s.pageSectionTitle}>클럽 관리</Text>
 
                   <View style={s.clubHeroCard}>
-                    <Image source={{ uri: CLUB_HERO_IMAGE }} style={s.clubHeroImage} resizeMode="cover" />
+                    <Image source={{ uri: club.coverImage || CLUB_HERO_IMAGE }} style={s.clubHeroImage} resizeMode="cover" />
                     <View style={s.clubHeroBody}>
                       <View style={{ flex: 1 }}>
                         <Text style={s.clubHeroName} numberOfLines={1}>{club.name}</Text>
@@ -488,37 +501,179 @@ export default function ClubScreen() {
 }
 
 function ClubInfoModal({
-  clubName,
-  subtitle,
-  role,
+  club,
+  clubs,
   memberCount,
   admins,
   onClose,
+  onSelectClub,
+  onSaveClub,
   onMembers,
   onInvite,
 }: {
-  clubName: string
-  subtitle: string
-  role: string
+  club: ClubInfo
+  clubs: ClubInfo[]
   memberCount: number
   admins: Array<{ userId: string; name: string; role: string }>
   onClose: () => void
+  onSelectClub: (club: ClubInfo) => void
+  onSaveClub: (name: string, subtitle: string, coverImage?: string) => Promise<void>
   onMembers: () => void
   onInvite: () => void
 }) {
+  const [editing, setEditing] = useState(false)
+  const [editName, setEditName] = useState(club.name)
+  const [editSubtitle, setEditSubtitle] = useState(club.subtitle)
+  const [editCoverImage, setEditCoverImage] = useState(club.coverImage)
+  const [saving, setSaving] = useState(false)
+  const [uploadingCover, setUploadingCover] = useState(false)
+  const isAdmin = club.role === 'admin'
+  const subtitle = club.subtitle?.trim() ? club.subtitle : '골프의 모든 경험을 하나로.'
+  const role = isAdmin ? '관리자' : '일반회원'
+
+  useEffect(() => {
+    setEditing(false)
+    setEditName(club.name)
+    setEditSubtitle(club.subtitle)
+    setEditCoverImage(club.coverImage)
+  }, [club.id, club.name, club.subtitle, club.coverImage])
+
+  async function handleSave() {
+    if (!editName.trim()) {
+      Alert.alert('클럽명을 입력하세요.')
+      return
+    }
+    setSaving(true)
+    try {
+      await onSaveClub(editName.trim(), editSubtitle.trim(), editCoverImage)
+      setEditing(false)
+    } catch (e: unknown) {
+      Alert.alert('오류', e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handlePickCoverImage() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      Alert.alert('권한 필요', '사진 접근 권한이 필요합니다.')
+      return
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [16, 7],
+      quality: 0.8,
+    })
+    if (result.canceled || !result.assets[0]) return
+
+    setUploadingCover(true)
+    try {
+      const compressed = await ImageManipulator.manipulateAsync(
+        result.assets[0].uri,
+        [{ resize: { width: 720 } }],
+        { compress: 0.45, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+      )
+      const dataUri = `data:image/jpeg;base64,${compressed.base64}`
+      if (dataUri.length > 220000) {
+        Alert.alert('사진이 너무 큽니다', '더 작은 사진을 선택해주세요.')
+        return
+      }
+      setEditCoverImage(dataUri)
+    } catch {
+      Alert.alert('오류', '사진 처리에 실패했습니다.')
+    } finally {
+      setUploadingCover(false)
+    }
+  }
+
   return (
     <Modal transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
           <View style={s.modalHeader}>
             <View style={{ flex: 1 }}>
-              <Text style={s.clubInfoTitle}>{clubName}</Text>
-              <Text style={s.clubInfoSubtitle}>{subtitle}</Text>
+              {editing ? (
+                <>
+                  <TouchableOpacity style={s.clubCoverPicker} onPress={handlePickCoverImage} activeOpacity={0.86}>
+                    <Image source={{ uri: editCoverImage || CLUB_HERO_IMAGE }} style={s.clubCoverPreview} resizeMode="cover" />
+                    <View style={s.clubCoverOverlay}>
+                      {uploadingCover
+                        ? <ActivityIndicator color="#fff" size="small" />
+                        : <Text style={s.clubCoverText}>대문 사진 변경</Text>}
+                    </View>
+                  </TouchableOpacity>
+                  <TextInput
+                    style={s.clubInfoInput}
+                    value={editName}
+                    onChangeText={setEditName}
+                    placeholder="클럽명"
+                    maxLength={24}
+                    placeholderTextColor={C.muted}
+                  />
+                  <TextInput
+                    style={s.clubInfoInput}
+                    value={editSubtitle}
+                    onChangeText={setEditSubtitle}
+                    placeholder="부제"
+                    maxLength={40}
+                    placeholderTextColor={C.muted}
+                  />
+                  {editCoverImage ? (
+                    <TouchableOpacity style={s.clubCoverResetBtn} onPress={() => setEditCoverImage('')} activeOpacity={0.82}>
+                      <Text style={s.clubCoverResetText}>기본 사진으로 변경</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <Text style={s.clubInfoTitle}>{club.name}</Text>
+                  <Text style={s.clubInfoSubtitle}>{subtitle}</Text>
+                </>
+              )}
             </View>
             <TouchableOpacity style={s.closeBtn} onPress={onClose}>
               <Text style={s.closeBtnText}>닫기</Text>
             </TouchableOpacity>
           </View>
+
+          {clubs.length > 1 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.clubSwitchScroll} contentContainerStyle={s.clubSwitchRow}>
+              {clubs.map((item) => {
+                const selected = item.id === club.id
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[s.clubSwitchChip, selected && s.clubSwitchChipActive]}
+                    onPress={() => onSelectClub(item)}
+                    activeOpacity={0.82}
+                  >
+                    <Text style={[s.clubSwitchText, selected && s.clubSwitchTextActive]}>{item.name}</Text>
+                  </TouchableOpacity>
+                )
+              })}
+            </ScrollView>
+          )}
+
+          {isAdmin && (
+            <View style={s.clubEditRow}>
+              {editing ? (
+                <>
+                  <TouchableOpacity style={[s.clubEditBtn, saving && { opacity: 0.6 }]} onPress={handleSave} disabled={saving} activeOpacity={0.82}>
+                    {saving ? <ActivityIndicator color={C.green} size="small" /> : <Text style={s.clubEditText}>저장</Text>}
+                  </TouchableOpacity>
+                  <TouchableOpacity style={s.clubEditBtn} onPress={() => setEditing(false)} activeOpacity={0.82}>
+                    <Text style={s.clubEditText}>취소</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <TouchableOpacity style={s.clubEditBtn} onPress={() => setEditing(true)} activeOpacity={0.82}>
+                  <Text style={s.clubEditText}>클럽 정보 수정</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
           <View style={s.clubInfoStats}>
             <Text style={s.clubInfoStat}>회원 {memberCount}명</Text>
@@ -791,6 +946,64 @@ const s = StyleSheet.create({
   modalTitle: { fontSize: 15, fontWeight: '700', color: C.text, flex: 1, marginRight: 8 },
   clubInfoTitle: { fontSize: 22, fontWeight: '900', color: C.text },
   clubInfoSubtitle: { fontSize: 13, color: C.muted, marginTop: 5, lineHeight: 18 },
+  clubInfoInput: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 14,
+    color: C.text,
+    marginBottom: 8,
+    backgroundColor: '#fff',
+  },
+  clubCoverPicker: {
+    height: 112,
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 10,
+    backgroundColor: '#eef3ef',
+  },
+  clubCoverPreview: { width: '100%', height: '100%' },
+  clubCoverOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.24)',
+  },
+  clubCoverText: { color: '#fff', fontSize: 13, fontWeight: '900' },
+  clubCoverResetBtn: {
+    alignSelf: 'flex-start',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: '#f2f4f6',
+    marginBottom: 8,
+  },
+  clubCoverResetText: { fontSize: 12, fontWeight: '800', color: C.muted },
+  clubSwitchScroll: { marginBottom: 12 },
+  clubSwitchRow: { gap: 8, paddingRight: 4 },
+  clubSwitchChip: {
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: '#f2f4f6',
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  clubSwitchChipActive: { backgroundColor: C.greenLight, borderColor: C.green },
+  clubSwitchText: { fontSize: 12, fontWeight: '800', color: C.muted },
+  clubSwitchTextActive: { color: C.green },
+  clubEditRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  clubEditBtn: {
+    borderRadius: 14,
+    backgroundColor: C.greenLight,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignItems: 'center',
+    minWidth: 70,
+  },
+  clubEditText: { fontSize: 12, fontWeight: '800', color: C.green },
   clubInfoStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
   clubInfoStat: { backgroundColor: C.greenLight, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6, fontSize: 12, fontWeight: '800', color: C.green },
   infoSection: { paddingTop: 12, marginTop: 4 },
