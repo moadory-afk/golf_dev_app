@@ -1339,6 +1339,24 @@ function LottoSelectionModal({
   const hitCount = resultRows.filter((row) => myStrokes?.[row.hole - 1] === row.score).length
   const allResultRows = Object.values(draw?.drawnScores ?? {}).sort((a, b) => a.hole - b.hole)
   const isPlaying = !myStrokes
+  const lottoAwardGroups = (() => {
+    if (!awardReady) return []
+    const rowsWithScore = awardRows.filter((row) => row.hasScore)
+    const missRows = rowsWithScore.filter((row) => row.prize <= 0)
+    const groups = [
+      {
+        label: '낙첨',
+        rows: missRows,
+        format: (row: LottoAwardRow) => `${row.name} ${row.hits}개`,
+      },
+      ...([3, 4, 5, 6] as const).map((hits) => ({
+        label: `${hits}개`,
+        rows: rowsWithScore.filter((row) => row.hits === hits && row.prize > 0),
+        format: (row: LottoAwardRow) => `${row.name} ${formatWon(row.prize)}`,
+      })),
+    ]
+    return groups.filter((group) => group.rows.length > 0)
+  })()
   const groups: Array<{ key: keyof LottoSelection; label: string; limit: number; holes: number[] }> = [
     { key: 'par3', label: '파 3', limit: 1, holes: pars.map((par, index) => par === 3 ? index + 1 : null).filter((hole): hole is number => !!hole) },
     { key: 'par4', label: '파 4', limit: 3, holes: pars.map((par, index) => par === 4 ? index + 1 : null).filter((hole): hole is number => !!hole) },
@@ -1413,12 +1431,7 @@ function LottoSelectionModal({
                   <Text style={s.lottoPrizeItem}>6개 {formatWon(jackpot)}</Text>
                 </View>
               </View>
-              {!canPurchase ? (
-                <View style={s.lottoPurchaseBox}>
-                  <Text style={s.lottoPurchaseTitle}>결과 확인</Text>
-                  <Text style={s.muted}>참석자로 배정된 경우에만 Lotto 구매가 가능합니다.</Text>
-                </View>
-              ) : isPurchased ? (
+              {isPurchased ? (
                 <View style={s.lottoPurchaseBox}>
                   <Text style={s.lottoPurchaseTitle}>구매 및 추첨 결과</Text>
                   <View style={s.lottoPurchaseHoles}>
@@ -1454,7 +1467,7 @@ function LottoSelectionModal({
                     })}
                   </View>
                 </View>
-              ) : (
+              ) : canPurchase ? (
                 <>
                   <View style={s.lottoCounterRow}>
                     <Text style={[s.lottoCounter, selection.par3.length === 1 && s.lottoCounterDone]}>파3 {selection.par3.length}/1</Text>
@@ -1494,9 +1507,8 @@ function LottoSelectionModal({
                     {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.lottoSaveText}>구매 완료</Text>}
                   </TouchableOpacity>
                 </>
-              )}
+              ) : null}
               <View style={s.lottoDrawBox}>
-                <Text style={s.lottoDrawTitle}>추첨 상태</Text>
                 {isCompleted ? (
                   <>
                     <Text style={s.lottoDrawDoneText}>
@@ -1512,19 +1524,15 @@ function LottoSelectionModal({
                       <Text style={s.lottoAwardTitle}>추첨 결과 및 시상금</Text>
                       {!awardReady ? (
                         <Text style={s.lottoDrawWaitText}>스코어 입력 후 당첨자를 확인할 수 있습니다.</Text>
-                      ) : awardRows.length === 0 ? (
+                      ) : lottoAwardGroups.length === 0 ? (
                         <Text style={s.lottoDrawWaitText}>참여 확정한 회원이 없습니다.</Text>
                       ) : (
                         <View style={s.lottoAwardList}>
-                          {awardRows.map((row) => (
-                            <View key={row.userId} style={[s.lottoAwardRow, row.prize > 0 && s.lottoAwardWinnerRow]}>
-                              <View style={{ flex: 1 }}>
-                                <Text style={[s.lottoAwardName, row.prize > 0 && s.lottoAwardWinnerText]}>
-                                  {row.name} {row.hasScore ? `${row.hits}개 적중` : '스코어 입력 전'}
-                                </Text>
-                                <Text style={s.lottoAwardMeta}>{row.prize > 0 ? `시상금 ${formatWon(row.prize)}` : '낙첨'}</Text>
-                              </View>
-                              {row.prize > 0 && <Text style={s.lottoAwardBadge}>당첨</Text>}
+                          {lottoAwardGroups.map((group) => (
+                            <View key={group.label} style={s.lottoAwardRow}>
+                              <Text style={s.lottoAwardName}>
+                                {group.label} : {group.rows.map(group.format).join(', ')}
+                              </Text>
                             </View>
                           ))}
                         </View>
