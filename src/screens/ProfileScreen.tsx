@@ -16,6 +16,7 @@ import * as ImageManipulator from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
 import type { User } from '@supabase/supabase-js'
 import { EmojiIcon } from '../components/EmojiIcon'
+import { ImageCropModal, type ImageCropRect } from '../components/ImageCropModal'
 import { ensureProfile } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { useUserProfile } from '../lib/UserProfileContext'
@@ -77,6 +78,7 @@ export default function ProfileScreen() {
   const [profileIcon, setProfileIcon] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [pendingPhotoCrop, setPendingPhotoCrop] = useState<{ uri: string; width: number; height: number } | null>(null)
   const [showPwModal, setShowPwModal] = useState(false)
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
@@ -135,12 +137,22 @@ export default function ProfileScreen() {
             quality: 0.8,
           })
     if (result.canceled || !result.assets[0]) return
+    const asset = result.assets[0]
+    setPendingPhotoCrop({
+      uri: asset.uri,
+      width: asset.width || 1000,
+      height: asset.height || 1000,
+    })
+  }
 
+  async function handleSaveCroppedPhoto(crop: ImageCropRect) {
+    if (!pendingPhotoCrop) return
+    setPendingPhotoCrop(null)
     setUploadingPhoto(true)
     try {
       const compressed = await ImageManipulator.manipulateAsync(
-        result.assets[0].uri,
-        [{ resize: { width: 100, height: 100 } }],
+        pendingPhotoCrop.uri,
+        [{ crop }, { resize: { width: 100, height: 100 } }],
         { compress: 0.4, format: ImageManipulator.SaveFormat.JPEG, base64: true },
       )
       const dataUri = `data:image/jpeg;base64,${compressed.base64}`
@@ -243,6 +255,17 @@ export default function ProfileScreen() {
 
   return (
     <View style={p.screen}>
+      {pendingPhotoCrop && (
+        <ImageCropModal
+          uri={pendingPhotoCrop.uri}
+          width={pendingPhotoCrop.width}
+          height={pendingPhotoCrop.height}
+          aspect={[1, 1]}
+          title="프로필 사진 자르기"
+          onCancel={() => setPendingPhotoCrop(null)}
+          onConfirm={handleSaveCroppedPhoto}
+        />
+      )}
       {showAvatarOptions && (
         <Modal transparent animationType="fade" onRequestClose={() => setShowAvatarOptions(false)}>
           <TouchableOpacity style={p.overlay} activeOpacity={1} onPress={() => setShowAvatarOptions(false)}>

@@ -17,6 +17,7 @@ import { C } from '../theme'
 import { AppHeader } from '../components/AppHeader'
 import { Icon } from '../components/Icon'
 import { EmojiIcon } from '../components/EmojiIcon'
+import { ImageCropModal, type ImageCropRect } from '../components/ImageCropModal'
 import type { MainTabParamList, RootStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
@@ -558,6 +559,7 @@ function ClubInfoModal({
   const [editCoverImage, setEditCoverImage] = useState(club.coverImage)
   const [saving, setSaving] = useState(false)
   const [uploadingCover, setUploadingCover] = useState(false)
+  const [pendingCoverCrop, setPendingCoverCrop] = useState<{ uri: string; width: number; height: number } | null>(null)
   const [showHandicapDrop, setShowHandicapDrop] = useState(false)
   const isAdmin = club.role === 'admin'
   const subtitle = club.subtitle?.trim() ? club.subtitle : '골프의 모든 경험을 하나로.'
@@ -599,12 +601,22 @@ function ClubInfoModal({
       quality: 0.8,
     })
     if (result.canceled || !result.assets[0]) return
+    const asset = result.assets[0]
+    setPendingCoverCrop({
+      uri: asset.uri,
+      width: asset.width || 1600,
+      height: asset.height || 900,
+    })
+  }
 
+  async function handleApplyCoverCrop(crop: ImageCropRect) {
+    if (!pendingCoverCrop) return
+    setPendingCoverCrop(null)
     setUploadingCover(true)
     try {
       const compressed = await ImageManipulator.manipulateAsync(
-        result.assets[0].uri,
-        [{ resize: { width: 720 } }],
+        pendingCoverCrop.uri,
+        [{ crop }, { resize: { width: 720 } }],
         { compress: 0.45, format: ImageManipulator.SaveFormat.JPEG, base64: true },
       )
       const dataUri = `data:image/jpeg;base64,${compressed.base64}`
@@ -622,6 +634,17 @@ function ClubInfoModal({
 
   return (
     <Modal transparent animationType="fade" onRequestClose={onClose}>
+      {pendingCoverCrop && (
+        <ImageCropModal
+          uri={pendingCoverCrop.uri}
+          width={pendingCoverCrop.width}
+          height={pendingCoverCrop.height}
+          aspect={[16, 7]}
+          title="클럽 대문사진 자르기"
+          onCancel={() => setPendingCoverCrop(null)}
+          onConfirm={handleApplyCoverCrop}
+        />
+      )}
       <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
           <View style={s.modalHeader}>
