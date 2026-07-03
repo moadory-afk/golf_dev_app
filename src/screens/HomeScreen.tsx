@@ -198,6 +198,7 @@ export default function HomeScreen() {
   const [personalPage, setPersonalPage] = useState(0)
   const [personalLoading, setPersonalLoading] = useState(false)
   const [personalSaving, setPersonalSaving] = useState(false)
+  const [personalEditable, setPersonalEditable] = useState(false)
   const [lottoRound, setLottoRound] = useState<ScheduledRound | null>(null)
   const [lottoPars, setLottoPars] = useState<number[]>([])
   const [lottoSelection, setLottoSelection] = useState<LottoSelection>(emptyLottoSelection)
@@ -610,6 +611,11 @@ export default function HomeScreen() {
       Alert.alert('확인', '로그인 정보가 필요합니다.')
       return
     }
+    const assignedToRound = round.groups.some((group) =>
+      group.members.some((member) => member.userId === myUserId || member.name === myName)
+    )
+    if (!isAdmin && !assignedToRound) return
+    setPersonalEditable(assignedToRound)
     setPersonalInputRound(round)
     setPersonalPage(0)
     setPersonalLoading(true)
@@ -630,7 +636,7 @@ export default function HomeScreen() {
     )
   }
   const savePersonalInput = async () => {
-    if (!club?.id || !myUserId || !personalInputRound) return
+    if (!club?.id || !myUserId || !personalInputRound || !personalEditable) return
     setPersonalSaving(true)
     try {
       await savePersonalRoundStat({
@@ -652,6 +658,10 @@ export default function HomeScreen() {
       Alert.alert('확인', '로그인 정보가 필요합니다.')
       return
     }
+    const assignedToRound = round.groups.some((group) =>
+      group.members.some((member) => member.userId === myUserId || member.name === myName)
+    )
+    if (!isAdmin && !assignedToRound) return
     setLottoRound(round)
     setLottoLoading(true)
     try {
@@ -692,6 +702,10 @@ export default function HomeScreen() {
   }
   const isLottoReady = lottoSelection.par3.length === 1 && lottoSelection.par4.length === 3 && lottoSelection.par5.length === 2
   const saveLottoSelection = async () => {
+    const assignedToRound = lottoRound?.groups.some((group) =>
+      group.members.some((member) => member.userId === myUserId || member.name === myName)
+    )
+    if (!assignedToRound) return
     if (!club?.id || !myUserId || !lottoRound || !isLottoReady) return
     setLottoSaving(true)
     try {
@@ -820,7 +834,8 @@ export default function HomeScreen() {
                     const assignedToGroup = round.groups.some((group) =>
                       group.members.some((member) => member.userId === myUserId || member.name === myName)
                     )
-                    const canUseTodayPlayerActions = isAdmin || assignedToGroup || myRoundAttendance[round.id] === '참석'
+                    const canEnterTodayPlayerActions = isAdmin || assignedToGroup
+                    const canEditTodayPlayerActions = assignedToGroup
                     return (
                       <View
                         key={round.id}
@@ -842,20 +857,20 @@ export default function HomeScreen() {
                           )}
                           <View style={s.todayActionRow}>
                             <TouchableOpacity
-                              style={[s.todayActionBtn, !canUseTodayPlayerActions && s.todayActionBtnDisabled]}
+                              style={[s.todayActionBtn, !canEnterTodayPlayerActions && s.todayActionBtnDisabled]}
                               onPress={() => openPersonalInput(round)}
-                              disabled={!canUseTodayPlayerActions}
+                              disabled={!canEnterTodayPlayerActions}
                               activeOpacity={0.82}
                             >
-                              <Text style={[s.todayActionText, !canUseTodayPlayerActions && s.todayActionTextDisabled]}>My Score</Text>
+                              <Text style={[s.todayActionText, !canEditTodayPlayerActions && s.todayActionTextDisabled]}>My Score</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                              style={[s.todayActionBtn, !canUseTodayPlayerActions && s.todayActionBtnDisabled]}
+                              style={[s.todayActionBtn, !canEnterTodayPlayerActions && s.todayActionBtnDisabled]}
                               onPress={() => openLottoSelection(round)}
-                              disabled={!canUseTodayPlayerActions}
+                              disabled={!canEnterTodayPlayerActions}
                               activeOpacity={0.82}
                             >
-                              <Text style={[s.todayActionText, !canUseTodayPlayerActions && s.todayActionTextDisabled]}>Lotto 6/18</Text>
+                              <Text style={[s.todayActionText, !canEditTodayPlayerActions && s.todayActionTextDisabled]}>Lotto 6/18</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={s.todayActionBtn} onPress={() => openRoundSheetFor(round)} activeOpacity={0.82}>
                               <Text style={s.todayActionText}>조편성 결과</Text>
@@ -1053,6 +1068,7 @@ export default function HomeScreen() {
             page={personalPage}
             loading={personalLoading}
             saving={personalSaving}
+            editable={personalEditable}
             onChangePage={setPersonalPage}
             onChangeHole={updatePersonalHole}
             onSave={savePersonalInput}
@@ -1070,6 +1086,9 @@ export default function HomeScreen() {
             awardConfig={lottoAwardConfig}
             jackpot={lottoJackpot}
             purchased={!!(lottoRound && myLottoPurchases[lottoRound.id])}
+            canPurchase={!!lottoRound?.groups.some((group) =>
+              group.members.some((member) => member.userId === myUserId || member.name === myName)
+            )}
             loading={lottoLoading}
             saving={lottoSaving}
             drawSaving={lottoDrawSaving}
@@ -1102,6 +1121,7 @@ function PersonalRoundInputModal({
   page,
   loading,
   saving,
+  editable,
   onChangePage,
   onChangeHole,
   onSave,
@@ -1112,6 +1132,7 @@ function PersonalRoundInputModal({
   page: number
   loading: boolean
   saving: boolean
+  editable: boolean
   onChangePage: (page: number) => void
   onChangeHole: (hole: number, patch: Partial<PersonalRoundHoleStat>) => void
   onSave: () => void
@@ -1157,11 +1178,15 @@ function PersonalRoundInputModal({
                 ))}
               </ScrollView>
               <Text style={s.personalProgress}>입력 {completed}/18홀</Text>
+              {!editable && (
+                <Text style={[s.muted, { marginBottom: 8 }]}>참석자로 배정된 경우에만 기록할 수 있습니다.</Text>
+              )}
               <ScrollView style={s.personalHoleScroll}>
                 {currentStat ? (
                   <PersonalHoleCard
                     stat={currentStat}
-                    onChange={(patch) => onChangeHole(currentStat.hole, patch)}
+                    editable={editable}
+                    onChange={(patch) => editable && onChangeHole(currentStat.hole, patch)}
                   />
                 ) : null}
               </ScrollView>
@@ -1178,7 +1203,7 @@ function PersonalRoundInputModal({
                     <Text style={s.personalSaveText}>다음</Text>
                   </TouchableOpacity>
                 ) : (
-                  <TouchableOpacity style={[s.personalSaveBtn, saving && { opacity: 0.6 }]} onPress={onSave} disabled={saving}>
+                  <TouchableOpacity style={[s.personalSaveBtn, (!editable || saving) && { opacity: 0.6 }]} onPress={onSave} disabled={!editable || saving}>
                     {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.personalSaveText}>저장 완료</Text>}
                   </TouchableOpacity>
                 )}
@@ -1191,8 +1216,9 @@ function PersonalRoundInputModal({
   )
 }
 
-function PersonalHoleCard({ stat, onChange }: {
+function PersonalHoleCard({ stat, editable, onChange }: {
   stat: PersonalRoundHoleStat
+  editable: boolean
   onChange: (patch: Partial<PersonalRoundHoleStat>) => void
 }) {
   const firDisabled = stat.par === 3
@@ -1208,19 +1234,20 @@ function PersonalHoleCard({ stat, onChange }: {
           <Text style={s.personalDisabledText}>파3는 FIR 기록 대상이 아닙니다.</Text>
         </View>
       ) : (
-        <FirPicker value={stat.fir} onChange={(fir) => onChange({ fir })} />
+        <FirPicker value={stat.fir} disabled={!editable} onChange={(fir) => onChange({ fir })} />
       )}
-      <CounterRow label="퍼팅수" value={stat.putts} min={0} onChange={(putts) => onChange({ putts })} />
-      <CounterRow label="패널티" value={stat.penalties} min={0} onChange={(penalties) => onChange({ penalties })} />
+      <CounterRow label="퍼팅수" value={stat.putts} min={0} disabled={!editable} onChange={(putts) => onChange({ putts })} />
+      <CounterRow label="패널티" value={stat.penalties} min={0} disabled={!editable} onChange={(penalties) => onChange({ penalties })} />
     </View>
   )
 }
 
-function FirPicker({ value, onChange }: { value: PersonalRoundFir; onChange: (value: PersonalRoundFir) => void }) {
+function FirPicker({ value, disabled, onChange }: { value: PersonalRoundFir; disabled?: boolean; onChange: (value: PersonalRoundFir) => void }) {
   const firButton = (label: string, nextValue: PersonalRoundFir, style?: object) => (
     <TouchableOpacity
-      style={[s.firButton, style, value === nextValue && s.firButtonActive]}
+      style={[s.firButton, style, value === nextValue && s.firButtonActive, disabled && { opacity: 0.5 }]}
       onPress={() => onChange(nextValue)}
+      disabled={disabled}
       activeOpacity={0.82}
     >
       <Text style={[s.firButtonText, value === nextValue && s.firButtonTextActive]}>{label}</Text>
@@ -1244,16 +1271,16 @@ function FirPicker({ value, onChange }: { value: PersonalRoundFir; onChange: (va
   )
 }
 
-function CounterRow({ label, value, min, onChange }: { label: string; value: number; min: number; onChange: (value: number) => void }) {
+function CounterRow({ label, value, min, disabled, onChange }: { label: string; value: number; min: number; disabled?: boolean; onChange: (value: number) => void }) {
   return (
     <View style={s.counterRow}>
       <Text style={s.personalFieldLabel}>{label}</Text>
       <View style={s.counterControl}>
-        <TouchableOpacity style={s.counterBtn} onPress={() => onChange(Math.max(min, value - 1))}>
+        <TouchableOpacity style={[s.counterBtn, disabled && { opacity: 0.5 }]} onPress={() => onChange(Math.max(min, value - 1))} disabled={disabled}>
           <Text style={s.counterBtnText}>-</Text>
         </TouchableOpacity>
         <Text style={s.counterValue}>{value}</Text>
-        <TouchableOpacity style={s.counterBtn} onPress={() => onChange(value + 1)}>
+        <TouchableOpacity style={[s.counterBtn, disabled && { opacity: 0.5 }]} onPress={() => onChange(value + 1)} disabled={disabled}>
           <Text style={s.counterBtnText}>+</Text>
         </TouchableOpacity>
       </View>
@@ -1273,6 +1300,7 @@ function LottoSelectionModal({
   awardConfig,
   jackpot,
   purchased,
+  canPurchase,
   loading,
   saving,
   drawSaving,
@@ -1293,6 +1321,7 @@ function LottoSelectionModal({
   awardConfig: LottoAwardConfig
   jackpot: number
   purchased: boolean
+  canPurchase: boolean
   loading: boolean
   saving: boolean
   drawSaving: boolean
@@ -1384,7 +1413,12 @@ function LottoSelectionModal({
                   <Text style={s.lottoPrizeItem}>6개 {formatWon(jackpot)}</Text>
                 </View>
               </View>
-              {isPurchased ? (
+              {!canPurchase ? (
+                <View style={s.lottoPurchaseBox}>
+                  <Text style={s.lottoPurchaseTitle}>결과 확인</Text>
+                  <Text style={s.muted}>참석자로 배정된 경우에만 Lotto 구매가 가능합니다.</Text>
+                </View>
+              ) : isPurchased ? (
                 <View style={s.lottoPurchaseBox}>
                   <Text style={s.lottoPurchaseTitle}>구매 및 추첨 결과</Text>
                   <View style={s.lottoPurchaseHoles}>
