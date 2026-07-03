@@ -4,8 +4,9 @@ import * as ImagePicker from 'expo-image-picker'
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator'
 import DateField, { todayLocal } from '../components/DateField'
 import { Icon } from '../components/Icon'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useRoute } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import type { RouteProp } from '@react-navigation/native'
 import { useClub } from '../lib/ClubContext'
 import {
   deleteRoundSchedule,
@@ -29,6 +30,7 @@ import { C } from '../theme'
 import type { RootStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
+type Route = RouteProp<RootStackParamList, 'RoundSchedulePrototype'>
 
 type ClubMember = { userId: string; name: string; role: string }
 type RoundEditorTab = 'basic' | 'score' | 'award' | 'money'
@@ -119,7 +121,9 @@ function moneyGroupKey(index: number) {
 
 export default function RoundSchedulePrototypeScreen() {
   const nav = useNavigation<Nav>()
+  const route = useRoute<Route>()
   const { activeClub: club } = useClub()
+  const modalOnly = route.params?.modalOnly === true
 
   useLayoutEffect(() => {
     nav.setOptions({ title: `${club?.name ?? '클럽'} 라운드 일정` })
@@ -294,6 +298,17 @@ export default function RoundSchedulePrototypeScreen() {
     setEditorOpen(true)
   }
 
+  function closeEditor() {
+    setEditorOpen(false)
+    if (modalOnly) nav.goBack()
+  }
+
+  useEffect(() => {
+    if (!route.params?.openCreate) return
+    openCreate()
+    nav.setParams({ openCreate: false })
+  }, [nav, route.params?.openCreate])
+
   function openEdit(item: ScheduledRound) {
     const savedMoneyGroups = item.moneyGroupIds ?? []
     if (item.moneyConfig) {
@@ -339,6 +354,15 @@ export default function RoundSchedulePrototypeScreen() {
     setEditorTab('basic')
     setEditorOpen(true)
   }
+
+  useEffect(() => {
+    const editScheduleId = route.params?.editScheduleId
+    if (!editScheduleId || items.length === 0) return
+    const item = items.find((round) => round.id === editScheduleId)
+    if (!item) return
+    openEdit(item)
+    nav.setParams({ editScheduleId: undefined })
+  }, [items, nav, route.params?.editScheduleId])
 
   function toggleAwardItem(id: string) {
     setSelectedAwardItems((current) => {
@@ -606,7 +630,7 @@ export default function RoundSchedulePrototypeScreen() {
       const awards = computeClubAwardResults(itemIds, saved, handicaps, totalPar(saved.pars))
       await saveClubAwardSnapshots(club.id, saved.id, awards)
       closeScoreUpload()
-      setEditorOpen(false)
+      closeEditor()
       nav.navigate('RoundDetail', { id: saved.id })
     } catch (error) {
       Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
@@ -785,7 +809,7 @@ export default function RoundSchedulePrototypeScreen() {
         })),
       })
       setItems(next)
-      setEditorOpen(false)
+      closeEditor()
     } finally {
       setSaving(false)
     }
@@ -793,7 +817,7 @@ export default function RoundSchedulePrototypeScreen() {
 
   async function handleDelete() {
     if (!club?.id || !draft.id) {
-      setEditorOpen(false)
+      closeEditor()
       return
     }
 
@@ -802,7 +826,7 @@ export default function RoundSchedulePrototypeScreen() {
       await deleteRoundsBySchedule(draft.id)
       const next = await deleteRoundSchedule(club.id, draft.id)
       setItems(next)
-      setEditorOpen(false)
+      closeEditor()
     } finally {
       setSaving(false)
     }
@@ -886,7 +910,7 @@ export default function RoundSchedulePrototypeScreen() {
         await saveClubAwardSnapshots(club.id, saved.id, awards)
         Alert.alert('완료', '저장된 스코어가 없어 전체 파 기록으로 종료했습니다.')
       }
-      setEditorOpen(false)
+      closeEditor()
     } finally {
       setSaving(false)
     }
@@ -922,14 +946,15 @@ export default function RoundSchedulePrototypeScreen() {
         })),
       })
       setItems(next)
-      setEditorOpen(false)
+      closeEditor()
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <View style={s.screen}>
+    <View style={[s.screen, modalOnly && s.modalOnlyScreen]}>
+      {!modalOnly ? (
       <ScrollView contentContainerStyle={s.content}>
         <View style={s.heroCard}>
           <View style={{ flex: 1 }}>
@@ -973,13 +998,14 @@ export default function RoundSchedulePrototypeScreen() {
           )}
         </View>
       </ScrollView>
+      ) : null}
 
-      <Modal transparent animationType="slide" visible={editorOpen} onRequestClose={() => setEditorOpen(false)}>
+      <Modal transparent animationType="slide" visible={editorOpen} onRequestClose={closeEditor}>
         <View style={s.modalBackdrop}>
           <View style={s.modalSheet}>
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>{draft.id ? '라운드 일정 수정' : '라운드 일정 등록'}</Text>
-              <TouchableOpacity style={s.closeButton} onPress={() => setEditorOpen(false)} activeOpacity={0.8}>
+              <TouchableOpacity style={s.closeButton} onPress={closeEditor} activeOpacity={0.8}>
                 <Text style={s.closeButtonText}>닫기</Text>
               </TouchableOpacity>
             </View>
@@ -1569,6 +1595,7 @@ function PickerShell({
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
+  modalOnlyScreen: { backgroundColor: 'transparent' },
   content: { padding: 20, gap: 16, paddingBottom: 32 },
   heroCard: {
     borderRadius: 28,

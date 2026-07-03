@@ -4,25 +4,25 @@
     "slug": "golf_dev_app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/gogopar_i.png",
+    "icon": "./assets/app-icon-1024.png",
     "userInterfaceStyle": "light",
     "splash": {
       "backgroundColor": "#f2f7f4"
     },
     "ios": {
       "supportsTablet": true,
-      "icon": "./assets/gogopar_i.png"
+      "icon": "./assets/app-icon-1024.png"
     },
     "android": {
-      "icon": "./assets/gogopar_a.png",
+      "icon": "./assets/app-icon-1024.png",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/gogopar_a.png"
+        "foregroundImage": "./assets/app-icon-1024.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon-64x64_v2.png"
     },
     "plugins": [
       "expo-secure-store",

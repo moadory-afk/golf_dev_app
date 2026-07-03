@@ -12,7 +12,7 @@ export type RootStackParamList = {
   Main: NavigatorScreenParams<MainTabParamList> | undefined
   Profile: undefined
   FeePrototype: { returnToManageMenu?: boolean } | undefined
-  RoundSchedulePrototype: { returnToManageMenu?: boolean } | undefined
+  RoundSchedulePrototype: { returnToManageMenu?: boolean; openCreate?: boolean; editScheduleId?: string; modalOnly?: boolean } | undefined
   FeeMemberPrototype: { clubId: string; memberUserId: string; memberName: string; statusId: string }
   TreasuryLedgerPrototype: undefined
   TreasuryEntryPrototype: {

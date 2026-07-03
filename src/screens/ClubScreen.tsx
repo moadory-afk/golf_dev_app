@@ -8,7 +8,7 @@ import type { RouteProp } from '@react-navigation/native'
 import { useState, useCallback, useEffect } from 'react'
 import * as ImageManipulator from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
-import { DEFAULT_LOTTO_AWARD_CONFIG, getClubLottoAwardConfig, getClubMembers, getClubNotices, getRounds, playerTotal, totalPar, computeHandicaps, saveClubLottoAwardConfig, shortName, updateClubSettings, type ClubInfo, type LottoAwardConfig, type SavedRound } from '../lib/store'
+import { DEFAULT_LOTTO_AWARD_CONFIG, getClubLottoAwardConfig, getClubMembers, getClubNotices, getRounds, playerTotal, totalPar, computeHandicaps, saveClubLottoAwardConfig, shortName, updateClubSettings, type ClubInfo, type ClubNotice, type LottoAwardConfig, type SavedRound } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
 import { useUserProfile } from '../lib/UserProfileContext'
 import { useAsync } from '../lib/useAsync'
@@ -87,12 +87,15 @@ export default function ClubScreen() {
   const onRefresh = useCallback(() => setRefreshKey((k) => k + 1), [])
   const [rankingType, setRankingType] = useState<RankingType | null>(null)
   const [clubInfoOpen, setClubInfoOpen] = useState(false)
+  const [selectedNotice, setSelectedNotice] = useState<ClubNotice | null>(null)
+  const [showLottoAwardGuide, setShowLottoAwardGuide] = useState(false)
   const [showHallCriteria, setShowHallCriteria] = useState(false)
   const [manageMenuOpen, setManageMenuOpen] = useState(false)
   const [lottoAwardOpen, setLottoAwardOpen] = useState(false)
   const { name: myName } = useUserProfile()
 
   const [handicapBasis, setHandicapBasis] = useState<HandicapBasis>(5)
+  const currentLottoAwardConfig = lottoAwardConfig ?? DEFAULT_LOTTO_AWARD_CONFIG
 
   useEffect(() => {
     loadHandicapBasis(club?.id).then(setHandicapBasis)
@@ -404,6 +407,26 @@ export default function ClubScreen() {
           </TouchableOpacity>
         </Modal>
       )}
+      {selectedNotice && (
+        <Modal transparent animationType="fade" onRequestClose={() => setSelectedNotice(null)}>
+          <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setSelectedNotice(null)}>
+            <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+              <View style={s.modalHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.modalTitle}>{selectedNotice.title}</Text>
+                  <Text style={s.noticeDetailDate}>{formatNoticeDate(selectedNotice.createdAt)}</Text>
+                </View>
+                <TouchableOpacity style={s.closeBtn} onPress={() => setSelectedNotice(null)}>
+                  <Text style={s.closeBtnText}>닫기</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView>
+                <Text style={s.noticeDetailBody}>{selectedNotice.body || '내용 없음'}</Text>
+              </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+      )}
 
       <ScrollView
         style={{ flex: 1 }}
@@ -449,7 +472,7 @@ export default function ClubScreen() {
                     {recentNotices.length === 0 ? (
                       <Text style={s.noticeEmpty}>등록된 공지사항이 없습니다.</Text>
                     ) : recentNotices.map((notice) => (
-                      <TouchableOpacity key={notice.id} style={s.noticeRow} onPress={() => nav.navigate('NoticePrototype')} activeOpacity={0.82}>
+                      <TouchableOpacity key={notice.id} style={s.noticeRow} onPress={() => setSelectedNotice(notice)} activeOpacity={0.82}>
                         <View style={s.noticeIcon}>
                           <Icon name="mail" size={15} color={C.green} />
                         </View>
@@ -460,6 +483,37 @@ export default function ClubScreen() {
                         <Icon name="chevronRight" size={16} color={C.muted} />
                       </TouchableOpacity>
                     ))}
+                  </View>
+
+                  <View style={s.card}>
+                    <TouchableOpacity
+                      style={s.cardTitleRow}
+                      onPress={() => {
+                        if (isManagerView) setLottoAwardOpen(true)
+                        else setShowLottoAwardGuide((value) => !value)
+                      }}
+                      activeOpacity={0.82}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[s.cardTitle, { marginBottom: 0 }]}>Lotto 6/18 당첨금 안내</Text>
+                        <Text style={s.lottoGuideSummary}>현재 누적 당첨금 {formatWon(currentLottoAwardConfig.carryoverAmount ?? 0)}</Text>
+                      </View>
+                      <Text style={s.more}>{isManagerView ? '설정' : showLottoAwardGuide ? '접기' : '펼치기'}</Text>
+                    </TouchableOpacity>
+                    {(!isManagerView && showLottoAwardGuide) ? (
+                      <View>
+                        {(['3', '4', '5', '6'] as const).map((count) => (
+                          <View key={count} style={s.lottoGuideRow}>
+                            <Text style={s.lottoGuideLabel}>{count}개 적중</Text>
+                            <Text style={s.lottoGuideValue}>{formatWon(currentLottoAwardConfig.prizes[count])}</Text>
+                          </View>
+                        ))}
+                        <View style={s.lottoGuideRow}>
+                          <Text style={s.lottoGuideLabel}>미당첨 이월</Text>
+                          <Text style={s.lottoGuideValue}>{currentLottoAwardConfig.rollover ? `${formatWon(currentLottoAwardConfig.rolloverIncrement)} 증가` : '미적용'}</Text>
+                        </View>
+                      </View>
+                    ) : null}
                   </View>
 
                   <View style={s.card}>
@@ -1044,6 +1098,12 @@ const s = StyleSheet.create({
   noticeTitle: { fontSize: 13, fontWeight: '700', color: C.text },
   noticeMeta: { fontSize: 11, color: C.muted, marginTop: 2 },
   noticeEmpty: { paddingTop: 12, fontSize: 13, color: C.muted },
+  noticeDetailDate: { marginTop: 5, fontSize: 12, fontWeight: '700', color: C.muted },
+  noticeDetailBody: { fontSize: 14, lineHeight: 22, color: C.text },
+  lottoGuideSummary: { marginTop: 6, fontSize: 12, fontWeight: '800', color: C.green },
+  lottoGuideRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: C.border },
+  lottoGuideLabel: { fontSize: 13, fontWeight: '700', color: C.muted },
+  lottoGuideValue: { flex: 1, fontSize: 13, fontWeight: '900', color: C.text, textAlign: 'right' },
   recordToggleBtn: { borderRadius: 999, backgroundColor: C.greenLight, paddingHorizontal: 10, paddingVertical: 5 },
   recordToggleText: { fontSize: 12, fontWeight: '800', color: C.green },
   criteriaCollapsedText: { fontSize: 13, fontWeight: '700', color: C.muted, lineHeight: 20 },

@@ -891,42 +891,40 @@ export default function FeePrototypeScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={s.policySection}>
-                <View style={s.transactionTopRow}>
-                  <View style={s.transactionDateCell}>
-                    <Text style={s.policySectionTitle}>날짜</Text>
+                <View style={s.transactionEditorTopRow}>
+                  <View style={s.transactionTopCell}>
                     <DateField
                       value={transactionDraft.entryDate}
                       onChange={(entryDate) => isAdmin && setTransactionDraft((current) => ({ ...current, entryDate }))}
                     />
                   </View>
-                  <View style={s.transactionTypeCell}>
-                    <Text style={s.policySectionTitle}>구분</Text>
-                    <View style={s.segmentRow}>
-                      <TouchableOpacity
-                        style={[s.segmentBtn, transactionDraft.type === 'income' && s.segmentBtnActive]}
-                        disabled={!isAdmin}
-                        onPress={() => setTransactionDraft((current) => ({
-                          ...current,
-                          type: 'income',
-                          detail: INCOME_DETAILS.includes(current.detail as any) ? current.detail : '회비',
-                          customDetail: '',
-                        }))}
-                      >
-                        <Text style={[s.segmentText, transactionDraft.type === 'income' && s.segmentTextActive]}>입금</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[s.segmentBtn, transactionDraft.type === 'expense' && s.segmentBtnActive]}
-                        disabled={!isAdmin}
-                        onPress={() => setTransactionDraft((current) => ({
-                          ...current,
-                          type: 'expense',
-                          detail: EXPENSE_DETAILS.includes(current.detail as any) ? current.detail : '캐디피',
-                          customDetail: '',
-                        }))}
-                      >
-                        <Text style={[s.segmentText, transactionDraft.type === 'expense' && s.segmentTextActive]}>지급</Text>
-                      </TouchableOpacity>
-                    </View>
+                  <View style={s.transactionTopCell}>
+                    <TouchableOpacity
+                      style={[s.transactionTopButton, transactionDraft.type === 'income' && s.segmentBtnActive]}
+                      disabled={!isAdmin}
+                      onPress={() => setTransactionDraft((current) => ({
+                        ...current,
+                        type: 'income',
+                        detail: INCOME_DETAILS.includes(current.detail as any) ? current.detail : '회비',
+                        customDetail: '',
+                      }))}
+                    >
+                      <Text style={[s.segmentText, transactionDraft.type === 'income' && s.segmentTextActive]}>입금</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={s.transactionTopCell}>
+                    <TouchableOpacity
+                      style={[s.transactionTopButton, transactionDraft.type === 'expense' && s.segmentBtnActive]}
+                      disabled={!isAdmin}
+                      onPress={() => setTransactionDraft((current) => ({
+                        ...current,
+                        type: 'expense',
+                        detail: EXPENSE_DETAILS.includes(current.detail as any) ? current.detail : '캐디피',
+                        customDetail: '',
+                      }))}
+                    >
+                      <Text style={[s.segmentText, transactionDraft.type === 'expense' && s.segmentTextActive]}>지급</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               </View>
@@ -999,10 +997,16 @@ export default function FeePrototypeScreen() {
                 {transactionDraft.receiptImages.length > 0 ? (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.receiptPreviewRow}>
                     {transactionDraft.receiptImages.map((uri, index) => (
-                      <TouchableOpacity key={`${uri.slice(0, 24)}-${index}`} onPress={() => setPreviewImage(uri)} activeOpacity={0.86}>
-                        <Image source={{ uri }} style={s.receiptPreview} />
-                        {isAdmin ? <Text style={s.receiptRemoveText}>삭제</Text> : null}
-                      </TouchableOpacity>
+                      <View key={`${uri.slice(0, 24)}-${index}`} style={s.receiptPreviewItem}>
+                        <TouchableOpacity onPress={() => setPreviewImage(uri)} activeOpacity={0.86}>
+                          <Image source={{ uri }} style={s.receiptPreview} />
+                        </TouchableOpacity>
+                        {isAdmin ? (
+                          <TouchableOpacity style={s.receiptRemoveBtn} onPress={() => removeReceiptImage(index)} activeOpacity={0.86}>
+                            <Text style={s.receiptRemoveText}>삭제</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
                     ))}
                   </ScrollView>
                 ) : null}
@@ -1212,7 +1216,10 @@ const s = StyleSheet.create({
   policyCloseText: { color: C.green, fontSize: 12, fontWeight: '800' },
   policySection: { paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.border },
   policySectionTitle: { fontSize: 14, fontWeight: '900', color: C.text, marginBottom: 10 },
-  transactionDateCell: { flex: 1.15 },
+  transactionEditorTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  transactionTopCell: { flex: 1 },
+  transactionTopButton: { borderRadius: 14, borderWidth: 1, borderColor: C.border, paddingVertical: 12, alignItems: 'center', backgroundColor: '#fff' },
+  transactionDateCell: { flex: 1 },
   transactionTypeCell: { flex: 1 },
   segmentRow: { flexDirection: 'row', gap: 8 },
   segmentBtn: { flex: 1, borderRadius: 14, borderWidth: 1, borderColor: C.border, paddingVertical: 12, alignItems: 'center', backgroundColor: '#fff' },
@@ -1261,8 +1268,10 @@ const s = StyleSheet.create({
   },
   receiptActionText: { color: C.green, fontSize: 12, fontWeight: '900' },
   receiptPreviewRow: { gap: 10, marginTop: 12, paddingBottom: 2 },
+  receiptPreviewItem: { alignItems: 'center' },
   receiptPreview: { width: 74, height: 74, borderRadius: 12, backgroundColor: C.border },
-  receiptRemoveText: { marginTop: 4, textAlign: 'center', fontSize: 11, fontWeight: '800', color: C.danger },
+  receiptRemoveBtn: { marginTop: 4, borderRadius: 999, backgroundColor: '#f7ece8', paddingHorizontal: 9, paddingVertical: 4 },
+  receiptRemoveText: { textAlign: 'center', fontSize: 11, fontWeight: '800', color: C.danger },
   imagePreviewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.86)', justifyContent: 'center', alignItems: 'center', padding: 18 },
   imagePreviewLarge: { width: '100%', height: '86%' },
   editorActionRow: { flexDirection: 'row', gap: 10, marginTop: 14 },

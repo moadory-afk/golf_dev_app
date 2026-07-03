@@ -669,6 +669,9 @@ export default function HomeScreen() {
     setRoundSheetMode(hasGroups ? 'groups' : 'attendance')
     setAttendanceSheetOpen(true)
   }
+  const openRoundEditor = (round: ScheduledRound) => {
+    nav.navigate('RoundSchedulePrototype', { editScheduleId: round.id, modalOnly: true })
+  }
   const openPersonalInput = async (round: ScheduledRound) => {
     if (!club?.id || !myUserId) {
       Alert.alert('확인', '로그인 정보가 필요합니다.')
@@ -1033,6 +1036,18 @@ export default function HomeScreen() {
                                       {summary.hasGroups ? '조편성 완료' : '참석 확인중'}
                                     </Text>
                                   </View>
+                                  {isAdmin ? (
+                                    <TouchableOpacity
+                                      style={s.roundEditBadge}
+                                      onPress={(event) => {
+                                        event.stopPropagation()
+                                        openRoundEditor(round)
+                                      }}
+                                      activeOpacity={0.82}
+                                    >
+                                      <Text style={s.roundEditBadgeText}>수정</Text>
+                                    </TouchableOpacity>
+                                  ) : null}
                                 </View>
                                 <Text style={s.roundInfoText}>{summary.groupSummary}</Text>
                                 <Text style={s.roundAwardText}>시상계획: {awardSummaryFor(round)}</Text>
@@ -1060,6 +1075,23 @@ export default function HomeScreen() {
                 )}
               </View>
             )}
+
+            {isAdmin ? (
+              <TouchableOpacity
+                style={s.adminRoundAddCard}
+                onPress={() => nav.navigate('RoundSchedulePrototype', { openCreate: true, modalOnly: true })}
+                activeOpacity={0.86}
+              >
+                <View style={s.adminRoundAddIcon}>
+                  <Icon name="plus" size={20} color={C.green} strokeWidth={2.2} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.adminRoundAddTitle}>라운드 일정 등록</Text>
+                  <Text style={s.adminRoundAddSub}>새 일정을 바로 추가합니다.</Text>
+                </View>
+                <Icon name="chevronRight" size={18} color={C.muted} />
+              </TouchableOpacity>
+            ) : null}
 
             <View style={s.protoCard}>
               <View style={s.protoTopRow}>
@@ -2149,6 +2181,26 @@ const s = StyleSheet.create({
   },
   protoMetaLabel: { fontSize: 11, color: C.muted, fontWeight: '700' },
   protoMetaValue: { fontSize: 12, color: C.text, fontWeight: '700', textAlign: 'right', flex: 1 },
+  adminRoundAddCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: C.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: C.greenLight,
+    padding: 14,
+  },
+  adminRoundAddIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.greenLight,
+  },
+  adminRoundAddTitle: { fontSize: 14, fontWeight: '900', color: C.text },
+  adminRoundAddSub: { marginTop: 3, fontSize: 12, fontWeight: '700', color: C.muted },
   feeInlineRow: { marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   feeStatusText: { flex: 1, fontSize: 14, fontWeight: '900', color: C.text },
   feeStatusTextWarn: { color: C.warn },
@@ -2211,6 +2263,8 @@ const s = StyleSheet.create({
   roundStageText: { fontSize: 10, fontWeight: '900' },
   roundStageTextPending: { color: C.muted },
   roundStageTextDone: { color: C.green },
+  roundEditBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: C.greenDark },
+  roundEditBadgeText: { fontSize: 10, fontWeight: '900', color: '#fff' },
   roundCollapsedBox: {
     paddingVertical: 12,
     paddingHorizontal: 12,
