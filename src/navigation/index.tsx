@@ -15,7 +15,6 @@ import ScoreCaptureScreen from '../screens/ScoreCaptureScreen'
 import ScoreReviewScreen from '../screens/ScoreReviewScreen'
 import ResultScreen from '../screens/ResultScreen'
 import MemberScreen from '../screens/MemberScreen'
-import SettingsScreen from '../screens/SettingsScreen'
 import FeePrototypeScreen from '../screens/FeePrototypeScreen'
 import FeeMemberPrototypeScreen from '../screens/FeeMemberPrototypeScreen'
 import NoticePrototypeScreen from '../screens/NoticePrototypeScreen'
@@ -137,7 +136,6 @@ function NavigationStack() {
       >
           <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
           <Stack.Screen name="Profile" component={ProfileScreen} options={({ navigation }) => ({ title: '프로필 · 설정', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
-          <Stack.Screen name="Settings" component={SettingsScreen} options={({ navigation, route }) => ({ title: clubScreenTitle(clubName, '운영 설정'), headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => closeToManageMenu(navigation, route.params?.returnToManageMenu)} /> })} />
           <Stack.Screen name="FeePrototype" component={FeePrototypeScreen} options={({ navigation, route }) => ({ title: clubScreenTitle(clubName, '회비 관리'), headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => closeToManageMenu(navigation, route.params?.returnToManageMenu)} /> })} />
           <Stack.Screen name="RoundSchedulePrototype" component={RoundSchedulePrototypeScreen} options={({ navigation, route }) => ({ title: clubScreenTitle(clubName, '라운드 일정'), headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => closeToManageMenu(navigation, route.params?.returnToManageMenu)} /> })} />
           <Stack.Screen name="FeeMemberPrototype" component={FeeMemberPrototypeScreen} options={({ navigation }) => ({ title: '회원 회비 상세', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />

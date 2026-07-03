@@ -9,7 +9,7 @@ import { useState, useCallback, useEffect } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as ImageManipulator from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
-import { DEFAULT_LOTTO_AWARD_CONFIG, getClubLottoAwardConfig, getClubMembers, getRounds, playerTotal, totalPar, computeHandicaps, saveClubLottoAwardConfig, shortName, updateClubSettings, type ClubInfo, type LottoAwardConfig, type SavedRound } from '../lib/store'
+import { DEFAULT_LOTTO_AWARD_CONFIG, getClubLottoAwardConfig, getClubMembers, getClubNotices, getRounds, playerTotal, totalPar, computeHandicaps, saveClubLottoAwardConfig, shortName, updateClubSettings, type ClubInfo, type LottoAwardConfig, type SavedRound } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
 import { useUserProfile } from '../lib/UserProfileContext'
 import { useAsync } from '../lib/useAsync'
@@ -26,11 +26,11 @@ type RankingType = 'recentMedal' | 'recentWins' | 'wins' | 'streak' | 'lowestHan
 const CLUB_HERO_IMAGE = 'https://images.unsplash.com/photo-1592919505780-303950717480?auto=format&fit=crop&w=1200&q=80'
 const APP_URL = 'https://golf-seven-psi.vercel.app'
 
-const RECENT_NOTICES = [
-  { title: '7월 월례회 공지', date: '06.28' },
-  { title: '하계 라운드 일정 안내', date: '06.24' },
-  { title: '회원 가입 안내문', date: '06.19' },
-]
+function formatNoticeDate(value: string) {
+  if (!value) return '-'
+  const date = value.slice(5, 10)
+  return date.length === 5 ? date.replace('-', '.') : value
+}
 
 function diffText(d: number) { return d > 0 ? `+${d}` : `${d}` }
 
@@ -75,8 +75,13 @@ export default function ClubScreen() {
     () => (club ? getClubLottoAwardConfig(club.id) : Promise.resolve(DEFAULT_LOTTO_AWARD_CONFIG)),
     [refreshKey, club?.id],
   )
+  const { data: clubNotices } = useAsync(
+    () => (club ? getClubNotices(club.id) : Promise.resolve([])),
+    [refreshKey, club?.id],
+  )
   const rounds = data ?? []
   const members = clubMembers ?? []
+  const recentNotices = (clubNotices ?? []).filter((notice) => notice.isPublished).slice(0, 3)
   const adminMembers = members.filter((member) => member.role === 'admin')
   const onRefresh = useCallback(() => setRefreshKey((k) => k + 1), [])
   const [rankingType, setRankingType] = useState<RankingType | null>(null)
@@ -86,11 +91,11 @@ export default function ClubScreen() {
   const [lottoAwardOpen, setLottoAwardOpen] = useState(false)
   const { name: myName } = useUserProfile()
 
-  const [handicapBasis, setHandicapBasis] = useState(5)
+  const [handicapBasis, setHandicapBasis] = useState<3 | 5 | 10>(5)
 
   useEffect(() => {
     AsyncStorage.getItem('@gogopar_handicap_basis').then(v => {
-      if (v === '3' || v === '5' || v === '10') setHandicapBasis(Number(v))
+      if (v === '3' || v === '5' || v === '10') setHandicapBasis(Number(v) as 3 | 5 | 10)
     })
   }, [])
 
@@ -111,6 +116,11 @@ export default function ClubScreen() {
     await updateClubSettings(club.id, name, subtitle, coverImage)
     await refreshClubs()
     setRefreshKey((k) => k + 1)
+  }
+
+  async function handleChangeHandicapBasis(value: 3 | 5 | 10) {
+    setHandicapBasis(value)
+    await AsyncStorage.setItem('@gogopar_handicap_basis', String(value))
   }
 
   const handicaps = computeHandicaps(rounds, handicapBasis)
@@ -286,13 +296,6 @@ export default function ClubScreen() {
 
   const managementMenus = club ? [
     {
-      key: 'members',
-      title: '회원 관리',
-      subtitle: '회원 정보와 권한을 관리합니다',
-      icon: 'users' as const,
-      onPress: () => nav.navigate('Members', { clubId: club.id, returnToManageMenu: true }),
-    },
-    {
       key: 'fee',
       title: '회비 관리',
       subtitle: '회비 정책과 납부 현황을 확인합니다',
@@ -321,13 +324,6 @@ export default function ClubScreen() {
       icon: 'mail' as const,
       onPress: () => nav.navigate('NoticePrototype', { returnToManageMenu: true }),
     },
-    {
-      key: 'settings',
-      title: '운영 설정',
-      subtitle: '클럽 정보와 운영 환경을 설정합니다',
-      icon: 'settings' as const,
-      onPress: () => nav.navigate('Settings', { returnToManageMenu: true }),
-    },
   ] : []
 
   return (
@@ -347,6 +343,8 @@ export default function ClubScreen() {
             setRefreshKey((k) => k + 1)
           }}
           onSaveClub={handleSaveClubInfo}
+          handicapBasis={handicapBasis as 3 | 5 | 10}
+          onChangeHandicapBasis={handleChangeHandicapBasis}
           onMembers={() => {
             setClubInfoOpen(false)
             nav.navigate('Members', { clubId: club.id })
@@ -448,14 +446,16 @@ export default function ClubScreen() {
                         <Text style={s.more}>전체보기 ›</Text>
                       </TouchableOpacity>
                     </View>
-                    {RECENT_NOTICES.map((notice) => (
-                      <TouchableOpacity key={`${notice.title}-${notice.date}`} style={s.noticeRow} onPress={() => nav.navigate('NoticePrototype')} activeOpacity={0.82}>
+                    {recentNotices.length === 0 ? (
+                      <Text style={s.noticeEmpty}>등록된 공지사항이 없습니다.</Text>
+                    ) : recentNotices.map((notice) => (
+                      <TouchableOpacity key={notice.id} style={s.noticeRow} onPress={() => nav.navigate('NoticePrototype')} activeOpacity={0.82}>
                         <View style={s.noticeIcon}>
                           <Icon name="mail" size={15} color={C.green} />
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={s.noticeTitle}>{notice.title}</Text>
-                          <Text style={s.noticeMeta}>{notice.date}</Text>
+                          <Text style={s.noticeTitle} numberOfLines={1}>{notice.title}</Text>
+                          <Text style={s.noticeMeta}>{formatNoticeDate(notice.createdAt)}</Text>
                         </View>
                         <Icon name="chevronRight" size={16} color={C.muted} />
                       </TouchableOpacity>
@@ -535,6 +535,8 @@ function ClubInfoModal({
   onClose,
   onSelectClub,
   onSaveClub,
+  handicapBasis,
+  onChangeHandicapBasis,
   onMembers,
   onInvite,
 }: {
@@ -545,6 +547,8 @@ function ClubInfoModal({
   onClose: () => void
   onSelectClub: (club: ClubInfo) => void
   onSaveClub: (name: string, subtitle: string, coverImage?: string) => Promise<void>
+  handicapBasis: 3 | 5 | 10
+  onChangeHandicapBasis: (value: 3 | 5 | 10) => void | Promise<void>
   onMembers: () => void
   onInvite: () => void
 }) {
@@ -554,6 +558,7 @@ function ClubInfoModal({
   const [editCoverImage, setEditCoverImage] = useState(club.coverImage)
   const [saving, setSaving] = useState(false)
   const [uploadingCover, setUploadingCover] = useState(false)
+  const [showHandicapDrop, setShowHandicapDrop] = useState(false)
   const isAdmin = club.role === 'admin'
   const subtitle = club.subtitle?.trim() ? club.subtitle : '골프의 모든 경험을 하나로.'
   const role = isAdmin ? '관리자' : '일반회원'
@@ -705,6 +710,40 @@ function ClubInfoModal({
           <Text style={s.clubInfoStatsText}>
             회원 {memberCount}명 · 운영진 {admins.length}명 · 내 역할 {role}
           </Text>
+
+          {isAdmin && (
+            <View style={[s.infoSection, { zIndex: 20 }]}>
+              <Text style={s.infoSectionTitle}>운영 기준</Text>
+              <View style={s.infoDivider} />
+              <View style={s.settingLine}>
+                <Text style={s.settingLineLabel}>핸디 기준 경기</Text>
+                <View>
+                  <TouchableOpacity style={s.handicapSelectBtn} onPress={() => setShowHandicapDrop((value) => !value)} activeOpacity={0.82}>
+                    <Text style={s.handicapSelectText}>{handicapBasis}경기 ▾</Text>
+                  </TouchableOpacity>
+                  {showHandicapDrop && (
+                    <View style={s.handicapMenu}>
+                      {([3, 5, 10] as const).map((value) => (
+                        <TouchableOpacity
+                          key={value}
+                          style={s.handicapMenuItem}
+                          onPress={async () => {
+                            setShowHandicapDrop(false)
+                            await onChangeHandicapBasis(value)
+                          }}
+                          activeOpacity={0.82}
+                        >
+                          <Text style={[s.handicapMenuText, handicapBasis === value && s.handicapMenuTextActive]}>
+                            {value}경기{handicapBasis === value ? ' ✓' : ''}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </View>
+            </View>
+          )}
 
           <View style={s.infoSection}>
             <Text style={s.infoSectionTitle}>멤버</Text>
@@ -982,6 +1021,7 @@ const s = StyleSheet.create({
   noticeIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
   noticeTitle: { fontSize: 13, fontWeight: '700', color: C.text },
   noticeMeta: { fontSize: 11, color: C.muted, marginTop: 2 },
+  noticeEmpty: { paddingTop: 12, fontSize: 13, color: C.muted },
   recordToggleBtn: { borderRadius: 999, backgroundColor: C.greenLight, paddingHorizontal: 10, paddingVertical: 5 },
   recordToggleText: { fontSize: 12, fontWeight: '800', color: C.green },
   criteriaCollapsedText: { fontSize: 13, fontWeight: '700', color: C.muted, lineHeight: 20 },
@@ -1124,6 +1164,29 @@ const s = StyleSheet.create({
   infoActionRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
   infoActionBtn: { flex: 1, borderRadius: 14, backgroundColor: C.greenLight, paddingVertical: 11, alignItems: 'center', marginTop: 10 },
   infoActionText: { fontSize: 13, fontWeight: '800', color: C.green },
+  settingLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 2, gap: 12 },
+  settingLineLabel: { fontSize: 13, fontWeight: '800', color: C.text },
+  handicapSelectBtn: { borderRadius: 999, backgroundColor: C.greenLight, paddingHorizontal: 13, paddingVertical: 8 },
+  handicapSelectText: { fontSize: 12, fontWeight: '900', color: C.green },
+  handicapMenu: {
+    position: 'absolute',
+    top: 38,
+    right: 0,
+    width: 92,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingVertical: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 5,
+    zIndex: 30,
+  },
+  handicapMenuItem: { paddingVertical: 8, paddingHorizontal: 10 },
+  handicapMenuText: { fontSize: 12, fontWeight: '800', color: C.muted, textAlign: 'center' },
+  handicapMenuTextActive: { color: C.green },
   ruleDesc: { fontSize: 13, color: C.text, lineHeight: 20, marginBottom: 8 },
   lottoAwardSummary: { fontSize: 14, fontWeight: '900', color: C.green, marginBottom: 12 },
   lottoAwardInputRow: {

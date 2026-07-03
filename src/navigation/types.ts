@@ -11,7 +11,6 @@ export type MainTabParamList = {
 export type RootStackParamList = {
   Main: NavigatorScreenParams<MainTabParamList> | undefined
   Profile: undefined
-  Settings: { returnToManageMenu?: boolean } | undefined
   FeePrototype: { returnToManageMenu?: boolean } | undefined
   RoundSchedulePrototype: { returnToManageMenu?: boolean } | undefined
   FeeMemberPrototype: { clubId: string; memberUserId: string; memberName: string; statusId: string }

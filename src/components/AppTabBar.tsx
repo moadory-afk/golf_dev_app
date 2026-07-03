@@ -12,7 +12,7 @@ type Tab = keyof MainTabParamList
 const TABS: { name: Tab; icon: string; line: IconName; label: string }[] = [
   { name: 'Home',     icon: '🏠', line: 'home',     label: '홈' },
   { name: 'History',  icon: '📋', line: 'list',     label: '기록' },
-  { name: 'Settings', icon: '⚙️', line: 'settings', label: '설정' },
+  { name: 'Club',     icon: '⛳', line: 'flag',     label: '클럽' },
 ]
 
 interface Props {

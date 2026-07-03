@@ -8,8 +8,6 @@ import Navigation from './src/navigation'
 import LoginScreen from './src/screens/LoginScreen'
 import InviteScreen from './src/screens/InviteScreen'
 import PromoScreen from './src/screens/PromoScreen'
-import SplashScreen from './src/screens/SplashScreen'
-import AdScreen from './src/screens/AdScreen'
 import { Platform, View, ActivityIndicator, Text, ScrollView, StyleSheet } from 'react-native'
 import { C } from './src/theme'
 
@@ -71,7 +69,6 @@ function clearJoinParam() {
 }
 
 export default function App() {
-  const [stage, setStage] = useState<'splash' | 'ad' | 'ready'>('splash')
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [joinCode] = useState<string | null>(() => getJoinCode())
@@ -88,11 +85,6 @@ export default function App() {
       window.location.href =
         'kakaotalk://web/openExternalBrowser?url=' + encodeURIComponent(window.location.href)
     }
-  }, [])
-
-  useEffect(() => {
-    const timer = setTimeout(() => setStage('ad'), 2000)
-    return () => clearTimeout(timer)
   }, [])
 
   useEffect(() => {
@@ -131,11 +123,7 @@ export default function App() {
     <ErrorBoundary>
       <SafeAreaProvider>
         <WebFrame>
-          {stage === 'splash' ? (
-            <SplashScreen />
-          ) : stage === 'ad' ? (
-            <AdScreen onDone={() => setStage('ready')} />
-          ) : loading ? (
+          {loading ? (
             <View style={js.center}>
               <ActivityIndicator color={C.green} size="large" />
             </View>

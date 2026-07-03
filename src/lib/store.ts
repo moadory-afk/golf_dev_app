@@ -51,6 +51,17 @@ export interface ClubAwardSnapshot extends ClubAwardSnapshotInput {
   sortOrder: number
 }
 
+export interface ClubNotice {
+  id: string
+  clubId: string
+  title: string
+  body: string
+  isPublished: boolean
+  isImportant: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 export type PersonalRoundFir = 'long' | 'center' | 'short' | 'left_ob' | 'right_ob' | 'other_ob' | 'hazard' | null
 
 export interface PersonalRoundHoleStat {
@@ -1036,8 +1047,7 @@ export async function getFeeDashboard(clubId: string): Promise<FeeDashboardData>
         .select('id, club_id, entry_type, title, amount, entry_date, memo, proof_text, receipt_images')
         .eq('club_id', clubId)
         .order('entry_date', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(20),
+        .order('created_at', { ascending: false }),
     ])
     if (treasuryResult.error) throw treasuryResult.error
 
@@ -1242,6 +1252,81 @@ export async function deleteTreasuryEntry(entryId: string): Promise<void> {
     .from('club_treasury_entries')
     .delete()
     .eq('id', entryId)
+  if (error) throw error
+}
+
+function isMissingClubNoticesTable(error: unknown) {
+  const item = error as { code?: string; message?: string }
+  return item?.code === '42P01' || item?.message?.includes('club_notices')
+}
+
+function normalizeNotice(row: any): ClubNotice {
+  return {
+    id: row.id,
+    clubId: row.club_id,
+    title: row.title ?? '',
+    body: row.body ?? '',
+    isPublished: row.is_published ?? true,
+    isImportant: row.is_important ?? false,
+    createdAt: row.created_at ?? '',
+    updatedAt: row.updated_at ?? '',
+  }
+}
+
+export async function getClubNotices(clubId: string): Promise<ClubNotice[]> {
+  const { data, error } = await supabase
+    .from('club_notices')
+    .select('id, club_id, title, body, is_published, is_important, created_at, updated_at')
+    .eq('club_id', clubId)
+    .order('is_important', { ascending: false })
+    .order('created_at', { ascending: false })
+  if (error) {
+    if (isMissingClubNoticesTable(error)) return []
+    throw error
+  }
+  return (data ?? []).map(normalizeNotice)
+}
+
+export async function createClubNotice(
+  clubId: string,
+  input: { title: string; body: string; isPublished?: boolean; isImportant?: boolean }
+): Promise<void> {
+  const user = await getUser()
+  const { error } = await supabase
+    .from('club_notices')
+    .insert({
+      club_id: clubId,
+      title: input.title.trim(),
+      body: input.body.trim(),
+      is_published: input.isPublished ?? true,
+      is_important: input.isImportant ?? false,
+      created_by: user?.id ?? null,
+    })
+  if (error) throw error
+}
+
+export async function updateClubNotice(
+  noticeId: string,
+  input: { title: string; body: string; isPublished: boolean; isImportant: boolean }
+): Promise<void> {
+  const { error } = await supabase
+    .from('club_notices')
+    .update({
+      title: input.title.trim(),
+      body: input.body.trim(),
+      is_published: input.isPublished,
+      is_important: input.isImportant,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', noticeId)
+  if (error) throw error
+}
+
+export async function deleteClubNotice(noticeId: string): Promise<void> {
+  const { error } = await supabase
+    .from('club_notices')
+    .delete()
+    .eq('id', noticeId)
   if (error) throw error
 }
 

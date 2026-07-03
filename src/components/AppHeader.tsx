@@ -58,7 +58,7 @@ export function AppHeader({ myName, showSettings = false, rightExtra }: {
             </View>
           )}
           {showSettings && club && (
-            <TouchableOpacity style={s.memberBtn} onPress={() => nav.navigate('Settings')}>
+            <TouchableOpacity style={s.memberBtn} onPress={() => nav.navigate('Main', { screen: 'Club', params: { openManageMenu: true } })}>
               {isTurf
                 ? <Icon name="settings" size={12} color="rgba(255,255,255,0.85)" />
                 : <Text style={{ fontSize: 11 }}>⚙️</Text>}
@@ -70,7 +70,7 @@ export function AppHeader({ myName, showSettings = false, rightExtra }: {
 
       <View style={s.right}>
         {rightExtra}
-        <UserAvatarBtn size={38} />
+        <UserAvatarBtn size={46} />
       </View>
 
       {menu && (

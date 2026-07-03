@@ -6,7 +6,7 @@ import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { DEFAULT_LOTTO_AWARD_CONFIG, getClubLottoAwardConfig, getCourseLayouts, getPersonalRoundStat, getRoundLottoDraw, getRoundLottoEntries, getRoundLottoEntry, getRounds, getClubMembers, getFeeDashboard, getFeeMemberHistory, playerTotal, savePersonalRoundStat, saveRoundLottoDrawResult, saveRoundLottoEntry, totalPar, computeHandicaps, shortName, type CourseLayout, type LottoAwardConfig, type PersonalRoundFir, type PersonalRoundHoleStat, type RoundLottoDraw, type RoundLottoDrawScore, type RoundLottoEntry, type SavedRound } from '../lib/store'
+import { DEFAULT_LOTTO_AWARD_CONFIG, getClubLottoAwardConfig, getClubNotices, getCourseLayouts, getPersonalRoundStat, getRoundLottoDraw, getRoundLottoEntries, getRoundLottoEntry, getRounds, getClubMembers, getFeeDashboard, getFeeMemberHistory, playerTotal, savePersonalRoundStat, saveRoundLottoDrawResult, saveRoundLottoEntry, totalPar, computeHandicaps, shortName, type ClubNotice, type CourseLayout, type LottoAwardConfig, type PersonalRoundFir, type PersonalRoundHoleStat, type RoundLottoDraw, type RoundLottoDrawScore, type RoundLottoEntry, type SavedRound } from '../lib/store'
 import {
   getRoundAttendanceMap,
   getRoundSchedules,
@@ -51,6 +51,10 @@ function todayKey() {
   const month = String(now.getMonth() + 1).padStart(2, '0')
   const day = String(now.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+function noticeReadKey(clubId?: string, userId?: string | null) {
+  return `@gogopar_notice_reads:${clubId ?? 'none'}:${userId ?? 'guest'}`
 }
 
 function defaultHoleStats(pars: number[]): PersonalRoundHoleStat[] {
@@ -209,6 +213,8 @@ export default function HomeScreen() {
   const [lottoLoading, setLottoLoading] = useState(false)
   const [lottoSaving, setLottoSaving] = useState(false)
   const [lottoDrawSaving, setLottoDrawSaving] = useState(false)
+  const [noticeReadIds, setNoticeReadIds] = useState<string[]>([])
+  const [noticePopup, setNoticePopup] = useState<ClubNotice | null>(null)
   const onRefresh = useCallback(() => {
     setRefreshKey((k) => k + 1)
     setRoundRefreshKey((k) => k + 1)
@@ -219,6 +225,45 @@ export default function HomeScreen() {
     () => (club && myUserId ? getFeeMemberHistory(club.id, myUserId) : Promise.resolve([])),
     [club?.id, myUserId, refreshKey],
   )
+  const { data: homeNotices } = useAsync(
+    () => (club ? getClubNotices(club.id) : Promise.resolve([])),
+    [club?.id, refreshKey],
+  )
+
+  useEffect(() => {
+    if (!club?.id) {
+      setNoticeReadIds([])
+      setNoticePopup(null)
+      return
+    }
+    AsyncStorage.getItem(noticeReadKey(club.id, myUserId))
+      .then((value) => setNoticeReadIds(value ? JSON.parse(value) : []))
+      .catch(() => setNoticeReadIds([]))
+  }, [club?.id, myUserId, refreshKey])
+
+  useEffect(() => {
+    if (!club?.id || noticePopup) return
+    const unreadNotice = (homeNotices ?? [])
+      .filter((notice) => notice.isPublished && !noticeReadIds.includes(notice.id))
+      .sort((a, b) => {
+        if (a.isImportant !== b.isImportant) return a.isImportant ? -1 : 1
+        return b.createdAt.localeCompare(a.createdAt)
+      })[0]
+    if (unreadNotice) setNoticePopup(unreadNotice)
+  }, [club?.id, homeNotices, noticeReadIds, noticePopup])
+
+  useEffect(() => {
+    if (!club?.id) return
+    const channel = supabase
+      .channel(`realtime:club-notices:${club.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'club_notices', filter: `club_id=eq.${club.id}` }, () => {
+        setRefreshKey((value) => value + 1)
+      })
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [club?.id])
 
   useEffect(() => {
     AsyncStorage.getItem('@gogopar_handicap_basis').then(v => {
@@ -744,6 +789,22 @@ export default function HomeScreen() {
       setLottoDrawSaving(false)
     }
   }
+  const markNoticeRead = async (notice: ClubNotice) => {
+    if (club?.id && !noticeReadIds.includes(notice.id)) {
+      const next = [...noticeReadIds, notice.id]
+      setNoticeReadIds(next)
+      await AsyncStorage.setItem(noticeReadKey(club.id, myUserId), JSON.stringify(next))
+    }
+  }
+  const closeNoticePopup = async () => {
+    if (noticePopup) await markNoticeRead(noticePopup)
+    setNoticePopup(null)
+  }
+  const openNoticePopupDetail = async () => {
+    if (noticePopup) await markNoticeRead(noticePopup)
+    setNoticePopup(null)
+    nav.navigate('NoticePrototype')
+  }
 
   // 클럽 로딩 전: 빈 화면 (모든 hook 호출 후)
   if (!clubsLoaded) return <View style={{ flex: 1, backgroundColor: C.bg }} />
@@ -763,6 +824,34 @@ export default function HomeScreen() {
       )}
       {recentRoundOpen && recent3[0] && myName && (
         <RecentRoundModal round={recent3[0]} myName={myName} onClose={() => setRecentRoundOpen(false)} />
+      )}
+      {noticePopup && (
+        <Modal transparent animationType="fade" visible={!!noticePopup} onRequestClose={closeNoticePopup}>
+          <View style={s.noticePopupOverlay}>
+            <View style={s.noticePopupCard}>
+              <View style={s.noticePopupHeader}>
+                <View style={s.noticePopupIcon}>
+                  <Icon name="mail" size={18} color={C.green} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.noticePopupTitle}>공지사항</Text>
+                  <Text style={s.noticePopupDate}>{formatShortDate(noticePopup.createdAt)}</Text>
+                </View>
+                {noticePopup.isImportant && <Text style={s.noticePopupImportant}>중요</Text>}
+              </View>
+              <Text style={s.noticePopupSubject}>{noticePopup.title}</Text>
+              <Text style={s.noticePopupBody} numberOfLines={5}>{noticePopup.body || '내용 없음'}</Text>
+              <View style={s.noticePopupActions}>
+                <TouchableOpacity style={s.noticePopupCloseBtn} onPress={closeNoticePopup}>
+                  <Text style={s.noticePopupCloseText}>닫기</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.noticePopupPrimaryBtn} onPress={openNoticePopupDetail}>
+                  <Text style={s.noticePopupPrimaryText}>공지사항 보기</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       )}
       <ScrollView
         style={{ flex: 1 }}
@@ -2180,6 +2269,40 @@ const s = StyleSheet.create({
     backgroundColor: C.card, borderRadius: 20, padding: 32,
     alignItems: 'center', marginBottom: 14,
   },
+  noticePopupOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.46)', justifyContent: 'center', padding: 22 },
+  noticePopupCard: { backgroundColor: '#fff', borderRadius: 22, padding: 18 },
+  noticePopupHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  noticePopupIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
+  noticePopupTitle: { fontSize: 13, fontWeight: '900', color: C.text },
+  noticePopupDate: { fontSize: 11, color: C.muted, marginTop: 2 },
+  noticePopupImportant: { fontSize: 11, fontWeight: '900', color: '#fff', backgroundColor: C.danger, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
+  noticePopupSubject: { fontSize: 18, fontWeight: '900', color: C.text, marginBottom: 8 },
+  noticePopupBody: { fontSize: 13, color: C.muted, lineHeight: 20 },
+  noticePopupActions: { flexDirection: 'row', gap: 8, marginTop: 18 },
+  noticePopupCloseBtn: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: 'center', backgroundColor: '#f2f4f6' },
+  noticePopupCloseText: { fontSize: 13, fontWeight: '900', color: C.muted },
+  noticePopupPrimaryBtn: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: 'center', backgroundColor: C.green },
+  noticePopupPrimaryText: { fontSize: 13, fontWeight: '900', color: '#fff' },
+  homeNoticeCard: {
+    backgroundColor: C.card,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  homeNoticeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  homeNoticeTitle: { fontSize: 15, fontWeight: '900', color: C.text },
+  homeNoticeMore: { fontSize: 12, fontWeight: '900', color: C.green },
+  homeNoticeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border },
+  homeNoticeUnread: { backgroundColor: '#f8fff8', marginHorizontal: -8, paddingHorizontal: 8, borderRadius: 12 },
+  homeNoticeIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
+  homeNoticeLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  homeNoticeText: { flex: 1, fontSize: 13, fontWeight: '800', color: C.text },
+  homeNoticeTextUnread: { color: C.green },
+  homeNoticeMeta: { fontSize: 11, color: C.muted, marginTop: 2 },
+  homeNoticeImportant: { fontSize: 10, fontWeight: '900', color: '#fff', backgroundColor: C.danger, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
+  homeNoticeDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.green },
   emptyCard: {
     backgroundColor: C.card, borderRadius: 20, padding: 32,
     alignItems: 'center', marginBottom: 14,
