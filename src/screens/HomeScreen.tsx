@@ -702,6 +702,10 @@ export default function HomeScreen() {
         selectedHoles: lottoSelection,
       })
       setMyLottoPurchases((current) => ({ ...current, [lottoRound.id]: lottoSelection }))
+      setLottoEntries((current) => [
+        ...current.filter((entry) => entry.userId !== myUserId),
+        { clubId: club.id, scheduleId: lottoRound.id, userId: myUserId, selectedHoles: lottoSelection },
+      ])
       setLottoRound(null)
       Alert.alert('구매 완료', 'Lotto 6/18 구매가 완료되었습니다.')
     } catch (e: unknown) {
@@ -1065,6 +1069,7 @@ export default function HomeScreen() {
             awardReady={!!lottoRoundRecord}
             awardConfig={lottoAwardConfig}
             jackpot={lottoJackpot}
+            purchased={!!(lottoRound && myLottoPurchases[lottoRound.id])}
             loading={lottoLoading}
             saving={lottoSaving}
             drawSaving={lottoDrawSaving}
@@ -1267,6 +1272,7 @@ function LottoSelectionModal({
   awardReady,
   awardConfig,
   jackpot,
+  purchased,
   loading,
   saving,
   drawSaving,
@@ -1286,6 +1292,7 @@ function LottoSelectionModal({
   awardReady: boolean
   awardConfig: LottoAwardConfig
   jackpot: number
+  purchased: boolean
   loading: boolean
   saving: boolean
   drawSaving: boolean
@@ -1298,7 +1305,7 @@ function LottoSelectionModal({
   const isDrafter = !!myUserId && draw?.drafterUserId === myUserId
   const isCompleted = draw?.drawStatus === 'COMPLETED'
   const selectedHoleList = [...selection.par3, ...selection.par4, ...selection.par5].sort((a, b) => a - b)
-  const isPurchased = selectedHoleList.length === 6
+  const isPurchased = purchased && selectedHoleList.length === 6
   const resultRows = selectedHoleList.map((hole) => draw?.drawnScores?.[String(hole)]).filter((item): item is RoundLottoDrawScore => !!item)
   const hitCount = resultRows.filter((row) => myStrokes?.[row.hole - 1] === row.score).length
   const allResultRows = Object.values(draw?.drawnScores ?? {}).sort((a, b) => a.hole - b.hole)

@@ -2,7 +2,7 @@ import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Alert, Image, Pla
 import { useRoute, useNavigation } from '@react-navigation/native'
 import { useState, useEffect, useRef } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { getClubAwardConfig, getClubAwardSnapshots, getRound, getRounds, deleteRound, updateRoundSettlement, playerTotal, totalPar, getHandicapsForRound, shortName, saveClubAwardSnapshots } from '../lib/store'
+import { DEFAULT_LOTTO_AWARD_CONFIG, getClubAwardConfig, getClubAwardSnapshots, getClubLottoAwardConfig, getClubMembers, getRound, getRoundLottoDraw, getRoundLottoEntries, getRounds, deleteRound, updateRoundSettlement, playerTotal, totalPar, getHandicapsForRound, shortName, saveClubAwardSnapshots, type LottoAwardConfig } from '../lib/store'
 import { getRoundSchedules } from '../lib/roundSchedule'
 import { AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
 import { computeClubAwardResults } from '../lib/awardResults'
@@ -17,6 +17,17 @@ import type { RootStackProps } from '../navigation/types'
 type Mode = 'regular' | 'shinperio' | 'score' | 'settlement'
 
 type AwardResult = { icon: string; label: string; winner: string; detail: string }
+type LottoAwardRow = { name: string; hits: number; total: number; prize: number; hasScore: boolean }
+
+function formatWon(value: number) {
+  return `${Math.max(0, Math.round(value)).toLocaleString('ko-KR')}원`
+}
+
+function lottoPrizeForHits(hits: number, config: LottoAwardConfig, jackpot: number) {
+  if (hits === 6) return jackpot
+  if (hits === 3 || hits === 4 || hits === 5) return config.prizes[String(hits) as '3' | '4' | '5']
+  return 0
+}
 
 function computeAwardResult(
   id: string,
@@ -216,6 +227,22 @@ export default function RoundDetailScreen() {
     return getRoundSchedules(activeClub.id)
   }, [activeClub?.id])
   const { data: clubAwardSnapshots } = useAsync(() => getClubAwardSnapshots(route.params.id), [route.params.id, recalcKey])
+  const { data: clubMembers } = useAsync(async () => {
+    if (!activeClub) return []
+    return getClubMembers(activeClub.id)
+  }, [activeClub?.id])
+  const { data: lottoAwardConfig } = useAsync(async () => {
+    if (!activeClub) return DEFAULT_LOTTO_AWARD_CONFIG
+    return getClubLottoAwardConfig(activeClub.id)
+  }, [activeClub?.id, recalcKey])
+  const { data: lottoEntries } = useAsync(async () => {
+    if (!round?.scheduleId) return []
+    return getRoundLottoEntries(round.scheduleId)
+  }, [round?.scheduleId, recalcKey])
+  const { data: lottoDraw } = useAsync(async () => {
+    if (!round?.scheduleId) return null
+    return getRoundLottoDraw(round.scheduleId)
+  }, [round?.scheduleId, recalcKey])
 
   useEffect(() => {
     if (!activeClub?.id || !round || !allRounds || !awardConfigLoaded || !clubAwardSnapshots || clubAwardSnapshots.length > 0 || awardSnapshotSaving.current) return
@@ -275,6 +302,26 @@ export default function RoundDetailScreen() {
     ? roundSchedules?.find((item) => item.id === round.scheduleId)?.awardConfig
     : null
   const effectiveAwardConfig = scheduleAwardConfig ?? awardConfig
+  const effectiveLottoAwardConfig = lottoAwardConfig ?? DEFAULT_LOTTO_AWARD_CONFIG
+  const lottoJackpot = effectiveLottoAwardConfig.prizes['6'] + (effectiveLottoAwardConfig.rollover ? effectiveLottoAwardConfig.carryoverAmount : 0)
+  const lottoAwardRows: LottoAwardRow[] = (lottoEntries ?? [])
+    .map((entry) => {
+      const member = (clubMembers ?? []).find((item) => item.userId === entry.userId)
+      const name = member?.name ?? '회원'
+      const player = round.players.find((item) => item.name === name)
+      const selectedHoles = [
+        ...entry.selectedHoles.par3,
+        ...entry.selectedHoles.par4,
+        ...entry.selectedHoles.par5,
+      ].sort((a, b) => a - b)
+      const hasScore = Boolean(player && lottoDraw?.drawStatus === 'COMPLETED' && lottoDraw.drawnScores)
+      const hits = hasScore
+        ? selectedHoles.filter((hole) => player!.strokes[hole - 1] === lottoDraw!.drawnScores?.[String(hole)]?.score).length
+        : 0
+      const prize = hasScore ? lottoPrizeForHits(hits, effectiveLottoAwardConfig, lottoJackpot) : 0
+      return { name, hits, total: selectedHoles.length, prize, hasScore }
+    })
+    .sort((a, b) => b.hits - a.hits || b.prize - a.prize || a.name.localeCompare(b.name, 'ko'))
 
   const regularRank = round.players
     .map((p) => {
@@ -661,14 +708,41 @@ export default function RoundDetailScreen() {
         )
 
         // 정산 설정 없을 때 → 개별 시상 안내 + 클럽 시상
+        const lottoAwardCard = (
+          <View style={s.card}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+              <Icon name="target" size={16} color={C.text} />
+              <Text style={[s.cardTitle, { marginBottom: 0 }]}>Lotto 6/18</Text>
+            </View>
+            {!round.scheduleId ? (
+              <Text style={s.muted}>라운드 일정 연결이 없습니다.</Text>
+            ) : lottoAwardRows.length === 0 ? (
+              <Text style={s.muted}>구매 내역이 없습니다.</Text>
+            ) : lottoDraw?.drawStatus !== 'COMPLETED' ? (
+              <Text style={s.muted}>추첨 완료 후 구매자별 적중 현황이 표시됩니다.</Text>
+            ) : lottoAwardRows.map((row, i) => (
+              <View key={row.name + i} style={[s.awardRow, i === 0 && { borderTopWidth: 0 }]}>
+                <Text style={s.awardTitle}>{shortName(row.name)}</Text>
+                <Text style={s.awardWinner}>{row.hasScore ? `${row.hits}/${row.total}개 적중` : '스코어 전'}</Text>
+                <View style={[s.awardDetailWrap, row.prize <= 0 && s.lottoMissWrap]}>
+                  <Text style={[s.awardDetail, row.prize <= 0 && s.lottoMissText]}>
+                    {row.prize > 0 ? `시상금 ${formatWon(row.prize)}` : '낙첨'}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )
+
         if (!cfg) {
           return (
             <>
+              {clubAwardCard}
+              {lottoAwardCard}
               <View style={s.card}>
                 <Text style={s.cardTitle}>머니게임</Text>
                 <Text style={s.muted}>이 라운드에는 정산 설정이 없습니다.{'\n'}스코어 입력 시 정산 설정을 추가하세요.</Text>
               </View>
-              {clubAwardCard}
             </>
           )
         }
@@ -689,6 +763,9 @@ export default function RoundDetailScreen() {
         return (
           <>
             {/* 설정 요약 */}
+            {clubAwardCard}
+            {lottoAwardCard}
+
             <View style={[s.card, { paddingVertical: 12 }]}>
               <Text style={s.muted}>
                 타당 {cfg.strokeFee.toLocaleString('ko-KR')}원 · 버디 {cfg.birdieBonus.toLocaleString('ko-KR')}원 · 참가 {participants.length}명
@@ -723,9 +800,6 @@ export default function RoundDetailScreen() {
                 ))
               )}
             </View>
-
-            {/* 클럽 시상 */}
-            {clubAwardCard}
 
             {/* 홀별 내역 (토글) */}
             {showHoleDetail && (
@@ -860,6 +934,8 @@ const s = StyleSheet.create({
   awardWinner: { flex: 1, fontSize: 15, fontWeight: '700', color: C.text },
   awardDetailWrap: { backgroundColor: C.greenLight, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
   awardDetail: { fontSize: 13, fontWeight: '800', color: C.green },
+  lottoMissWrap: { backgroundColor: '#f5f5f5' },
+  lottoMissText: { color: C.muted },
   // 신페리오 기준 드롭다운
   basisBtn: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, borderWidth: 1, borderColor: C.green, backgroundColor: C.green },
   basisBtnText: { fontSize: 11, color: '#fff', fontWeight: '600' },
