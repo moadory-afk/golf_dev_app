@@ -26,6 +26,7 @@ export default function NoticePrototypeScreen() {
   const [readIds, setReadIds] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [editing, setEditing] = useState<ClubNotice | 'new' | null>(null)
+  const [selectedNotice, setSelectedNotice] = useState<ClubNotice | null>(null)
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [isPublished, setIsPublished] = useState(true)
@@ -68,6 +69,11 @@ export default function NoticePrototypeScreen() {
     const next = [...readIds, notice.id]
     setReadIds(next)
     await AsyncStorage.setItem(readKey(activeClub.id, userId), JSON.stringify(next))
+  }
+
+  async function openNoticeDetail(notice: ClubNotice) {
+    setSelectedNotice(notice)
+    await markRead(notice)
   }
 
   async function saveNotice() {
@@ -127,7 +133,7 @@ export default function NoticePrototypeScreen() {
         ) : notices.map((notice) => {
           const unread = notice.isPublished && !readIds.includes(notice.id)
           return (
-            <TouchableOpacity key={notice.id} style={[s.noticeRow, unread && s.noticeUnread]} onPress={() => markRead(notice)} activeOpacity={0.82}>
+            <TouchableOpacity key={notice.id} style={[s.noticeRow, unread && s.noticeUnread]} onPress={() => openNoticeDetail(notice)} activeOpacity={0.82}>
               <View style={s.noticeIcon}>
                 <Icon name="mail" size={16} color={unread ? C.green : C.muted} />
               </View>
@@ -142,14 +148,33 @@ export default function NoticePrototypeScreen() {
               </View>
               {isAdmin && (
                 <View style={s.noticeActions}>
-                  <TouchableOpacity onPress={() => openEditor(notice)}><Text style={s.actionText}>수정</Text></TouchableOpacity>
-                  <TouchableOpacity onPress={() => removeNotice(notice)}><Text style={[s.actionText, { color: C.danger }]}>삭제</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={(event) => { event.stopPropagation(); openEditor(notice) }}><Text style={s.actionText}>수정</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={(event) => { event.stopPropagation(); removeNotice(notice) }}><Text style={[s.actionText, { color: C.danger }]}>삭제</Text></TouchableOpacity>
                 </View>
               )}
             </TouchableOpacity>
           )
         })}
       </View>
+
+      <Modal transparent visible={!!selectedNotice} animationType="fade" onRequestClose={() => setSelectedNotice(null)}>
+        <View style={s.overlay}>
+          <View style={s.modalCard}>
+            <View style={s.detailHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.modalTitle}>{selectedNotice?.title}</Text>
+                <Text style={s.detailDate}>{selectedNotice ? shortDate(selectedNotice.createdAt) : ''}</Text>
+              </View>
+              <TouchableOpacity style={s.detailCloseBtn} onPress={() => setSelectedNotice(null)}>
+                <Text style={s.detailCloseText}>닫기</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView>
+              <Text style={s.detailBody}>{selectedNotice?.body || '내용 없음'}</Text>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <Modal transparent visible={!!editing} animationType="fade" onRequestClose={() => setEditing(null)}>
         <View style={s.overlay}>
@@ -207,6 +232,11 @@ const s = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 20 },
   modalCard: { backgroundColor: '#fff', borderRadius: 20, padding: 18 },
   modalTitle: { fontSize: 18, fontWeight: '900', color: C.text, marginBottom: 14 },
+  detailHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 12 },
+  detailDate: { fontSize: 12, fontWeight: '700', color: C.muted },
+  detailBody: { fontSize: 14, lineHeight: 22, color: C.text },
+  detailCloseBtn: { borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: C.greenLight },
+  detailCloseText: { fontSize: 12, fontWeight: '900', color: C.green },
   input: { borderWidth: 1, borderColor: C.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, fontSize: 14, color: C.text, marginBottom: 10 },
   bodyInput: { minHeight: 120, textAlignVertical: 'top' },
   toggleRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },

@@ -884,9 +884,21 @@ export default function FeePrototypeScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={s.policyTitle}>{transactionDraft.id ? '거래 수정' : '신규거래 추가'}</Text>
               </View>
-              <TouchableOpacity style={s.policyCloseBtn} onPress={() => setTransactionEditorOpen(false)}>
-                <Text style={s.policyCloseText}>닫기</Text>
-              </TouchableOpacity>
+              <View style={s.transactionHeaderActions}>
+                {isAdmin ? (
+                  <>
+                    <TouchableOpacity style={[s.transactionHeaderBtn, s.transactionHeaderDeleteBtn]} onPress={deleteTransactionDraft}>
+                      <Text style={[s.transactionHeaderBtnText, s.transactionHeaderDeleteText]}>삭제</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[s.transactionHeaderBtn, s.transactionHeaderSaveBtn]} onPress={saveTransactionDraft}>
+                      <Text style={[s.transactionHeaderBtnText, s.transactionHeaderSaveText]}>저장/닫기</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : null}
+                <TouchableOpacity style={s.transactionHeaderBtn} onPress={() => setTransactionEditorOpen(false)}>
+                  <Text style={s.transactionHeaderBtnText}>닫기</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -1013,14 +1025,6 @@ export default function FeePrototypeScreen() {
               </View>
             </ScrollView>
 
-            {isAdmin ? <View style={s.editorActionRow}>
-              <TouchableOpacity style={s.editorDeleteBtn} onPress={deleteTransactionDraft}>
-                <Text style={s.editorDeleteText}>삭제</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.editorSaveBtn} onPress={saveTransactionDraft}>
-                <Text style={s.policySaveText}>저장</Text>
-              </TouchableOpacity>
-            </View> : null}
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -1214,6 +1218,20 @@ const s = StyleSheet.create({
   policyDescription: { fontSize: 12, color: C.muted, lineHeight: 18, marginTop: 6 },
   policyCloseBtn: { backgroundColor: C.greenLight, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8 },
   policyCloseText: { color: C.green, fontSize: 12, fontWeight: '800' },
+  transactionHeaderActions: { flexDirection: 'row', gap: 6, flexShrink: 0 },
+  transactionHeaderBtn: {
+    width: 72,
+    minHeight: 34,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.greenLight,
+  },
+  transactionHeaderBtnText: { color: C.green, fontSize: 12, fontWeight: '900' },
+  transactionHeaderDeleteBtn: { backgroundColor: '#f7ece8' },
+  transactionHeaderDeleteText: { color: C.danger },
+  transactionHeaderSaveBtn: { backgroundColor: C.green },
+  transactionHeaderSaveText: { color: '#fff' },
   policySection: { paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.border },
   policySectionTitle: { fontSize: 14, fontWeight: '900', color: C.text, marginBottom: 10 },
   transactionEditorTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -1274,24 +1292,6 @@ const s = StyleSheet.create({
   receiptRemoveText: { textAlign: 'center', fontSize: 11, fontWeight: '800', color: C.danger },
   imagePreviewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.86)', justifyContent: 'center', alignItems: 'center', padding: 18 },
   imagePreviewLarge: { width: '100%', height: '86%' },
-  editorActionRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  editorDeleteBtn: {
-    flex: 1,
-    borderRadius: 16,
-    backgroundColor: '#f7ece8',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-  },
-  editorDeleteText: { color: C.danger, fontSize: 14, fontWeight: '900' },
-  editorSaveBtn: {
-    flex: 1,
-    marginTop: 0,
-    borderRadius: 16,
-    backgroundColor: C.green,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
   policyListRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border },
   policyListName: { flex: 1, fontSize: 13, fontWeight: '800', color: C.text },
   policyListAmount: { fontSize: 13, fontWeight: '800', color: C.text },

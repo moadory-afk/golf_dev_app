@@ -1375,8 +1375,8 @@ function PersonalHoleCard({ stat, editable, onChange }: {
       ) : (
         <FirPicker value={stat.fir} disabled={!editable} onChange={(fir) => onChange({ fir })} />
       )}
-      <CounterRow label="퍼팅수" value={stat.putts} min={0} disabled={!editable} onChange={(putts) => onChange({ putts })} />
-      <CounterRow label="패널티" value={stat.penalties} min={0} disabled={!editable} onChange={(penalties) => onChange({ penalties })} />
+      <StatTagRow label="퍼팅수" value={stat.putts} options={[1, 2, 3, 4]} disabled={!editable} onChange={(putts) => onChange({ putts })} />
+      <StatTagRow label="패널티" value={stat.penalties} options={[1, 2, 3, 4]} disabled={!editable} onChange={(penalties) => onChange({ penalties })} />
     </View>
   )
 }
@@ -1410,18 +1410,25 @@ function FirPicker({ value, disabled, onChange }: { value: PersonalRoundFir; dis
   )
 }
 
-function CounterRow({ label, value, min, disabled, onChange }: { label: string; value: number; min: number; disabled?: boolean; onChange: (value: number) => void }) {
+function StatTagRow({ label, value, options, disabled, onChange }: { label: string; value: number; options: number[]; disabled?: boolean; onChange: (value: number) => void }) {
   return (
-    <View style={s.counterRow}>
+    <View style={s.statTagRow}>
       <Text style={s.personalFieldLabel}>{label}</Text>
-      <View style={s.counterControl}>
-        <TouchableOpacity style={[s.counterBtn, disabled && { opacity: 0.5 }]} onPress={() => onChange(Math.max(min, value - 1))} disabled={disabled}>
-          <Text style={s.counterBtnText}>-</Text>
-        </TouchableOpacity>
-        <Text style={s.counterValue}>{value}</Text>
-        <TouchableOpacity style={[s.counterBtn, disabled && { opacity: 0.5 }]} onPress={() => onChange(value + 1)} disabled={disabled}>
-          <Text style={s.counterBtnText}>+</Text>
-        </TouchableOpacity>
+      <View style={s.statTagList}>
+        {options.map((option) => {
+          const active = value === option
+          return (
+            <TouchableOpacity
+              key={`${label}-${option}`}
+              style={[s.statTag, active && s.statTagActive, disabled && { opacity: 0.5 }]}
+              onPress={() => onChange(option)}
+              disabled={disabled}
+              activeOpacity={0.82}
+            >
+              <Text style={[s.statTagText, active && s.statTagTextActive]}>{option}</Text>
+            </TouchableOpacity>
+          )
+        })}
       </View>
     </View>
   )
@@ -2411,24 +2418,25 @@ const s = StyleSheet.create({
     marginTop: 8,
   },
   personalDisabledText: { fontSize: 12, color: C.muted, fontWeight: '800' },
-  firWrap: { alignItems: 'center', marginTop: 8, gap: 5 },
+  firWrap: { alignItems: 'center', alignSelf: 'center', marginTop: -18, marginBottom: 12, gap: 5, width: 214 },
   firMiddle: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   firExtraRow: { flexDirection: 'row', gap: 6, marginTop: 4 },
   firButton: { minWidth: 54, minHeight: 34, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f3f5f3', borderWidth: 1, borderColor: C.border, paddingHorizontal: 10 },
   firButtonActive: { backgroundColor: C.greenLight, borderColor: C.green },
   firButtonText: { fontSize: 12, fontWeight: '900', color: C.muted },
   firButtonTextActive: { color: C.green },
-  firTop: { borderTopLeftRadius: 28, borderTopRightRadius: 28, width: 86 },
-  firBottom: { borderBottomLeftRadius: 28, borderBottomRightRadius: 28, width: 86 },
+  firTop: { borderTopLeftRadius: 28, borderTopRightRadius: 28, width: 74 },
+  firBottom: { borderBottomLeftRadius: 28, borderBottomRightRadius: 28, width: 74 },
   firSide: { backgroundColor: '#fff2ef', borderColor: '#f0cbc4' },
-  firCenter: { width: 76, minHeight: 42 },
+  firCenter: { width: 66, minHeight: 42 },
   firExtra: { minWidth: 92 },
   firHazard: { minWidth: 82, backgroundColor: '#eef6ff', borderColor: '#cfe1f5' },
-  counterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
-  counterControl: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  counterBtn: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: C.greenLight },
-  counterBtnText: { fontSize: 18, fontWeight: '900', color: C.green },
-  counterValue: { minWidth: 22, textAlign: 'center', fontSize: 15, fontWeight: '900', color: C.text },
+  statTagRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
+  statTagList: { flex: 1, flexDirection: 'row', gap: 7 },
+  statTag: { flex: 1, minHeight: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f3f5f3', borderWidth: 1, borderColor: C.border },
+  statTagActive: { backgroundColor: C.greenLight, borderColor: C.green },
+  statTagText: { fontSize: 13, fontWeight: '900', color: C.muted },
+  statTagTextActive: { color: C.green },
   personalFooter: { flexDirection: 'row', gap: 10, marginTop: 12 },
   personalNavBtn: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: 'center', backgroundColor: '#f2f4f6' },
   personalNavBtnDisabled: { opacity: 0.4 },

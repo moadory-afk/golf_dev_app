@@ -445,8 +445,6 @@ export default function ClubScreen() {
         <View style={s.content}>
           {club && (
             <>
-              <Text style={s.pageSectionTitle}>클럽 관리</Text>
-
                   <View style={s.clubHeroCard}>
                     <Image source={{ uri: club.coverImage || CLUB_HERO_IMAGE }} style={s.clubHeroImage} resizeMode="cover" />
                     <View style={s.clubHeroBody}>
