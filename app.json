@@ -17,9 +17,7 @@
       "icon": "./assets/gogopar_a.png",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/gogopar_a.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./assets/gogopar_a.png"
       },
       "predictiveBackGestureEnabled": false
     },

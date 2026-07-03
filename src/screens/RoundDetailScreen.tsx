@@ -1,7 +1,6 @@
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Alert, Image, Platform } from 'react-native'
 import { useRoute, useNavigation } from '@react-navigation/native'
 import { useState, useEffect, useRef } from 'react'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { DEFAULT_LOTTO_AWARD_CONFIG, getClubAwardConfig, getClubAwardSnapshots, getClubLottoAwardConfig, getClubMembers, getRound, getRoundLottoDraw, getRoundLottoEntries, getRounds, deleteRound, updateRoundSettlement, playerTotal, totalPar, getHandicapsForRound, shortName, saveClubAwardSnapshots, type LottoAwardConfig } from '../lib/store'
 import { getRoundSchedules } from '../lib/roundSchedule'
 import { AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
@@ -9,6 +8,7 @@ import { computeClubAwardResults } from '../lib/awardResults'
 import { calcSettlement, holeNetForPlayer, fmtKRW } from '../features/settlement'
 import { useAsync } from '../lib/useAsync'
 import { useClub } from '../lib/ClubContext'
+import { loadHandicapBasis, type HandicapBasis } from '../lib/handicapBasis'
 import { C } from '../theme'
 import { Icon } from '../components/Icon'
 import AppTabBar from '../components/AppTabBar'
@@ -193,7 +193,7 @@ export default function RoundDetailScreen() {
   const [recalcKey, setRecalcKey] = useState(0)
   const [recalcing, setRecalcing] = useState(false)
   const [applyHandicap, setApplyHandicap] = useState(false)
-  const [handicapBasis, setHandicapBasis] = useState<3 | 5 | 10>(5)
+  const [handicapBasis, setHandicapBasis] = useState<HandicapBasis>(5)
   const [showShinDropdown, setShowShinDropdown] = useState(false)
   const [showRegularDropdown, setShowRegularDropdown] = useState(false)
   const [showHoleDetail, setShowHoleDetail] = useState(false)
@@ -204,10 +204,8 @@ export default function RoundDetailScreen() {
   const { activeClub } = useClub()
 
   useEffect(() => {
-    AsyncStorage.getItem('@gogopar_handicap_basis').then(v => {
-      if (v === '3' || v === '5' || v === '10') setHandicapBasis(Number(v) as 3 | 5 | 10)
-    })
-  }, [])
+    loadHandicapBasis(activeClub?.id).then(setHandicapBasis)
+  }, [activeClub?.id])
   useEffect(() => {
     if (!activeClub?.id) return
     setAwardConfigLoaded(false)

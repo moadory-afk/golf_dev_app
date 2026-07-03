@@ -891,41 +891,44 @@ export default function FeePrototypeScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={s.policySection}>
-                <Text style={s.policySectionTitle}>구분</Text>
-                <View style={s.segmentRow}>
-                  <TouchableOpacity
-                    style={[s.segmentBtn, transactionDraft.type === 'income' && s.segmentBtnActive]}
-                    disabled={!isAdmin}
-                    onPress={() => setTransactionDraft((current) => ({
-                      ...current,
-                      type: 'income',
-                      detail: INCOME_DETAILS.includes(current.detail as any) ? current.detail : '회비',
-                      customDetail: '',
-                    }))}
-                  >
-                    <Text style={[s.segmentText, transactionDraft.type === 'income' && s.segmentTextActive]}>입금</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[s.segmentBtn, transactionDraft.type === 'expense' && s.segmentBtnActive]}
-                    disabled={!isAdmin}
-                    onPress={() => setTransactionDraft((current) => ({
-                      ...current,
-                      type: 'expense',
-                      detail: EXPENSE_DETAILS.includes(current.detail as any) ? current.detail : '캐디피',
-                      customDetail: '',
-                    }))}
-                  >
-                    <Text style={[s.segmentText, transactionDraft.type === 'expense' && s.segmentTextActive]}>지급</Text>
-                  </TouchableOpacity>
+                <View style={s.transactionTopRow}>
+                  <View style={s.transactionDateCell}>
+                    <Text style={s.policySectionTitle}>날짜</Text>
+                    <DateField
+                      value={transactionDraft.entryDate}
+                      onChange={(entryDate) => isAdmin && setTransactionDraft((current) => ({ ...current, entryDate }))}
+                    />
+                  </View>
+                  <View style={s.transactionTypeCell}>
+                    <Text style={s.policySectionTitle}>구분</Text>
+                    <View style={s.segmentRow}>
+                      <TouchableOpacity
+                        style={[s.segmentBtn, transactionDraft.type === 'income' && s.segmentBtnActive]}
+                        disabled={!isAdmin}
+                        onPress={() => setTransactionDraft((current) => ({
+                          ...current,
+                          type: 'income',
+                          detail: INCOME_DETAILS.includes(current.detail as any) ? current.detail : '회비',
+                          customDetail: '',
+                        }))}
+                      >
+                        <Text style={[s.segmentText, transactionDraft.type === 'income' && s.segmentTextActive]}>입금</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[s.segmentBtn, transactionDraft.type === 'expense' && s.segmentBtnActive]}
+                        disabled={!isAdmin}
+                        onPress={() => setTransactionDraft((current) => ({
+                          ...current,
+                          type: 'expense',
+                          detail: EXPENSE_DETAILS.includes(current.detail as any) ? current.detail : '캐디피',
+                          customDetail: '',
+                        }))}
+                      >
+                        <Text style={[s.segmentText, transactionDraft.type === 'expense' && s.segmentTextActive]}>지급</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
                 </View>
-              </View>
-
-              <View style={s.policySection}>
-                <Text style={s.policySectionTitle}>날짜</Text>
-                <DateField
-                  value={transactionDraft.entryDate}
-                  onChange={(entryDate) => isAdmin && setTransactionDraft((current) => ({ ...current, entryDate }))}
-                />
               </View>
 
               <View style={s.policySection}>
@@ -985,14 +988,6 @@ export default function FeePrototypeScreen() {
 
               <View style={s.policySection}>
                 <Text style={s.policySectionTitle}>증빙</Text>
-                <TextInput
-                  style={s.policyInput}
-                  value={transactionDraft.proofText}
-                  onChangeText={(value) => setTransactionDraft((current) => ({ ...current, proofText: value }))}
-                  editable={isAdmin}
-                  placeholder="증빙 내용 입력"
-                  placeholderTextColor={C.muted}
-                />
                 {isAdmin ? <View style={s.receiptActionRow}>
                   <TouchableOpacity style={s.receiptActionBtn} onPress={takeReceiptPhoto} activeOpacity={0.86}>
                     <Text style={s.receiptActionText}>사진찍기</Text>
@@ -1217,6 +1212,8 @@ const s = StyleSheet.create({
   policyCloseText: { color: C.green, fontSize: 12, fontWeight: '800' },
   policySection: { paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.border },
   policySectionTitle: { fontSize: 14, fontWeight: '900', color: C.text, marginBottom: 10 },
+  transactionDateCell: { flex: 1.15 },
+  transactionTypeCell: { flex: 1 },
   segmentRow: { flexDirection: 'row', gap: 8 },
   segmentBtn: { flex: 1, borderRadius: 14, borderWidth: 1, borderColor: C.border, paddingVertical: 12, alignItems: 'center', backgroundColor: '#fff' },
   segmentBtnActive: { backgroundColor: C.accent, borderColor: C.accent },

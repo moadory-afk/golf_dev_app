@@ -45,6 +45,8 @@ type Draft = {
   date: string
   courseId?: string
   courseName?: string
+  layoutId?: string
+  layoutName?: string
   status: RoundScheduleStatus
   attendanceMode: RoundAttendanceMode
   note: string
@@ -238,6 +240,27 @@ export default function RoundSchedulePrototypeScreen() {
       `${course.name} ${course.region}`.toLowerCase().includes(keyword)
     )
   }, [courses, courseSearch])
+  const courseLayoutOptions = useMemo(() => {
+    const map = new Map<string, CourseLayout>()
+    layouts.forEach((layout) => map.set(layout.id, layout))
+    draft.groups.forEach((group) => {
+      ;[
+        { id: group.frontLayoutId, name: group.frontLayoutName },
+        { id: group.backLayoutId, name: group.backLayoutName },
+        { id: draft.layoutId, name: draft.layoutName },
+      ].forEach((layout) => {
+        if (!layout.id || !layout.name || map.has(layout.id)) return
+        map.set(layout.id, {
+          id: layout.id,
+          golfCourseId: draft.courseId ?? 'custom',
+          name: layout.name,
+          holes: 9,
+          pars: [],
+        })
+      })
+    })
+    return [...map.values()]
+  }, [layouts, draft.groups, draft.courseId, draft.layoutId, draft.layoutName])
   const sortedClubMembers = useMemo(() => {
     const order: Record<RoundAttendanceLabel, number> = { 참석: 0, 미정: 1, 불참: 2 }
     return [...clubMembers].sort((a, b) => {
@@ -294,6 +317,8 @@ export default function RoundSchedulePrototypeScreen() {
       date: item.date,
       courseId: item.courseId,
       courseName: item.courseName,
+      layoutId: item.layoutId,
+      layoutName: item.layoutName,
       status: item.status,
       attendanceMode: item.attendanceMode,
       note: item.note,
@@ -342,6 +367,8 @@ export default function RoundSchedulePrototypeScreen() {
           date: draft.date,
           courseId: draft.courseId,
           courseName: draft.courseName?.trim() || undefined,
+          layoutId: draft.layoutId,
+          layoutName: draft.layoutName,
           status: draft.status,
           attendanceMode: draft.attendanceMode,
           note: draft.note.trim(),
@@ -385,6 +412,8 @@ export default function RoundSchedulePrototypeScreen() {
           date: draft.date,
           courseId: draft.courseId,
           courseName: draft.courseName?.trim() || undefined,
+          layoutId: draft.layoutId,
+          layoutName: draft.layoutName,
           status: draft.status,
           attendanceMode: draft.attendanceMode,
           note: draft.note.trim(),
@@ -616,6 +645,8 @@ export default function RoundSchedulePrototypeScreen() {
         ...current,
         courseId: undefined,
         courseName: undefined,
+        layoutId: undefined,
+        layoutName: undefined,
         groups: current.groups.map((group) => ({
           ...group,
           frontLayoutId: undefined,
@@ -634,6 +665,8 @@ export default function RoundSchedulePrototypeScreen() {
       ...current,
       courseId: course.id,
       courseName: course.name,
+      layoutId: undefined,
+      layoutName: undefined,
       groups: current.groups.map((group) => ({
         ...group,
         frontLayoutId: undefined,
@@ -659,6 +692,33 @@ export default function RoundSchedulePrototypeScreen() {
           backLayoutName: layout?.name,
         })
     setLayoutPickerTarget(null)
+  }
+
+  function toggleLayoutTag(groupId: string, side: 'front' | 'back' | 'extra', layout: CourseLayout | null) {
+    if (side === 'extra') {
+      setDraft((current) => {
+        const active = current.layoutId === layout?.id
+        return {
+          ...current,
+          layoutId: active ? undefined : layout?.id,
+          layoutName: active ? undefined : layout?.name,
+        }
+      })
+      return
+    }
+
+    const group = draft.groups.find((item) => item.id === groupId)
+    const currentId = side === 'front' ? group?.frontLayoutId : group?.backLayoutId
+    const nextLayout = currentId === layout?.id ? null : layout
+    updateGroup(groupId, side === 'front'
+      ? {
+          frontLayoutId: nextLayout?.id,
+          frontLayoutName: nextLayout?.name,
+        }
+      : {
+          backLayoutId: nextLayout?.id,
+          backLayoutName: nextLayout?.name,
+        })
   }
 
   function toggleGroupMember(groupId: string, member: ClubMember) {
@@ -706,6 +766,8 @@ export default function RoundSchedulePrototypeScreen() {
         date: draft.date,
         courseId: draft.courseId,
         courseName: draft.courseName?.trim() || undefined,
+        layoutId: draft.layoutId,
+        layoutName: draft.layoutName,
         status: draft.status,
         attendanceMode: draft.attendanceMode,
         note: draft.note.trim(),
@@ -757,6 +819,8 @@ export default function RoundSchedulePrototypeScreen() {
         date: draft.date,
         courseId: draft.courseId,
         courseName: draft.courseName?.trim() || undefined,
+        layoutId: draft.layoutId,
+        layoutName: draft.layoutName,
         status: 'finished',
         attendanceMode: draft.attendanceMode,
         note: draft.note.trim(),
@@ -839,6 +903,8 @@ export default function RoundSchedulePrototypeScreen() {
         date: draft.date,
         courseId: draft.courseId,
         courseName: draft.courseName?.trim() || undefined,
+        layoutId: draft.layoutId,
+        layoutName: draft.layoutName,
         status: 'closed',
         attendanceMode: draft.attendanceMode,
         note: draft.note.trim(),
@@ -980,33 +1046,68 @@ export default function RoundSchedulePrototypeScreen() {
                       </View>
 
                       <View style={s.coursePairRow}>
-                        <TouchableOpacity
-                          style={[s.selector, s.groupSelector, !draft.courseId && s.selectorDisabled]}
-                          onPress={() => draft.courseId && setLayoutPickerTarget({ groupId: group.id, side: 'front' })}
-                          activeOpacity={0.84}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={s.groupSelectorLabel}>전반 코스</Text>
-                            <Text style={[s.selectorText, !group.frontLayoutName && s.selectorPlaceholder]}>
-                              {group.frontLayoutName ?? '선택'}
-                            </Text>
+                        <View style={s.courseTagBlock}>
+                          <Text style={s.groupSelectorLabel}>전반 코스</Text>
+                          <View style={s.courseTagRow}>
+                            {courseLayoutOptions.length === 0 ? (
+                              <Text style={s.emptyMemberText}>{draft.courseId ? '등록된 코스가 없습니다' : '골프장을 먼저 선택하세요'}</Text>
+                            ) : courseLayoutOptions.map((layout) => {
+                              const active = group.frontLayoutId === layout.id
+                              return (
+                                <TouchableOpacity
+                                  key={`front-${group.id}-${layout.id}`}
+                                  style={[s.courseTag, active && s.courseTagActive]}
+                                  onPress={() => toggleLayoutTag(group.id, 'front', layout)}
+                                  activeOpacity={0.84}
+                                >
+                                  <Text style={[s.courseTagText, active && s.courseTagTextActive]}>{layout.name}</Text>
+                                </TouchableOpacity>
+                              )
+                            })}
                           </View>
-                          <Icon name="chevronRight" size={18} color={C.muted} />
-                        </TouchableOpacity>
+                        </View>
 
-                        <TouchableOpacity
-                          style={[s.selector, s.groupSelector, !draft.courseId && s.selectorDisabled]}
-                          onPress={() => draft.courseId && setLayoutPickerTarget({ groupId: group.id, side: 'back' })}
-                          activeOpacity={0.84}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={s.groupSelectorLabel}>후반 코스</Text>
-                            <Text style={[s.selectorText, !group.backLayoutName && s.selectorPlaceholder]}>
-                              {group.backLayoutName ?? '선택'}
-                            </Text>
+                        <View style={s.courseTagBlock}>
+                          <Text style={s.groupSelectorLabel}>후반 코스</Text>
+                          <View style={s.courseTagRow}>
+                            {courseLayoutOptions.length === 0 ? (
+                              <Text style={s.emptyMemberText}>{draft.courseId ? '등록된 코스가 없습니다' : '골프장을 먼저 선택하세요'}</Text>
+                            ) : courseLayoutOptions.map((layout) => {
+                              const active = group.backLayoutId === layout.id
+                              return (
+                                <TouchableOpacity
+                                  key={`back-${group.id}-${layout.id}`}
+                                  style={[s.courseTag, active && s.courseTagActive]}
+                                  onPress={() => toggleLayoutTag(group.id, 'back', layout)}
+                                  activeOpacity={0.84}
+                                >
+                                  <Text style={[s.courseTagText, active && s.courseTagTextActive]}>{layout.name}</Text>
+                                </TouchableOpacity>
+                              )
+                            })}
                           </View>
-                          <Icon name="chevronRight" size={18} color={C.muted} />
-                        </TouchableOpacity>
+                        </View>
+
+                        <View style={s.courseTagBlock}>
+                          <Text style={s.groupSelectorLabel}>추가 코스</Text>
+                          <View style={s.courseTagRow}>
+                            {courseLayoutOptions.length === 0 ? (
+                              <Text style={s.emptyMemberText}>{draft.courseId ? '등록된 코스가 없습니다' : '골프장을 먼저 선택하세요'}</Text>
+                            ) : courseLayoutOptions.map((layout) => {
+                              const active = draft.layoutId === layout.id
+                              return (
+                                <TouchableOpacity
+                                  key={`extra-${group.id}-${layout.id}`}
+                                  style={[s.courseTag, active && s.courseTagActive]}
+                                  onPress={() => toggleLayoutTag(group.id, 'extra', layout)}
+                                  activeOpacity={0.84}
+                                >
+                                  <Text style={[s.courseTagText, active && s.courseTagTextActive]}>{layout.name}</Text>
+                                </TouchableOpacity>
+                              )
+                            })}
+                          </View>
+                        </View>
                       </View>
 
                       <View style={s.memberSection}>
@@ -1106,7 +1207,7 @@ export default function RoundSchedulePrototypeScreen() {
                         <View style={{ flex: 1 }}>
                           <Text style={s.scoreGroupTitle}>{group.name || `${index + 1}조`}</Text>
                           <Text style={s.scoreGroupMeta}>
-                            {group.time?.trim() ? group.time : '티오프 미정'} · {group.frontLayoutName ?? '전반 미정'} / {group.backLayoutName ?? '후반 미정'}
+                            {group.time?.trim() ? group.time : '티오프 미정'} · {[group.frontLayoutName ?? '전반 미정', group.backLayoutName ?? '후반 미정', draft.layoutName].filter(Boolean).join(' / ')}
                           </Text>
                           <Text style={s.scoreGroupMembers}>
                             {group.members.length > 0 ? group.members.map((member) => member.name).join(', ') : '배정된 회원 없음'}
@@ -1331,7 +1432,7 @@ export default function RoundSchedulePrototypeScreen() {
                 <View style={s.scoreUploadGroupBox}>
                   <Text style={s.scoreUploadGroupTitle}>{selectedScoreGroup.members.map((member) => member.name).join(', ')}</Text>
                   <Text style={s.scoreGroupMeta}>
-                    {selectedScoreGroup.time?.trim() ? selectedScoreGroup.time : '티오프 미정'} · {selectedScoreGroup.frontLayoutName ?? '전반 미정'} / {selectedScoreGroup.backLayoutName ?? '후반 미정'}
+                    {selectedScoreGroup.time?.trim() ? selectedScoreGroup.time : '티오프 미정'} · {[selectedScoreGroup.frontLayoutName ?? '전반 미정', selectedScoreGroup.backLayoutName ?? '후반 미정', draft.layoutName].filter(Boolean).join(' / ')}
                   </Text>
                 </View>
               )}
@@ -1795,6 +1896,25 @@ const s = StyleSheet.create({
   timeInputWrap: { gap: 8 },
   timeInputLabel: { fontSize: 13, fontWeight: '700', color: C.muted },
   coursePairRow: { gap: 10 },
+  courseTagBlock: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: '#f8fbf8',
+  },
+  courseTagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  courseTag: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  courseTagActive: { backgroundColor: C.accent, borderColor: C.accent },
+  courseTagText: { fontSize: 12, fontWeight: '800', color: C.muted },
+  courseTagTextActive: { color: C.accentText },
   groupSelector: { minHeight: 70 },
   groupSelectorLabel: { fontSize: 12, fontWeight: '700', color: C.muted, marginBottom: 6 },
   timeInput: {

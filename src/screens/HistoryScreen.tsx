@@ -5,13 +5,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useState, useCallback, useEffect } from 'react'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AppHeader } from '../components/AppHeader'
 import Svg, { Polyline, Circle, Line, Text as SvgText, G } from 'react-native-svg'
 import { getRounds, getRound, playerTotal, totalPar, getHandicapsForRound, computeHandicaps, shortName, type SavedRound } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
 import { useUserProfile } from '../lib/UserProfileContext'
 import { useAsync } from '../lib/useAsync'
+import { loadHandicapBasis, type HandicapBasis } from '../lib/handicapBasis'
 import { C } from '../theme'
 import { EmojiIcon } from '../components/EmojiIcon'
 import { Icon } from '../components/Icon'
@@ -132,7 +132,7 @@ export default function HistoryScreen() {
   const [tab, setTab] = useState<Tab>('byPlayer')
   const [refreshKey, setRefreshKey] = useState(0)
   const { name: myName } = useUserProfile()
-  const [handicapBasis, setHandicapBasis] = useState(5)
+  const [handicapBasis, setHandicapBasis] = useState<HandicapBasis>(5)
   const { activeClub, clubsLoaded } = useClub()
   const { data, loading } = useAsync(
     () => (activeClub ? getRounds(activeClub.id) : Promise.resolve([])),
@@ -145,10 +145,8 @@ export default function HistoryScreen() {
   useFocusEffect(useCallback(() => { setRefreshKey((k) => k + 1) }, []))
 
   useEffect(() => {
-    AsyncStorage.getItem('@gogopar_handicap_basis').then(v => {
-      if (v === '3' || v === '5' || v === '10') setHandicapBasis(Number(v))
-    })
-  }, [])
+    loadHandicapBasis(activeClub?.id).then(setHandicapBasis)
+  }, [activeClub?.id])
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -173,7 +171,7 @@ export default function HistoryScreen() {
           <>
             {tab === 'byRound' && <ByRound rounds={rounds} handicapBasis={handicapBasis} />}
             {tab === 'byPlayer' && <ByPlayer rounds={rounds} handicapBasis={handicapBasis} myName={myName} />}
-            {tab === 'club' && <Club rounds={rounds} />}
+            {tab === 'club' && <Club rounds={rounds} handicapBasis={handicapBasis} />}
             {tab === 'hall' && <HallOfFame rounds={rounds} handicapBasis={handicapBasis} />}
           </>
         )}
@@ -735,15 +733,13 @@ function DetailButton({ label, onPress }: { label: string; onPress: () => void }
 
 // ─── 클럽 전체 ───────────────────────────────────────────────────────────────
 
-function Club({ rounds }: { rounds: SavedRound[] }) {
+function Club({ rounds, handicapBasis: currentHandicapBasis }: { rounds: SavedRound[]; handicapBasis: HandicapBasis }) {
   const [showChart, setShowChart] = useState<'avg' | 'best' | false>(false)
-  const [handicapBasis, setHandicapBasis] = useState<3 | 5 | 10>(5)
+  const [handicapBasis, setHandicapBasis] = useState<HandicapBasis>(currentHandicapBasis)
   const [showBasisDropdown, setShowBasisDropdown] = useState(false)
   useEffect(() => {
-    AsyncStorage.getItem('@gogopar_handicap_basis').then(v => {
-      if (v === '3' || v === '5' || v === '10') setHandicapBasis(Number(v) as 3 | 5 | 10)
-    })
-  }, [])
+    setHandicapBasis(currentHandicapBasis)
+  }, [currentHandicapBasis])
 
   if (rounds.length === 0) return <Text style={s.muted}>데이터가 없습니다.</Text>
 

@@ -6,13 +6,13 @@ import { CommonActions, useNavigation, useRoute } from '@react-navigation/native
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import type { RouteProp } from '@react-navigation/native'
 import { useState, useCallback, useEffect } from 'react'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as ImageManipulator from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
 import { DEFAULT_LOTTO_AWARD_CONFIG, getClubLottoAwardConfig, getClubMembers, getClubNotices, getRounds, playerTotal, totalPar, computeHandicaps, saveClubLottoAwardConfig, shortName, updateClubSettings, type ClubInfo, type LottoAwardConfig, type SavedRound } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
 import { useUserProfile } from '../lib/UserProfileContext'
 import { useAsync } from '../lib/useAsync'
+import { loadHandicapBasis, saveHandicapBasis, type HandicapBasis } from '../lib/handicapBasis'
 import { C } from '../theme'
 import { AppHeader } from '../components/AppHeader'
 import { Icon } from '../components/Icon'
@@ -92,13 +92,11 @@ export default function ClubScreen() {
   const [lottoAwardOpen, setLottoAwardOpen] = useState(false)
   const { name: myName } = useUserProfile()
 
-  const [handicapBasis, setHandicapBasis] = useState<3 | 5 | 10>(5)
+  const [handicapBasis, setHandicapBasis] = useState<HandicapBasis>(5)
 
   useEffect(() => {
-    AsyncStorage.getItem('@gogopar_handicap_basis').then(v => {
-      if (v === '3' || v === '5' || v === '10') setHandicapBasis(Number(v) as 3 | 5 | 10)
-    })
-  }, [])
+    loadHandicapBasis(club?.id).then(setHandicapBasis)
+  }, [club?.id])
 
   async function handleInviteMember() {
     if (!club) return
@@ -119,9 +117,10 @@ export default function ClubScreen() {
     setRefreshKey((k) => k + 1)
   }
 
-  async function handleChangeHandicapBasis(value: 3 | 5 | 10) {
+  async function handleChangeHandicapBasis(value: HandicapBasis) {
+    if (!club?.id) return
     setHandicapBasis(value)
-    await AsyncStorage.setItem('@gogopar_handicap_basis', String(value))
+    await saveHandicapBasis(club.id, value)
   }
 
   const handicaps = computeHandicaps(rounds, handicapBasis)
@@ -344,7 +343,7 @@ export default function ClubScreen() {
             setRefreshKey((k) => k + 1)
           }}
           onSaveClub={handleSaveClubInfo}
-          handicapBasis={handicapBasis as 3 | 5 | 10}
+          handicapBasis={handicapBasis}
           onChangeHandicapBasis={handleChangeHandicapBasis}
           onMembers={() => {
             setClubInfoOpen(false)

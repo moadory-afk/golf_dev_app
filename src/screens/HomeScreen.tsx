@@ -2,7 +2,7 @@
   ActivityIndicator, Alert, ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useNavigation } from '@react-navigation/native'
+import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -19,6 +19,7 @@ import { useClub } from '../lib/ClubContext'
 import { useUserProfile } from '../lib/UserProfileContext'
 import { useAsync } from '../lib/useAsync'
 import { supabase } from '../lib/supabase'
+import { loadHandicapBasis, type HandicapBasis } from '../lib/handicapBasis'
 import { C } from '../theme'
 import { UserAvatarBtn } from '../components/UserAvatar'
 import { AppHeader } from '../components/AppHeader'
@@ -153,6 +154,14 @@ function getWinner(r: SavedRound, handicaps: Map<string, number>): string | null
   return ranked[0]?.name ?? null
 }
 
+function formatGroupCourse(group: { frontLayoutName?: string; backLayoutName?: string }, extraLayoutName?: string) {
+  return [
+    group.frontLayoutName ?? '전반 미정',
+    group.backLayoutName ?? '후반 미정',
+    extraLayoutName,
+  ].filter(Boolean).join(' / ')
+}
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets()
   const nav = useNavigation<Nav>()
@@ -160,6 +169,7 @@ export default function HomeScreen() {
   const [roundRefreshKey, setRoundRefreshKey] = useState(0)
   const roundRealtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const roundRealtimeKey = useRef(`home-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  const noticeRealtimeKey = useRef(`notice-${Date.now()}-${Math.random().toString(36).slice(2)}`)
   const { activeClub: club, clubsLoaded } = useClub()
 
   // 클럽 로드 완료 후 소속 클럽 없으면 Club 탭으로 자동 이동
@@ -220,7 +230,7 @@ export default function HomeScreen() {
     setRoundRefreshKey((k) => k + 1)
   }, [])
 
-  const [handicapBasis, setHandicapBasis] = useState(5)
+  const [handicapBasis, setHandicapBasis] = useState<HandicapBasis>(5)
   const { data: myFeeHistory, loading: myFeeHistoryLoading } = useAsync(
     () => (club && myUserId ? getFeeMemberHistory(club.id, myUserId) : Promise.resolve([])),
     [club?.id, myUserId, refreshKey],
@@ -255,7 +265,7 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!club?.id) return
     const channel = supabase
-      .channel(`realtime:club-notices:${club.id}`)
+      .channel(`club-notices:${club.id}:${noticeRealtimeKey.current}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'club_notices', filter: `club_id=eq.${club.id}` }, () => {
         setRefreshKey((value) => value + 1)
       })
@@ -265,11 +275,19 @@ export default function HomeScreen() {
     }
   }, [club?.id])
 
+  const reloadHandicapBasis = useCallback(() => {
+    loadHandicapBasis(club?.id).then(setHandicapBasis)
+  }, [club?.id])
+
   useEffect(() => {
-    AsyncStorage.getItem('@gogopar_handicap_basis').then(v => {
-      if (v === '3' || v === '5' || v === '10') setHandicapBasis(Number(v))
-    })
-  }, [])
+    reloadHandicapBasis()
+  }, [reloadHandicapBasis])
+
+  useFocusEffect(
+    useCallback(() => {
+      reloadHandicapBasis()
+    }, [reloadHandicapBasis]),
+  )
 
   useEffect(() => {
     setLottoAwardConfigOverride(null)
@@ -492,9 +510,9 @@ export default function HomeScreen() {
   const hasCourse = Boolean(nextRound?.courseName || (nextRound?.course && nextRound.course !== '미정'))
   const roundCourseName = hasCourse ? (nextRound?.courseName ?? nextRound?.course ?? '골프장 미정') : '골프장 미정'
   const roundCourseSummary = myRoundGroup
-    ? `${myRoundGroup.frontLayoutName ?? '전반 미정'} / ${myRoundGroup.backLayoutName ?? '후반 미정'}`
+    ? formatGroupCourse(myRoundGroup, nextRound?.layoutName)
     : (roundGroups[0]?.frontLayoutName || roundGroups[0]?.backLayoutName)
-      ? `${roundGroups[0].frontLayoutName ?? '전반 미정'} / ${roundGroups[0].backLayoutName ?? '후반 미정'}`
+      ? formatGroupCourse(roundGroups[0], nextRound?.layoutName)
       : (nextRound?.layoutName ?? '코스 미정')
   const teeTime = myRoundGroup?.time || nextRound?.time || '티오프 미정'
   const allGroupSummary = hasAssignedGroups ? `${assignedGroups.length}개 조 편성` : '조 미편성'
@@ -516,9 +534,9 @@ export default function HomeScreen() {
     ) ?? null
     const courseName = round.courseName || (round.course && round.course !== '미정' ? round.course : '골프장 미정')
     const courseSummary = myGroup
-      ? `${myGroup.frontLayoutName ?? '전반 미정'} / ${myGroup.backLayoutName ?? '후반 미정'}`
+      ? formatGroupCourse(myGroup, round.layoutName)
       : (groups[0]?.frontLayoutName || groups[0]?.backLayoutName)
-        ? `${groups[0].frontLayoutName ?? '전반 미정'} / ${groups[0].backLayoutName ?? '후반 미정'}`
+        ? formatGroupCourse(groups[0], round.layoutName)
         : (round.layoutName ?? '코스 미정')
     const time = myGroup?.time || round.time || '티오프 미정'
     const groupTimes = assigned.map((group) => group.time).filter(Boolean)
@@ -1079,7 +1097,7 @@ export default function HomeScreen() {
                             <Text style={s.groupSummaryTime}>{group.time || '미정'}</Text>
                           </View>
                           <Text style={s.groupSummaryCourse}>
-                            {group.frontLayoutName ?? '전반 미정'} / {group.backLayoutName ?? '후반 미정'}
+                            {formatGroupCourse(group, nextRound?.layoutName)}
                           </Text>
                           <Text style={s.groupMemberName}>{group.members.map((member) => member.name).join(', ')}</Text>
                         </View>
