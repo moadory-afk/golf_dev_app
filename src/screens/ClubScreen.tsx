@@ -800,6 +800,7 @@ function LottoAwardConfigModal({
   const [prize5, setPrize5] = useState(String(config.prizes['5'] ?? 0))
   const [prize6, setPrize6] = useState(String(config.prizes['6'] ?? 0))
   const [rollover, setRollover] = useState(config.rollover)
+  const [rolloverIncrement, setRolloverIncrement] = useState(String(config.rolloverIncrement ?? 0))
   const [saving, setSaving] = useState(false)
   const parseMoney = (value: string) => Number(value.replace(/[^0-9]/g, '')) || 0
   const save = async () => {
@@ -813,6 +814,7 @@ function LottoAwardConfigModal({
           '6': parseMoney(prize6),
         },
         rollover,
+        rolloverIncrement: parseMoney(rolloverIncrement),
         carryoverAmount: config.carryoverAmount ?? 0,
       })
     } catch (error) {
@@ -851,6 +853,13 @@ function LottoAwardConfigModal({
               <Text style={[s.lottoSwitchText, rollover && s.lottoSwitchTextOn]}>{rollover ? 'ON' : 'OFF'}</Text>
             </View>
           </TouchableOpacity>
+          {rollover && (
+            <View style={s.lottoAwardInputRow}>
+              <Text style={s.lottoAwardInputLabel}>이월 증가</Text>
+              <TextInput value={rolloverIncrement} onChangeText={setRolloverIncrement} keyboardType="numeric" placeholder="0" style={s.lottoAwardInput} />
+              <Text style={s.lottoAwardUnit}>원</Text>
+            </View>
+          )}
           <TouchableOpacity style={[s.infoActionBtn, saving && { opacity: 0.6 }]} onPress={save} disabled={saving}>
             {saving ? <ActivityIndicator color={C.green} /> : <Text style={s.infoActionText}>저장</Text>}
           </TouchableOpacity>

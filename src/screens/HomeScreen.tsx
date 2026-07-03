@@ -6,7 +6,7 @@ import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { getCourseLayouts, getPersonalRoundStat, getRoundLottoDraw, getRoundLottoEntries, getRoundLottoEntry, getRounds, getClubMembers, getFeeDashboard, getFeeMemberHistory, playerTotal, savePersonalRoundStat, saveRoundLottoDrawResult, saveRoundLottoEntry, totalPar, computeHandicaps, shortName, type CourseLayout, type PersonalRoundFir, type PersonalRoundHoleStat, type RoundLottoDraw, type RoundLottoDrawScore, type RoundLottoEntry, type SavedRound } from '../lib/store'
+import { DEFAULT_LOTTO_AWARD_CONFIG, getClubLottoAwardConfig, getCourseLayouts, getPersonalRoundStat, getRoundLottoDraw, getRoundLottoEntries, getRoundLottoEntry, getRounds, getClubMembers, getFeeDashboard, getFeeMemberHistory, playerTotal, savePersonalRoundStat, saveRoundLottoDrawResult, saveRoundLottoEntry, totalPar, computeHandicaps, shortName, type CourseLayout, type LottoAwardConfig, type PersonalRoundFir, type PersonalRoundHoleStat, type RoundLottoDraw, type RoundLottoDrawScore, type RoundLottoEntry, type SavedRound } from '../lib/store'
 import {
   getRoundAttendanceMap,
   getRoundSchedules,
@@ -30,9 +30,13 @@ import type { RootStackParamList } from '../navigation/types'
 type Nav = NativeStackNavigationProp<RootStackParamList>
 type PersonalDetailType = 'handicap' | 'average' | 'best' | 'wins' | 'singleBirdie' | 'records'
 type LottoSelection = { par3: number[]; par4: number[]; par5: number[] }
-type LottoAwardRow = { userId: string; name: string; hits: number; total: number; hasScore: boolean; winner: boolean }
+type LottoAwardRow = { userId: string; name: string; hits: number; total: number; hasScore: boolean; prize: number }
 
 function diffText(d: number) { return d > 0 ? `+${d}` : `${d}` }
+
+function formatWon(value: number) {
+  return `${Math.max(0, Math.round(value)).toLocaleString('ko-KR')}원`
+}
 
 function formatShortDate(input: string) {
   if (!input) return '-'
@@ -116,6 +120,12 @@ function scoreName(score: number | undefined, par: number) {
   return '트리플'
 }
 
+function lottoPrizeForHits(hits: number, config: LottoAwardConfig, jackpot: number) {
+  if (hits === 6) return jackpot
+  if (hits === 3 || hits === 4 || hits === 5) return config.prizes[String(hits) as '3' | '4' | '5']
+  return 0
+}
+
 const AWARD_LABELS = new Map(AWARD_CATEGORIES.flatMap((category) => category.items).map((item) => [item.id, item.label]))
 
 function awardSummaryFor(round?: ScheduledRound | null) {
@@ -167,6 +177,10 @@ export default function HomeScreen() {
     () => (club ? getFeeDashboard(club.id) : Promise.resolve(null)),
     [club?.id, refreshKey],
   )
+  const { data: lottoAwardConfigData } = useAsync(
+    () => (club ? getClubLottoAwardConfig(club.id) : Promise.resolve(DEFAULT_LOTTO_AWARD_CONFIG)),
+    [club?.id, refreshKey],
+  )
   const rounds = data ?? []
   const { name: myName, userId: myUserId } = useUserProfile()
   const [personalDetail, setPersonalDetail] = useState<PersonalDetailType | null>(null)
@@ -189,6 +203,7 @@ export default function HomeScreen() {
   const [lottoSelection, setLottoSelection] = useState<LottoSelection>(emptyLottoSelection)
   const [lottoDraw, setLottoDraw] = useState<RoundLottoDraw | null>(null)
   const [lottoEntries, setLottoEntries] = useState<RoundLottoEntry[]>([])
+  const [lottoAwardConfigOverride, setLottoAwardConfigOverride] = useState<LottoAwardConfig | null>(null)
   const [myLottoPurchases, setMyLottoPurchases] = useState<Record<string, LottoSelection>>({})
   const [lottoLoading, setLottoLoading] = useState(false)
   const [lottoSaving, setLottoSaving] = useState(false)
@@ -209,6 +224,10 @@ export default function HomeScreen() {
       if (v === '3' || v === '5' || v === '10') setHandicapBasis(Number(v))
     })
   }, [])
+
+  useEffect(() => {
+    setLottoAwardConfigOverride(null)
+  }, [club?.id])
 
   useEffect(() => {
     if (!club?.id) {
@@ -529,6 +548,8 @@ export default function HomeScreen() {
     return player?.strokes ?? null
   })()
   const lottoRoundRecord = lottoRound ? rounds.find((item) => item.scheduleId === lottoRound.id) : undefined
+  const lottoAwardConfig = lottoAwardConfigOverride ?? lottoAwardConfigData ?? DEFAULT_LOTTO_AWARD_CONFIG
+  const lottoJackpot = lottoAwardConfig.prizes['6'] + (lottoAwardConfig.rollover ? lottoAwardConfig.carryoverAmount : 0)
   const lottoAwardRows = (() => {
     if (!lottoRound || !lottoDraw?.drawnScores) return []
     const rows = lottoEntries.map((entry) => {
@@ -539,12 +560,18 @@ export default function HomeScreen() {
       const hits = player
         ? selectedHoles.filter((hole) => player.strokes[hole - 1] === lottoDraw.drawnScores?.[String(hole)]?.score).length
         : 0
-      return { userId: entry.userId, name, hits, total: selectedHoles.length, hasScore: !!player, winner: false }
+      return {
+        userId: entry.userId,
+        name,
+        hits,
+        total: selectedHoles.length,
+        hasScore: !!player,
+        prize: player ? lottoPrizeForHits(hits, lottoAwardConfig, lottoJackpot) : 0,
+      }
     })
-    const maxHits = Math.max(0, ...rows.filter((row) => row.hasScore).map((row) => row.hits))
     return rows
-      .map((row) => ({ ...row, winner: !!lottoRoundRecord && maxHits > 0 && row.hits === maxHits }))
-      .sort((a, b) => Number(b.winner) - Number(a.winner) || b.hits - a.hits || a.name.localeCompare(b.name))
+      .filter((row) => isAdmin || row.userId === myUserId)
+      .sort((a, b) => b.hits - a.hits || b.prize - a.prize || a.name.localeCompare(b.name))
   })()
   const nextAttendance = (value: RoundAttendanceLabel) => {
     const order: RoundAttendanceLabel[] = ['미정', '참석', '불참']
@@ -630,10 +657,11 @@ export default function HomeScreen() {
     try {
       const layouts = round.courseId ? await getCourseLayouts(round.courseId) : []
       setLottoPars(parsForScheduledRound(round, layouts, myUserId, myName))
-      const [saved, draw, entries] = await Promise.all([
+      const [saved, draw, entries, awardConfig] = await Promise.all([
         getRoundLottoEntry(round.id, myUserId),
         getRoundLottoDraw(round.id),
         getRoundLottoEntries(round.id),
+        getClubLottoAwardConfig(club.id),
       ])
       setLottoSelection(saved?.selectedHoles ?? emptyLottoSelection())
       if (saved) {
@@ -641,6 +669,7 @@ export default function HomeScreen() {
       }
       setLottoDraw(draw)
       setLottoEntries(entries)
+      setLottoAwardConfigOverride(awardConfig)
     } catch {
       setLottoPars(Array.from({ length: 18 }, () => 4))
       setLottoSelection(emptyLottoSelection())
@@ -1034,6 +1063,8 @@ export default function HomeScreen() {
             myStrokes={lottoMyStrokes}
             awardRows={lottoAwardRows}
             awardReady={!!lottoRoundRecord}
+            awardConfig={lottoAwardConfig}
+            jackpot={lottoJackpot}
             loading={lottoLoading}
             saving={lottoSaving}
             drawSaving={lottoDrawSaving}
@@ -1234,6 +1265,8 @@ function LottoSelectionModal({
   myStrokes,
   awardRows,
   awardReady,
+  awardConfig,
+  jackpot,
   loading,
   saving,
   drawSaving,
@@ -1251,6 +1284,8 @@ function LottoSelectionModal({
   myStrokes: number[] | null
   awardRows: LottoAwardRow[]
   awardReady: boolean
+  awardConfig: LottoAwardConfig
+  jackpot: number
   loading: boolean
   saving: boolean
   drawSaving: boolean
@@ -1267,7 +1302,6 @@ function LottoSelectionModal({
   const resultRows = selectedHoleList.map((hole) => draw?.drawnScores?.[String(hole)]).filter((item): item is RoundLottoDrawScore => !!item)
   const hitCount = resultRows.filter((row) => myStrokes?.[row.hole - 1] === row.score).length
   const allResultRows = Object.values(draw?.drawnScores ?? {}).sort((a, b) => a.hole - b.hole)
-  const hasWinner = awardRows.some((row) => row.winner)
   const isPlaying = !myStrokes
   const groups: Array<{ key: keyof LottoSelection; label: string; limit: number; holes: number[] }> = [
     { key: 'par3', label: '파 3', limit: 1, holes: pars.map((par, index) => par === 3 ? index + 1 : null).filter((hole): hole is number => !!hole) },
@@ -1333,6 +1367,16 @@ function LottoSelectionModal({
             </View>
           ) : (
             <>
+              <View style={s.lottoPrizeBox}>
+                <Text style={s.lottoPrizeTitle}>Lotto 6/18 시상 기준</Text>
+                <Text style={s.lottoPrizeJackpot}>현재 누적 당첨금 {formatWon(jackpot)}</Text>
+                <View style={s.lottoPrizeGrid}>
+                  <Text style={s.lottoPrizeItem}>3개 {formatWon(awardConfig.prizes['3'])}</Text>
+                  <Text style={s.lottoPrizeItem}>4개 {formatWon(awardConfig.prizes['4'])}</Text>
+                  <Text style={s.lottoPrizeItem}>5개 {formatWon(awardConfig.prizes['5'])}</Text>
+                  <Text style={s.lottoPrizeItem}>6개 {formatWon(jackpot)}</Text>
+                </View>
+              </View>
               {isPurchased ? (
                 <View style={s.lottoPurchaseBox}>
                   <Text style={s.lottoPurchaseTitle}>구매 및 추첨 결과</Text>
@@ -1424,22 +1468,22 @@ function LottoSelectionModal({
                       </View>
                     )}
                     <View style={s.lottoAwardBox}>
-                      <Text style={s.lottoAwardTitle}>로또 당첨 및 시상</Text>
+                      <Text style={s.lottoAwardTitle}>추첨 결과 및 시상금</Text>
                       {!awardReady ? (
                         <Text style={s.lottoDrawWaitText}>스코어 입력 후 당첨자를 확인할 수 있습니다.</Text>
                       ) : awardRows.length === 0 ? (
                         <Text style={s.lottoDrawWaitText}>참여 확정한 회원이 없습니다.</Text>
-                      ) : !hasWinner ? (
-                        <Text style={s.lottoDrawWaitText}>적중자가 없습니다.</Text>
                       ) : (
                         <View style={s.lottoAwardList}>
                           {awardRows.map((row) => (
-                            <View key={row.userId} style={[s.lottoAwardRow, row.winner && s.lottoAwardWinnerRow]}>
+                            <View key={row.userId} style={[s.lottoAwardRow, row.prize > 0 && s.lottoAwardWinnerRow]}>
                               <View style={{ flex: 1 }}>
-                                <Text style={[s.lottoAwardName, row.winner && s.lottoAwardWinnerText]}>{row.name}</Text>
-                                <Text style={s.lottoAwardMeta}>{row.hasScore ? `${row.hits}/${row.total}개 적중` : '스코어 입력 전'}</Text>
+                                <Text style={[s.lottoAwardName, row.prize > 0 && s.lottoAwardWinnerText]}>
+                                  {row.name} {row.hasScore ? `${row.hits}개 적중` : '스코어 입력 전'}
+                                </Text>
+                                <Text style={s.lottoAwardMeta}>{row.prize > 0 ? `시상금 ${formatWon(row.prize)}` : '낙첨'}</Text>
                               </View>
-                              {row.winner && <Text style={s.lottoAwardBadge}>당첨</Text>}
+                              {row.prize > 0 && <Text style={s.lottoAwardBadge}>당첨</Text>}
                             </View>
                           ))}
                         </View>
@@ -2179,6 +2223,20 @@ const s = StyleSheet.create({
   lottoHoleBtnActive: { backgroundColor: C.greenLight, borderColor: C.green },
   lottoHoleText: { fontSize: 12, fontWeight: '900', color: C.muted },
   lottoHoleTextActive: { color: C.green },
+  lottoPrizeBox: { borderRadius: 14, padding: 12, backgroundColor: '#f6f7f6', borderWidth: 1, borderColor: C.border, marginBottom: 10 },
+  lottoPrizeTitle: { fontSize: 13, fontWeight: '900', color: C.text },
+  lottoPrizeJackpot: { fontSize: 14, fontWeight: '900', color: C.green, marginTop: 5 },
+  lottoPrizeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  lottoPrizeItem: {
+    minWidth: '47%',
+    borderRadius: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    backgroundColor: '#fff',
+    fontSize: 11,
+    fontWeight: '800',
+    color: C.text,
+  },
   lottoPurchaseBox: { borderWidth: 1, borderColor: C.border, backgroundColor: '#f6f7f6', borderRadius: 14, padding: 12 },
   lottoPurchaseTitle: { fontSize: 13, fontWeight: '900', color: C.text, marginBottom: 8 },
   lottoPurchaseHoles: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },

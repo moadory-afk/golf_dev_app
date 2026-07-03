@@ -27,12 +27,14 @@ export interface ClubAwardConfig {
 export interface LottoAwardConfig {
   prizes: Record<'3' | '4' | '5' | '6', number>
   rollover: boolean
+  rolloverIncrement: number
   carryoverAmount: number
 }
 
 export const DEFAULT_LOTTO_AWARD_CONFIG: LottoAwardConfig = {
   prizes: { '3': 0, '4': 0, '5': 0, '6': 0 },
   rollover: true,
+  rolloverIncrement: 0,
   carryoverAmount: 0,
 }
 
@@ -601,13 +603,17 @@ export async function getClubLottoAwardConfig(clubId: string): Promise<LottoAwar
     .maybeSingle()
   if (error) throw error
   const config = data?.lotto_award_config as Partial<LottoAwardConfig> | null
+  const prizes = (config?.prizes ?? {}) as Partial<Record<'3' | '4' | '5' | '6', number>>
   return {
     prizes: {
-      ...DEFAULT_LOTTO_AWARD_CONFIG.prizes,
-      ...(config?.prizes ?? {}),
+      '3': Number(prizes['3'] ?? DEFAULT_LOTTO_AWARD_CONFIG.prizes['3']),
+      '4': Number(prizes['4'] ?? DEFAULT_LOTTO_AWARD_CONFIG.prizes['4']),
+      '5': Number(prizes['5'] ?? DEFAULT_LOTTO_AWARD_CONFIG.prizes['5']),
+      '6': Number(prizes['6'] ?? DEFAULT_LOTTO_AWARD_CONFIG.prizes['6']),
     },
     rollover: config?.rollover ?? DEFAULT_LOTTO_AWARD_CONFIG.rollover,
-    carryoverAmount: config?.carryoverAmount ?? DEFAULT_LOTTO_AWARD_CONFIG.carryoverAmount,
+    rolloverIncrement: Number(config?.rolloverIncrement ?? DEFAULT_LOTTO_AWARD_CONFIG.rolloverIncrement),
+    carryoverAmount: Number(config?.carryoverAmount ?? DEFAULT_LOTTO_AWARD_CONFIG.carryoverAmount),
   }
 }
 
