@@ -7,7 +7,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useState, useCallback, useEffect } from 'react'
 import { AppHeader } from '../components/AppHeader'
 import Svg, { Polyline, Circle, Line, Text as SvgText, G } from 'react-native-svg'
-import { getRounds, getRound, playerTotal, totalPar, getHandicapsForRound, computeHandicaps, shortName, type SavedRound } from '../lib/store'
+import { getRounds, getRound, getPersonalRoundStat, playerTotal, totalPar, getHandicapsForRound, computeHandicaps, shortName, type PersonalRoundFir, type PersonalRoundHoleStat, type SavedRound } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
 import { useUserProfile } from '../lib/UserProfileContext'
 import { useAsync } from '../lib/useAsync'
@@ -131,7 +131,7 @@ export default function HistoryScreen() {
   const nav = useNavigation<Nav>()
   const [tab, setTab] = useState<Tab>('byPlayer')
   const [refreshKey, setRefreshKey] = useState(0)
-  const { name: myName } = useUserProfile()
+  const { name: myName, userId: myUserId } = useUserProfile()
   const [handicapBasis, setHandicapBasis] = useState<HandicapBasis>(5)
   const { activeClub, clubsLoaded } = useClub()
   const { data, loading } = useAsync(
@@ -170,7 +170,7 @@ export default function HistoryScreen() {
         ) : (
           <>
             {tab === 'byRound' && <ByRound rounds={rounds} handicapBasis={handicapBasis} />}
-            {tab === 'byPlayer' && <ByPlayer rounds={rounds} handicapBasis={handicapBasis} myName={myName} />}
+            {tab === 'byPlayer' && <ByPlayer rounds={rounds} handicapBasis={handicapBasis} myName={myName} myUserId={myUserId} />}
             {tab === 'club' && <Club rounds={rounds} handicapBasis={handicapBasis} />}
             {tab === 'hall' && <HallOfFame rounds={rounds} handicapBasis={handicapBasis} />}
           </>
@@ -440,9 +440,22 @@ interface PlayerRound {
   front: number; back: number; birdie: number; parCount: number; bogey: number; double: number; triplePlus: number
 }
 
-function ByPlayer({ rounds, handicapBasis = 5, myName }: { rounds: SavedRound[]; handicapBasis?: number; myName: string | null }) {
+function firLabel(value: PersonalRoundFir) {
+  if (value === 'center') return '중앙'
+  if (value === 'long') return '상'
+  if (value === 'short') return '하'
+  if (value === 'left_ob') return '좌 OB'
+  if (value === 'right_ob') return '우 OB'
+  if (value === 'other_ob') return '기타 OB'
+  if (value === 'hazard') return '해저드'
+  return '미입력'
+}
+
+function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: SavedRound[]; handicapBasis?: number; myName: string | null; myUserId: string | null }) {
   const [targetScore, setTargetScore] = useState('')
-  const [detailModal, setDetailModal] = useState<'target' | 'trend' | 'hole' | 'score' | 'rank' | 'improve' | 'rounds' | null>(null)
+  const [playerPanel, setPlayerPanel] = useState<'summary' | 'shot' | 'detail'>('summary')
+  const [detailModal, setDetailModal] = useState<'target' | 'trend' | 'hole' | 'score' | 'rank' | 'improve' | 'rounds' | 'shot' | null>(null)
+  const [personalStatsBySchedule, setPersonalStatsBySchedule] = useState<Record<string, PersonalRoundHoleStat[]>>({})
   const byName = new Map<string, PlayerRound[]>()
 
   for (const r of rounds) {
@@ -472,6 +485,29 @@ function ByPlayer({ rounds, handicapBasis = 5, myName }: { rounds: SavedRound[];
   }
 
   const playerRounds = myName ? [...(byName.get(myName) ?? [])].sort((a, b) => b.date.localeCompare(a.date)) : []
+  const scheduleIds = playerRounds
+    .map((round) => rounds.find((item) => item.id === round.roundId)?.scheduleId)
+    .filter((id): id is string => !!id)
+
+  useEffect(() => {
+    if (!myUserId || scheduleIds.length === 0) {
+      setPersonalStatsBySchedule({})
+      return
+    }
+    let cancelled = false
+    Promise.all(scheduleIds.map(async (scheduleId) => {
+      const item = await getPersonalRoundStat(scheduleId, myUserId)
+      return [scheduleId, item?.holeStats ?? []] as const
+    }))
+      .then((items) => {
+        if (!cancelled) setPersonalStatsBySchedule(Object.fromEntries(items))
+      })
+      .catch(() => {
+        if (!cancelled) setPersonalStatsBySchedule({})
+      })
+    return () => { cancelled = true }
+  }, [myUserId, scheduleIds.join('|')])
+
   if (!myName || playerRounds.length === 0) return <Text style={s.muted}>내 개인 기록 데이터가 없습니다.</Text>
 
   const totals = playerRounds.map((round) => round.total)
@@ -537,6 +573,19 @@ function ByPlayer({ rounds, handicapBasis = 5, myName }: { rounds: SavedRound[];
   const totalPlayers = playerStats.length
   const target = Number(targetScore.replace(/[^0-9]/g, ''))
   const targetGap = target ? avg - target : 0
+  const personalHoleStats = scheduleIds.flatMap((scheduleId) => personalStatsBySchedule[scheduleId] ?? [])
+  const firTargets = personalHoleStats.filter((item) => item.par !== 3 && item.fir)
+  const firSuccess = firTargets.filter((item) => item.fir === 'center').length
+  const firRate = firTargets.length ? Math.round((firSuccess / firTargets.length) * 100) : null
+  const obCount = personalHoleStats.filter((item) => item.fir === 'left_ob' || item.fir === 'right_ob' || item.fir === 'other_ob').length
+  const hazardCount = personalHoleStats.filter((item) => item.fir === 'hazard').length
+  const avgPutts = personalHoleStats.length ? (personalHoleStats.reduce((sum, item) => sum + item.putts, 0) / personalHoleStats.length).toFixed(1) : '-'
+  const threePuttCount = personalHoleStats.filter((item) => item.putts >= 3).length
+  const penaltyTotal = personalHoleStats.reduce((sum, item) => sum + item.penalties, 0)
+  const firCounts = new Map<PersonalRoundFir, number>()
+  for (const item of personalHoleStats) if (item.fir) firCounts.set(item.fir, (firCounts.get(item.fir) ?? 0) + 1)
+  const mainMiss = [...firCounts.entries()].filter(([key]) => key !== 'center').sort((a, b) => b[1] - a[1])[0]
+  const mainMissText = mainMiss ? firLabel(mainMiss[0]) : '미입력'
   const aiComments = [
     recent5Avg < avg
       ? `최근 5경기 평균이 전체 평균보다 ${avg - recent5Avg}타 낮아져 흐름이 좋습니다.`
@@ -564,7 +613,8 @@ function ByPlayer({ rounds, handicapBasis = 5, myName }: { rounds: SavedRound[];
         : detailModal === 'score' ? '스코어 분포'
           : detailModal === 'rank' ? '클럽 내 순위'
             : detailModal === 'improve' ? '개선 리포트'
-              : '라운드별 상세'
+              : detailModal === 'shot' ? '샷/퍼팅 분석'
+                : '라운드별 상세'
 
   return (
     <>
@@ -637,6 +687,19 @@ function ByPlayer({ rounds, handicapBasis = 5, myName }: { rounds: SavedRound[];
                     <View style={s.analysisRow}><Text style={s.analysisLabel}>버디 순위</Text><Text style={s.analysisValue}>{rankOf(playerStats, 'birdie', false)} / {totalPlayers}</Text></View>
                   </>
                 )}
+                {detailModal === 'shot' && (
+                  <>
+                    <View style={s.metricGrid}>
+                      <MetricCard label="FIR 성공률" value={firRate === null ? '-' : `${firRate}%`} />
+                      <MetricCard label="평균 퍼팅" value={avgPutts === '-' ? '-' : `${avgPutts}개`} />
+                      <MetricCard label="OB/해저드" value={`${obCount}/${hazardCount}`} />
+                      <MetricCard label="패널티" value={`${penaltyTotal}개`} />
+                    </View>
+                    <View style={s.analysisRow}><Text style={s.analysisLabel}>주요 미스</Text><Text style={s.analysisValue}>{mainMissText}</Text></View>
+                    <View style={s.analysisRow}><Text style={s.analysisLabel}>3퍼트 이상</Text><Text style={s.analysisValue}>{threePuttCount}회</Text></View>
+                    <Text style={s.insightText}>OB와 해저드는 티샷 리스크, 3퍼트는 그린 위 손실로 나눠 관리하면 개선 포인트가 더 선명해집니다.</Text>
+                  </>
+                )}
                 {detailModal === 'improve' && improvementItems.map((item) => (
                   <BulletText key={item} text={item} />
                 ))}
@@ -675,22 +738,66 @@ function ByPlayer({ rounds, handicapBasis = 5, myName }: { rounds: SavedRound[];
         <MetricCard label="최근5" value={`${recent5Avg}타`} />
       </View>
 
-      <View style={s.card}>
-        <Text style={s.cardTitle}>AI 코멘트</Text>
-        {aiComments.slice(0, 2).map((comment) => (
-          <BulletText key={comment} text={comment} />
+      <View style={s.playerPanelTabs}>
+        {[
+          { key: 'summary', label: '요약' },
+          { key: 'shot', label: '샷분석' },
+          { key: 'detail', label: '상세' },
+        ].map((item) => (
+          <TouchableOpacity
+            key={item.key}
+            style={[s.playerPanelTab, playerPanel === item.key && s.playerPanelTabActive]}
+            activeOpacity={0.85}
+            onPress={() => setPlayerPanel(item.key as typeof playerPanel)}
+          >
+            <Text style={[s.playerPanelTabText, playerPanel === item.key && s.playerPanelTabTextActive]}>{item.label}</Text>
+          </TouchableOpacity>
         ))}
       </View>
 
-      <View style={s.detailGrid}>
-        <DetailButton label="목표 설정" onPress={() => setDetailModal('target')} />
-        <DetailButton label="추이 분석" onPress={() => setDetailModal('trend')} />
-        <DetailButton label="홀 유형" onPress={() => setDetailModal('hole')} />
-        <DetailButton label="스코어 분포" onPress={() => setDetailModal('score')} />
-        <DetailButton label="클럽 순위" onPress={() => setDetailModal('rank')} />
-        <DetailButton label="개선 리포트" onPress={() => setDetailModal('improve')} />
-        <DetailButton label="라운드 상세" onPress={() => setDetailModal('rounds')} />
-      </View>
+      {playerPanel === 'summary' && (
+        <>
+          <View style={s.card}>
+            <Text style={s.cardTitle}>AI 코멘트</Text>
+            {aiComments.slice(0, 2).map((comment) => (
+              <BulletText key={comment} text={comment} />
+            ))}
+          </View>
+
+          <View style={s.detailGrid}>
+            <DetailButton label="목표 설정" onPress={() => setDetailModal('target')} />
+            <DetailButton label="추이 분석" onPress={() => setDetailModal('trend')} />
+            <DetailButton label="개선 리포트" onPress={() => setDetailModal('improve')} />
+          </View>
+        </>
+      )}
+
+      {playerPanel === 'shot' && (
+        <>
+          <View style={s.card}>
+            <Text style={s.cardTitle}>샷/퍼팅 분석</Text>
+            <View style={s.compactMetricGrid}>
+              <CompactMetric label="FIR" value={firRate === null ? '-' : `${firRate}%`} />
+              <CompactMetric label="퍼팅" value={avgPutts === '-' ? '-' : `${avgPutts}개`} />
+              <CompactMetric label="OB" value={`${obCount}회`} />
+              <CompactMetric label="패널티" value={`${penaltyTotal}개`} />
+            </View>
+            <DetailButton label="샷/퍼팅 상세" onPress={() => setDetailModal('shot')} />
+          </View>
+
+          <View style={s.detailGrid}>
+            <DetailButton label="홀 유형" onPress={() => setDetailModal('hole')} />
+            <DetailButton label="스코어 분포" onPress={() => setDetailModal('score')} />
+          </View>
+        </>
+      )}
+
+      {playerPanel === 'detail' && (
+        <View style={s.detailGrid}>
+          <DetailButton label="클럽 순위" onPress={() => setDetailModal('rank')} />
+          <DetailButton label="라운드 상세" onPress={() => setDetailModal('rounds')} />
+        </View>
+      )}
     </>
   )
 }
@@ -700,6 +807,15 @@ function MetricCard({ label, value, tone }: { label: string; value: string; tone
     <View style={s.metricCard}>
       <Text style={s.metricLabel}>{label}</Text>
       <Text style={[s.metricValue, tone ? { color: tone } : null]}>{value}</Text>
+    </View>
+  )
+}
+
+function CompactMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={s.compactMetric}>
+      <Text style={s.compactMetricLabel}>{label}</Text>
+      <Text style={s.compactMetricValue}>{value}</Text>
     </View>
   )
 }
@@ -1253,6 +1369,18 @@ const s = StyleSheet.create({
   metricCard: { flexBasis: '47%', flexGrow: 1, backgroundColor: C.card, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: C.border },
   metricLabel: { fontSize: 11, fontWeight: '800', color: C.muted },
   metricValue: { fontSize: 20, fontWeight: '900', color: C.text, marginTop: 8 },
+  compactMetricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  compactMetric: {
+    flexBasis: '48%', flexGrow: 1, minHeight: 46, borderRadius: 12, borderWidth: 1, borderColor: C.border,
+    backgroundColor: C.greenLight, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  compactMetricLabel: { fontSize: 12, fontWeight: '900', color: C.muted },
+  compactMetricValue: { fontSize: 16, fontWeight: '900', color: C.text },
+  playerPanelTabs: { flexDirection: 'row', backgroundColor: C.card, borderRadius: 16, padding: 4, marginBottom: 12, borderWidth: 1, borderColor: C.border },
+  playerPanelTab: { flex: 1, minHeight: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  playerPanelTabActive: { backgroundColor: C.green },
+  playerPanelTabText: { fontSize: 13, fontWeight: '800', color: C.muted },
+  playerPanelTabTextActive: { color: '#fff' },
   analysisRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: C.border },
   analysisLabel: { fontSize: 13, fontWeight: '700', color: C.muted },
   analysisValue: { fontSize: 14, fontWeight: '900', color: C.text },
