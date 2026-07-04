@@ -80,6 +80,20 @@ export interface PersonalRoundStat {
   updatedAt?: string
 }
 
+export interface CourseHoleGuide {
+  golfCourseId: string
+  layoutId: string
+  holeNo: number
+  par?: number
+  blueTeeM?: number
+  whiteTeeM?: number
+  redTeeM?: number
+  title?: string
+  summary: string
+  strategy?: string
+  caution?: string
+}
+
 export interface RoundLottoEntry {
   clubId: string
   scheduleId: string
@@ -1399,6 +1413,29 @@ export async function getPersonalRoundStat(scheduleId: string, userId: string): 
     holeStats: data.hole_stats ?? [],
     updatedAt: data.updated_at ?? undefined,
   }
+}
+
+export async function getCourseHoleGuides(layoutIds: string[]): Promise<CourseHoleGuide[]> {
+  const uniqueLayoutIds = [...new Set(layoutIds.filter(Boolean))]
+  if (uniqueLayoutIds.length === 0) return []
+  const { data, error } = await supabase
+    .from('course_hole_guides')
+    .select('golf_course_id, layout_id, hole_no, par, blue_tee_m, white_tee_m, red_tee_m, title, summary, strategy, caution')
+    .in('layout_id', uniqueLayoutIds)
+  if (error) throw error
+  return (data ?? []).map((row) => ({
+    golfCourseId: row.golf_course_id,
+    layoutId: row.layout_id,
+    holeNo: row.hole_no,
+    par: row.par ?? undefined,
+    blueTeeM: row.blue_tee_m ?? undefined,
+    whiteTeeM: row.white_tee_m ?? undefined,
+    redTeeM: row.red_tee_m ?? undefined,
+    title: row.title ?? undefined,
+    summary: row.summary,
+    strategy: row.strategy ?? undefined,
+    caution: row.caution ?? undefined,
+  }))
 }
 
 export async function savePersonalRoundStat(input: PersonalRoundStat): Promise<void> {

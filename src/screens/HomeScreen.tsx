@@ -6,7 +6,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { DEFAULT_LOTTO_AWARD_CONFIG, getClubLottoAwardConfig, getClubNotices, getCourseLayouts, getPersonalRoundStat, getRoundLottoDraw, getRoundLottoEntries, getRoundLottoEntry, getRounds, getClubMembers, getFeeDashboard, getFeeMemberHistory, playerTotal, savePersonalRoundStat, saveRoundLottoDrawResult, saveRoundLottoEntry, totalPar, computeHandicaps, shortName, type ClubNotice, type CourseLayout, type LottoAwardConfig, type PersonalRoundFir, type PersonalRoundHoleStat, type RoundLottoDraw, type RoundLottoDrawScore, type RoundLottoEntry, type SavedRound } from '../lib/store'
+import { DEFAULT_LOTTO_AWARD_CONFIG, getClubLottoAwardConfig, getClubNotices, getCourseHoleGuides, getCourseLayouts, getPersonalRoundStat, getRoundLottoDraw, getRoundLottoEntries, getRoundLottoEntry, getRounds, getClubMembers, getFeeDashboard, getFeeMemberHistory, playerTotal, savePersonalRoundStat, saveRoundLottoDrawResult, saveRoundLottoEntry, totalPar, computeHandicaps, shortName, type ClubNotice, type CourseHoleGuide, type CourseLayout, type LottoAwardConfig, type PersonalRoundFir, type PersonalRoundHoleStat, type RoundLottoDraw, type RoundLottoDrawScore, type RoundLottoEntry, type SavedRound } from '../lib/store'
 import {
   getRoundAttendanceMap,
   getRoundSchedules,
@@ -32,6 +32,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>
 type PersonalDetailType = 'handicap' | 'average' | 'best' | 'wins' | 'singleBirdie' | 'records'
 type LottoSelection = { par3: number[]; par4: number[]; par5: number[] }
 type LottoAwardRow = { userId: string; name: string; hits: number; total: number; hasScore: boolean; prize: number }
+type PersonalCourseSegment = { label: string; layoutId?: string; start: number; end: number }
 
 function diffText(d: number) { return d > 0 ? `+${d}` : `${d}` }
 
@@ -69,14 +70,52 @@ function defaultHoleStats(pars: number[]): PersonalRoundHoleStat[] {
 }
 
 function parsForScheduledRound(round: ScheduledRound, layouts: CourseLayout[], userId?: string | null, name?: string | null) {
-  const group = round.groups.find((item) =>
+  const segments = courseSegmentsForScheduledRound(round, layouts, userId, name)
+  const pars = segments.flatMap((segment) => {
+    const layout = layouts.find((item) => item.id === segment.layoutId)
+    const length = segment.end - segment.start + 1
+    return Array.from({ length }, (_, index) => layout?.pars[index] ?? 4)
+  }).slice(0, 18)
+  return pars.length === 18 ? pars : [...pars, ...Array.from({ length: 18 - pars.length }, () => 4)]
+}
+
+function groupForScheduledRound(round: ScheduledRound, userId?: string | null, name?: string | null) {
+  return round.groups.find((item) =>
     item.members.some((member) => member.userId === userId || member.name === name)
   ) ?? round.groups.find((item) => item.members.length > 0) ?? round.groups[0]
-  if (!group) return Array.from({ length: 18 }, () => 4)
-  const front = layouts.find((layout) => layout.id === group.frontLayoutId)?.pars ?? []
-  const back = layouts.find((layout) => layout.id === group.backLayoutId)?.pars ?? []
-  const pars = [...front, ...back].slice(0, 18)
-  return pars.length === 18 ? pars : Array.from({ length: 18 }, () => 4)
+}
+
+function courseSegmentsForScheduledRound(round: ScheduledRound, layouts: CourseLayout[], userId?: string | null, name?: string | null): PersonalCourseSegment[] {
+  const group = groupForScheduledRound(round, userId, name)
+  const candidates = [
+    { id: group?.frontLayoutId, name: group?.frontLayoutName ?? '전반' },
+    { id: group?.backLayoutId, name: group?.backLayoutName ?? '후반' },
+    { id: round.layoutId, name: round.layoutName ?? '추가' },
+  ].filter((item, index, list) => item.id || (item.name && index < 2))
+    .filter((item, index, list) => list.findIndex((target) => target.id === item.id && target.name === item.name) === index)
+
+  if (candidates.length === 0) {
+    return [
+      { label: '전반', start: 0, end: 8 },
+      { label: '후반', start: 9, end: 17 },
+    ]
+  }
+
+  let cursor = 0
+  const segments: PersonalCourseSegment[] = []
+  for (const candidate of candidates) {
+    if (cursor >= 18) break
+    const layout = layouts.find((item) => item.id === candidate.id)
+    const length = Math.max(1, Math.min(layout?.holes ?? layout?.pars.length ?? 9, 18 - cursor))
+    segments.push({
+      label: layout?.name ?? candidate.name,
+      layoutId: candidate.id,
+      start: cursor,
+      end: cursor + length - 1,
+    })
+    cursor += length
+  }
+  return segments
 }
 
 const emptyLottoSelection = (): LottoSelection => ({ par3: [], par4: [], par5: [] })
@@ -209,6 +248,8 @@ export default function HomeScreen() {
   const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null)
   const [personalInputRound, setPersonalInputRound] = useState<ScheduledRound | null>(null)
   const [personalHoleStats, setPersonalHoleStats] = useState<PersonalRoundHoleStat[]>([])
+  const [personalHoleGuides, setPersonalHoleGuides] = useState<Record<number, CourseHoleGuide>>({})
+  const [personalCourseSegments, setPersonalCourseSegments] = useState<PersonalCourseSegment[]>([])
   const [personalPage, setPersonalPage] = useState(0)
   const [personalLoading, setPersonalLoading] = useState(false)
   const [personalSaving, setPersonalSaving] = useState(false)
@@ -672,6 +713,43 @@ export default function HomeScreen() {
   const openRoundEditor = (round: ScheduledRound) => {
     nav.navigate('RoundSchedulePrototype', { editScheduleId: round.id, modalOnly: true })
   }
+  const openPersonalRoundModal = async (round: ScheduledRound, editable: boolean, loadSaved: boolean) => {
+    if (!club?.id) return
+    setPersonalInputRound(round)
+    setPersonalEditable(editable)
+    setPersonalPage(0)
+    setPersonalHoleGuides({})
+    setPersonalCourseSegments([])
+    setPersonalLoading(true)
+    try {
+      const layouts = round.courseId ? await getCourseLayouts(round.courseId) : []
+      const segments = courseSegmentsForScheduledRound(round, layouts, myUserId, myName)
+      setPersonalCourseSegments(segments)
+      const baseStats = defaultHoleStats(parsForScheduledRound(round, layouts, myUserId, myName))
+      const saved = loadSaved && myUserId ? await getPersonalRoundStat(round.id, myUserId) : null
+      setPersonalHoleStats(saved?.holeStats?.length === 18 ? saved.holeStats : baseStats)
+      try {
+        const guides = await getCourseHoleGuides(segments.map((segment) => segment.layoutId).filter((id): id is string => !!id))
+        const nextGuides: Record<number, CourseHoleGuide> = {}
+        for (const guide of guides) {
+          const segment = segments.find((item) => item.layoutId === guide.layoutId)
+          const segmentLength = segment ? segment.end - segment.start + 1 : 0
+          if (segment && guide.holeNo >= 1 && guide.holeNo <= segmentLength) {
+            nextGuides[segment.start + guide.holeNo] = guide
+          }
+        }
+        setPersonalHoleGuides(nextGuides)
+      } catch {
+        setPersonalHoleGuides({})
+      }
+    } catch {
+      setPersonalHoleStats(defaultHoleStats(Array.from({ length: 18 }, () => 4)))
+      setPersonalHoleGuides({})
+      setPersonalCourseSegments([])
+    } finally {
+      setPersonalLoading(false)
+    }
+  }
   const openPersonalInput = async (round: ScheduledRound) => {
     if (!club?.id || !myUserId) {
       Alert.alert('확인', '로그인 정보가 필요합니다.')
@@ -681,20 +759,10 @@ export default function HomeScreen() {
       group.members.some((member) => member.userId === myUserId || member.name === myName)
     )
     if (!isAdmin && !assignedToRound) return
-    setPersonalEditable(assignedToRound)
-    setPersonalInputRound(round)
-    setPersonalPage(0)
-    setPersonalLoading(true)
-    try {
-      const layouts = round.courseId ? await getCourseLayouts(round.courseId) : []
-      const baseStats = defaultHoleStats(parsForScheduledRound(round, layouts, myUserId, myName))
-      const saved = await getPersonalRoundStat(round.id, myUserId)
-      setPersonalHoleStats(saved?.holeStats?.length === 18 ? saved.holeStats : baseStats)
-    } catch {
-      setPersonalHoleStats(defaultHoleStats(Array.from({ length: 18 }, () => 4)))
-    } finally {
-      setPersonalLoading(false)
-    }
+    openPersonalRoundModal(round, assignedToRound, true)
+  }
+  const openCourseMap = (round: ScheduledRound) => {
+    openPersonalRoundModal(round, false, false)
   }
   const updatePersonalHole = (hole: number, patch: Partial<PersonalRoundHoleStat>) => {
     setPersonalHoleStats((current) =>
@@ -959,6 +1027,15 @@ export default function HomeScreen() {
                             <View style={[s.roundStageBadge, s.todayRoundBadge]}>
                               <Text style={s.todayRoundBadgeText}>진행일</Text>
                             </View>
+                            {isAdmin ? (
+                              <TouchableOpacity
+                                style={s.roundEditBadge}
+                                onPress={() => openRoundEditor(round)}
+                                activeOpacity={0.82}
+                              >
+                                <Text style={s.roundEditBadgeText}>수정</Text>
+                              </TouchableOpacity>
+                            ) : null}
                           </View>
                           <Text style={s.roundInfoText}>{summary.groupSummary}</Text>
                           <Text style={s.roundAwardText}>시상계획: {awardSummaryFor(round)}</Text>
@@ -1051,6 +1128,38 @@ export default function HomeScreen() {
                                 </View>
                                 <Text style={s.roundInfoText}>{summary.groupSummary}</Text>
                                 <Text style={s.roundAwardText}>시상계획: {awardSummaryFor(round)}</Text>
+                                <View style={s.todayActionRow}>
+                                  <TouchableOpacity
+                                    style={s.todayActionBtn}
+                                    onPress={(event) => {
+                                      event.stopPropagation()
+                                      openCourseMap(round)
+                                    }}
+                                    activeOpacity={0.82}
+                                  >
+                                    <Text style={s.todayActionText}>Course Map</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={[s.todayActionBtn, s.todayActionBtnDisabled]}
+                                    onPress={(event) => {
+                                      event.stopPropagation()
+                                      Alert.alert('안내', '라운딩 당일 구매 가능합니다')
+                                    }}
+                                    activeOpacity={0.82}
+                                  >
+                                    <Text style={[s.todayActionText, s.todayActionTextDisabled]}>Lotto 6/18</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={s.todayActionBtn}
+                                    onPress={(event) => {
+                                      event.stopPropagation()
+                                      openRoundSheetFor(round)
+                                    }}
+                                    activeOpacity={0.82}
+                                  >
+                                    <Text style={s.todayActionText}>조편성 결과</Text>
+                                  </TouchableOpacity>
+                                </View>
                               </View>
                             </TouchableOpacity>
                           )
@@ -1204,6 +1313,8 @@ export default function HomeScreen() {
           <PersonalRoundInputModal
             round={personalInputRound}
             stats={personalHoleStats}
+            guides={personalHoleGuides}
+            courseSegments={personalCourseSegments}
             page={personalPage}
             loading={personalLoading}
             saving={personalSaving}
@@ -1257,6 +1368,8 @@ export default function HomeScreen() {
 function PersonalRoundInputModal({
   round,
   stats,
+  guides,
+  courseSegments,
   page,
   loading,
   saving,
@@ -1268,6 +1381,8 @@ function PersonalRoundInputModal({
 }: {
   round: ScheduledRound | null
   stats: PersonalRoundHoleStat[]
+  guides: Record<number, CourseHoleGuide>
+  courseSegments: PersonalCourseSegment[]
   page: number
   loading: boolean
   saving: boolean
@@ -1280,6 +1395,13 @@ function PersonalRoundInputModal({
   const currentStat = stats[page]
   const maxPage = 17
   const completed = stats.filter((item) => item.fir || item.par === 3 || item.putts !== 2 || item.penalties > 0).length
+  const holeGuide = currentStat ? guides[currentStat.hole] ?? null : null
+  const visibleCourseSegments = courseSegments.length > 0 ? courseSegments : [
+    { label: '전반', start: 0, end: 8 },
+    { label: '후반', start: 9, end: 17 },
+  ]
+  const activeSegment = visibleCourseSegments.find((item) => page >= item.start && page <= item.end) ?? visibleCourseSegments[0]
+  const displayHoleNo = activeSegment ? page - activeSegment.start + 1 : currentStat?.hole ?? page + 1
 
   return (
     <Modal transparent animationType="fade" visible={!!round} onRequestClose={onClose}>
@@ -1290,9 +1412,19 @@ function PersonalRoundInputModal({
               <Text style={s.modalTitle}>내 경기 입력</Text>
               <Text style={s.personalModalSub}>{round ? `${round.date} · ${round.courseName ?? round.course}` : ''}</Text>
             </View>
-            <TouchableOpacity style={s.closeBtn} onPress={onClose}>
-              <Text style={s.closeBtnText}>닫기</Text>
-            </TouchableOpacity>
+            {editable ? (
+              <TouchableOpacity
+                style={[s.closeBtn, (saving || loading) && { opacity: 0.6 }]}
+                onPress={onSave}
+                disabled={saving || loading}
+              >
+                {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.closeBtnText}>저장</Text>}
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={s.closeBtn} onPress={onClose}>
+                <Text style={s.closeBtnText}>닫기</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {loading ? (
@@ -1303,15 +1435,15 @@ function PersonalRoundInputModal({
           ) : (
             <>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.personalPageScroll} contentContainerStyle={s.personalPageTabs}>
-                {stats.map((stat, index) => (
+                {visibleCourseSegments.map((segment) => (
                   <TouchableOpacity
-                    key={stat.hole}
-                    style={[s.personalPageTab, page === index && s.personalPageTabActive]}
-                    onPress={() => onChangePage(index)}
+                    key={`${segment.label}-${segment.start}`}
+                    style={[s.personalPageTab, activeSegment?.start === segment.start && s.personalPageTabActive]}
+                    onPress={() => onChangePage(segment.start)}
                     activeOpacity={0.82}
                   >
-                    <Text style={[s.personalPageTabText, page === index && s.personalPageTabTextActive]}>
-                      {stat.hole}H
+                    <Text style={[s.personalPageTabText, activeSegment?.start === segment.start && s.personalPageTabTextActive]}>
+                      {segment.label}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -1324,6 +1456,9 @@ function PersonalRoundInputModal({
                 {currentStat ? (
                   <PersonalHoleCard
                     stat={currentStat}
+                    guide={holeGuide}
+                    displayHoleNo={displayHoleNo}
+                    courseName={activeSegment?.label ?? ''}
                     editable={editable}
                     onChange={(patch) => editable && onChangeHole(currentStat.hole, patch)}
                   />
@@ -1332,12 +1467,12 @@ function PersonalRoundInputModal({
               <View style={s.personalFooter}>
                 <TouchableOpacity
                   style={[s.personalNavBtn, page === 0 && s.personalNavBtnDisabled]}
-                  onPress={() => onChangePage(Math.max(0, page - 1))}
-                  disabled={page === 0}
+                  onPress={() => onChangePage(Math.max(activeSegment?.start ?? 0, page - 1))}
+                  disabled={page === (activeSegment?.start ?? 0)}
                 >
                   <Text style={s.personalNavText}>이전</Text>
                 </TouchableOpacity>
-                {page < maxPage ? (
+                {page < (activeSegment?.end ?? maxPage) ? (
                   <TouchableOpacity style={s.personalSaveBtn} onPress={() => onChangePage(page + 1)}>
                     <Text style={s.personalSaveText}>다음</Text>
                   </TouchableOpacity>
@@ -1355,57 +1490,83 @@ function PersonalRoundInputModal({
   )
 }
 
-function PersonalHoleCard({ stat, editable, onChange }: {
+function PersonalHoleCard({ stat, guide, displayHoleNo, courseName, editable, onChange }: {
   stat: PersonalRoundHoleStat
+  guide: CourseHoleGuide | null
+  displayHoleNo: number
+  courseName: string
   editable: boolean
   onChange: (patch: Partial<PersonalRoundHoleStat>) => void
 }) {
   const firDisabled = stat.par === 3
+  const teeDistanceText = guide
+    ? [
+        { color: '#2f67c7', value: guide.blueTeeM },
+        { color: '#f7f7f2', value: guide.whiteTeeM, border: C.border },
+        { color: '#d94f45', value: guide.redTeeM },
+      ].filter((item): item is { color: string; value: number; border?: string } => typeof item.value === 'number')
+    : []
   return (
     <View style={s.personalHoleCard}>
       <View style={s.personalHoleHeader}>
-        <Text style={s.personalHoleTitle}>{stat.hole}H</Text>
-        <Text style={s.personalHolePar}>Par {stat.par}</Text>
+        <Text style={s.personalHoleTitle}>{courseName ? `${courseName} ${displayHoleNo}번` : `${displayHoleNo}H`} (Par {stat.par})</Text>
+        {teeDistanceText.length > 0 ? (
+          <View style={s.teeDistanceRow}>
+            {teeDistanceText.map((item) => (
+              <View key={item.value} style={s.teeDistanceItem}>
+                <View style={[s.teeDistanceDot, { backgroundColor: item.color, borderColor: item.border ?? item.color }]} />
+                <Text style={s.teeDistanceText}>{item.value}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
       </View>
-      <Text style={s.personalFieldLabel}>FIR</Text>
+      {guide ? (
+        <View style={s.personalHoleGuide}>
+          <Text style={s.personalHoleGuideText}>{guide.summary}</Text>
+          {!!guide.strategy && <Text style={s.personalHoleGuideText}>공략: {guide.strategy}</Text>}
+          {!!guide.caution && <Text style={s.personalHoleGuideText}>주의: {guide.caution}</Text>}
+        </View>
+      ) : null}
       {firDisabled ? (
         <View style={s.firDisabledBox}>
-          <Text style={s.personalDisabledText}>파3는 FIR 기록 대상이 아닙니다.</Text>
+          <Text style={s.personalDisabledText}>파3는 티샷 방향 기록을 생략합니다.</Text>
         </View>
       ) : (
-        <FirPicker value={stat.fir} disabled={!editable} onChange={(fir) => onChange({ fir })} />
+        <View style={s.statTagRow}>
+          <Text style={s.personalFieldLabel}>티샷</Text>
+          <FirPicker value={stat.fir} disabled={!editable} onChange={(fir) => onChange({ fir })} />
+        </View>
       )}
-      <StatTagRow label="퍼팅수" value={stat.putts} options={[1, 2, 3, 4]} disabled={!editable} onChange={(putts) => onChange({ putts })} />
-      <StatTagRow label="패널티" value={stat.penalties} options={[1, 2, 3, 4]} disabled={!editable} onChange={(penalties) => onChange({ penalties })} />
+      <StatTagRow label="퍼팅수" value={stat.putts} options={[0, 1, 2, 3, 4]} disabled={!editable} onChange={(putts) => onChange({ putts })} />
     </View>
   )
 }
 
 function FirPicker({ value, disabled, onChange }: { value: PersonalRoundFir; disabled?: boolean; onChange: (value: PersonalRoundFir) => void }) {
-  const firButton = (label: string, nextValue: PersonalRoundFir, style?: object) => (
-    <TouchableOpacity
-      style={[s.firButton, style, value === nextValue && s.firButtonActive, disabled && { opacity: 0.5 }]}
-      onPress={() => onChange(nextValue)}
-      disabled={disabled}
-      activeOpacity={0.82}
-    >
-      <Text style={[s.firButtonText, value === nextValue && s.firButtonTextActive]}>{label}</Text>
-    </TouchableOpacity>
-  )
+  const options: Array<{ label: string; value: PersonalRoundFir }> = [
+    { label: '페어웨이', value: 'center' },
+    { label: '좌OB', value: 'left_ob' },
+    { label: '우OB', value: 'right_ob' },
+    { label: '해저드', value: 'hazard' },
+  ]
 
   return (
     <View style={s.firWrap}>
-      {firButton('상', 'long', s.firTop)}
-      <View style={s.firMiddle}>
-        {firButton('OB', 'left_ob', s.firSide)}
-        {firButton('중', 'center', s.firCenter)}
-        {firButton('OB', 'right_ob', s.firSide)}
-      </View>
-      {firButton('하', 'short', s.firBottom)}
-      <View style={s.firExtraRow}>
-        {firButton('OB(기타)', 'other_ob', s.firExtra)}
-        {firButton('해저드', 'hazard', s.firHazard)}
-      </View>
+      {options.map((option) => {
+        const active = value === option.value
+        return (
+          <TouchableOpacity
+            key={option.label}
+            style={[s.firButton, active && s.firButtonActive, disabled && { opacity: 0.5 }]}
+            onPress={() => onChange(option.value)}
+            disabled={disabled}
+            activeOpacity={0.82}
+          >
+            <Text style={[s.firButtonText, active && s.firButtonTextActive]}>{option.label}</Text>
+          </TouchableOpacity>
+        )
+      })}
     </View>
   )
 }
@@ -2405,11 +2566,19 @@ const s = StyleSheet.create({
   personalPageTabText: { fontSize: 11, fontWeight: '800', color: C.muted },
   personalPageTabTextActive: { color: C.green },
   personalProgress: { fontSize: 12, fontWeight: '800', color: C.muted, marginBottom: 8 },
-  personalHoleScroll: { maxHeight: 520 },
-  personalHoleCard: { borderWidth: 1, borderColor: C.border, borderRadius: 14, padding: 12, marginBottom: 10, backgroundColor: '#fff' },
-  personalHoleHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  personalHoleScroll: { height: 430, maxHeight: 430 },
+  personalHoleCard: { minHeight: 410, borderWidth: 1, borderColor: C.border, borderRadius: 14, padding: 12, marginBottom: 10, backgroundColor: '#fff' },
+  personalHoleHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8, flexWrap: 'wrap' },
   personalHoleTitle: { fontSize: 15, fontWeight: '900', color: C.text },
   personalHolePar: { fontSize: 12, fontWeight: '800', color: C.muted },
+  teeDistanceRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  teeDistanceItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  teeDistanceDot: { width: 11, height: 11, borderRadius: 6, borderWidth: 1 },
+  teeDistanceText: { fontSize: 12, fontWeight: '900', color: C.muted },
+  personalHoleGuide: { marginBottom: 10, borderRadius: 14, backgroundColor: '#f6fbf7', borderWidth: 1, borderColor: C.border, padding: 12 },
+  personalHoleGuideTitle: { fontSize: 12, fontWeight: '900', color: C.green, marginBottom: 5 },
+  personalHoleGuideText: { fontSize: 12, fontWeight: '700', color: C.text, lineHeight: 18 },
+  personalHoleGuideDistance: { marginTop: 6, fontSize: 12, fontWeight: '900', color: C.green },
   personalFieldLabel: { fontSize: 12, fontWeight: '900', color: C.text },
   firDisabledBox: {
     minHeight: 164,
@@ -2418,10 +2587,10 @@ const s = StyleSheet.create({
     marginTop: 8,
   },
   personalDisabledText: { fontSize: 12, color: C.muted, fontWeight: '800' },
-  firWrap: { alignItems: 'center', alignSelf: 'center', marginTop: -18, marginBottom: 12, gap: 5, width: 214 },
+  firWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 7 },
   firMiddle: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   firExtraRow: { flexDirection: 'row', gap: 6, marginTop: 4 },
-  firButton: { minWidth: 54, minHeight: 34, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f3f5f3', borderWidth: 1, borderColor: C.border, paddingHorizontal: 10 },
+  firButton: { flex: 1, minHeight: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f3f5f3', borderWidth: 1, borderColor: C.border, paddingHorizontal: 8 },
   firButtonActive: { backgroundColor: C.greenLight, borderColor: C.green },
   firButtonText: { fontSize: 12, fontWeight: '900', color: C.muted },
   firButtonTextActive: { color: C.green },
