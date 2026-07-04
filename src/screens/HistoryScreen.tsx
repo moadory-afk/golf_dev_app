@@ -6,7 +6,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useState, useCallback, useEffect } from 'react'
 import { AppHeader } from '../components/AppHeader'
-import Svg, { Polyline, Circle, Line, Text as SvgText, G } from 'react-native-svg'
+import Svg, { Polyline, Circle, Line, Text as SvgText, G, Polygon } from 'react-native-svg'
 import { getRounds, getRound, getPersonalRoundStat, playerTotal, totalPar, getHandicapsForRound, computeHandicaps, shortName, type PersonalRoundFir, type PersonalRoundHoleStat, type SavedRound } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
 import { useUserProfile } from '../lib/UserProfileContext'
@@ -574,9 +574,20 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
   const target = Number(targetScore.replace(/[^0-9]/g, ''))
   const targetGap = target ? avg - target : 0
   const personalHoleStats = scheduleIds.flatMap((scheduleId) => personalStatsBySchedule[scheduleId] ?? [])
+  const personalHoleStatsWithScore = scheduleIds.flatMap((scheduleId) => {
+    const round = rounds.find((item) => item.scheduleId === scheduleId)
+    const playerRound = round ? playerRounds.find((item) => item.roundId === round.id) : null
+    return (personalStatsBySchedule[scheduleId] ?? []).map((item) => ({
+      ...item,
+      score: playerRound?.strokes[item.hole - 1] ?? null,
+    }))
+  })
   const firTargets = personalHoleStats.filter((item) => item.par !== 3 && item.fir)
   const firSuccess = firTargets.filter((item) => item.fir === 'center').length
   const firRate = firTargets.length ? Math.round((firSuccess / firTargets.length) * 100) : null
+  const girTargets = personalHoleStatsWithScore.filter((item) => item.score !== null && item.putts > 0)
+  const girSuccess = girTargets.filter((item) => item.score !== null && item.score - item.putts <= item.par - 2).length
+  const girRate = girTargets.length ? Math.round((girSuccess / girTargets.length) * 100) : null
   const obCount = personalHoleStats.filter((item) => item.fir === 'left_ob' || item.fir === 'right_ob' || item.fir === 'other_ob').length
   const hazardCount = personalHoleStats.filter((item) => item.fir === 'hazard').length
   const avgPutts = personalHoleStats.length ? (personalHoleStats.reduce((sum, item) => sum + item.putts, 0) / personalHoleStats.length).toFixed(1) : '-'
@@ -586,6 +597,48 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
   for (const item of personalHoleStats) if (item.fir) firCounts.set(item.fir, (firCounts.get(item.fir) ?? 0) + 1)
   const mainMiss = [...firCounts.entries()].filter(([key]) => key !== 'center').sort((a, b) => b[1] - a[1])[0]
   const mainMissText = mainMiss ? firLabel(mainMiss[0]) : '미입력'
+  const roundsOldToNew = [...playerRounds].sort((a, b) => a.date.localeCompare(b.date))
+  const trendRounds = roundsOldToNew.slice(-6)
+  const trendWithStats = trendRounds.map((round) => {
+    const scheduleId = rounds.find((item) => item.id === round.roundId)?.scheduleId
+    const holeStats = scheduleId ? personalStatsBySchedule[scheduleId] ?? [] : []
+    const holeStatsWithScore = holeStats.map((item) => ({ ...item, score: round.strokes[item.hole - 1] ?? null }))
+    const roundFirTargets = holeStats.filter((item) => item.par !== 3 && item.fir)
+    const roundGirTargets = holeStatsWithScore.filter((item) => item.score !== null && item.putts > 0)
+    return {
+      round,
+      fir: roundFirTargets.length ? Math.round((roundFirTargets.filter((item) => item.fir === 'center').length / roundFirTargets.length) * 100) : null,
+      gir: roundGirTargets.length ? Math.round((roundGirTargets.filter((item) => item.score !== null && item.score - item.putts <= item.par - 2).length / roundGirTargets.length) * 100) : null,
+      putts: holeStats.length ? Number((holeStats.reduce((sum, item) => sum + item.putts, 0) / holeStats.length).toFixed(1)) : null,
+    }
+  })
+  const toTrendData = <T extends { round: PlayerRound }>(items: T[], valueOf: (item: T) => number | null) => (
+    items.map((item) => {
+      const value = valueOf(item)
+      return value === null ? null : { date: item.round.date, value }
+    }).filter((item): item is { date: string; value: number } => !!item)
+  )
+  const puttTrendData = toTrendData(trendWithStats, (item) => item.putts)
+  const obDistributionData = [
+    { label: '좌 OB', value: firCounts.get('left_ob') ?? 0 },
+    { label: '우 OB', value: firCounts.get('right_ob') ?? 0 },
+    { label: '기타 OB', value: firCounts.get('other_ob') ?? 0 },
+    { label: '해저드', value: firCounts.get('hazard') ?? 0 },
+  ]
+  const parRadarData = ([3, 4, 5] as const).map((par) => ({ label: `Par ${par}`, value: Number(avgParType(par)) })).filter((item) => !Number.isNaN(item.value))
+  const scoreDistributionData = [
+    { label: '버디', value: scoreTotals.birdie, color: C.info },
+    { label: '파', value: scoreTotals.par, color: C.green },
+    { label: '보기', value: scoreTotals.bogey, color: C.warn },
+    { label: '더블+', value: scoreTotals.double + scoreTotals.triplePlus, color: C.danger },
+  ]
+  const scoreStackData = trendRounds.map((round) => ({
+    date: round.date,
+    birdie: round.birdie,
+    par: round.parCount,
+    bogey: round.bogey,
+    doublePlus: round.double + round.triplePlus,
+  }))
   const aiComments = [
     recent5Avg < avg
       ? `최근 5경기 평균이 전체 평균보다 ${avg - recent5Avg}타 낮아져 흐름이 좋습니다.`
@@ -663,6 +716,7 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
                 )}
                 {detailModal === 'hole' && (
                   <>
+                    <RadarChart data={parRadarData} />
                     <View style={s.metricGrid}>
                       <MetricCard label="Par 3" value={`${avgParType(3)}타`} />
                       <MetricCard label="Par 4" value={`${avgParType(4)}타`} />
@@ -672,13 +726,17 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
                   </>
                 )}
                 {detailModal === 'score' && (
-                  <View style={s.scoreDistRow}>
-                    <ScoreDist label="버디" value={scoreTotals.birdie} color={C.info} />
-                    <ScoreDist label="파" value={scoreTotals.par} color={C.green} />
-                    <ScoreDist label="보기" value={scoreTotals.bogey} color={C.warn} />
-                    <ScoreDist label="더블" value={scoreTotals.double} color={C.danger} />
-                    <ScoreDist label="트리플+" value={scoreTotals.triplePlus} color={C.text} />
-                  </View>
+                  <>
+                    <ScoreDonut data={scoreDistributionData} />
+                    <StackedScoreBars data={scoreStackData} />
+                    <View style={s.scoreDistRow}>
+                      <ScoreDist label="버디" value={scoreTotals.birdie} color={C.info} />
+                      <ScoreDist label="파" value={scoreTotals.par} color={C.green} />
+                      <ScoreDist label="보기" value={scoreTotals.bogey} color={C.warn} />
+                      <ScoreDist label="더블" value={scoreTotals.double} color={C.danger} />
+                      <ScoreDist label="트리플+" value={scoreTotals.triplePlus} color={C.text} />
+                    </View>
+                  </>
                 )}
                 {detailModal === 'rank' && (
                   <>
@@ -689,8 +747,15 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
                 )}
                 {detailModal === 'shot' && (
                   <>
+                    <View style={s.gaugeRow}>
+                      <DonutGauge label="FIR" value={firRate} />
+                      <DonutGauge label="GIR" value={girRate} />
+                    </View>
+                    <PuttBars data={puttTrendData} />
+                    <ObDistribution data={obDistributionData} />
                     <View style={s.metricGrid}>
                       <MetricCard label="FIR 성공률" value={firRate === null ? '-' : `${firRate}%`} />
+                      <MetricCard label="GIR 성공률" value={girRate === null ? '-' : `${girRate}%`} />
                       <MetricCard label="평균 퍼팅" value={avgPutts === '-' ? '-' : `${avgPutts}개`} />
                       <MetricCard label="OB/해저드" value={`${obCount}/${hazardCount}`} />
                       <MetricCard label="패널티" value={`${penaltyTotal}개`} />
@@ -778,11 +843,12 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
             <Text style={s.cardTitle}>샷/퍼팅 분석</Text>
             <View style={s.compactMetricGrid}>
               <CompactMetric label="FIR" value={firRate === null ? '-' : `${firRate}%`} />
+              <CompactMetric label="GIR" value={girRate === null ? '-' : `${girRate}%`} />
               <CompactMetric label="퍼팅" value={avgPutts === '-' ? '-' : `${avgPutts}개`} />
               <CompactMetric label="OB" value={`${obCount}회`} />
               <CompactMetric label="패널티" value={`${penaltyTotal}개`} />
             </View>
-            <DetailButton label="샷/퍼팅 상세" onPress={() => setDetailModal('shot')} />
+            <CompactActionButton label="샷/퍼팅 상세" onPress={() => setDetailModal('shot')} />
           </View>
 
           <View style={s.detailGrid}>
@@ -816,6 +882,190 @@ function CompactMetric({ label, value }: { label: string; value: string }) {
     <View style={s.compactMetric}>
       <Text style={s.compactMetricLabel}>{label}</Text>
       <Text style={s.compactMetricValue}>{value}</Text>
+    </View>
+  )
+}
+
+function CompactActionButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={s.compactActionButton} activeOpacity={0.82} onPress={onPress}>
+      <Text style={s.compactActionText}>{label}</Text>
+      <Text style={s.compactActionArrow}>›</Text>
+    </TouchableOpacity>
+  )
+}
+
+function DonutGauge({ label, value }: { label: string; value: number | null }) {
+  const size = 104
+  const radius = 34
+  const center = size / 2
+  const circumference = 2 * Math.PI * radius
+  const progress = Math.max(0, Math.min(100, value ?? 0))
+  return (
+    <View style={s.gaugeCard}>
+      <Svg width={size} height={size}>
+        <Circle cx={center} cy={center} r={radius} stroke={C.border} strokeWidth={11} fill="none" />
+        <Circle
+          cx={center}
+          cy={center}
+          r={radius}
+          stroke={C.green}
+          strokeWidth={11}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={`${(circumference * progress) / 100},${circumference}`}
+          transform={`rotate(-90 ${center} ${center})`}
+        />
+        <SvgText x={center} y={center - 4} textAnchor="middle" fontSize={12} fontWeight="800" fill={C.muted}>{label}</SvgText>
+        <SvgText x={center} y={center + 18} textAnchor="middle" fontSize={18} fontWeight="900" fill={C.text}>{value === null ? '-' : `${value}%`}</SvgText>
+      </Svg>
+    </View>
+  )
+}
+
+function PuttBars({ data }: { data: { date: string; value: number }[] }) {
+  const max = Math.max(4, ...data.map((item) => item.value))
+  return (
+    <View style={s.visualCard}>
+      <View style={s.visualHeader}><Text style={s.visualTitle}>퍼팅 추세</Text><Text style={s.visualValue}>{data.length ? `${data[data.length - 1].value}개` : '-'}</Text></View>
+      <View style={s.puttBarRow}>
+        {data.length === 0 ? <Text style={s.visualEmpty}>추세 데이터가 없습니다.</Text> : data.map((item) => (
+          <View key={item.date} style={s.puttBarItem}>
+            <Text style={s.puttBarValue}>{item.value}</Text>
+            <View style={[s.puttBar, { height: Math.max(12, (item.value / max) * 58) }]} />
+            <Text style={s.puttBarDate}>{item.date.slice(5)}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+function ObDistribution({ data }: { data: { label: string; value: number }[] }) {
+  return (
+    <View style={s.visualCard}>
+      <View style={s.visualHeader}><Text style={s.visualTitle}>OB/해저드 분포</Text><Text style={s.visualValue}>{data.reduce((sum, item) => sum + item.value, 0)}회</Text></View>
+      <View style={s.obGrid}>
+        {data.map((item) => (
+          <View key={item.label} style={s.obCell}>
+            <Text style={s.obLabel}>{item.label}</Text>
+            <Text style={s.obValue}>{item.value}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+function RadarChart({ data }: { data: { label: string; value: number }[] }) {
+  const size = 190
+  const center = size / 2
+  const radius = 58
+  const values = data.map((item) => item.value)
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const normalized = (value: number) => max === min ? 0.72 : 0.35 + ((max - value) / (max - min)) * 0.5
+  const point = (index: number, ratio: number) => {
+    const angle = -Math.PI / 2 + (Math.PI * 2 * index) / data.length
+    return { x: center + Math.cos(angle) * radius * ratio, y: center + Math.sin(angle) * radius * ratio }
+  }
+  const outerPoints = data.map((_, index) => point(index, 1)).map((p) => `${p.x},${p.y}`).join(' ')
+  const valuePoints = data.map((item, index) => point(index, normalized(item.value))).map((p) => `${p.x},${p.y}`).join(' ')
+  return (
+    <View style={s.visualCard}>
+      <View style={s.visualHeader}><Text style={s.visualTitle}>홀 유형 밸런스</Text><Text style={s.visualValue}>낮을수록 강점</Text></View>
+      {data.length < 3 ? <Text style={s.visualEmpty}>분석 데이터가 부족합니다.</Text> : (
+        <Svg width={size} height={size}>
+          <Polygon points={outerPoints} fill="none" stroke={C.border} strokeWidth={1} />
+          <Polygon points={valuePoints} fill="rgba(32, 160, 91, 0.18)" stroke={C.green} strokeWidth={2} />
+          {data.map((item, index) => {
+            const p = point(index, 1.24)
+            const dot = point(index, normalized(item.value))
+            return (
+              <G key={item.label}>
+                <Line x1={center} y1={center} x2={point(index, 1).x} y2={point(index, 1).y} stroke={C.border} strokeWidth={1} />
+                <Circle cx={dot.x} cy={dot.y} r={3} fill={C.green} />
+                <SvgText x={p.x} y={p.y + 4} textAnchor="middle" fontSize={10} fontWeight="800" fill={C.muted}>{item.label}</SvgText>
+                <SvgText x={p.x} y={p.y + 18} textAnchor="middle" fontSize={10} fill={C.text}>{item.value.toFixed(1)}</SvgText>
+              </G>
+            )
+          })}
+        </Svg>
+      )}
+    </View>
+  )
+}
+
+function ScoreDonut({ data }: { data: { label: string; value: number; color: string }[] }) {
+  const size = 156
+  const center = size / 2
+  const radius = 48
+  const circumference = 2 * Math.PI * radius
+  const total = data.reduce((sum, item) => sum + item.value, 0)
+  let offset = 0
+  return (
+    <View style={s.visualCard}>
+      <View style={s.visualHeader}><Text style={s.visualTitle}>스코어 구성</Text><Text style={s.visualValue}>{total}홀</Text></View>
+      {total === 0 ? <Text style={s.visualEmpty}>스코어 데이터가 없습니다.</Text> : (
+        <View style={s.donutRow}>
+          <Svg width={size} height={size}>
+            <Circle cx={center} cy={center} r={radius} stroke={C.border} strokeWidth={18} fill="none" />
+            {data.map((item) => {
+              const dash = (item.value / total) * circumference
+              const segment = (
+                <Circle
+                  key={item.label}
+                  cx={center}
+                  cy={center}
+                  r={radius}
+                  stroke={item.color}
+                  strokeWidth={18}
+                  fill="none"
+                  strokeDasharray={`${dash},${circumference}`}
+                  strokeDashoffset={-offset}
+                  transform={`rotate(-90 ${center} ${center})`}
+                />
+              )
+              offset += dash
+              return segment
+            })}
+            <SvgText x={center} y={center - 2} textAnchor="middle" fontSize={13} fontWeight="900" fill={C.text}>총 {total}</SvgText>
+            <SvgText x={center} y={center + 16} textAnchor="middle" fontSize={10} fill={C.muted}>holes</SvgText>
+          </Svg>
+          <View style={s.donutLegend}>
+            {data.map((item) => (
+              <View key={item.label} style={s.legendRow}>
+                <View style={[s.legendDot, { backgroundColor: item.color }]} />
+                <Text style={s.legendLabel}>{item.label}</Text>
+                <Text style={s.legendValue}>{item.value}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+    </View>
+  )
+}
+
+function StackedScoreBars({ data }: { data: { date: string; birdie: number; par: number; bogey: number; doublePlus: number }[] }) {
+  return (
+    <View style={s.visualCard}>
+      <View style={s.visualHeader}><Text style={s.visualTitle}>최근 라운드 구성</Text><Text style={s.visualValue}>스택</Text></View>
+      {data.length === 0 ? <Text style={s.visualEmpty}>추세 데이터가 없습니다.</Text> : data.map((item) => {
+        const total = Math.max(1, item.birdie + item.par + item.bogey + item.doublePlus)
+        return (
+          <View key={item.date} style={s.stackRow}>
+            <Text style={s.stackDate}>{item.date.slice(5)}</Text>
+            <View style={s.stackTrack}>
+              <View style={[s.stackSeg, { flex: item.birdie, backgroundColor: C.info }]} />
+              <View style={[s.stackSeg, { flex: item.par, backgroundColor: C.green }]} />
+              <View style={[s.stackSeg, { flex: item.bogey, backgroundColor: C.warn }]} />
+              <View style={[s.stackSeg, { flex: item.doublePlus, backgroundColor: C.danger }]} />
+              {total === 1 && item.birdie + item.par + item.bogey + item.doublePlus === 0 && <View style={[s.stackSeg, { flex: 1, backgroundColor: C.border }]} />}
+            </View>
+          </View>
+        )
+      })}
     </View>
   )
 }
@@ -1364,18 +1614,56 @@ const s = StyleSheet.create({
   pillText: { fontSize: 13, fontWeight: '700', color: C.green },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: C.greenLight, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
   badgeText: { fontSize: 10, fontWeight: '700', color: C.green },
-  metricGridCompact: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  metricGridCompact: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 8 },
   metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
-  metricCard: { flexBasis: '47%', flexGrow: 1, backgroundColor: C.card, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: C.border },
+  metricCard: { flexBasis: '47%', flexGrow: 1, backgroundColor: C.card, borderRadius: 14, padding: 10, borderWidth: 1, borderColor: C.border },
   metricLabel: { fontSize: 11, fontWeight: '800', color: C.muted },
-  metricValue: { fontSize: 20, fontWeight: '900', color: C.text, marginTop: 8 },
-  compactMetricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  metricValue: { fontSize: 18, fontWeight: '900', color: C.text, marginTop: 4 },
+  compactMetricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 8 },
   compactMetric: {
-    flexBasis: '48%', flexGrow: 1, minHeight: 46, borderRadius: 12, borderWidth: 1, borderColor: C.border,
-    backgroundColor: C.greenLight, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    flexBasis: '31%', flexGrow: 1, minHeight: 40, borderRadius: 12, borderWidth: 1, borderColor: C.border,
+    backgroundColor: C.greenLight, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
-  compactMetricLabel: { fontSize: 12, fontWeight: '900', color: C.muted },
-  compactMetricValue: { fontSize: 16, fontWeight: '900', color: C.text },
+  compactMetricLabel: { fontSize: 11, fontWeight: '900', color: C.muted },
+  compactMetricValue: { fontSize: 15, fontWeight: '900', color: C.text },
+  compactActionButton: {
+    minHeight: 42, borderRadius: 13, borderWidth: 1, borderColor: C.border, backgroundColor: C.card,
+    paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  compactActionText: { fontSize: 13, fontWeight: '900', color: C.text },
+  compactActionArrow: { fontSize: 18, fontWeight: '700', color: C.muted },
+  gaugeRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  gaugeCard: { flex: 1, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border, borderRadius: 14, backgroundColor: C.greenLight },
+  visualCard: { borderWidth: 1, borderColor: C.border, borderRadius: 14, padding: 12, backgroundColor: C.greenLight, marginBottom: 10 },
+  visualHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  visualTitle: { fontSize: 12, fontWeight: '900', color: C.muted },
+  visualValue: { fontSize: 12, fontWeight: '900', color: C.text },
+  visualEmpty: { minHeight: 42, textAlign: 'center', textAlignVertical: 'center', color: C.muted, fontSize: 12 },
+  puttBarRow: { minHeight: 84, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 },
+  puttBarItem: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
+  puttBarValue: { fontSize: 10, fontWeight: '900', color: C.text, marginBottom: 4 },
+  puttBar: { width: '70%', borderRadius: 8, backgroundColor: C.green },
+  puttBarDate: { fontSize: 9, color: C.muted, marginTop: 5 },
+  obGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  obCell: { flexBasis: '48%', flexGrow: 1, minHeight: 42, borderRadius: 12, backgroundColor: C.card, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  obLabel: { fontSize: 11, fontWeight: '900', color: C.muted },
+  obValue: { fontSize: 16, fontWeight: '900', color: C.text },
+  donutRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  donutLegend: { flex: 1, gap: 7 },
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  legendDot: { width: 9, height: 9, borderRadius: 5 },
+  legendLabel: { flex: 1, fontSize: 12, fontWeight: '800', color: C.muted },
+  legendValue: { fontSize: 12, fontWeight: '900', color: C.text },
+  stackRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 7 },
+  stackDate: { width: 36, fontSize: 10, fontWeight: '800', color: C.muted },
+  stackTrack: { flex: 1, height: 14, borderRadius: 8, overflow: 'hidden', backgroundColor: C.border, flexDirection: 'row' },
+  stackSeg: { height: '100%' },
+  trendChartGrid: { gap: 8, marginBottom: 12 },
+  smallTrendCard: { borderWidth: 1, borderColor: C.border, borderRadius: 14, paddingTop: 10, paddingHorizontal: 10, backgroundColor: C.greenLight },
+  smallTrendHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
+  smallTrendTitle: { fontSize: 12, fontWeight: '900', color: C.muted },
+  smallTrendValue: { fontSize: 13, fontWeight: '900', color: C.text },
+  smallTrendEmpty: { minHeight: 48, textAlign: 'center', textAlignVertical: 'center', color: C.muted, fontSize: 12 },
   playerPanelTabs: { flexDirection: 'row', backgroundColor: C.card, borderRadius: 16, padding: 4, marginBottom: 12, borderWidth: 1, borderColor: C.border },
   playerPanelTab: { flex: 1, minHeight: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   playerPanelTabActive: { backgroundColor: C.green },
