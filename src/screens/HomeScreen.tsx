@@ -1558,7 +1558,7 @@ function FirPicker({ value, disabled, onChange }: { value: PersonalRoundFir; dis
           <TouchableOpacity
             key={option.label}
             style={[s.firButton, active && s.firButtonActive, disabled && { opacity: 0.5 }]}
-            onPress={() => onChange(option.value)}
+            onPress={() => onChange(active ? null : option.value)}
             disabled={disabled}
             activeOpacity={0.82}
           >
