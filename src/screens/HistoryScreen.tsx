@@ -582,8 +582,8 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
       score: playerRound?.strokes[item.hole - 1] ?? null,
     }))
   })
-  const firTargets = personalHoleStats.filter((item) => item.par !== 3 && item.fir)
-  const firSuccess = firTargets.filter((item) => item.fir === 'center').length
+  const firTargets = personalHoleStats.filter((item) => item.par !== 3)
+  const firSuccess = firTargets.filter((item) => !item.fir || item.fir === 'center').length
   const firRate = firTargets.length ? Math.round((firSuccess / firTargets.length) * 100) : null
   const girTargets = personalHoleStatsWithScore.filter((item) => item.score !== null && item.putts > 0)
   const girSuccess = girTargets.filter((item) => item.score !== null && item.score - item.putts <= item.par - 2).length
@@ -603,11 +603,11 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
     const scheduleId = rounds.find((item) => item.id === round.roundId)?.scheduleId
     const holeStats = scheduleId ? personalStatsBySchedule[scheduleId] ?? [] : []
     const holeStatsWithScore = holeStats.map((item) => ({ ...item, score: round.strokes[item.hole - 1] ?? null }))
-    const roundFirTargets = holeStats.filter((item) => item.par !== 3 && item.fir)
+    const roundFirTargets = holeStats.filter((item) => item.par !== 3)
     const roundGirTargets = holeStatsWithScore.filter((item) => item.score !== null && item.putts > 0)
     return {
       round,
-      fir: roundFirTargets.length ? Math.round((roundFirTargets.filter((item) => item.fir === 'center').length / roundFirTargets.length) * 100) : null,
+      fir: roundFirTargets.length ? Math.round((roundFirTargets.filter((item) => !item.fir || item.fir === 'center').length / roundFirTargets.length) * 100) : null,
       gir: roundGirTargets.length ? Math.round((roundGirTargets.filter((item) => item.score !== null && item.score - item.putts <= item.par - 2).length / roundGirTargets.length) * 100) : null,
       putts: holeStats.length ? Number((holeStats.reduce((sum, item) => sum + item.putts, 0) / holeStats.length).toFixed(1)) : null,
     }

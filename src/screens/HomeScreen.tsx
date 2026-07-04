@@ -1545,7 +1545,6 @@ function PersonalHoleCard({ stat, guide, displayHoleNo, courseName, editable, on
 
 function FirPicker({ value, disabled, onChange }: { value: PersonalRoundFir; disabled?: boolean; onChange: (value: PersonalRoundFir) => void }) {
   const options: Array<{ label: string; value: PersonalRoundFir }> = [
-    { label: '페어웨이', value: 'center' },
     { label: '좌OB', value: 'left_ob' },
     { label: '우OB', value: 'right_ob' },
     { label: '해저드', value: 'hazard' },
