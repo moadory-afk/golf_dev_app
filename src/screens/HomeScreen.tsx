@@ -1,4 +1,4 @@
-﻿import {
+import {
   ActivityIndicator, Alert, ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -21,6 +21,8 @@ import { useAsync } from '../lib/useAsync'
 import { supabase } from '../lib/supabase'
 import { loadHandicapBasis, type HandicapBasis } from '../lib/handicapBasis'
 import { C } from '../theme'
+import { useSkin } from '../skins'
+import { GPMascotHero, GPRoundTicket, GPStatCard } from '../design'
 import { UserAvatarBtn } from '../components/UserAvatar'
 import { AppHeader } from '../components/AppHeader'
 import { EmojiIcon } from '../components/EmojiIcon'
@@ -275,6 +277,7 @@ function formatGroupCourse(group: { frontLayoutName?: string; backLayoutName?: s
 }
 
 export default function HomeScreen() {
+  const { palette, skinId } = useSkin()
   const insets = useSafeAreaInsets()
   const nav = useNavigation<Nav>()
   const [refreshKey, setRefreshKey] = useState(0)
@@ -969,10 +972,10 @@ export default function HomeScreen() {
   }
 
   // 클럽 로딩 전: 빈 화면 (모든 hook 호출 후)
-  if (!clubsLoaded) return <View style={{ flex: 1, backgroundColor: C.bg }} />
+  if (!clubsLoaded) return <View style={{ flex: 1, backgroundColor: palette.bg }} />
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
+    <View style={{ flex: 1, backgroundColor: palette.bg }}>
       {h2hPlayer && (
         <HeadToHeadModal player={h2hPlayer} rounds={rounds} handicaps={handicaps} onClose={() => setH2hPlayer(null)} basis={handicapBasis} />
       )}
@@ -1023,42 +1026,22 @@ export default function HomeScreen() {
         <AppHeader myName={myName} />
 
         <View style={s.content}>
+          {skinId === 'cuteGolf' ? (
+            <GPMascotHero
+              title={`${myName || '회원'}님, 오늘도 굿샷!`}
+              message={hasUpcomingRound ? `${roundCourseName} 일정이 준비되어 있어요. 캐디북과 조편성을 확인해보세요.` : '아직 예정된 라운드가 없어요. 새 라운드를 잡아볼까요?'}
+              stat={myHandicap !== null ? `현재 핸디 ${diffText(myHandicap)}` : '첫 기록을 기다리는 중'}
+            />
+          ) : null}
+
           {/* 상단 요약 카드 */}
-          <View style={s.statsRow}>
-            <TouchableOpacity style={s.statCard} onPress={() => setPersonalDetail('handicap')}>
-              <Text style={s.statLabel}>핸디캡</Text>
-              <Text style={s.statValue}>{myHandicap !== null ? diffText(myHandicap) : '-'}</Text>
-              <Text style={s.statSub}>최근 {handicapBasis}경기</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.statCard} onPress={() => setPersonalDetail('average')}>
-              <Text style={s.statLabel}>평균</Text>
-              <Text style={s.statValue}>{myAverage !== null ? `${myAverage}타` : '-'}</Text>
-              <Text style={s.statSub}>전체 경기 평균</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.statCard} onPress={() => setPersonalDetail('best')}>
-              <Text style={s.statLabel}>베스트</Text>
-              <Text style={[s.statValue, { color: C.gold }]}>{myBest ? `${myBest.total}타` : '-'}</Text>
-              <Text style={s.statSub}>{myBest?.courseName.slice(0, 5) ?? ''}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={s.statCard}
-              onPress={() => recent3[0] && setRecentRoundOpen(true)}
-              disabled={!recent3[0]}
-            >
-              <Text style={s.statLabel}>최근라운드</Text>
-              <Text style={s.statValue}>{recentRoundSummary.value}</Text>
-              <Text style={s.statSub}>{recentRoundSummary.sub}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.statCard} onPress={() => setH2hPlayer(myName)}>
-              <Text style={s.statLabel}>상대전적</Text>
-              <Text style={s.statValue}>{diffText(headToHeadHandicapDiff)}타</Text>
-              <Text style={s.statSub}>핸디차이</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.statCard} onPress={() => setPersonalDetail('records')}>
-              <Text style={s.statLabel}>보유기록</Text>
-              <Text style={s.statValue}>{ginnessRecords.length}개</Text>
-              <Text style={s.statSub}>클럽 기준</Text>
-            </TouchableOpacity>
+          <View style={s.designStatsGrid}>
+            <GPStatCard label="핸디캡" value={myHandicap !== null ? diffText(myHandicap) : '-'} sub={`최근 ${handicapBasis}경기`} onPress={() => setPersonalDetail('handicap')} />
+            <GPStatCard label="평균" value={myAverage !== null ? `${myAverage}타` : '-'} sub="전체 경기 평균" onPress={() => setPersonalDetail('average')} />
+            <GPStatCard label="베스트" value={myBest ? `${myBest.total}타` : '-'} sub={myBest?.courseName.slice(0, 5) ?? ''} accent={palette.gold} onPress={() => setPersonalDetail('best')} />
+            <GPStatCard label="최근라운드" value={recentRoundSummary.value} sub={recentRoundSummary.sub} onPress={() => recent3[0] && setRecentRoundOpen(true)} />
+            <GPStatCard label="상대전적" value={`${diffText(headToHeadHandicapDiff)}타`} sub="핸디차이" onPress={() => setH2hPlayer(myName)} />
+            <GPStatCard label="보유기록" value={`${ginnessRecords.length}개`} sub="클럽 기준" onPress={() => setPersonalDetail('records')} />
           </View>
 
           {/* 클럽 없음 안내 */}
@@ -1088,34 +1071,15 @@ export default function HomeScreen() {
                     const canEnterTodayPlayerActions = isAdmin || assignedToGroup
                     const canEditTodayPlayerActions = assignedToGroup
                     return (
-                      <View
+                      <GPRoundTicket
                         key={round.id}
-                        style={[s.roundRow, summary.hasGroups ? s.roundRowGroupReady : s.roundRowAttendanceReady, s.todayRoundRow]}
-                      >
-                        <View style={{ flex: 1 }}>
-                          <View style={s.roundLine}>
-                            <Text style={s.roundCourse} numberOfLines={1}>
-                              {round.date} · {summary.courseName}
-                            </Text>
-                            <View style={[s.roundStageBadge, s.todayRoundBadge]}>
-                              <Text style={s.todayRoundBadgeText}>진행일</Text>
-                            </View>
-                            {isAdmin ? (
-                              <TouchableOpacity
-                                style={s.roundEditBadge}
-                                onPress={() => openRoundEditor(round)}
-                                activeOpacity={0.82}
-                              >
-                                <Text style={s.roundEditBadgeText}>수정</Text>
-                              </TouchableOpacity>
-                            ) : null}
-                          </View>
-                          <Text style={s.roundInfoText}>{summary.groupSummary}</Text>
-                          <Text style={s.roundAwardText}>시상계획: {awardSummaryFor(round)}</Text>
-                          {!!purchaseSummary && (
-                            <Text style={s.roundLottoPurchaseText}>구매현황 : {purchaseSummary} 구매 완료</Text>
-                          )}
-                          <View style={s.todayActionRow}>
+                        date={round.date}
+                        course={summary.courseName}
+                        status="진행일"
+                        sub={summary.groupSummary}
+                        award={`시상계획: ${awardSummaryFor(round)}${purchaseSummary ? `\n구매현황 : ${purchaseSummary} 구매 완료` : ''}`}
+                        actions={(
+                          <>
                             <TouchableOpacity
                               style={[s.todayActionBtn, !canEnterTodayPlayerActions && s.todayActionBtnDisabled]}
                               onPress={() => openPersonalInput(round)}
@@ -1135,9 +1099,14 @@ export default function HomeScreen() {
                             <TouchableOpacity style={s.todayActionBtn} onPress={() => openRoundSheetFor(round)} activeOpacity={0.82}>
                               <Text style={s.todayActionText}>조편성 결과</Text>
                             </TouchableOpacity>
-                          </View>
-                        </View>
-                      </View>
+                            {isAdmin ? (
+                              <TouchableOpacity style={s.todayActionBtn} onPress={() => openRoundEditor(round)} activeOpacity={0.82}>
+                                <Text style={s.todayActionText}>수정</Text>
+                              </TouchableOpacity>
+                            ) : null}
+                          </>
+                        )}
+                      />
                     )
                   })}
                 </View>
@@ -1160,81 +1129,38 @@ export default function HomeScreen() {
                           const summary = roundSummaryFor(round)
                           const selected = round.id === selectedRoundId
                           return (
-                            <TouchableOpacity
+                            <GPRoundTicket
                               key={round.id}
-                              style={[
-                                s.roundRow,
-                                summary.hasGroups ? s.roundRowGroupReady : s.roundRowAttendanceReady,
-                                selected && s.roundRowSelected,
-                              ]}
+                              date={round.date}
+                              course={summary.courseName}
+                              status={summary.hasGroups ? '조편성 완료' : '참석 확인중'}
+                              sub={summary.groupSummary}
+                              award={`시상계획: ${awardSummaryFor(round)}`}
+                              selected={selected}
                               onPress={() => openRoundSheetFor(round)}
-                              activeOpacity={0.84}
-                            >
-                              <View style={{ flex: 1 }}>
-                                <View style={s.roundLine}>
-                                  <Text style={s.roundCourse} numberOfLines={1}>
-                                    {round.date} · {summary.courseName}
-                                  </Text>
-                                  <View style={[
-                                    s.roundStageBadge,
-                                    summary.hasGroups ? s.roundStageDone : s.roundStagePending,
-                                  ]}>
-                                    <Text style={[
-                                      s.roundStageText,
-                                      summary.hasGroups ? s.roundStageTextDone : s.roundStageTextPending,
-                                    ]}>
-                                      {summary.hasGroups ? '조편성 완료' : '참석 확인중'}
-                                    </Text>
-                                  </View>
-                                  {isAdmin ? (
-                                    <TouchableOpacity
-                                      style={s.roundEditBadge}
-                                      onPress={(event) => {
-                                        event.stopPropagation()
-                                        openRoundEditor(round)
-                                      }}
-                                      activeOpacity={0.82}
-                                    >
-                                      <Text style={s.roundEditBadgeText}>수정</Text>
-                                    </TouchableOpacity>
-                                  ) : null}
-                                </View>
-                                <Text style={s.roundInfoText}>{summary.groupSummary}</Text>
-                                <Text style={s.roundAwardText}>시상계획: {awardSummaryFor(round)}</Text>
-                                <View style={s.todayActionRow}>
-                                  <TouchableOpacity
-                                    style={s.todayActionBtn}
-                                    onPress={(event) => {
-                                      event.stopPropagation()
-                                      openCourseMap(round)
-                                    }}
-                                    activeOpacity={0.82}
-                                  >
+                              actions={(
+                                <>
+                                  <TouchableOpacity style={s.todayActionBtn} onPress={() => openCourseMap(round)} activeOpacity={0.82}>
                                     <Text style={s.todayActionText}>캐디북</Text>
                                   </TouchableOpacity>
                                   <TouchableOpacity
                                     style={[s.todayActionBtn, s.todayActionBtnDisabled]}
-                                    onPress={(event) => {
-                                      event.stopPropagation()
-                                      Alert.alert('안내', '라운딩 당일 구매 가능합니다')
-                                    }}
+                                    onPress={() => Alert.alert('안내', '라운딩 당일 구매 가능합니다')}
                                     activeOpacity={0.82}
                                   >
                                     <Text style={[s.todayActionText, s.todayActionTextDisabled]}>Lotto 6/18</Text>
                                   </TouchableOpacity>
-                                  <TouchableOpacity
-                                    style={s.todayActionBtn}
-                                    onPress={(event) => {
-                                      event.stopPropagation()
-                                      openRoundSheetFor(round)
-                                    }}
-                                    activeOpacity={0.82}
-                                  >
+                                  <TouchableOpacity style={s.todayActionBtn} onPress={() => openRoundSheetFor(round)} activeOpacity={0.82}>
                                     <Text style={s.todayActionText}>조편성 결과</Text>
                                   </TouchableOpacity>
-                                </View>
-                              </View>
-                            </TouchableOpacity>
+                                  {isAdmin ? (
+                                    <TouchableOpacity style={s.todayActionBtn} onPress={() => openRoundEditor(round)} activeOpacity={0.82}>
+                                      <Text style={s.todayActionText}>수정</Text>
+                                    </TouchableOpacity>
+                                  ) : null}
+                                </>
+                              )}
+                            />
                           )
                         })}
                       </View>
@@ -2329,6 +2255,7 @@ const s = StyleSheet.create({
   content: { padding: 16 },
 
   // 스탯 카드
+  designStatsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14, justifyContent: 'space-between' },
   statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
   statCard: {
     width: '31%', backgroundColor: C.card, borderRadius: 16, padding: 14,

@@ -2,7 +2,8 @@ import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { C, isTurf } from '../theme'
+import { C } from '../theme'
+import { SkinProvider, useSkin } from '../skins'
 import { Icon, type IconName } from '../components/Icon'
 import { ClubProvider, useClub } from '../lib/ClubContext'
 import { UserProfileProvider } from '../lib/UserProfileContext'
@@ -53,18 +54,20 @@ function TabIcon({
   emoji: string
   icon: IconName
 }) {
-  if (!isTurf) {
+  const { palette, isModern } = useSkin()
+  if (!isModern) {
     return <Text style={{ fontSize: 22, color }}>{emoji}</Text>
   }
 
   return (
-    <View style={[navStyles.tabIconPill, focused && navStyles.tabIconPillActive]}>
-      <Icon name={icon} size={20} color={focused ? C.accentText : C.muted} strokeWidth={focused ? 2.2 : 1.8} />
+    <View style={[navStyles.tabIconPill, focused && { backgroundColor: palette.tabActiveBg }]}>
+      <Icon name={icon} size={20} color={focused ? palette.accentText : palette.muted} strokeWidth={focused ? 2.2 : 1.8} />
     </View>
   )
 }
 
 function MainTabs() {
+  const { palette, isModern } = useSkin()
   const tabBarIcon = (name: keyof MainTabParamList) =>
     ({ focused, color }: { focused: boolean; color: string }) => (
       <TabIcon focused={focused} color={color} emoji={TAB_META[name].emoji} icon={TAB_META[name].icon} />
@@ -74,18 +77,18 @@ function MainTabs() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: isTurf ? C.text : C.green,
-        tabBarInactiveTintColor: C.muted,
+        tabBarActiveTintColor: isModern ? palette.text : palette.green,
+        tabBarInactiveTintColor: palette.muted,
         tabBarStyle: {
-          borderTopColor: C.border,
-          backgroundColor: '#fff',
-          height: isTurf ? 66 : 58,
-          paddingTop: isTurf ? 7 : 0,
+          borderTopColor: palette.border,
+          backgroundColor: palette.tabBg,
+          height: isModern ? 66 : 58,
+          paddingTop: isModern ? 7 : 0,
           paddingBottom: 8,
         },
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: isTurf ? '700' : '600',
+          fontWeight: isModern ? '700' : '600',
         },
       }}
     >
@@ -121,6 +124,7 @@ function clubScreenTitle(clubName: string | undefined, title: string) {
 }
 
 function NavigationStack() {
+  const { palette } = useSkin()
   const { activeClub } = useClub()
   const clubName = activeClub?.name
 
@@ -128,8 +132,8 @@ function NavigationStack() {
     <NavigationContainer>
       <Stack.Navigator
         screenOptions={{
-          headerStyle: { backgroundColor: C.greenDark },
-          headerTintColor: '#fff',
+          headerStyle: { backgroundColor: palette.headerBg },
+          headerTintColor: palette.headerText,
           headerTitleStyle: { fontWeight: '700' },
           headerBackVisible: false,
         }}
@@ -180,11 +184,13 @@ function NavigationStack() {
 
 export default function Navigation() {
   return (
-    <UserProfileProvider>
-      <ClubProvider>
-        <NavigationStack />
-      </ClubProvider>
-    </UserProfileProvider>
+    <SkinProvider>
+      <UserProfileProvider>
+        <ClubProvider>
+          <NavigationStack />
+        </ClubProvider>
+      </UserProfileProvider>
+    </SkinProvider>
   )
 }
 
@@ -208,7 +214,5 @@ const navStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tabIconPillActive: {
-    backgroundColor: C.accent,
-  },
+  tabIconPillActive: {},
 })

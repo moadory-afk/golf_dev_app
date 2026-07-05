@@ -6,7 +6,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useClub } from '../lib/ClubContext'
 import { shortName } from '../lib/store'
 import { UserAvatarBtn } from './UserAvatar'
-import { C, isTurf } from '../theme'
+import { C } from '../theme'
+import { useSkin } from '../skins'
 import { Icon } from './Icon'
 import type { RootStackParamList } from '../navigation/types'
 
@@ -26,6 +27,7 @@ export function AppHeader({ myName, showSettings = false, rightExtra }: {
   rightExtra?: ReactNode
 }) {
   const insets = useSafeAreaInsets()
+  const { palette, isModern } = useSkin()
   const nav = useNavigation<Nav>()
   const { activeClub: club, myClubs, setActiveClub } = useClub()
   const badgeRef = useRef<View>(null)
@@ -39,19 +41,19 @@ export function AppHeader({ myName, showSettings = false, rightExtra }: {
   }
 
   return (
-    <View style={[s.header, { paddingTop: insets.top + 16 }]}>
+    <View style={[s.header, { paddingTop: insets.top + 16, backgroundColor: palette.headerBg }]}>
       <View style={{ flex: 1 }}>
         <Text style={s.greeting} numberOfLines={1}>
-          {myName ? <Text style={s.greetingName}>{shortName(myName)}님 </Text> : null}
+          {myName ? <Text style={s.greetingName}>{myName}님 </Text> : null}
           {greeting}.
         </Text>
         <View style={s.identityRow}>
           {club && (
             <View ref={badgeRef} collapsable={false}>
-              <TouchableOpacity style={s.clubBadge} onPress={openMenu} activeOpacity={0.7}>
-                {isTurf && <Icon name="flag" size={13} color={C.accent} strokeWidth={2} />}
-                <Text style={s.clubBadgeText} numberOfLines={1}>{isTurf ? '' : '⛳ '}{club.name}</Text>
-                {isTurf
+              <TouchableOpacity style={[s.clubBadge, isModern && { backgroundColor: 'rgba(198,255,58,0.12)', borderColor: palette.accent }]} onPress={openMenu} activeOpacity={0.7}>
+                {isModern && <Icon name="flag" size={13} color={palette.accent} strokeWidth={2} />}
+                <Text style={s.clubBadgeText} numberOfLines={1}>{isModern ? '' : '⛳ '}{club.name}</Text>
+                {isModern
                   ? <Icon name="chevronDown" size={13} color="rgba(255,255,255,0.8)" />
                   : <Text style={s.caret}>▾</Text>}
               </TouchableOpacity>
@@ -59,7 +61,7 @@ export function AppHeader({ myName, showSettings = false, rightExtra }: {
           )}
           {showSettings && club && (
             <TouchableOpacity style={s.memberBtn} onPress={() => nav.navigate('Main', { screen: 'Club', params: { openManageMenu: true } })}>
-              {isTurf
+              {isModern
                 ? <Icon name="settings" size={12} color="rgba(255,255,255,0.85)" />
                 : <Text style={{ fontSize: 11 }}>⚙️</Text>}
               <Text style={s.memberBtnText}>설정</Text>
@@ -86,8 +88,8 @@ export function AppHeader({ myName, showSettings = false, rightExtra }: {
                     onPress={() => { setActiveClub(c); setMenu(null) }}
                   >
                     <Text style={[s.menuText, active && s.menuTextActive]} numberOfLines={1}>⛳ {c.name}</Text>
-                    {active && (isTurf
-                      ? <Icon name="check" size={14} color={C.green} strokeWidth={2.4} />
+                    {active && (isModern
+                      ? <Icon name="check" size={14} color={palette.green} strokeWidth={2.4} />
                       : <Text style={s.check}>✓</Text>)}
                   </TouchableOpacity>
                 )
@@ -110,10 +112,10 @@ const s = StyleSheet.create({
   identityRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   right: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   clubBadge: {
-    backgroundColor: isTurf ? 'rgba(198,255,58,0.12)' : 'rgba(255,255,255,0.15)', borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12,
     paddingHorizontal: 10, paddingVertical: 4, maxWidth: 150,
-    borderWidth: 1, borderColor: isTurf ? 'rgba(198,255,58,0.3)' : 'rgba(255,255,255,0.25)',
-    flexDirection: 'row', alignItems: 'center', gap: isTurf ? 5 : 0,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
+    flexDirection: 'row', alignItems: 'center', gap: 5,
   },
   clubBadgeText: { color: 'rgba(255,255,255,0.92)', fontSize: 12, fontWeight: '600', flexShrink: 1 },
   caret: { color: 'rgba(255,255,255,0.9)', fontSize: 11, marginLeft: 4 },

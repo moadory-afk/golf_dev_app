@@ -21,6 +21,7 @@ import { ensureProfile } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { useUserProfile } from '../lib/UserProfileContext'
 import { C } from '../theme'
+import { useSkin, type SkinId } from '../skins'
 
 const PROFILE_EMOJIS = [
   '🏌️', '⛳', '🏆', '👑', '💎', '🔥', '⚡', '🌟', '😎', '🤩',
@@ -68,6 +69,7 @@ function EmojiPicker({
 
 export default function ProfileScreen() {
   const { refreshProfile } = useUserProfile()
+  const { skinId, skins, setSkinId, palette } = useSkin()
   const [user, setUser] = useState<User | null>(null)
   const [editingName, setEditingName] = useState(false)
   const [editNameVal, setEditNameVal] = useState('')
@@ -413,6 +415,35 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+
+        <Text style={p.sectionLabel}>디자인 스킨</Text>
+        <View style={p.skinGrid}>
+          {skins.map((item) => {
+            const active = item.id === skinId
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  p.skinCard,
+                  { borderColor: active ? palette.green : palette.border, backgroundColor: palette.card, borderRadius: palette.cardRadius },
+                  active && { backgroundColor: palette.greenLight },
+                ]}
+                onPress={() => setSkinId(item.id as SkinId)}
+                activeOpacity={0.82}
+              >
+                <View style={p.skinSwatches}>
+                  <View style={[p.skinSwatch, { backgroundColor: item.palette.headerBg }]} />
+                  <View style={[p.skinSwatch, { backgroundColor: item.palette.accent }]} />
+                  <View style={[p.skinSwatch, { backgroundColor: item.palette.bg }]} />
+                </View>
+                <Text style={[p.skinName, { color: palette.text }]}>{item.name}</Text>
+                <Text style={[p.skinDesc, { color: palette.muted }]} numberOfLines={2}>{item.description}</Text>
+                {active && <Text style={[p.skinActiveText, { color: palette.green }]}>적용중</Text>}
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+
         <Text style={p.sectionLabel}>계정</Text>
         <View style={p.menuCard}>
           <TouchableOpacity style={p.menuRow} onPress={() => setShowPwModal(true)}>
@@ -506,6 +537,13 @@ const p = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 10,
   },
+  skinGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingHorizontal: 16 },
+  skinCard: { width: '48%', borderWidth: 1.5, padding: 12, minHeight: 118 },
+  skinSwatches: { flexDirection: 'row', gap: 5, marginBottom: 10 },
+  skinSwatch: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)' },
+  skinName: { fontSize: 14, fontWeight: '800', marginBottom: 4 },
+  skinDesc: { fontSize: 11, lineHeight: 15 },
+  skinActiveText: { fontSize: 11, fontWeight: '800', marginTop: 8 },
   menuCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
