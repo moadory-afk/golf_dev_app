@@ -85,6 +85,10 @@ function groupForScheduledRound(round: ScheduledRound, userId?: string | null, n
   ) ?? round.groups.find((item) => item.members.length > 0) ?? round.groups[0]
 }
 
+function shortRoundDate(date?: string) {
+  return date && date.length >= 10 ? date.slice(2) : date ?? ''
+}
+
 function courseSegmentsForScheduledRound(round: ScheduledRound, layouts: CourseLayout[], userId?: string | null, name?: string | null): PersonalCourseSegment[] {
   const group = groupForScheduledRound(round, userId, name)
   const candidates = [
@@ -116,6 +120,16 @@ function courseSegmentsForScheduledRound(round: ScheduledRound, layouts: CourseL
     cursor += length
   }
   return segments
+}
+
+function teeDistanceItems(guide: CourseHoleGuide | null) {
+  return guide
+    ? [
+        { color: '#2f67c7', value: guide.blueTeeM },
+        { color: '#f7f7f2', value: guide.whiteTeeM, border: C.border },
+        { color: '#d94f45', value: guide.redTeeM },
+      ].filter((item): item is { color: string; value: number; border?: string } => typeof item.value === 'number')
+    : []
 }
 
 const emptyLottoSelection = (): LottoSelection => ({ par3: [], par4: [], par5: [] })
@@ -1394,7 +1408,6 @@ function PersonalRoundInputModal({
 }) {
   const currentStat = stats[page]
   const maxPage = 17
-  const completed = stats.filter((item) => item.fir || item.par === 3 || item.putts !== 2 || item.penalties > 0).length
   const holeGuide = currentStat ? guides[currentStat.hole] ?? null : null
   const visibleCourseSegments = courseSegments.length > 0 ? courseSegments : [
     { label: '전반', start: 0, end: 8 },
@@ -1402,6 +1415,10 @@ function PersonalRoundInputModal({
   ]
   const activeSegment = visibleCourseSegments.find((item) => page >= item.start && page <= item.end) ?? visibleCourseSegments[0]
   const displayHoleNo = activeSegment ? page - activeSegment.start + 1 : currentStat?.hole ?? page + 1
+  const modalCourseLine = round
+    ? `${shortRoundDate(round.date)} ${(round.courseName ?? round.course).trim()} ${visibleCourseSegments.map((item) => item.label).join(' ')}`
+    : ''
+  const currentTeeDistances = teeDistanceItems(holeGuide)
 
   return (
     <Modal transparent animationType="fade" visible={!!round} onRequestClose={onClose}>
@@ -1410,7 +1427,7 @@ function PersonalRoundInputModal({
           <View style={s.modalHeader}>
             <View style={{ flex: 1 }}>
               <Text style={s.modalTitle}>내 경기 입력</Text>
-              <Text style={s.personalModalSub}>{round ? `${round.date} · ${round.courseName ?? round.course}` : ''}</Text>
+              <Text style={s.personalModalSub}>{modalCourseLine}</Text>
             </View>
             {editable ? (
               <TouchableOpacity
@@ -1448,22 +1465,29 @@ function PersonalRoundInputModal({
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-              <Text style={s.personalProgress}>입력 {completed}/18홀</Text>
-              {!editable && (
-                <Text style={[s.muted, { marginBottom: 8 }]}>참석자로 배정된 경우에만 기록할 수 있습니다.</Text>
-              )}
-              <ScrollView style={s.personalHoleScroll}>
-                {currentStat ? (
-                  <PersonalHoleCard
-                    stat={currentStat}
-                    guide={holeGuide}
-                    displayHoleNo={displayHoleNo}
-                    courseName={activeSegment?.label ?? ''}
-                    editable={editable}
-                    onChange={(patch) => editable && onChangeHole(currentStat.hole, patch)}
-                  />
+              <View style={s.currentHoleSummary}>
+                <Text style={s.currentHoleTitle}>
+                  {activeSegment?.label ?? ''} {displayHoleNo}번 {currentStat ? `(Par ${currentStat.par})` : ''}
+                </Text>
+                {currentTeeDistances.length > 0 ? (
+                  <View style={s.teeDistanceRow}>
+                    {currentTeeDistances.map((item) => (
+                      <View key={item.value} style={s.teeDistanceItem}>
+                        <View style={[s.teeDistanceDot, { backgroundColor: item.color, borderColor: item.border ?? item.color }]} />
+                        <Text style={s.teeDistanceText}>{item.value}</Text>
+                      </View>
+                    ))}
+                  </View>
                 ) : null}
-              </ScrollView>
+              </View>
+              {currentStat ? (
+                <PersonalHoleCard
+                  stat={currentStat}
+                  guide={holeGuide}
+                  editable={editable}
+                  onChange={(patch) => editable && onChangeHole(currentStat.hole, patch)}
+                />
+              ) : null}
               <View style={s.personalFooter}>
                 <TouchableOpacity
                   style={[s.personalNavBtn, page === 0 && s.personalNavBtnDisabled]}
@@ -1490,55 +1514,41 @@ function PersonalRoundInputModal({
   )
 }
 
-function PersonalHoleCard({ stat, guide, displayHoleNo, courseName, editable, onChange }: {
+function PersonalHoleCard({ stat, guide, editable, onChange }: {
   stat: PersonalRoundHoleStat
   guide: CourseHoleGuide | null
-  displayHoleNo: number
-  courseName: string
   editable: boolean
   onChange: (patch: Partial<PersonalRoundHoleStat>) => void
 }) {
   const firDisabled = stat.par === 3
-  const teeDistanceText = guide
-    ? [
-        { color: '#2f67c7', value: guide.blueTeeM },
-        { color: '#f7f7f2', value: guide.whiteTeeM, border: C.border },
-        { color: '#d94f45', value: guide.redTeeM },
-      ].filter((item): item is { color: string; value: number; border?: string } => typeof item.value === 'number')
-    : []
   return (
     <View style={s.personalHoleCard}>
-      <View style={s.personalHoleHeader}>
-        <Text style={s.personalHoleTitle}>{courseName ? `${courseName} ${displayHoleNo}번` : `${displayHoleNo}H`} (Par {stat.par})</Text>
-        {teeDistanceText.length > 0 ? (
-          <View style={s.teeDistanceRow}>
-            {teeDistanceText.map((item) => (
-              <View key={item.value} style={s.teeDistanceItem}>
-                <View style={[s.teeDistanceDot, { backgroundColor: item.color, borderColor: item.border ?? item.color }]} />
-                <Text style={s.teeDistanceText}>{item.value}</Text>
-              </View>
-            ))}
+      <ScrollView style={s.personalGuideScroll} showsVerticalScrollIndicator>
+        {guide ? (
+          <View style={s.personalHoleGuide}>
+            <Text style={s.personalHoleGuideText}>{guide.summary.trim()}</Text>
+            {!!guide.strategy && <Text style={s.personalHoleGuideText}>공략: {guide.strategy}</Text>}
+            {!!guide.caution && <Text style={s.personalHoleGuideText}>주의: {guide.caution}</Text>}
           </View>
-        ) : null}
+        ) : (
+          <View style={s.personalHoleGuide}>
+            <Text style={s.personalHoleGuideText}>등록된 코스 공략 정보가 없습니다.</Text>
+          </View>
+        )}
+      </ScrollView>
+      <View style={s.personalFixedInputs}>
+        {firDisabled ? (
+          <View style={s.firDisabledBox}>
+            <Text style={s.personalDisabledText}>파3는 티샷 방향 기록을 생략합니다.</Text>
+          </View>
+        ) : (
+          <View style={s.statTagRow}>
+            <Text style={s.personalFieldLabel}>티샷</Text>
+            <FirPicker value={stat.fir} disabled={!editable} onChange={(fir) => onChange({ fir })} />
+          </View>
+        )}
+        <StatTagRow label="퍼팅수" value={stat.putts} options={[0, 1, 2, 3, 4]} disabled={!editable} onChange={(putts) => onChange({ putts })} />
       </View>
-      {guide ? (
-        <View style={s.personalHoleGuide}>
-          <Text style={s.personalHoleGuideText}>{guide.summary}</Text>
-          {!!guide.strategy && <Text style={s.personalHoleGuideText}>공략: {guide.strategy}</Text>}
-          {!!guide.caution && <Text style={s.personalHoleGuideText}>주의: {guide.caution}</Text>}
-        </View>
-      ) : null}
-      {firDisabled ? (
-        <View style={s.firDisabledBox}>
-          <Text style={s.personalDisabledText}>파3는 티샷 방향 기록을 생략합니다.</Text>
-        </View>
-      ) : (
-        <View style={s.statTagRow}>
-          <Text style={s.personalFieldLabel}>티샷</Text>
-          <FirPicker value={stat.fir} disabled={!editable} onChange={(fir) => onChange({ fir })} />
-        </View>
-      )}
-      <StatTagRow label="퍼팅수" value={stat.putts} options={[0, 1, 2, 3, 4]} disabled={!editable} onChange={(putts) => onChange({ putts })} />
     </View>
   )
 }
@@ -2565,8 +2575,12 @@ const s = StyleSheet.create({
   personalPageTabText: { fontSize: 11, fontWeight: '800', color: C.muted },
   personalPageTabTextActive: { color: C.green },
   personalProgress: { fontSize: 12, fontWeight: '800', color: C.muted, marginBottom: 8 },
-  personalHoleScroll: { height: 430, maxHeight: 430 },
-  personalHoleCard: { minHeight: 410, borderWidth: 1, borderColor: C.border, borderRadius: 14, padding: 12, marginBottom: 10, backgroundColor: '#fff' },
+  currentHoleSummary: {
+    minHeight: 38, borderRadius: 13, backgroundColor: '#f6fbf7', borderWidth: 1, borderColor: C.border,
+    paddingHorizontal: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+  },
+  currentHoleTitle: { flex: 1, fontSize: 13, fontWeight: '900', color: C.text },
+  personalHoleCard: { height: 470, borderWidth: 1, borderColor: C.border, borderRadius: 14, padding: 12, marginBottom: 10, backgroundColor: '#fff' },
   personalHoleHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8, flexWrap: 'wrap' },
   personalHoleTitle: { fontSize: 15, fontWeight: '900', color: C.text },
   personalHolePar: { fontSize: 12, fontWeight: '800', color: C.muted },
@@ -2574,18 +2588,19 @@ const s = StyleSheet.create({
   teeDistanceItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   teeDistanceDot: { width: 11, height: 11, borderRadius: 6, borderWidth: 1 },
   teeDistanceText: { fontSize: 12, fontWeight: '900', color: C.muted },
-  personalHoleGuide: { marginBottom: 10, borderRadius: 14, backgroundColor: '#f6fbf7', borderWidth: 1, borderColor: C.border, padding: 12 },
+  personalGuideScroll: { flex: 1, marginBottom: 10 },
+  personalHoleGuide: { borderRadius: 14, backgroundColor: '#f6fbf7', borderWidth: 1, borderColor: C.border, padding: 12 },
   personalHoleGuideTitle: { fontSize: 12, fontWeight: '900', color: C.green, marginBottom: 5 },
-  personalHoleGuideText: { fontSize: 12, fontWeight: '700', color: C.text, lineHeight: 18 },
+  personalHoleGuideText: { fontSize: 12, fontWeight: '700', color: C.text, lineHeight: 20 },
   personalHoleGuideDistance: { marginTop: 6, fontSize: 12, fontWeight: '900', color: C.green },
   personalFieldLabel: { fontSize: 12, fontWeight: '900', color: C.text },
   firDisabledBox: {
-    minHeight: 164,
+    minHeight: 34,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
   },
   personalDisabledText: { fontSize: 12, color: C.muted, fontWeight: '800' },
+  personalFixedInputs: { borderTopWidth: 1, borderTopColor: C.border, paddingTop: 8 },
   firWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 7 },
   firMiddle: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   firExtraRow: { flexDirection: 'row', gap: 6, marginTop: 4 },
