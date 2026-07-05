@@ -132,6 +132,65 @@ function teeDistanceItems(guide: CourseHoleGuide | null) {
     : []
 }
 
+function findSection(text: string, labels: string[], stopLabels: string[]) {
+  const starts = labels
+    .map((label) => ({ label, index: text.indexOf(label) }))
+    .filter((item) => item.index >= 0)
+    .sort((a, b) => a.index - b.index)
+  const start = starts[0]
+  if (!start) return ''
+  const end = stopLabels
+    .map((label) => text.indexOf(label, start.index + start.label.length))
+    .filter((index) => index >= 0)
+    .sort((a, b) => a - b)[0]
+  return text.slice(start.index, end ?? text.length).trim()
+}
+
+function splitGuideText(guide: CourseHoleGuide | null) {
+  if (!guide) return { summary: '', strategy: '', caddie: '' }
+  const source = guide.summary.trim()
+  const strategyMatch = source.match(/(?:💡\s*)?공략\s*포인트\s*([\s\S]*)/i)
+  const summary = strategyMatch && typeof strategyMatch.index === 'number'
+    ? source.slice(0, strategyMatch.index).trim()
+    : source
+  const strategySource = guide.strategy?.trim() || strategyMatch?.[1]?.trim() || ''
+  const cautionSource = guide.caution?.trim() || ''
+  const combinedGuide = [strategySource, cautionSource].filter(Boolean).join('\n\n')
+  const stopLabels = ['공략 전략', '골퍼 맞춤 전략', '티샷', '세컨샷', '세컨드샷', '세컨드 샷', '그린 공략', '주의사항', '캐디 한마디']
+  const strategySections = [
+    findSection(combinedGuide, ['공략 전략', '골퍼 맞춤 전략'], stopLabels),
+    findSection(combinedGuide, ['티샷'], stopLabels),
+    findSection(combinedGuide, ['세컨샷', '세컨드샷', '세컨드 샷', '그린 공략'], stopLabels),
+  ].filter(Boolean)
+  const caddieSections = [
+    findSection(combinedGuide, ['주의사항'], stopLabels),
+    findSection(combinedGuide, ['캐디 한마디'], stopLabels),
+  ].filter(Boolean)
+  return {
+    summary,
+    strategy: strategySections.join('\n\n') || strategySource,
+    caddie: caddieSections.join('\n\n') || cautionSource,
+  }
+}
+
+function difficultyFactorLabels(factors: CourseHoleGuide['difficultyFactors']) {
+  if (!factors) return []
+  if (Array.isArray(factors)) return factors.filter(Boolean)
+  const labels: Record<string, string> = {
+    length: '거리',
+    ob: 'OB',
+    hazard: '해저드',
+    bunker: '벙커',
+    dogleg: '도그렉',
+    elevation: '고저차',
+    green: '그린',
+  }
+  return Object.entries(factors)
+    .filter(([, value]) => typeof value === 'number' && value > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([key, value]) => `${labels[key] ?? key} ${value}`)
+}
+
 const emptyLottoSelection = (): LottoSelection => ({ par3: [], par4: [], par5: [] })
 
 function lottoPurchaseSummary(selection?: LottoSelection) {
@@ -1063,7 +1122,7 @@ export default function HomeScreen() {
                               disabled={!canEnterTodayPlayerActions}
                               activeOpacity={0.82}
                             >
-                              <Text style={[s.todayActionText, !canEditTodayPlayerActions && s.todayActionTextDisabled]}>My Score</Text>
+                              <Text style={[s.todayActionText, !canEditTodayPlayerActions && s.todayActionTextDisabled]}>캐디북</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                               style={[s.todayActionBtn, !canEnterTodayPlayerActions && s.todayActionBtnDisabled]}
@@ -1151,7 +1210,7 @@ export default function HomeScreen() {
                                     }}
                                     activeOpacity={0.82}
                                   >
-                                    <Text style={s.todayActionText}>Course Map</Text>
+                                    <Text style={s.todayActionText}>캐디북</Text>
                                   </TouchableOpacity>
                                   <TouchableOpacity
                                     style={[s.todayActionBtn, s.todayActionBtnDisabled]}
@@ -1521,20 +1580,52 @@ function PersonalHoleCard({ stat, guide, editable, onChange }: {
   onChange: (patch: Partial<PersonalRoundHoleStat>) => void
 }) {
   const firDisabled = stat.par === 3
+  const [guideTab, setGuideTab] = useState<'summary' | 'strategy' | 'caddie'>('summary')
+  const guideText = splitGuideText(guide)
+  const difficultyFactors = difficultyFactorLabels(guide?.difficultyFactors)
+  const guideBody = !guide
+    ? '등록된 코스 공략 정보가 없습니다.'
+    : guideTab === 'summary'
+      ? (guideText.summary || '등록된 코스 설명이 없습니다.')
+      : guideTab === 'strategy'
+        ? (guideText.strategy || '등록된 공략 전략이 없습니다.')
+        : (guideText.caddie || '등록된 캐디 한마디가 없습니다.')
   return (
     <View style={s.personalHoleCard}>
       <ScrollView style={s.personalGuideScroll} showsVerticalScrollIndicator>
-        {guide ? (
-          <View style={s.personalHoleGuide}>
-            <Text style={s.personalHoleGuideText}>{guide.summary.trim()}</Text>
-            {!!guide.strategy && <Text style={s.personalHoleGuideText}>공략: {guide.strategy}</Text>}
-            {!!guide.caution && <Text style={s.personalHoleGuideText}>주의: {guide.caution}</Text>}
-          </View>
-        ) : (
-          <View style={s.personalHoleGuide}>
-            <Text style={s.personalHoleGuideText}>등록된 코스 공략 정보가 없습니다.</Text>
-          </View>
-        )}
+        <View style={s.personalGuideTabs}>
+          {[
+            { key: 'summary', label: '코스설명' },
+            { key: 'strategy', label: '공략전략' },
+            { key: 'caddie', label: '캐디 한마디' },
+          ].map((tab) => (
+            <TouchableOpacity
+              key={tab.key}
+              style={[s.personalGuideTab, guideTab === tab.key && s.personalGuideTabActive]}
+              onPress={() => setGuideTab(tab.key as 'summary' | 'strategy' | 'caddie')}
+              activeOpacity={0.85}
+            >
+              <Text style={[s.personalGuideTabText, guideTab === tab.key && s.personalGuideTabTextActive]}>{tab.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <View style={s.personalHoleGuide}>
+          {guide?.baseDifficulty || difficultyFactors.length > 0 ? (
+            <View style={s.personalDifficultyBox}>
+              {guide?.baseDifficulty ? (
+                <Text style={s.personalDifficultyText}>기본 난이도 {guide.baseDifficulty}</Text>
+              ) : null}
+              {difficultyFactors.length > 0 ? (
+                <View style={s.personalDifficultyFactors}>
+                  {difficultyFactors.slice(0, 4).map((factor) => (
+                    <Text key={factor} style={s.personalDifficultyFactor}>{factor}</Text>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+          <Text style={s.personalHoleGuideText}>{guideBody}</Text>
+        </View>
       </ScrollView>
       <View style={s.personalFixedInputs}>
         {firDisabled ? (
@@ -2589,9 +2680,18 @@ const s = StyleSheet.create({
   teeDistanceDot: { width: 11, height: 11, borderRadius: 6, borderWidth: 1 },
   teeDistanceText: { fontSize: 12, fontWeight: '900', color: C.muted },
   personalGuideScroll: { flex: 1, marginBottom: 10 },
+  personalGuideTabs: { flexDirection: 'row', gap: 6, marginBottom: 8 },
+  personalGuideTab: { flex: 1, minHeight: 32, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f2f4f6', borderWidth: 1, borderColor: C.border },
+  personalGuideTabActive: { backgroundColor: C.greenLight, borderColor: C.green },
+  personalGuideTabText: { fontSize: 12, fontWeight: '900', color: C.muted },
+  personalGuideTabTextActive: { color: C.green },
   personalHoleGuide: { borderRadius: 14, backgroundColor: '#f6fbf7', borderWidth: 1, borderColor: C.border, padding: 12 },
   personalHoleGuideTitle: { fontSize: 12, fontWeight: '900', color: C.green, marginBottom: 5 },
-  personalHoleGuideText: { fontSize: 12, fontWeight: '700', color: C.text, lineHeight: 20 },
+  personalDifficultyBox: { marginBottom: 10, gap: 7 },
+  personalDifficultyText: { fontSize: 13, fontWeight: '900', color: C.green },
+  personalDifficultyFactors: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  personalDifficultyFactor: { borderRadius: 999, backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, paddingHorizontal: 8, paddingVertical: 4, fontSize: 11, fontWeight: '900', color: C.muted },
+  personalHoleGuideText: { fontSize: 14, fontWeight: '700', color: C.text, lineHeight: 23 },
   personalHoleGuideDistance: { marginTop: 6, fontSize: 12, fontWeight: '900', color: C.green },
   personalFieldLabel: { fontSize: 12, fontWeight: '900', color: C.text },
   firDisabledBox: {

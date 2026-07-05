@@ -155,7 +155,7 @@ export default function HistoryScreen() {
         {(['byPlayer', 'byRound', 'club', 'hall'] as Tab[]).map((t) => (
           <TouchableOpacity key={t} style={[s.tab, tab === t && s.tabActive]} onPress={() => setTab(t)}>
             <Text style={[s.tabText, tab === t && s.tabTextActive]}>
-              {t === 'byRound' ? '라운딩별' : t === 'byPlayer' ? '개인별' : t === 'club' ? '클럽 전체' : '명예의 전당'}
+              {t === 'byRound' ? '라운딩별' : t === 'byPlayer' ? '개인별' : t === 'club' ? '클럽 전체' : '기네스 북'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -1264,12 +1264,12 @@ function Club({ rounds, handicapBasis: currentHandicapBasis }: { rounds: SavedRo
   )
 }
 
-// ─── 명예의 전당 ─────────────────────────────────────────────────────────────
+// ─── 기네스 북 ─────────────────────────────────────────────────────────────
 
 function HallOfFame({ rounds, handicapBasis }: { rounds: SavedRound[]; handicapBasis: number }) {
   const [rankingType, setRankingType] = useState<RankingType | null>(null)
 
-  if (rounds.length === 0) return <Text style={s.muted}>명예의 전당 데이터가 없습니다.</Text>
+  if (rounds.length === 0) return <Text style={s.muted}>기네스 북 데이터가 없습니다.</Text>
 
   const avgOf = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length
   const handicaps = computeHandicaps(rounds, handicapBasis)
@@ -1453,7 +1453,7 @@ function HallOfFame({ rounds, handicapBasis }: { rounds: SavedRound[]; handicapB
       <View style={s.card}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
           <Icon name="trophy" size={16} color={C.text} />
-          <Text style={[s.cardTitle, { marginBottom: 0 }]}>명예의 전당</Text>
+          <Text style={[s.cardTitle, { marginBottom: 0 }]}>기네스 북</Text>
         </View>
         {highlightSections.map((section) => (
           <View key={section.title} style={s.hallSection}>

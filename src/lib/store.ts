@@ -92,6 +92,8 @@ export interface CourseHoleGuide {
   summary: string
   strategy?: string
   caution?: string
+  baseDifficulty?: number
+  difficultyFactors?: Record<string, number> | string[]
 }
 
 export interface RoundLottoEntry {
@@ -1420,7 +1422,7 @@ export async function getCourseHoleGuides(layoutIds: string[]): Promise<CourseHo
   if (uniqueLayoutIds.length === 0) return []
   const { data, error } = await supabase
     .from('course_hole_guides')
-    .select('golf_course_id, layout_id, hole_no, par, blue_tee_m, white_tee_m, red_tee_m, title, summary, strategy, caution')
+    .select('golf_course_id, layout_id, hole_no, par, blue_tee_m, white_tee_m, red_tee_m, title, summary, strategy, caution, base_difficulty, difficulty_factors')
     .in('layout_id', uniqueLayoutIds)
   if (error) throw error
   return (data ?? []).map((row) => ({
@@ -1435,6 +1437,8 @@ export async function getCourseHoleGuides(layoutIds: string[]): Promise<CourseHo
     summary: row.summary,
     strategy: row.strategy ?? undefined,
     caution: row.caution ?? undefined,
+    baseDifficulty: row.base_difficulty ?? undefined,
+    difficultyFactors: row.difficulty_factors ?? undefined,
   }))
 }
 
