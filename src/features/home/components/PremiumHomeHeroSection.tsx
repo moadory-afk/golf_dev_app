@@ -12,13 +12,6 @@ const HERO_DISPLAY_HEIGHT_RATIO = (10.5 / 16) * 1.5
 const HERO_MIN_WIDTH = 280
 const HERO_MAX_WIDTH = 430
 
-type HeroAction = {
-  key: string
-  icon: string
-  label: string
-  onPress: (round: HomeHeroRound) => void
-}
-
 type PremiumHomeHeroSectionProps = {
   greeting: string
   userName: string
@@ -34,8 +27,8 @@ type PremiumHomeHeroSectionProps = {
   isAdmin?: boolean
   onClubPress: () => void
   onNotificationPress: () => void
+  onProfilePress?: () => void
   onCreateRound: () => void
-  actions: HeroAction[]
   heroImageSource?: ImageSourcePropType
 }
 
@@ -52,8 +45,8 @@ export function PremiumHomeHeroSection({
   isAdmin = false,
   onClubPress,
   onNotificationPress,
+  onProfilePress,
   onCreateRound,
-  actions,
   heroImageSource,
 }: PremiumHomeHeroSectionProps) {
   const { palette } = useSkin()
@@ -74,26 +67,6 @@ export function PremiumHomeHeroSection({
 
   return (
     <View style={styles.shell}>
-      <View style={styles.headerRow}>
-        <TouchableOpacity activeOpacity={0.84} onPress={onClubPress} style={[styles.clubPill, { backgroundColor: palette.card, borderColor: palette.border }]}> 
-          <Text style={styles.clubIcon}>⛳</Text>
-          <Text style={[styles.clubText, { color: palette.text }]} numberOfLines={1}>{clubName}</Text>
-          <Text style={[styles.clubArrow, { color: palette.text }]}>⌄</Text>
-        </TouchableOpacity>
-
-        <View style={styles.headerActions}>
-          <TouchableOpacity activeOpacity={0.84} onPress={onNotificationPress} style={[styles.circleButton, { backgroundColor: palette.card, borderColor: palette.border }]}> 
-            <Text style={styles.bellText}>🔔</Text>
-            <View style={[styles.badge, { backgroundColor: palette.danger }]}> 
-              <Text style={styles.badgeText}>3</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity activeOpacity={0.84} style={[styles.profileButton, { backgroundColor: palette.card, borderColor: palette.border }]}> 
-            <Image source={gogoMark} style={styles.profileImage} resizeMode="cover" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
       <View
         onLayout={(event) => {
           const nextWidth = Math.round(event.nativeEvent.layout.width)
@@ -104,6 +77,25 @@ export function PremiumHomeHeroSection({
         <View style={styles.heroImage}>
           {heroImageSource ? <Image source={heroImageSource} style={styles.heroBackgroundImage} resizeMode="cover" /> : null}
           <View style={styles.scrim} />
+          <View style={styles.headerRow} pointerEvents="box-none">
+            <TouchableOpacity activeOpacity={0.84} onPress={onClubPress} style={styles.clubPill}> 
+              <Text style={styles.clubIcon}>⛳</Text>
+              <Text style={styles.clubText} numberOfLines={1}>{clubName}</Text>
+              <Text style={styles.clubArrow}>⌄</Text>
+            </TouchableOpacity>
+
+            <View style={styles.headerActions}>
+              <TouchableOpacity activeOpacity={0.84} onPress={onNotificationPress} style={styles.circleButton}> 
+                <Text style={styles.bellText}>🔔</Text>
+                <View style={[styles.badge, { backgroundColor: palette.danger }]}> 
+                  <Text style={styles.badgeText}>3</Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity activeOpacity={0.84} onPress={onProfilePress} style={styles.profileButton}> 
+                <Image source={gogoMark} style={styles.profileImage} resizeMode="cover" />
+              </TouchableOpacity>
+            </View>
+          </View>
           <ScrollView
             horizontal
             pagingEnabled
@@ -113,7 +105,7 @@ export function PremiumHomeHeroSection({
             style={styles.carousel}
           >
             {hasRounds ? rounds.map((round) => (
-              <HeroRoundCard key={round.id} width={heroWidth} height={heroHeight} round={round} actions={actions} />
+              <HeroRoundCard key={round.id} width={heroWidth} height={heroHeight} round={round} />
             )) : (
               <HeroEmptyCard
                 width={heroWidth}
@@ -157,7 +149,7 @@ export function PremiumHomeHeroSection({
   )
 }
 
-function HeroRoundCard({ width, height, round, actions }: { width: number; height: number; round: HomeHeroRound; actions: HeroAction[] }) {
+function HeroRoundCard({ width, height, round }: { width: number; height: number; round: HomeHeroRound }) {
   const { palette } = useSkin()
 
   return (
@@ -183,14 +175,6 @@ function HeroRoundCard({ width, height, round, actions }: { width: number; heigh
           <HeroInfo icon="🌬" value={round.windText || '2m/s'} label="풍속" />
           <HeroInfo icon="🚗" value={round.routeTimeText} label="이동" />
           <HeroInfo icon="🕒" value={round.departureTimeText} label="출발추천" accent />
-        </View>
-        <View style={styles.heroActionRow}>
-          {actions.slice(0, 3).map((action) => (
-            <TouchableOpacity key={action.key} activeOpacity={0.86} onPress={() => action.onPress(round)} style={styles.heroActionButton}>
-              <Text style={styles.heroActionIcon}>{action.icon}</Text>
-              <Text style={styles.heroActionLabel} numberOfLines={1}>{action.label}</Text>
-            </TouchableOpacity>
-          ))}
         </View>
       </View>
     </View>
@@ -282,7 +266,11 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   headerRow: {
-    height: 58,
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    right: 14,
+    zIndex: 5,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -290,47 +278,47 @@ const styles = StyleSheet.create({
   clubPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    maxWidth: '58%',
-    minHeight: 44,
-    paddingHorizontal: spacing.lg,
+    gap: 5,
+    maxWidth: '44%',
+    minHeight: 28,
+    paddingHorizontal: 9,
     borderRadius: radius.pill,
-    borderWidth: 1,
+    backgroundColor: 'rgba(0,0,0,0.22)',
   },
-  clubIcon: { fontSize: 18 },
-  clubText: { flex: 1, fontSize: 17, lineHeight: 22, fontWeight: '900', letterSpacing: -0.6 },
-  clubArrow: { fontSize: 17, lineHeight: 17, fontWeight: '900' },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  clubIcon: { fontSize: 12 },
+  clubText: { flex: 1, color: '#fff', fontSize: 11, lineHeight: 14, fontWeight: '900', letterSpacing: -0.3 },
+  clubArrow: { color: '#fff', fontSize: 12, lineHeight: 12, fontWeight: '900' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   circleButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    backgroundColor: 'rgba(0,0,0,0.18)',
   },
-  bellText: { fontSize: 22 },
+  bellText: { fontSize: 17 },
   badge: {
     position: 'absolute',
     top: -5,
-    right: -3,
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { color: '#fff', fontSize: 12, fontWeight: '900' },
+  badgeText: { color: '#fff', fontSize: 9, fontWeight: '900' },
   profileButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    borderWidth: 1,
+    backgroundColor: 'rgba(0,0,0,0.18)',
   },
-  profileImage: { width: 52, height: 52 },
+  profileImage: { width: 32, height: 32 },
   heroCard: {
     width: '100%',
     aspectRatio: HERO_DISPLAY_ASPECT_RATIO,
@@ -345,7 +333,7 @@ const styles = StyleSheet.create({
   carousel: { flex: 1 },
   slide: {
     paddingHorizontal: 14,
-    paddingTop: 14,
+    paddingTop: 52,
     paddingBottom: 28,
     justifyContent: 'space-between',
   },
@@ -393,10 +381,6 @@ const styles = StyleSheet.create({
   infoValue: { color: '#fff', fontSize: 13, lineHeight: 16, fontWeight: '900', letterSpacing: -0.4 },
   infoAccent: { color: '#45C26B' },
   infoLabel: { color: '#fff', opacity: 0.9, fontSize: 8, lineHeight: 10, fontWeight: '900' },
-  heroActionRow: { flexDirection: 'row', gap: spacing.sm, marginTop: 10 },
-  heroActionButton: { flex: 1, minHeight: 40, borderRadius: radius.xl, backgroundColor: 'rgba(255,255,255,0.20)', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4, paddingHorizontal: 6 },
-  heroActionIcon: { fontSize: 14, lineHeight: 17 },
-  heroActionLabel: { color: '#fff', fontSize: 12, lineHeight: 16, fontWeight: '900', letterSpacing: -0.3 },
   dotsRow: { position: 'absolute', left: 0, right: 0, bottom: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
   dot: { borderRadius: radius.pill },
   heroWave: {

@@ -1,10 +1,10 @@
 # GogoPar Project Status
 
 ## Current Version
-AI Caddie Data Binding Sprint v2.4
+Home Redesign v3.0 Phase 2
 
 ## Current Sprint
-AI Caddie Data Binding v2.4
+Home Redesign v3.0
 
 ## Progress
 
@@ -13,40 +13,35 @@ AI Caddie Data Binding v2.4
 ✅ Design Token
 ✅ Architecture
 ✅ Component Library (Base)
-✅ Home Experience v1.0
-✅ Premium Hero v1.1
-✅ Gogo Caddie Card v1.2
-✅ Recent Stats Cards v1.3
-✅ Upcoming Round Ticket v1.4
-✅ Quick Menu Polish v1.5
-✅ Bottom Navigation Polish v1.6
-✅ Motion Animation v1.7
-✅ Live Data Foundation v2.1
-✅ Home Real Binding v2.2
-✅ AI Engine Foundation v2.3
-✅ AI Caddie Data Binding v2.4
+✅ Home Experience
+✅ AI Engine Foundation
+✅ AI Caddie
+✅ CaddieBook
+✅ AI Hole Strategy
+✅ AI Shot Plan
+✅ Home Redesign v3.0 Phase 2 - Hero Top Buttons
+✅ Home Redesign v3.0 Phase 2 - Caddie Actions Relocation
 
 ## Current Task
 
-AI Caddie가 실제 DB 데이터를 사용해 Home에 추천 메시지를 표시할 수 있도록 연결했다.
+Hero 카드 내부에 있던 세부 액션 버튼을 캐디 카드 하단으로 이동했다.
 
-- `user_distance_profiles` 조회
-- `user_preferences` 조회
-- `course_hole_guides` 조회
-- DB Row → AI Engine Input 매핑
-- Home AI Caddie Card Live Advice 표시
+- Hero 내부 `캐디맵 / 조편성 / Lotto` 버튼 제거
+- Today's AI / 캐디 카드 하단에 동일 액션 배치
+- 첫 번째 예정 라운드 기준으로 캐디북, 조편성, Lotto 동작 연결
+- DB 변경 없음
 
 ## Verified
 
-- 순수 AI Engine 및 Mapper 파일 부분 TypeScript 검증 통과
-- 전체 프로젝트 검증은 전체 프로젝트 루트와 의존성 설치 환경에서 재실행 필요
+- 업로드된 `src.zip`, `docs.zip` 기준 실제 소스/문서 수정 완료
+- Hero 컴포넌트에서 액션 버튼 렌더링 블록 제거 확인
+- 전체 프로젝트 루트 설정 파일이 없어 전체 TypeScript 검증은 로컬 프로젝트에서 재실행 필요
 
 ## Next Task
 
-- AI Hole Strategy v2.5
-- 홀별 상세 공략 화면에서 AI Engine 사용
-- 추천 근거 상세 표시
-- 사용자 비거리 입력/수정 UI 연결
+- 실제 모바일 화면에서 캐디 카드 하단 액션 버튼 위치 확인
+- Today's AI 카드/Quick Menu Premium 간격 조정
+- Home v3 Phase 2 최종 polish
 
 ## Do Not Touch
 

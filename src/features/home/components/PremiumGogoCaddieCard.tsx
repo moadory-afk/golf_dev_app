@@ -37,6 +37,7 @@ export function PremiumGogoCaddieCard({
   message: liveMessage,
   feed,
   onPress,
+  actions = [],
 }: PremiumGogoCaddieCardProps) {
   const { palette } = useSkin()
   const displayName = userName || '골퍼'
@@ -71,6 +72,19 @@ export function PremiumGogoCaddieCard({
         </View>
       </TouchableOpacity>
 
+      {actions.length > 0 && (
+        <View style={[styles.actionRow, { borderTopColor: palette.border }]}>
+          {actions.slice(0, 3).map((action) => (
+            <TouchableOpacity key={action.key} activeOpacity={0.86} onPress={action.onPress} style={styles.actionButton}>
+              <Text style={styles.actionIcon}>{action.icon}</Text>
+              <View style={styles.actionTextWrap}>
+                <Text style={[styles.actionTitle, { color: palette.text }]} numberOfLines={1}>{action.title}</Text>
+                <Text style={[styles.actionSubtitle, { color: palette.muted }]} numberOfLines={1}>{action.subtitle}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
     </View>
   )
 }
@@ -120,21 +134,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
     borderTopWidth: 1,
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
   },
   actionButton: {
     flex: 1,
     minWidth: 0,
-    minHeight: 42,
+    minHeight: 50,
+    borderRadius: radius.xl,
+    backgroundColor: 'rgba(0,0,0,0.045)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
-    paddingHorizontal: 2,
+    gap: 6,
+    paddingHorizontal: 6,
   },
   actionIcon: { fontSize: 18, lineHeight: 21 },
   actionTextWrap: { minWidth: 0, alignItems: 'flex-start' },
-  actionTitle: { fontSize: 11, lineHeight: 14, fontWeight: '900', letterSpacing: -0.3 },
+  actionTitle: { fontSize: 12, lineHeight: 15, fontWeight: '900', letterSpacing: -0.3 },
   actionSubtitle: { fontSize: 9, lineHeight: 12, fontWeight: '800', marginTop: 1 },
 })

@@ -154,6 +154,18 @@ export default function HomeExperienceScreen() {
     { key: 'lotto', icon: '🎲', label: 'Lotto', onPress: (round: HomeHeroRound) => openRoundPopup(round, 'lotto') },
   ], [nav, openRoundPopup])
 
+  const caddieQuickActions = useMemo(() => {
+    const primaryRound = dashboard.hero.rounds[0]
+    if (!primaryRound) return []
+    return heroActions.map((action) => ({
+      key: action.key,
+      icon: action.icon,
+      title: action.label,
+      subtitle: primaryRound.courseName,
+      onPress: () => action.onPress(primaryRound),
+    }))
+  }, [dashboard.hero.rounds, heroActions])
+
 
   if (clubsLoaded && !club) {
     return (
@@ -191,9 +203,9 @@ export default function HomeExperienceScreen() {
                   fallbackRoundDate={dashboard.hero.roundDate}
                   fallbackTeeTime={dashboard.hero.teeTime}
                   isAdmin={club?.role === 'admin'}
-                  actions={heroActions}
                   onClubPress={() => nav.navigate('Main', { screen: 'Club' })}
                   onNotificationPress={() => nav.navigate('NoticePrototype')}
+                  onProfilePress={() => nav.navigate('Profile')}
                   onCreateRound={() => nav.navigate('RoundSchedulePrototype', { openCreate: true })}
                   heroImageSource={activeHeroImageSource}
                 />
@@ -213,6 +225,7 @@ export default function HomeExperienceScreen() {
                   averageScore={dashboard.aiCaddie.averageScore}
                   hasUpcomingRound={dashboard.aiCaddie.hasUpcomingRound}
                   feed={dashboard.feed}
+                  actions={caddieQuickActions}
                   onPress={() => resolveFeedNavigation(nav, dashboard.feed.actionType, dashboard.upcomingRound)}
                 />
               </PremiumHomeMotion>
