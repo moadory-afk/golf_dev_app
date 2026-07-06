@@ -47,6 +47,7 @@ export type HomeWeatherSnapshot = {
   temperature: string
   weatherText: string
   windText: string
+  fetchedAt?: string
 }
 
 export type HomeDashboardRawData = {
@@ -57,6 +58,14 @@ export type HomeDashboardRawData = {
   layouts: HomeLayoutRow[]
   rounds: SavedRound[]
   weatherByCourseId: Record<string, HomeWeatherSnapshot>
+  weatherByScheduleId: Record<string, HomeWeatherSnapshot>
+}
+
+type OpenWeatherForecastItem = {
+  dt?: number
+  main?: { temp?: number }
+  weather?: Array<{ description?: string; main?: string }>
+  wind?: { speed?: number }
 }
 
 function uniqueValues(values: Array<string | null | undefined>) {
@@ -72,49 +81,91 @@ function normalizeWeatherText(value?: string) {
   return value.replace(/^[a-z]/, (char) => char.toUpperCase())
 }
 
-async function fetchWeatherForCourse(course: HomeCourseRow): Promise<HomeWeatherSnapshot | null> {
+function normalizeTeeTime(value?: string | null) {
+  if (!value) return '09:00'
+  const match = value.match(/^(\d{1,2}):(\d{2})/)
+  if (!match) return '09:00'
+  return `${match[1].padStart(2, '0')}:${match[2]}`
+}
+
+function targetTimestamp(date?: string | null, teeTime?: string | null) {
+  const roundDate = date?.slice(0, 10)
+  if (!roundDate) return null
+  const target = new Date(`${roundDate}T${normalizeTeeTime(teeTime)}:00+09:00`).getTime()
+  return Number.isNaN(target) ? null : Math.round(target / 1000)
+}
+
+function pickNearestForecast(items: OpenWeatherForecastItem[], date?: string | null, teeTime?: string | null) {
+  const target = targetTimestamp(date, teeTime)
+  if (!target || items.length === 0) return null
+  return [...items]
+    .filter((item) => typeof item.dt === 'number')
+    .sort((a, b) => Math.abs((a.dt ?? 0) - target) - Math.abs((b.dt ?? 0) - target))[0] ?? null
+}
+
+function weatherSnapshotFromForecast(item: OpenWeatherForecastItem | null): HomeWeatherSnapshot | null {
+  if (!item) return null
+  const description = item.weather?.[0]?.description || item.weather?.[0]?.main
+
+  return {
+    temperature: typeof item.main?.temp === 'number' ? `${Math.round(item.main.temp)}°` : '--°',
+    weatherText: normalizeWeatherText(description),
+    windText: typeof item.wind?.speed === 'number' ? `${Math.round(item.wind.speed)}m/s` : '풍속 준비중',
+    fetchedAt: new Date().toISOString(),
+  }
+}
+
+async function geocodeCourse(course: HomeCourseRow, apiKey: string) {
+  const query = encodeURIComponent(`${course.name} ${course.region} Korea`)
+  const geoResponse = await fetch(`https://api.openweathermap.org/geo/1.0/direct?q=${query}&limit=1&appid=${apiKey}`)
+  if (!geoResponse.ok) return null
+
+  const locations = await geoResponse.json() as Array<{ lat?: number; lon?: number }>
+  return locations.find((item) => typeof item.lat === 'number' && typeof item.lon === 'number') ?? null
+}
+
+async function fetchWeatherForSchedule(schedule: HomeScheduleRow, course: HomeCourseRow): Promise<HomeWeatherSnapshot | null> {
   const apiKey = openWeatherApiKey()
   if (!apiKey) return null
 
   try {
-    const query = encodeURIComponent(`${course.name} ${course.region} Korea`)
-    const geoResponse = await fetch(`https://api.openweathermap.org/geo/1.0/direct?q=${query}&limit=1&appid=${apiKey}`)
-    if (!geoResponse.ok) return null
-
-    const locations = await geoResponse.json() as Array<{ lat?: number; lon?: number }>
-    const location = locations.find((item) => typeof item.lat === 'number' && typeof item.lon === 'number')
+    const location = await geocodeCourse(course, apiKey)
     if (!location?.lat || !location?.lon) return null
 
-    const weatherResponse = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${location.lat}&lon=${location.lon}&units=metric&lang=kr&appid=${apiKey}`)
-    if (!weatherResponse.ok) return null
+    const forecastResponse = await fetch(
+      `https://api.openweathermap.org/data/2.5/forecast?lat=${location.lat}&lon=${location.lon}&units=metric&lang=kr&appid=${apiKey}`,
+    )
+    if (!forecastResponse.ok) return null
 
-    const weather = await weatherResponse.json() as {
-      main?: { temp?: number }
-      weather?: Array<{ description?: string; main?: string }>
-      wind?: { speed?: number }
-    }
-
-    const temp = typeof weather.main?.temp === 'number' ? `${Math.round(weather.main.temp)}°` : '--°'
-    const description = weather.weather?.[0]?.description || weather.weather?.[0]?.main
-    const wind = typeof weather.wind?.speed === 'number' ? `${Math.round(weather.wind.speed)}m/s` : '풍속 준비중'
-
-    return {
-      temperature: temp,
-      weatherText: normalizeWeatherText(description),
-      windText: wind,
-    }
+    const forecast = await forecastResponse.json() as { list?: OpenWeatherForecastItem[] }
+    const picked = pickNearestForecast(forecast.list ?? [], schedule.round_date, schedule.tee_time)
+    return weatherSnapshotFromForecast(picked)
   } catch {
     return null
   }
 }
 
-async function fetchWeatherByCourseId(courses: HomeCourseRow[]) {
+async function fetchWeatherByScheduleId(schedules: HomeScheduleRow[], courses: HomeCourseRow[]) {
+  const courseById = new Map(courses.map((course) => [course.id, course]))
   const entries = await Promise.all(
-    courses.map(async (course) => [course.id, await fetchWeatherForCourse(course)] as const),
+    schedules.map(async (schedule) => {
+      const course = schedule.course_id ? courseById.get(schedule.course_id) : undefined
+      if (!course) return [schedule.id, null] as const
+      return [schedule.id, await fetchWeatherForSchedule(schedule, course)] as const
+    }),
   )
 
-  return entries.reduce<Record<string, HomeWeatherSnapshot>>((acc, [courseId, weather]) => {
-    if (weather) acc[courseId] = weather
+  return entries.reduce<Record<string, HomeWeatherSnapshot>>((acc, [scheduleId, weather]) => {
+    if (weather) acc[scheduleId] = weather
+    return acc
+  }, {})
+}
+
+function buildWeatherByCourseId(schedules: HomeScheduleRow[], weatherByScheduleId: Record<string, HomeWeatherSnapshot>) {
+  return schedules.reduce<Record<string, HomeWeatherSnapshot>>((acc, schedule) => {
+    const courseId = schedule.course_id
+    const weather = weatherByScheduleId[schedule.id]
+    if (courseId && weather && !acc[courseId]) acc[courseId] = weather
     return acc
   }, {})
 }
@@ -175,7 +226,7 @@ export async function getHomeDashboardRawData(clubId: string): Promise<HomeDashb
   if (layoutResult.error) throw layoutResult.error
 
   const courseRows = (courseResult.data ?? []) as HomeCourseRow[]
-  const weatherByCourseId = await fetchWeatherByCourseId(courseRows)
+  const weatherByScheduleId = await fetchWeatherByScheduleId(scheduleRows, courseRows)
 
   return {
     schedules: scheduleRows,
@@ -184,6 +235,7 @@ export async function getHomeDashboardRawData(clubId: string): Promise<HomeDashb
     courses: courseRows,
     layouts: (layoutResult.data ?? []) as HomeLayoutRow[],
     rounds,
-    weatherByCourseId,
+    weatherByCourseId: buildWeatherByCourseId(scheduleRows, weatherByScheduleId),
+    weatherByScheduleId,
   }
 }

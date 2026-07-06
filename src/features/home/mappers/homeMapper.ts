@@ -132,6 +132,8 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow):
   const teeTime = firstTeeTime(schedule, groups)
   const locationParts = [course?.region, layoutName ? `${layoutName} 코스` : undefined].filter(Boolean)
 
+  const weather = raw.weatherByScheduleId[schedule.id] ?? (course?.id ? raw.weatherByCourseId[course.id] : undefined)
+
   return {
     id: schedule.id,
     courseName,
@@ -145,9 +147,9 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow):
     memberCount: countMembers(groups, members),
     groupCount: groups.length,
     note: schedule.note ?? undefined,
-    weatherText: '날씨 준비중',
-    temperature: '--°',
-    windText: '풍속 준비중',
+    weatherText: weather?.weatherText ?? '날씨 준비중',
+    temperature: weather?.temperature ?? '--°',
+    windText: weather?.windText ?? '풍속 준비중',
     courseId: schedule.course_id ?? course?.id,
     layoutId: schedule.layout_id ?? layout?.id,
     locationLabel: locationParts.join(' · ') || '골프장 위치 준비중',

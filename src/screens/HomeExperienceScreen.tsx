@@ -181,7 +181,7 @@ export default function HomeExperienceScreen() {
   return (
     <View style={[styles.root, { backgroundColor: palette.bg }]}> 
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={palette.green} />}
         showsVerticalScrollIndicator={false}
       >
@@ -320,7 +320,7 @@ function RoundInfoModal({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { paddingHorizontal: 20 },
+  content: { paddingHorizontal: 0, paddingTop: 0 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
   clubButton: { marginTop: 16 },
   emptyRoundIcon: { fontSize: 34, marginBottom: 10 },

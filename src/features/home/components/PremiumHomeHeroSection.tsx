@@ -3,6 +3,7 @@ import { useState } from 'react'
 
 import { colorLayers, radius, spacing } from '../../../design/tokens'
 import { useSkin } from '../../../skins'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { HomeHeroRound } from '../types/home'
 
 const gogoMark = require('../../../../assets/gogopar_i.png')
@@ -50,10 +51,11 @@ export function PremiumHomeHeroSection({
   heroImageSource,
 }: PremiumHomeHeroSectionProps) {
   const { palette } = useSkin()
+  const insets = useSafeAreaInsets()
   const { width: windowWidth } = useWindowDimensions()
   const [activeIndex, setActiveIndex] = useState(0)
   const [measuredHeroWidth, setMeasuredHeroWidth] = useState(0)
-  const fallbackHeroWidth = Math.max(HERO_MIN_WIDTH, Math.min(windowWidth - 40, HERO_MAX_WIDTH))
+  const fallbackHeroWidth = Math.max(HERO_MIN_WIDTH, Math.min(windowWidth, HERO_MAX_WIDTH))
   const heroWidth = measuredHeroWidth || fallbackHeroWidth
   const heroHeight = Math.round(heroWidth * HERO_DISPLAY_HEIGHT_RATIO)
   const hasRounds = rounds.length > 0
@@ -72,12 +74,12 @@ export function PremiumHomeHeroSection({
           const nextWidth = Math.round(event.nativeEvent.layout.width)
           if (nextWidth > 0 && nextWidth !== measuredHeroWidth) setMeasuredHeroWidth(nextWidth)
         }}
-        style={[styles.heroCard, { borderRadius: palette.cardRadius + 12 }]}
+        style={[styles.heroCard, { borderRadius: 0 }]}
       > 
         <View style={styles.heroImage}>
           {heroImageSource ? <Image source={heroImageSource} style={styles.heroBackgroundImage} resizeMode="cover" /> : null}
           <View style={styles.scrim} />
-          <View style={styles.headerRow} pointerEvents="box-none">
+          <View style={[styles.headerRow, { top: insets.top + 8 }]} pointerEvents="box-none">
             <TouchableOpacity activeOpacity={0.84} onPress={onClubPress} style={styles.clubPill}> 
               <Text style={styles.clubIcon}>⛳</Text>
               <Text style={styles.clubText} numberOfLines={1}>{clubName}</Text>
@@ -105,7 +107,7 @@ export function PremiumHomeHeroSection({
             style={styles.carousel}
           >
             {hasRounds ? rounds.map((round) => (
-              <HeroRoundCard key={round.id} width={heroWidth} height={heroHeight} round={round} />
+              <HeroRoundCard key={round.id} width={heroWidth} height={heroHeight} round={round} safeTop={insets.top} />
             )) : (
               <HeroEmptyCard
                 width={heroWidth}
@@ -117,13 +119,14 @@ export function PremiumHomeHeroSection({
                 dday={fallbackDday}
                 roundDate={fallbackRoundDate}
                 teeTime={fallbackTeeTime}
+                safeTop={insets.top}
                 isAdmin={isAdmin}
                 onCreateRound={onCreateRound}
               />
             )}
 
             {isAdmin && hasRounds && (
-              <HeroCreateRoundCard width={heroWidth} height={heroHeight} onCreateRound={onCreateRound} />
+              <HeroCreateRoundCard width={heroWidth} height={heroHeight} safeTop={insets.top} onCreateRound={onCreateRound} />
             )}
           </ScrollView>
 
@@ -149,11 +152,11 @@ export function PremiumHomeHeroSection({
   )
 }
 
-function HeroRoundCard({ width, height, round }: { width: number; height: number; round: HomeHeroRound }) {
+function HeroRoundCard({ width, height, round, safeTop }: { width: number; height: number; round: HomeHeroRound; safeTop: number }) {
   const { palette } = useSkin()
 
   return (
-    <View style={[styles.slide, { width, height }]}> 
+    <View style={[styles.slide, { width, height, paddingTop: safeTop + 52 }]}> 
       <View style={styles.courseBlock}>
         <View style={[styles.ddayPill, { backgroundColor: palette.green }]}> 
           <Text style={styles.ddayText}>{round.dday}</Text>
@@ -191,6 +194,7 @@ function HeroEmptyCard({
   dday,
   roundDate,
   teeTime,
+  safeTop,
   isAdmin,
   onCreateRound,
 }: {
@@ -203,13 +207,14 @@ function HeroEmptyCard({
   dday: string
   roundDate: string
   teeTime: string
+  safeTop: number
   isAdmin: boolean
   onCreateRound: () => void
 }) {
   const { palette } = useSkin()
 
   return (
-    <View style={[styles.slide, { width, height }]}> 
+    <View style={[styles.slide, { width, height, paddingTop: safeTop + 52 }]}> 
       <View style={styles.courseBlock}>
         <View style={[styles.ddayPill, { backgroundColor: palette.green }]}> 
           <Text style={styles.ddayText}>{dday}</Text>
@@ -234,11 +239,11 @@ function HeroEmptyCard({
   )
 }
 
-function HeroCreateRoundCard({ width, height, onCreateRound }: { width: number; height: number; onCreateRound: () => void }) {
+function HeroCreateRoundCard({ width, height, safeTop, onCreateRound }: { width: number; height: number; safeTop: number; onCreateRound: () => void }) {
   const { palette } = useSkin()
 
   return (
-    <View style={[styles.slide, { width, height }]}> 
+    <View style={[styles.slide, { width, height, paddingTop: safeTop + 52 }]}> 
       <TouchableOpacity activeOpacity={0.9} onPress={onCreateRound} style={[styles.createCard, { borderColor: palette.gold }]}> 
         <Text style={styles.createIcon}>＋</Text>
         <Text style={[styles.createTitle, { color: palette.text }]}>새 라운딩 등록</Text>
@@ -264,6 +269,7 @@ const styles = StyleSheet.create({
   shell: {
     marginBottom: 0,
     width: '100%',
+    alignSelf: 'stretch',
   },
   headerRow: {
     position: 'absolute',
@@ -279,9 +285,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    maxWidth: '44%',
-    minHeight: 28,
-    paddingHorizontal: 9,
+    maxWidth: '38%',
+    minHeight: 26,
+    paddingHorizontal: 8,
     borderRadius: radius.pill,
     backgroundColor: 'rgba(0,0,0,0.22)',
   },

@@ -19,29 +19,27 @@ Home Redesign v3.0
 ✅ CaddieBook
 ✅ AI Hole Strategy
 ✅ AI Shot Plan
-✅ Home Redesign v3.0 Phase 2 - Hero Top Buttons
-✅ Home Redesign v3.0 Phase 2 - Caddie Actions Relocation
+✅ Home Weather Acquisition
+✅ Home Hero Full Bleed
 
 ## Current Task
 
-Hero 카드 내부에 있던 세부 액션 버튼을 캐디 카드 하단으로 이동했다.
+Home Hero가 iPhone 상태바 영역부터 좌우 여백 없이 화면 전체 폭으로 표시되도록 수정했다.
 
-- Hero 내부 `캐디맵 / 조편성 / Lotto` 버튼 제거
-- Today's AI / 캐디 카드 하단에 동일 액션 배치
-- 첫 번째 예정 라운드 기준으로 캐디북, 조편성, Lotto 동작 연결
-- DB 변경 없음
+- ScrollView 기본 좌우 패딩 제거
+- Hero 외 섹션은 LayoutRenderer에서 좌우 20px 유지
+- Hero 상단 버튼은 Safe Area 반영
+- Hero 카드 라운드 제거로 full-bleed 표시
 
 ## Verified
 
 - 업로드된 `src.zip`, `docs.zip` 기준 실제 소스/문서 수정 완료
-- Hero 컴포넌트에서 액션 버튼 렌더링 블록 제거 확인
 - 전체 프로젝트 루트 설정 파일이 없어 전체 TypeScript 검증은 로컬 프로젝트에서 재실행 필요
 
 ## Next Task
 
-- 실제 모바일 화면에서 캐디 카드 하단 액션 버튼 위치 확인
-- Today's AI 카드/Quick Menu Premium 간격 조정
-- Home v3 Phase 2 최종 polish
+- iPhone 실기기에서 상태바/버튼/이미지 겹침 확인
+- 필요 시 StatusBar light-content 적용
 
 ## Do Not Touch
 
