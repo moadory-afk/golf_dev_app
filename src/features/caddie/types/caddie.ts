@@ -121,6 +121,55 @@ export type HoleStrategy = {
   warning?: string
 }
 
+
+export type AIShotPlanStepType = 'tee' | 'second' | 'approach' | 'green'
+
+export type AIShotPlanStep = {
+  type: AIShotPlanStepType
+  label: string
+  clubLabel: string
+  carryM: number
+  remainingAfterM: number
+}
+
+export type AIShotPlanProbability = {
+  par: number
+  bogey: number
+  double: number
+}
+
+export type AIShotPlanHole = {
+  holeNo: number
+  par: number
+  distanceM: number
+  mode: RecommendationMode
+  modeLabel: string
+  difficulty: 'EASY' | 'NORMAL' | 'HARD'
+  difficultyLabel: string
+  expectedStrokes: number
+  expectedScoreLabel: string
+  probability: AIShotPlanProbability
+  steps: AIShotPlanStep[]
+  compact: string
+  mission: string
+  reason: string
+  confidence: number
+}
+
+export type AIShotPlanSummary = {
+  expectedScore: number
+  parCount: number
+  bogeyCount: number
+  doubleCount: number
+  missionScore: number
+  compactRows: Array<{
+    holeNo: number
+    compact: string
+    expectedStrokes: number
+    difficultyLabel: string
+  }>
+}
+
 export type AICaddieInput = {
   environment: ShotEnvironment
   distanceProfile: UserDistanceProfile

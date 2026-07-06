@@ -43,6 +43,12 @@ export type HomeLayoutRow = {
   name: string
 }
 
+export type HomeWeatherSnapshot = {
+  temperature: string
+  weatherText: string
+  windText: string
+}
+
 export type HomeDashboardRawData = {
   schedules: HomeScheduleRow[]
   groups: HomeScheduleGroupRow[]
@@ -50,10 +56,67 @@ export type HomeDashboardRawData = {
   courses: HomeCourseRow[]
   layouts: HomeLayoutRow[]
   rounds: SavedRound[]
+  weatherByCourseId: Record<string, HomeWeatherSnapshot>
 }
 
 function uniqueValues(values: Array<string | null | undefined>) {
   return Array.from(new Set(values.filter((value): value is string => !!value)))
+}
+
+function openWeatherApiKey() {
+  return process.env.EXPO_PUBLIC_OPENWEATHER_API_KEY?.trim()
+}
+
+function normalizeWeatherText(value?: string) {
+  if (!value) return '날씨 준비중'
+  return value.replace(/^[a-z]/, (char) => char.toUpperCase())
+}
+
+async function fetchWeatherForCourse(course: HomeCourseRow): Promise<HomeWeatherSnapshot | null> {
+  const apiKey = openWeatherApiKey()
+  if (!apiKey) return null
+
+  try {
+    const query = encodeURIComponent(`${course.name} ${course.region} Korea`)
+    const geoResponse = await fetch(`https://api.openweathermap.org/geo/1.0/direct?q=${query}&limit=1&appid=${apiKey}`)
+    if (!geoResponse.ok) return null
+
+    const locations = await geoResponse.json() as Array<{ lat?: number; lon?: number }>
+    const location = locations.find((item) => typeof item.lat === 'number' && typeof item.lon === 'number')
+    if (!location?.lat || !location?.lon) return null
+
+    const weatherResponse = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${location.lat}&lon=${location.lon}&units=metric&lang=kr&appid=${apiKey}`)
+    if (!weatherResponse.ok) return null
+
+    const weather = await weatherResponse.json() as {
+      main?: { temp?: number }
+      weather?: Array<{ description?: string; main?: string }>
+      wind?: { speed?: number }
+    }
+
+    const temp = typeof weather.main?.temp === 'number' ? `${Math.round(weather.main.temp)}°` : '--°'
+    const description = weather.weather?.[0]?.description || weather.weather?.[0]?.main
+    const wind = typeof weather.wind?.speed === 'number' ? `${Math.round(weather.wind.speed)}m/s` : '풍속 준비중'
+
+    return {
+      temperature: temp,
+      weatherText: normalizeWeatherText(description),
+      windText: wind,
+    }
+  } catch {
+    return null
+  }
+}
+
+async function fetchWeatherByCourseId(courses: HomeCourseRow[]) {
+  const entries = await Promise.all(
+    courses.map(async (course) => [course.id, await fetchWeatherForCourse(course)] as const),
+  )
+
+  return entries.reduce<Record<string, HomeWeatherSnapshot>>((acc, [courseId, weather]) => {
+    if (weather) acc[courseId] = weather
+    return acc
+  }, {})
 }
 
 export async function getHomeDashboardRawData(clubId: string): Promise<HomeDashboardRawData> {
@@ -111,12 +174,16 @@ export async function getHomeDashboardRawData(clubId: string): Promise<HomeDashb
   if (courseResult.error) throw courseResult.error
   if (layoutResult.error) throw layoutResult.error
 
+  const courseRows = (courseResult.data ?? []) as HomeCourseRow[]
+  const weatherByCourseId = await fetchWeatherByCourseId(courseRows)
+
   return {
     schedules: scheduleRows,
     groups: (groupResult.data ?? []) as HomeScheduleGroupRow[],
     members: (memberResult.data ?? []) as HomeScheduleGroupMemberRow[],
-    courses: (courseResult.data ?? []) as HomeCourseRow[],
+    courses: courseRows,
     layouts: (layoutResult.data ?? []) as HomeLayoutRow[],
     rounds,
+    weatherByCourseId,
   }
 }

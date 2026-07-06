@@ -1,5 +1,5 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { createShadow, radius, spacing, typography } from '../../../design/tokens'
+import { radius, spacing } from '../../../design/tokens'
 import { useSkin } from '../../../skins'
 
 type TrendPoint = 'up' | 'down' | 'flat'
@@ -20,59 +20,44 @@ type PremiumRecentStatsSectionProps = {
   stats: PremiumRecentStatItem[]
 }
 
-const defaultTrend: TrendPoint[] = ['flat', 'up', 'down', 'flat', 'up']
-
 export function PremiumRecentStatsSection({ stats }: PremiumRecentStatsSectionProps) {
   return (
-    <View style={styles.grid}>
-      {stats.map((stat) => (
-        <PremiumStatCard key={stat.key} stat={stat} />
+    <View style={styles.card}>
+      {stats.slice(0, 4).map((stat, index) => (
+        <PremiumStatCell key={stat.key} stat={stat} showDivider={index > 0} />
       ))}
     </View>
   )
 }
 
-function PremiumStatCard({ stat }: { stat: PremiumRecentStatItem }) {
+function PremiumStatCell({ stat, showDivider }: { stat: PremiumRecentStatItem; showDivider: boolean }) {
   const { palette } = useSkin()
   const accent = stat.tone === 'gold'
     ? palette.gold
     : stat.tone === 'info'
       ? palette.info
       : palette.green
-  const trend = stat.trend?.length ? stat.trend : defaultTrend
 
   return (
     <TouchableOpacity
       activeOpacity={0.88}
       disabled={!stat.onPress}
       onPress={stat.onPress}
-      style={[
-        styles.card,
-        createShadow(palette, 1),
-        { backgroundColor: palette.card, borderColor: palette.border, borderRadius: palette.cardRadius + 8 },
-      ]}
+      style={[styles.cell, showDivider && { borderLeftColor: palette.border, borderLeftWidth: 1 }]}
     >
-      <View style={[styles.iconBadge, { backgroundColor: palette.greenLight }]}> 
-        <Text style={styles.icon}>{stat.icon}</Text>
-      </View>
-
-      <Text style={[styles.label, { color: palette.green }]} numberOfLines={1}>{stat.label}</Text>
-      <View style={styles.valueRow}>
-        <Text style={[styles.value, { color: accent }]} numberOfLines={1}>{stat.value}</Text>
-        {!!stat.suffix && <Text style={[styles.suffix, { color: accent }]}>{stat.suffix}</Text>}
-      </View>
-      <Text style={[styles.caption, { color: palette.muted }]} numberOfLines={1}>{stat.caption}</Text>
-
+      <Text style={[styles.label, { color: palette.text }]} numberOfLines={1}>{shortLabel(stat.label)}</Text>
+      <Text style={[styles.value, { color: accent }]} numberOfLines={1}>{stat.value}</Text>
+      <Text style={[styles.caption, { color: palette.muted }]} numberOfLines={1}>{shortCaption(stat.key, stat.caption)}</Text>
       <View style={styles.trendRow}>
-        {trend.map((point, index) => (
+        {(stat.trend?.length ? stat.trend : ['flat', 'up', 'flat', 'down', 'up']).slice(0, 5).map((point, index) => (
           <View
             key={`${stat.key}-${index}`}
             style={[
               styles.trendSegment,
               {
                 backgroundColor: point === 'down' ? palette.border : accent,
-                opacity: point === 'flat' ? 0.58 : 1,
-                height: point === 'up' ? 4 : point === 'down' ? 2 : 3,
+                opacity: point === 'flat' ? 0.5 : 1,
+                height: point === 'up' ? 3 : 2,
               },
             ]}
           />
@@ -82,39 +67,50 @@ function PremiumStatCard({ stat }: { stat: PremiumRecentStatItem }) {
   )
 }
 
+function shortLabel(label: string) {
+  if (label.includes('핸디')) return '핸디캡'
+  if (label.includes('평균')) return '평균'
+  if (label.includes('최근')) return '최근'
+  if (label.includes('베스트')) return '베스트'
+  return label
+}
+
+function shortCaption(key: string, caption: string) {
+  if (key === 'handicap') return '최근 5경기'
+  if (key === 'average') return '평균'
+  if (key === 'recent') return caption.replace('요일', '').slice(0, 7)
+  if (key === 'best') return '최고 기록'
+  return caption
+}
+
 const styles = StyleSheet.create({
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
   card: {
-    width: '48%',
-    minHeight: 152,
-    borderWidth: 1,
-    padding: spacing.lg,
+    minHeight: 110,
+    flexDirection: 'row',
+    borderRadius: 26,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+    marginBottom: 4,
+    shadowColor: '#0B3D24',
+    shadowOpacity: 0.07,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 2,
   },
-  iconBadge: {
-    alignSelf: 'flex-end',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
+  cell: {
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 14,
     justifyContent: 'center',
-    marginBottom: spacing.sm,
   },
-  icon: { fontSize: 20 },
-  label: { ...typography.bodySm, marginBottom: spacing.xs },
-  valueRow: { flexDirection: 'row', alignItems: 'flex-end', minHeight: 41 },
-  value: { fontSize: 34, lineHeight: 40, fontWeight: '900', letterSpacing: -1.2 },
-  suffix: { fontSize: 18, lineHeight: 30, fontWeight: '900', marginLeft: spacing.xxs },
-  caption: { ...typography.bodySm, marginTop: spacing.xs },
+  label: { fontSize: 12, lineHeight: 16, fontWeight: '900', letterSpacing: -0.25, marginBottom: spacing.xs },
+  value: { fontSize: 26, lineHeight: 31, fontWeight: '900', letterSpacing: -0.9 },
+  caption: { fontSize: 10, lineHeight: 14, fontWeight: '800', marginTop: spacing.xs },
   trendRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: spacing.xs,
-    marginTop: 'auto',
-    paddingTop: spacing.md,
+    gap: 3,
+    marginTop: spacing.sm,
   },
   trendSegment: {
     flex: 1,

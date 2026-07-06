@@ -1,5 +1,4 @@
-import type { AICaddieAdvice } from './caddie'
-import type { AIShotPlan, AIShotPlanRoundSummary } from './shotPlan'
+import type { AICaddieAdvice, AIShotPlanHole, AIShotPlanSummary } from './caddie'
 import type { CaddieDistanceProfileRow, CaddieHoleGuideRow, CaddieUserPreferencesRow } from './caddieData'
 
 export type CaddieBookRouteParams = {
@@ -33,9 +32,8 @@ export type CaddieBookHole = {
   aiStrategyMessage: string
   checkpoints: string[]
   advice: AICaddieAdvice
-  shotPlan: AIShotPlan
+  shotPlan?: AIShotPlanHole | null
 }
-
 
 export type CaddieBookData = {
   courseName: string
@@ -43,5 +41,5 @@ export type CaddieBookData = {
   holes: CaddieBookHole[]
   primaryHole?: CaddieBookHole
   hasLiveGuide: boolean
-  shotPlanSummary?: AIShotPlanRoundSummary
+  shotPlanSummary?: AIShotPlanSummary
 }

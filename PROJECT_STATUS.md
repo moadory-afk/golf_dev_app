@@ -1,10 +1,10 @@
 # GogoPar Project Status
 
 ## Current Version
-AI Shot Plan Sprint v2.8
+Home Redesign v3.0 Phase 1
 
 ## Current Sprint
-AI Shot Plan v2.8
+Home Round Hub Hero Carousel
 
 ## Progress
 
@@ -21,30 +21,29 @@ AI Shot Plan v2.8
 ✅ CaddieBook Entry v2.5
 ✅ CaddieBook Live Detail v2.6
 ✅ AI Hole Strategy v2.7
-✅ AI Shot Plan v2.8
+✅ AI Shot Plan v2.8 ~ v2.8.1
+✅ Home Redesign v3.0 Phase 1
 
 ## Current Task
 
-캐디북에서 홀별 설명을 넘어, 경기 전 18홀 전체 실행 계획을 볼 수 있는 AI Shot Plan을 추가했다.
+Home Hero를 예정 라운드 Carousel 기반의 Round Hub로 전환했다.
 
-- 홀별 추천 클럽 플랜
-- 샷별 예상 거리와 남은 거리
-- 홀별 예상 타수
-- Par / Bogey / Double 확률
-- 18홀 예상 스코어
-- 오늘 목표 미션
+- 여러 예정 라운드 Swipe 표시
+- Hero 내부 라운드 액션 통합
+- 관리자 전용 새 라운딩 등록 카드 추가
+- 이동시간 / 추천 출발시간 표시 영역 추가
 
 ## Verified
 
-- 순수 AI Shot Plan Engine TypeScript 검증 통과
-- 전체 앱 TypeScript 검증은 전체 프로젝트 루트와 의존성 부재로 미실행
+- 변경 파일 기준 TypeScript transpile syntax check 통과
+- 전체 TypeScript 검증은 전체 프로젝트 루트와 의존성 부재로 미실행
 
 ## Next Task
 
-- AI Shot Plan Polish v2.8.1
-- Shot Plan Timeline UI 개선
-- 18홀 전략표 프리미엄 UI 정리
-- SAFE / BALANCED / ATTACK 토글 검토
+- Home Redesign v3.0 Phase 2
+- Upcoming Round Card 제거
+- Home 중복 섹션 정리
+- AI Card / Quick Menu 단순화
 
 ## Do Not Touch
 
@@ -52,3 +51,27 @@ AI Shot Plan v2.8
 - Invite
 - Payment
 - Existing DB Schema without explicit SQL approval
+
+
+# PROJECT_STATUS - Home v3.7 Update
+
+## Current Version
+Home Redesign v3.7 Concierge Visual Polish
+
+## Current Sprint
+Home v3.7 No-Scroll Concierge Layout
+
+## Current Task Completed
+- 상단 Header 단순화
+- Hero 핵심 정보 Strip 유지
+- Greeting을 Concierge 카드로 이동
+- Concierge 카드 중복 교통상황 블록 삭제
+- Concierge 액션 3개 배치
+- Stats 4개 한 줄 compact 유지
+
+## Verified
+- 전체 TypeScript 검증 실행 결과, 기존 CaddieBook/AI Shot Plan 오류 3건으로 실패.
+- Home 변경 파일의 신규 오류는 확인되지 않음.
+
+## Next Task
+Home v3.8 Data Reliability

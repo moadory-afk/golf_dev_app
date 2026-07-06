@@ -1,7 +1,7 @@
 import { computeHandicaps, playerTotal, totalPar, type SavedRound } from '../../../lib/store'
 import type { PremiumRecentStatItem } from '../components'
 import type { HomeCourseRow, HomeDashboardRawData, HomeLayoutRow, HomeScheduleGroupMemberRow, HomeScheduleGroupRow, HomeScheduleRow } from '../api/homeRepository'
-import type { HomeDashboard, HomeRecentRound, HomeRoundStatus, HomeUpcomingRound } from '../types/home'
+import type { HomeDashboard, HomeHeroRound, HomeRecentRound, HomeRoundStatus, HomeUpcomingRound } from '../types/home'
 
 function formatRoundDate(date?: string) {
   if (!date) return '일정 미정'
@@ -27,6 +27,38 @@ function statusLabel(status?: HomeRoundStatus | null) {
   if (status === 'closed') return '마감'
   if (status === 'finished') return '완료'
   return '예정'
+}
+
+function ddayNumber(date?: string) {
+  if (!date || date.length < 10) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const target = new Date(date.slice(0, 10))
+  target.setHours(0, 0, 0, 0)
+  if (Number.isNaN(target.getTime())) return null
+  return Math.round((target.getTime() - today.getTime()) / 86400000)
+}
+
+function urgencyTone(date?: string): HomeHeroRound['urgencyTone'] {
+  const diff = ddayNumber(date)
+  if (diff === null) return 'calm'
+  if (diff <= 0) return 'today'
+  if (diff <= 1) return 'urgent'
+  if (diff <= 3) return 'soon'
+  return 'calm'
+}
+
+function routeTimeText() {
+  return '48분'
+}
+
+function departureTimeText(teeTime?: string | null) {
+  if (!teeTime || !/^\d{1,2}:\d{2}$/.test(teeTime)) return '10:55'
+  const [hourText, minuteText] = teeTime.split(':')
+  const target = new Date()
+  target.setHours(Number(hourText), Number(minuteText), 0, 0)
+  target.setMinutes(target.getMinutes() - 77)
+  return `${String(target.getHours()).padStart(2, '0')}:${String(target.getMinutes()).padStart(2, '0')}`
 }
 
 function average(values: number[]) {
@@ -90,10 +122,7 @@ function countMembers(groups: HomeScheduleGroupRow[], members: HomeScheduleGroup
   return groups.length > 0 ? groups.length * 4 : 0
 }
 
-function mapUpcomingRound(raw: HomeDashboardRawData): HomeUpcomingRound | null {
-  const schedule = raw.schedules[0]
-  if (!schedule) return null
-
+function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow): HomeHeroRound {
   const groups = raw.groups.filter((group) => group.schedule_id === schedule.id)
   const members = raw.members.filter((member) => member.schedule_id === schedule.id)
   const course = raw.courses.find((item) => item.id === schedule.course_id)
@@ -101,6 +130,7 @@ function mapUpcomingRound(raw: HomeDashboardRawData): HomeUpcomingRound | null {
   const courseName = resolveCourseName(schedule, course)
   const layoutName = resolveLayoutName(schedule, layout)
   const teeTime = firstTeeTime(schedule, groups)
+  const locationParts = [course?.region, layoutName ? `${layoutName} 코스` : undefined].filter(Boolean)
 
   return {
     id: schedule.id,
@@ -115,11 +145,27 @@ function mapUpcomingRound(raw: HomeDashboardRawData): HomeUpcomingRound | null {
     memberCount: countMembers(groups, members),
     groupCount: groups.length,
     note: schedule.note ?? undefined,
-    weatherText: '날씨 준비중',
-    temperature: '--°',
+    weatherText: '맑음',
+    temperature: '24°',
+    windText: '2m/s',
     courseId: schedule.course_id ?? course?.id,
     layoutId: schedule.layout_id ?? layout?.id,
+    locationLabel: locationParts.join(' · ') || '골프장 위치 준비중',
+    routeTimeText: routeTimeText(),
+    departureTimeText: departureTimeText(teeTime),
+    urgencyTone: urgencyTone(schedule.round_date),
   }
+}
+
+function mapHeroRounds(raw: HomeDashboardRawData): HomeHeroRound[] {
+  return raw.schedules.map((schedule) => mapScheduleRound(raw, schedule))
+}
+
+function mapUpcomingRound(raw: HomeDashboardRawData): HomeUpcomingRound | null {
+  const [firstRound] = mapHeroRounds(raw)
+  if (!firstRound) return null
+  const { locationLabel: _locationLabel, routeTimeText: _routeTimeText, departureTimeText: _departureTimeText, urgencyTone: _urgencyTone, ...round } = firstRound
+  return round
 }
 
 function mapRecentRounds(rounds: SavedRound[], userName?: string | null): HomeRecentRound[] {
@@ -205,6 +251,7 @@ export function createEmptyHomeDashboard(): HomeDashboard {
       roundDate: '예정 라운드 없음',
       teeTime: '--:--',
       totalCount: 1,
+      rounds: [],
     },
     upcomingRound: null,
     aiCaddie: {
@@ -220,19 +267,22 @@ export function createEmptyHomeDashboard(): HomeDashboard {
 }
 
 export function mapHomeDashboard(raw: HomeDashboardRawData, userName?: string | null): HomeDashboard {
+  const heroRounds = mapHeroRounds(raw)
   const upcomingRound = mapUpcomingRound(raw)
   const stats = mapStats(raw.rounds, userName)
+  const firstHeroRound = heroRounds[0]
 
   return {
     hero: {
-      courseName: upcomingRound?.courseName || 'GogoPar',
-      address: upcomingRound?.layoutName ? `${upcomingRound.layoutName} 코스` : '다음 라운드를 등록하면 홈에서 바로 확인할 수 있어요',
-      weatherText: upcomingRound?.weatherText || '준비중',
-      temperature: upcomingRound?.temperature || '--°',
-      dday: upcomingRound?.dday || 'READY',
-      roundDate: upcomingRound?.dateLabel || '예정 라운드 없음',
-      teeTime: upcomingRound?.teeTime || '--:--',
-      totalCount: Math.max(1, Math.min(3, raw.schedules.length || 1)),
+      courseName: firstHeroRound?.courseName || 'GogoPar',
+      address: firstHeroRound?.locationLabel || '다음 라운드를 등록하면 홈에서 바로 확인할 수 있어요',
+      weatherText: firstHeroRound?.weatherText || '준비중',
+      temperature: firstHeroRound?.temperature || '--°',
+      dday: firstHeroRound?.dday || 'READY',
+      roundDate: firstHeroRound?.dateLabel || '예정 라운드 없음',
+      teeTime: firstHeroRound?.teeTime || '--:--',
+      totalCount: Math.max(1, heroRounds.length || 1),
+      rounds: heroRounds,
     },
     upcomingRound,
     aiCaddie: {

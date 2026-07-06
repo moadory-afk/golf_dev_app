@@ -17,8 +17,17 @@ export type HomeUpcomingRound = {
   note?: string
   weatherText: string
   temperature: string
+  windText?: string
+  weatherIcon?: string
   courseId?: string
   layoutId?: string
+}
+
+export type HomeHeroRound = HomeUpcomingRound & {
+  locationLabel: string
+  routeTimeText: string
+  departureTimeText: string
+  urgencyTone: 'calm' | 'soon' | 'today' | 'urgent'
 }
 
 export type HomeHero = {
@@ -30,6 +39,7 @@ export type HomeHero = {
   roundDate: string
   teeTime: string
   totalCount: number
+  rounds: HomeHeroRound[]
 }
 
 export type HomeAiCaddie = {

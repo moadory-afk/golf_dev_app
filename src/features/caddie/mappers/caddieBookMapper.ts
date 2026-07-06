@@ -1,4 +1,4 @@
-import { createAICaddieAdvice, createAIShotPlan, summarizeAIShotPlans } from '../engine'
+import { createAICaddieAdvice, createAIShotPlanHole, createAIShotPlanSummary } from '../engine'
 import type { AICaddieInput, RiskLevel } from '../types/caddie'
 import type { CaddieBookData, CaddieBookHole, CaddieBookRawData } from '../types/caddieBook'
 import type { CaddieHoleGuideRow, UserPreferenceTee } from '../types/caddieData'
@@ -42,13 +42,14 @@ export function mapCaddieBookData(params: {
       holeGuide: guide,
     }
     const advice = createAICaddieAdvice(input)
-    const shotPlan = createAIShotPlan({
+
+    const shotPlan = createAIShotPlanHole({
       holeNo: guide.hole_no,
       par: guide.par,
-      teeDistanceM,
+      distanceM: teeDistanceM,
       mode: advice.strategy.mode,
       distanceProfile,
-      holeGuide: guide,
+      riskLabel: riskLabel(advice.risk.level),
     })
 
     return {
@@ -72,7 +73,7 @@ export function mapCaddieBookData(params: {
     }
   })
 
-  const shotPlanSummary = summarizeAIShotPlans(holes.map((hole) => ({ holeNo: hole.holeNo, par: hole.par, plan: hole.shotPlan })))
+  const shotPlanSummary = createAIShotPlanSummary(holes.map((hole) => hole.shotPlan))
 
   return {
     courseName: params.courseName || '캐디북',

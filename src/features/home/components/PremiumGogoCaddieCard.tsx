@@ -1,82 +1,102 @@
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { createShadow, radius, spacing, typography } from '../../../design/tokens'
+import { createShadow, radius, spacing } from '../../../design/tokens'
 import { useSkin } from '../../../skins'
 
 const gogoMark = require('../../../../assets/gogopar_i.png')
 
 type PremiumGogoCaddieCardProps = {
+  userName: string
   courseName?: string | null
   teeTime?: string | null
-  dday?: string | null
   averageScore: string
   hasUpcomingRound: boolean
-  title?: string | null
   message?: string | null
-  primaryChip?: string | null
-  secondaryChip?: string | null
-  hasLiveAdvice?: boolean
+  recommendedClub?: string | null
   onPress: () => void
+  onCaddieBookPress: () => void
+  onGroupsPress: () => void
+  onLottoPress: () => void
 }
 
 export function PremiumGogoCaddieCard({
+  userName,
   courseName,
   teeTime,
-  dday,
   averageScore,
   hasUpcomingRound,
-  title: liveTitle,
   message: liveMessage,
-  primaryChip: livePrimaryChip,
-  secondaryChip: liveSecondaryChip,
-  hasLiveAdvice,
+  recommendedClub,
   onPress,
+  onCaddieBookPress,
+  onGroupsPress,
+  onLottoPress,
 }: PremiumGogoCaddieCardProps) {
   const { palette } = useSkin()
-  const title = liveTitle || (hasUpcomingRound ? '오늘도 버디 가볼까요?' : '다음 라운드를 준비해볼까요?')
-  const message = liveMessage || (hasUpcomingRound
-    ? `${courseName || '예정 라운드'} ${teeTime || '티오프'} 기준으로 코스 전략을 준비하고 있어요.`
-    : `최근 평균 ${averageScore}타 기준으로 다음 라운드 전략을 추천해드릴게요.`)
-  const primaryChip = livePrimaryChip || (hasUpcomingRound ? dday || '예정' : '준비중')
-  const secondaryChip = liveSecondaryChip || (hasUpcomingRound ? teeTime || 'Tee Off' : `${averageScore}타 평균`)
-  const label = hasLiveAdvice ? 'Live Gogo Caddie' : 'Gogo Caddie'
+  const roundText = hasUpcomingRound
+    ? `${courseName || '예정 라운드'} ${teeTime || ''} Tee Off 라운드가 예정되어 있어요.`.replace('  ', ' ')
+    : `최근 평균 ${averageScore}타 기준으로 다음 라운드를 준비해드릴게요.`
+  const advice = liveMessage || (recommendedClub
+    ? `${recommendedClub} 중심으로 오늘의 1번홀 전략을 준비했어요.`
+    : hasUpcomingRound
+      ? '캐디북에서 코스 공략과 오늘의 Shot Plan을 확인해보세요.'
+      : '다음 라운드를 등록하면 출발 준비와 캐디북을 바로 안내할게요.')
 
   return (
     <TouchableOpacity
-      activeOpacity={0.88}
+      activeOpacity={0.92}
       onPress={onPress}
       style={[
         styles.card,
-        createShadow(palette, 2),
-        { backgroundColor: palette.card, borderColor: palette.border, borderRadius: palette.cardRadius + 10 },
+        createShadow(palette, 1),
+        { backgroundColor: palette.card, borderColor: palette.border, borderRadius: palette.cardRadius + 12 },
       ]}
     >
-      <View style={[styles.characterStage, { backgroundColor: palette.greenLight }]}> 
-        <View style={[styles.characterHalo, { backgroundColor: palette.card }]}>
+      <View style={styles.introRow}>
+        <View style={[styles.characterStage, { backgroundColor: palette.greenLight }]}> 
           <Image source={gogoMark} style={styles.characterImage} resizeMode="cover" />
         </View>
-      </View>
 
-      <View style={styles.content}> 
-        <View style={styles.labelRow}>
-          <Text style={[styles.label, { color: palette.green }]}>{label}</Text>
-          <View style={[styles.liveDot, { backgroundColor: palette.gold }]} />
-        </View>
-        <Text style={[styles.title, { color: palette.text }]} numberOfLines={1}>{title}</Text>
-        <Text style={[styles.message, { color: palette.muted }]} numberOfLines={2}>{message}</Text>
-
-        <View style={styles.chipRow}>
-          <View style={[styles.chip, { backgroundColor: palette.greenLight }]}> 
-            <Text style={[styles.chipText, { color: palette.green }]}>{primaryChip}</Text>
-          </View>
-          <View style={[styles.chip, { backgroundColor: palette.bg }]}> 
-            <Text style={[styles.chipText, { color: palette.muted }]}>{secondaryChip}</Text>
-          </View>
+        <View style={styles.introTextBlock}> 
+          <Text style={[styles.label, { color: palette.green }]}>Gogo Concierge</Text>
+          <Text style={[styles.title, { color: palette.text }]} numberOfLines={1}>안녕하세요, {userName}님! 👋</Text>
+          <Text style={[styles.message, { color: palette.muted }]} numberOfLines={2}>{roundText}</Text>
         </View>
       </View>
 
-      <View style={[styles.arrowButton, { backgroundColor: palette.greenLight }]}> 
-        <Text style={[styles.arrowText, { color: palette.green }]}>›</Text>
+      <View style={styles.actionRow}>
+        <ConciergeAction icon="🗺️" title="AI 캐디북" subtitle="코스 공략" onPress={onCaddieBookPress} />
+        <ConciergeAction icon="👥" title="조편성" subtitle="멤버 확인" onPress={onGroupsPress} />
+        <ConciergeAction icon="🎱" title="Lotto" subtitle="행운 뽑기" onPress={onLottoPress} />
       </View>
+
+      <View style={[styles.adviceBox, { backgroundColor: palette.greenLight }]}> 
+        <View style={[styles.adviceIconWrap, { backgroundColor: palette.card }]}> 
+          <Text style={styles.adviceIcon}>✨</Text>
+        </View>
+        <View style={styles.adviceTextBlock}>
+          <Text style={[styles.adviceLabel, { color: palette.green }]}>AI 한줄 코멘트</Text>
+          <Text style={[styles.adviceText, { color: palette.text }]} numberOfLines={2}>{advice}</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  )
+}
+
+function ConciergeAction({ icon, title, subtitle, onPress }: { icon: string; title: string; subtitle: string; onPress: () => void }) {
+  const { palette } = useSkin()
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.86}
+      onPress={onPress}
+      style={[styles.actionButton, { backgroundColor: palette.card, borderColor: palette.border }]}
+    >
+      <Text style={styles.actionIcon}>{icon}</Text>
+      <View style={styles.actionTextBlock}>
+        <Text style={[styles.actionTitle, { color: palette.text }]} numberOfLines={1}>{title}</Text>
+        <Text style={[styles.actionSubtitle, { color: palette.muted }]} numberOfLines={1}>{subtitle}</Text>
+      </View>
+      <Text style={[styles.actionArrow, { color: palette.muted }]}>›</Text>
     </TouchableOpacity>
   )
 }
@@ -84,50 +104,72 @@ export function PremiumGogoCaddieCard({
 const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
-    minHeight: 146,
-    paddingVertical: spacing.lg,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.lg,
+    padding: 16,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  introRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.lg,
-    overflow: 'hidden',
+    gap: 14,
   },
   characterStage: {
-    width: 104,
-    height: 114,
-    borderRadius: radius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  characterHalo: {
     width: 88,
     height: 88,
-    borderRadius: 44,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   characterImage: {
-    width: 120,
-    height: 120,
-    transform: [{ translateY: 10 }],
+    width: 122,
+    height: 122,
+    transform: [{ translateY: 12 }],
   },
-  content: { flex: 1, minWidth: 0 },
-  labelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
-  label: { ...typography.bodyLg, letterSpacing: -0.2 },
-  liveDot: { width: 7, height: 7, borderRadius: radius.pill },
-  title: { fontSize: 25, lineHeight: 31, fontWeight: '900', letterSpacing: -1.0 },
-  message: { marginTop: spacing.xs, fontSize: 14, lineHeight: 20, fontWeight: '700' },
-  chipRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md, flexWrap: 'wrap' },
-  chip: { borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
-  chipText: { ...typography.bodySm },
-  arrowButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  introTextBlock: { flex: 1, minWidth: 0 },
+  label: { fontSize: 15, lineHeight: 19, fontWeight: '900', letterSpacing: -0.2, marginBottom: 4 },
+  title: { fontSize: 24, lineHeight: 30, fontWeight: '900', letterSpacing: -1.0 },
+  message: { marginTop: 6, fontSize: 14, lineHeight: 20, fontWeight: '800' },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+  },
+  actionButton: {
+    flex: 1,
+    minHeight: 72,
+    borderWidth: 1,
+    borderRadius: radius.xl,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  actionIcon: { fontSize: 24, lineHeight: 28 },
+  actionTextBlock: { flex: 1, minWidth: 0 },
+  actionTitle: { fontSize: 13, lineHeight: 17, fontWeight: '900', letterSpacing: -0.25 },
+  actionSubtitle: { fontSize: 10, lineHeight: 14, fontWeight: '800', marginTop: 2 },
+  actionArrow: { fontSize: 22, lineHeight: 22, fontWeight: '900' },
+  adviceBox: {
+    minHeight: 58,
+    borderRadius: radius.xl,
+    marginTop: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  adviceIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  arrowText: { fontSize: 34, lineHeight: 36, fontWeight: '600' },
+  adviceIcon: { fontSize: 19 },
+  adviceTextBlock: { flex: 1, minWidth: 0 },
+  adviceLabel: { fontSize: 12, lineHeight: 16, fontWeight: '900', marginBottom: 2 },
+  adviceText: { fontSize: 15, lineHeight: 20, fontWeight: '900', letterSpacing: -0.35 },
 })

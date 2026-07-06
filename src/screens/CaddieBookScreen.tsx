@@ -8,7 +8,7 @@ import { GPButton, GPCard } from '../design'
 import { useSkin } from '../skins'
 import { useUserProfile } from '../lib/UserProfileContext'
 import type { RootStackParamList } from '../navigation/types'
-import { useCaddieBook, type AIShotPlanRoundSummary, type CaddieBookHole } from '../features/caddie'
+import { useCaddieBook, type AIShotPlanHole, type AIShotPlanSummary, type CaddieBookHole } from '../features/caddie'
 import { radius, spacing, typography } from '../design/tokens'
 
 type CaddieBookRoute = RouteProp<RootStackParamList, 'CaddieBook'>
@@ -92,94 +92,6 @@ function StrategyStep({ title, message }: { title: string; message: string }) {
   )
 }
 
-
-function ShotPlanTimeline({ hole }: { hole: CaddieBookHole }) {
-  const { palette } = useSkin()
-  const plan = hole.shotPlan
-  const steps = plan?.steps ?? []
-  return (
-    <GPCard style={styles.detailCard}>
-      <View style={styles.shotPlanHeaderRow}>
-        <View style={styles.aiHeaderText}>
-          <Text style={[styles.cardEyebrow, { color: palette.green }]}>AI Shot Plan</Text>
-          <Text style={[styles.shotPlanTitle, { color: palette.text }]}>{plan?.shortSummary || '추천 플랜 준비중'}</Text>
-        </View>
-        <View style={[styles.shotPlanBadge, { backgroundColor: palette.greenLight, borderColor: palette.border }]}> 
-          <Text style={[styles.shotPlanBadgeText, { color: palette.green }]}>{plan?.riskLabel ?? 'SAFE'}</Text>
-          <Text style={[styles.shotPlanBadgeMeta, { color: palette.muted }]}>{plan?.mode ?? 'SAFE'}</Text>
-        </View>
-      </View>
-
-      <View style={[styles.predictionBox, { backgroundColor: palette.greenLight, borderColor: palette.border }]}> 
-        <View style={styles.predictionItem}>
-          <Text style={[styles.metricLabel, { color: palette.muted }]}>예상타수</Text>
-          <Text style={[styles.predictionValue, { color: palette.text }]}>{plan?.expectedScoreText ?? '-'}</Text>
-        </View>
-        <View style={styles.predictionItem}>
-          <Text style={[styles.metricLabel, { color: palette.muted }]}>Par 확률</Text>
-          <Text style={[styles.predictionValue, { color: palette.gold }]}>{plan?.parProbability ?? 0}%</Text>
-        </View>
-        <View style={styles.predictionItem}>
-          <Text style={[styles.metricLabel, { color: palette.muted }]}>목표</Text>
-          <Text style={[styles.predictionValue, { color: palette.green }]}>{plan?.targetScoreLabel ?? 'Par'}</Text>
-        </View>
-      </View>
-
-      <View style={styles.timelineBox}>
-        {steps.length > 0 ? steps.map((step, index) => (
-          <View key={`${step.order}-${step.clubLabel}`} style={styles.timelineStep}>
-            <View style={[styles.timelineDot, { backgroundColor: index === 0 ? palette.gold : palette.green }]} />
-            <View style={styles.timelineContent}>
-              <View style={styles.timelineTitleRow}>
-                <Text style={[styles.timelineClub, { color: palette.text }]}>{step.clubLabel}</Text>
-                <Text style={[styles.timelineDistance, { color: palette.green }]}>{step.plannedDistanceM}m</Text>
-              </View>
-              <Text style={[styles.timelineNote, { color: palette.muted }]}>{step.note}</Text>
-              <Text style={[styles.timelineRemain, { color: palette.muted }]}>남은거리 {step.remainingAfterM}m</Text>
-            </View>
-          </View>
-        )) : <Text style={[styles.sectionText, { color: palette.muted }]}>AI Shot Plan을 준비 중입니다.</Text>}
-      </View>
-
-      <Text style={[styles.reasonText, { color: palette.text }]}>AI 한마디 · {plan?.reason ?? '사용자 비거리와 홀 정보를 기준으로 공략을 준비합니다.'}</Text>
-    </GPCard>
-  )
-}
-
-function ShotPlanOverview({ summary, onSelect }: { summary?: AIShotPlanRoundSummary; onSelect: (holeNo: number) => void }) {
-  const { palette } = useSkin()
-  if (!summary || summary.holes.length === 0) return null
-  return (
-    <GPCard style={styles.overviewCard}>
-      <View style={styles.overviewHeader}>
-        <View>
-          <Text style={[styles.cardEyebrow, { color: palette.green }]}>18 Hole Shot Plan</Text>
-          <Text style={[styles.overviewTitle, { color: palette.text }]}>오늘의 AI 전략표</Text>
-        </View>
-        <View style={[styles.expectedScorePill, { backgroundColor: palette.headerBg }]}> 
-          <Text style={[styles.expectedScoreLabel, { color: palette.gold }]}>Expected</Text>
-          <Text style={[styles.expectedScoreValue, { color: palette.headerText }]}>{summary.totalExpectedScore}</Text>
-        </View>
-      </View>
-      <Text style={[styles.overviewMission, { color: palette.muted }]}>{summary.missionText}</Text>
-      <View style={styles.missionGrid}>
-        <MiniMetric label="Par" value={`${summary.parCount}개`} />
-        <MiniMetric label="Bogey" value={`${summary.bogeyCount}개`} />
-        <MiniMetric label="Double" value={`${summary.doubleCount}개`} tone="danger" />
-      </View>
-      <View style={styles.overviewList}>
-        {summary.holes.slice(0, 18).map((item) => (
-          <TouchableOpacity key={item.holeNo} activeOpacity={0.82} onPress={() => onSelect(item.holeNo)} style={[styles.overviewRow, { borderColor: palette.border }]}> 
-            <Text style={[styles.overviewHoleNo, { color: palette.green }]}>{item.holeNo}</Text>
-            <Text style={[styles.overviewPlan, { color: palette.text }]} numberOfLines={1}>{item.shortSummary}</Text>
-            <Text style={[styles.overviewScore, { color: item.riskLabel === 'DANGER' ? palette.danger : palette.gold }]}>{item.expectedStrokes.toFixed(1)}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </GPCard>
-  )
-}
-
 function HolePicker({ holes, selectedHoleNo, onSelect }: { holes: CaddieBookHole[]; selectedHoleNo: number; onSelect: (holeNo: number) => void }) {
   const { palette } = useSkin()
   return (
@@ -202,6 +114,117 @@ function HolePicker({ holes, selectedHoleNo, onSelect }: { holes: CaddieBookHole
         )
       })}
     </ScrollView>
+  )
+}
+
+
+function ShotPlanTimeline({ plan }: { plan?: AIShotPlanHole | null }) {
+  const { palette } = useSkin()
+  const steps = plan?.steps ?? []
+  if (!plan || steps.length === 0) return null
+
+  return (
+    <View style={styles.timelineWrap}>
+      <View style={styles.timelineRail}>
+        {steps.map((step, index) => (
+          <View key={`${step.type}-${index}`} style={styles.timelineNodeWrap}>
+            <View style={[styles.timelineNode, { backgroundColor: index === 0 ? palette.gold : palette.green }]} />
+            {index < steps.length - 1 && <View style={[styles.timelineLine, { backgroundColor: palette.border }]} />}
+          </View>
+        ))}
+        <View style={styles.timelineNodeWrap}>
+          <View style={[styles.timelineGreenNode, { borderColor: palette.green }]} />
+        </View>
+      </View>
+      <View style={styles.timelineLabels}>
+        {steps.map((step, index) => (
+          <View key={`${step.clubLabel}-${index}`} style={styles.timelineStepLabel}>
+            <Text style={[styles.timelineStepTitle, { color: palette.text }]}>{step.clubLabel}</Text>
+            <Text style={[styles.timelineStepMeta, { color: palette.muted }]}>{step.carryM}m</Text>
+            <Text style={[styles.timelineStepRemain, { color: palette.green }]}>남은 {step.remainingAfterM}m</Text>
+          </View>
+        ))}
+        <View style={styles.timelineStepLabel}>
+          <Text style={[styles.timelineStepTitle, { color: palette.text }]}>Green</Text>
+          <Text style={[styles.timelineStepMeta, { color: palette.muted }]}>PUTT</Text>
+        </View>
+      </View>
+    </View>
+  )
+}
+
+function AIShotPlanCard({ plan }: { plan?: AIShotPlanHole | null }) {
+  const { palette } = useSkin()
+  if (!plan) return null
+
+  return (
+    <GPCard style={[styles.shotPlanCard, { backgroundColor: palette.card }]}> 
+      <View style={styles.shotPlanHeaderRow}>
+        <View style={styles.shotPlanHeaderText}>
+          <Text style={[styles.cardEyebrow, { color: palette.green }]}>AI Shot Plan</Text>
+          <Text style={[styles.shotPlanTitle, { color: palette.text }]}>{plan.modeLabel} · {plan.compact || '플랜 준비중'}</Text>
+        </View>
+        <View style={[styles.confidencePill, { borderColor: palette.border, backgroundColor: palette.greenLight }]}> 
+          <Text style={[styles.confidenceValue, { color: palette.green }]}>{plan.confidence}%</Text>
+          <Text style={[styles.confidenceLabel, { color: palette.muted }]}>신뢰도</Text>
+        </View>
+      </View>
+
+      <ShotPlanTimeline plan={plan} />
+
+      <View style={styles.predictionGrid}>
+        <MiniMetric label="예상타수" value={plan.expectedStrokes.toFixed(1)} tone="gold" />
+        <MiniMetric label="구간" value={plan.expectedScoreLabel} />
+        <MiniMetric label="난이도" value={plan.difficultyLabel} tone={plan.difficulty === 'HARD' ? 'danger' : 'default'} />
+      </View>
+
+      <View style={[styles.probabilityBox, { borderColor: palette.border, backgroundColor: palette.greenLight }]}> 
+        <Text style={[styles.probabilityTitle, { color: palette.text }]}>스코어 확률</Text>
+        <View style={styles.probabilityRow}>
+          <Text style={[styles.probabilityItem, { color: palette.green }]}>Par {plan.probability.par}%</Text>
+          <Text style={[styles.probabilityItem, { color: palette.gold }]}>Bogey {plan.probability.bogey}%</Text>
+          <Text style={[styles.probabilityItem, { color: palette.danger }]}>Double {plan.probability.double}%</Text>
+        </View>
+      </View>
+
+      <Text style={[styles.shotPlanReason, { color: palette.text }]}>{plan.reason}</Text>
+      <Text style={[styles.shotPlanMission, { color: palette.muted }]}>{plan.mission}</Text>
+    </GPCard>
+  )
+}
+
+function ShotPlanSummaryCard({ summary }: { summary?: AIShotPlanSummary }) {
+  const { palette } = useSkin()
+  if (!summary || summary.compactRows.length === 0) return null
+
+  return (
+    <GPCard style={styles.summaryCard}>
+      <View style={styles.summaryHeaderRow}>
+        <View>
+          <Text style={[styles.cardEyebrow, { color: palette.green }]}>18 Hole Strategy</Text>
+          <Text style={[styles.summaryTitle, { color: palette.text }]}>오늘 AI 예상 {summary.expectedScore}타</Text>
+        </View>
+        <View style={[styles.missionPill, { backgroundColor: palette.headerBg }]}> 
+          <Text style={[styles.missionPillText, { color: palette.headerText }]}>목표 {summary.missionScore}타</Text>
+        </View>
+      </View>
+
+      <View style={styles.summaryMetricRow}>
+        <MiniMetric label="Par" value={`${summary.parCount}`} />
+        <MiniMetric label="Bogey" value={`${summary.bogeyCount}`} tone="gold" />
+        <MiniMetric label="Double" value={`${summary.doubleCount}`} tone="danger" />
+      </View>
+
+      <View style={styles.strategyTable}>
+        {summary.compactRows.slice(0, 18).map((row) => (
+          <View key={row.holeNo} style={[styles.strategyRow, { borderColor: palette.border }]}> 
+            <Text style={[styles.strategyHoleNo, { color: palette.green }]}>{row.holeNo}</Text>
+            <Text style={[styles.strategyCompact, { color: palette.text }]} numberOfLines={1}>{row.compact}</Text>
+            <Text style={[styles.strategyExpected, { color: palette.gold }]}>{row.expectedStrokes.toFixed(1)}</Text>
+          </View>
+        ))}
+      </View>
+    </GPCard>
   )
 }
 
@@ -240,7 +263,7 @@ function HoleDetailCard({ hole }: { hole: CaddieBookHole }) {
         </View>
       </GPCard>
 
-      <ShotPlanTimeline hole={hole} />
+      <AIShotPlanCard plan={hole.shotPlan} />
 
       <GPCard style={styles.detailCard}>
         <View style={styles.aiHeaderRow}>
@@ -357,6 +380,8 @@ export default function CaddieBookScreen() {
           <Text style={[styles.subtitle, { color: palette.muted }]}>{data.layoutName || '코스를 선택하면 홀별 공략이 표시됩니다.'}</Text>
         </View>
 
+        {data.holes.length > 0 && <ShotPlanSummaryCard summary={data.shotPlanSummary} />}
+
         {loading && data.holes.length === 0 ? (
           <View style={styles.loadingBox}>
             <ActivityIndicator color={palette.green} />
@@ -368,7 +393,6 @@ export default function CaddieBookScreen() {
           <EmptyCaddieBook onRetry={refresh} />
         ) : selectedHole ? (
           <>
-            <ShotPlanOverview summary={data.shotPlanSummary} onSelect={setSelectedHoleNo} />
             <HolePicker holes={data.holes} selectedHoleNo={selectedHole.holeNo} onSelect={setSelectedHoleNo} />
             <HoleDetailCard hole={selectedHole} />
             <HoleNavigation currentIndex={selectedIndex} total={data.holes.length} onPrev={goPrev} onNext={goNext} />
@@ -409,37 +433,42 @@ const styles = StyleSheet.create({
   metricLabel: { ...typography.caption, fontWeight: '900' },
   metricValue: { ...typography.bodySm, fontWeight: '900' },
 
-
+  shotPlanCard: { padding: spacing.lg, gap: spacing.md },
   shotPlanHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md },
-  shotPlanTitle: { ...typography.cardTitle },
-  shotPlanBadge: { minWidth: 82, borderWidth: 1, borderRadius: radius.xl, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, alignItems: 'center', gap: 2 },
-  shotPlanBadgeText: { ...typography.caption, fontWeight: '900' },
-  shotPlanBadgeMeta: { ...typography.caption, fontWeight: '900' },
-  predictionBox: { borderWidth: 1, borderRadius: radius.xl, padding: spacing.md, flexDirection: 'row', gap: spacing.sm },
-  predictionItem: { flex: 1, gap: spacing.xs },
-  predictionValue: { ...typography.bodyLg, fontWeight: '900' },
-  timelineBox: { gap: spacing.md },
-  timelineStep: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
-  timelineDot: { width: 12, height: 12, borderRadius: 6, marginTop: 5 },
-  timelineContent: { flex: 1, gap: spacing.xs },
-  timelineTitleRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md },
-  timelineClub: { ...typography.bodyLg, fontWeight: '900' },
-  timelineDistance: { ...typography.bodySm, fontWeight: '900' },
-  timelineNote: { ...typography.bodySm, fontWeight: '700' },
-  timelineRemain: { ...typography.caption, fontWeight: '900' },
-  overviewCard: { padding: spacing.lg, gap: spacing.md },
-  overviewHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.md },
-  overviewTitle: { ...typography.sectionTitle },
-  expectedScorePill: { borderRadius: radius.xl, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, alignItems: 'center', minWidth: 76 },
-  expectedScoreLabel: { ...typography.caption, fontWeight: '900' },
-  expectedScoreValue: { fontSize: 25, lineHeight: 29, fontWeight: '900' },
-  overviewMission: { ...typography.bodySm, fontWeight: '800' },
-  missionGrid: { flexDirection: 'row', gap: spacing.sm },
-  overviewList: { gap: spacing.xs },
-  overviewRow: { minHeight: 42, borderBottomWidth: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  overviewHoleNo: { ...typography.bodySm, fontWeight: '900', width: 24 },
-  overviewPlan: { ...typography.bodySm, fontWeight: '900', flex: 1 },
-  overviewScore: { ...typography.bodySm, fontWeight: '900', width: 40, textAlign: 'right' },
+  shotPlanHeaderText: { flex: 1, gap: spacing.xs },
+  shotPlanTitle: { ...typography.bodyLg, fontWeight: '900' },
+  confidencePill: { minWidth: 74, borderWidth: 1, borderRadius: radius.xl, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, alignItems: 'center', gap: 2 },
+  confidenceValue: { ...typography.bodySm, fontWeight: '900' },
+  confidenceLabel: { ...typography.caption, fontWeight: '900' },
+  timelineWrap: { gap: spacing.md },
+  timelineRail: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.xs },
+  timelineNodeWrap: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  timelineNode: { width: 12, height: 12, borderRadius: 6 },
+  timelineGreenNode: { width: 16, height: 16, borderRadius: 8, borderWidth: 3 },
+  timelineLine: { height: 2, flex: 1, marginHorizontal: spacing.xs },
+  timelineLabels: { flexDirection: 'row', gap: spacing.sm },
+  timelineStepLabel: { flex: 1, gap: 2 },
+  timelineStepTitle: { ...typography.caption, fontWeight: '900' },
+  timelineStepMeta: { ...typography.caption, fontWeight: '800' },
+  timelineStepRemain: { ...typography.caption, fontWeight: '900' },
+  predictionGrid: { flexDirection: 'row', gap: spacing.sm },
+  probabilityBox: { borderWidth: 1, borderRadius: radius.lg, padding: spacing.md, gap: spacing.sm },
+  probabilityTitle: { ...typography.bodySm, fontWeight: '900' },
+  probabilityRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
+  probabilityItem: { ...typography.caption, fontWeight: '900' },
+  shotPlanReason: { ...typography.bodySm, fontWeight: '800' },
+  shotPlanMission: { ...typography.bodySm, fontWeight: '900' },
+  summaryCard: { padding: spacing.lg, gap: spacing.md },
+  summaryHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md },
+  summaryTitle: { ...typography.bodyLg, fontWeight: '900' },
+  missionPill: { borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  missionPillText: { ...typography.caption, fontWeight: '900' },
+  summaryMetricRow: { flexDirection: 'row', gap: spacing.sm },
+  strategyTable: { gap: spacing.xs },
+  strategyRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderBottomWidth: 1, paddingVertical: spacing.sm },
+  strategyHoleNo: { ...typography.bodySm, fontWeight: '900', width: 24 },
+  strategyCompact: { ...typography.bodySm, fontWeight: '900', flex: 1 },
+  strategyExpected: { ...typography.bodySm, fontWeight: '900', width: 42, textAlign: 'right' },
 
   modeBadge: { minWidth: 88, borderRadius: radius.xl, borderWidth: 1, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, alignItems: 'center', gap: 2 },
   modeBadgeText: { ...typography.caption, fontWeight: '900' },
