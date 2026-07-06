@@ -10,6 +10,11 @@ type PremiumGogoCaddieCardProps = {
   dday?: string | null
   averageScore: string
   hasUpcomingRound: boolean
+  title?: string | null
+  message?: string | null
+  primaryChip?: string | null
+  secondaryChip?: string | null
+  hasLiveAdvice?: boolean
   onPress: () => void
 }
 
@@ -19,15 +24,21 @@ export function PremiumGogoCaddieCard({
   dday,
   averageScore,
   hasUpcomingRound,
+  title: liveTitle,
+  message: liveMessage,
+  primaryChip: livePrimaryChip,
+  secondaryChip: liveSecondaryChip,
+  hasLiveAdvice,
   onPress,
 }: PremiumGogoCaddieCardProps) {
   const { palette } = useSkin()
-  const title = hasUpcomingRound ? '오늘도 버디 가볼까요?' : '다음 라운드를 준비해볼까요?'
-  const message = hasUpcomingRound
+  const title = liveTitle || (hasUpcomingRound ? '오늘도 버디 가볼까요?' : '다음 라운드를 준비해볼까요?')
+  const message = liveMessage || (hasUpcomingRound
     ? `${courseName || '예정 라운드'} ${teeTime || '티오프'} 기준으로 코스 전략을 준비하고 있어요.`
-    : `최근 평균 ${averageScore}타 기준으로 다음 라운드 전략을 추천해드릴게요.`
-  const primaryChip = hasUpcomingRound ? dday || '예정' : '준비중'
-  const secondaryChip = hasUpcomingRound ? teeTime || 'Tee Off' : `${averageScore}타 평균`
+    : `최근 평균 ${averageScore}타 기준으로 다음 라운드 전략을 추천해드릴게요.`)
+  const primaryChip = livePrimaryChip || (hasUpcomingRound ? dday || '예정' : '준비중')
+  const secondaryChip = liveSecondaryChip || (hasUpcomingRound ? teeTime || 'Tee Off' : `${averageScore}타 평균`)
+  const label = hasLiveAdvice ? 'Live Gogo Caddie' : 'Gogo Caddie'
 
   return (
     <TouchableOpacity
@@ -47,7 +58,7 @@ export function PremiumGogoCaddieCard({
 
       <View style={styles.content}> 
         <View style={styles.labelRow}>
-          <Text style={[styles.label, { color: palette.green }]}>Gogo Caddie</Text>
+          <Text style={[styles.label, { color: palette.green }]}>{label}</Text>
           <View style={[styles.liveDot, { backgroundColor: palette.gold }]} />
         </View>
         <Text style={[styles.title, { color: palette.text }]} numberOfLines={1}>{title}</Text>

@@ -1,35 +1,47 @@
-# CHANGELOG - Live Data Foundation Sprint v2.2
+# CHANGELOG - AI Shot Plan Sprint v2.8
 
 ## Added
-- Home Live Binding 구조 추가
-  - `src/features/home/api/homeRepository.ts`
-  - `src/features/home/services/homeService.ts`
-  - `src/features/home/mappers/homeMapper.ts`
-  - `src/features/home/hooks/useHomeDashboard.ts`
-  - `src/features/home/types/home.ts`
-- Home Dashboard 모델 추가
-  - Hero
-  - Upcoming Round
-  - AI Caddie
-  - Recent Stats
-  - Recent Rounds
-- Home 데이터 로딩/에러/새로고침 상태 처리 추가
+- AI Shot Plan v2.8 추가
+  - 홀별 추천 클럽 플랜 생성
+  - 샷별 예상 거리와 남은 거리 계산
+  - 홀별 예상 타수 산출
+  - Par / Bogey / Double 확률 산출
+  - 18홀 Shot Plan 요약과 오늘 예상 스코어 산출
+- `src/features/caddie/types/shotPlan.ts` 추가
+  - `AIShotPlan`, `AIShotPlanStep`, `AIShotPlanRoundSummary` 타입 정의
+- `src/features/caddie/engine/shotPlanEngine.ts` 추가
+  - 사용자 비거리, 홀 거리, PAR, 위험도, 추천 모드를 기반으로 AI Shot Plan 생성
+  - 18홀 예상 스코어 요약 생성
+- 캐디북 상세 화면에 `AI Shot Plan` 카드 추가
+  - Driver → 4H 형태의 실행 계획 표시
+  - 샷별 예상 거리 / 남은 거리 / AI 한마디 표시
+- 캐디북 상단에 `18 Hole Shot Plan` 요약 카드 추가
+  - 홀별 공략 요약
+  - 홀별 예상 타수
+  - 오늘 예상 스코어
+  - Par / Bogey / Double 목표 표시
 
 ## Changed
-- `HomeExperienceScreen`이 직접 `getRounds`, `getRoundSchedules`, `computeHandicaps`를 호출하지 않도록 변경했다.
-- Home 화면 데이터 흐름을 `Repository → Service → Mapper → Hook → Screen` 구조로 분리했다.
-- Hero와 Upcoming Round가 `club_round_schedules`, `club_round_groups`, `club_round_group_members`, `golf_courses`, `course_layouts` 기반 Dashboard 모델을 사용하도록 변경했다.
-- Recent Stats 계산 로직을 `homeMapper`로 이동했다.
-- Home 화면의 Screen 책임을 화면 조립과 Navigation 연결 중심으로 줄였다.
+- `CaddieBookHole` 모델에 `shotPlan`을 추가했다.
+- `CaddieBookData` 모델에 `shotPlanSummary`를 추가했다.
+- `mapCaddieBookData`가 홀별 AI Shot Plan과 18홀 요약을 함께 생성하도록 변경했다.
+- 캐디북은 단순 설명형 화면에서 라운드 전 실행 계획을 보여주는 화면으로 확장했다.
 
 ## DB
-- 이번 코드 작업에서 추가 DB 변경은 없다.
-- 직전 작업에서 생성한 `user_distance_profiles`, `user_preferences`는 향후 AI Caddie 개인화 Sprint에서 사용한다.
+- 이번 Sprint에서 DB 변경은 없다.
 
 ## Verified
-- `npx tsc --noEmit` 통과
+- 순수 AI Shot Plan Engine 관련 TypeScript 검증 통과
+  - `shotPlan.ts`
+  - `shotPlanEngine.ts`
+  - `clubRecommendation.ts`
+  - `riskAnalyzer.ts`
+  - `caddie.ts`
+- 전체 앱 TypeScript 검증은 업로드 범위가 `src.zip`이고 프로젝트 루트 의존성이 없어 실행하지 못했다.
 
 ## Preserved
-- 기존 Navigation Route 의미 유지
-- Authentication, Invite, Payment 기능 변경 없음
-- 기존 DB Schema 추가 변경 없음
+- 기존 Navigation 구조 유지
+- 기존 Home UI 유지
+- 기존 CaddieBook 진입 흐름 유지
+- Authentication, Invite, Payment 변경 없음
+- 기존 DB Schema 변경 없음

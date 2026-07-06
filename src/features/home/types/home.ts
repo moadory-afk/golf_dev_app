@@ -38,6 +38,13 @@ export type HomeAiCaddie = {
   dday?: string
   averageScore: string
   hasUpcomingRound: boolean
+  title?: string
+  message?: string
+  primaryChip?: string
+  secondaryChip?: string
+  hasLiveAdvice?: boolean
+  recommendedClub?: string
+  riskLabel?: string
 }
 
 export type HomeRecentRound = {

@@ -6,6 +6,7 @@ import type { HomeDashboard, HomeDashboardState } from '../types/home'
 type UseHomeDashboardParams = {
   clubId?: string | null
   userName?: string | null
+  userId?: string | null
 }
 
 function errorMessage(error: unknown) {
@@ -14,7 +15,7 @@ function errorMessage(error: unknown) {
   return '홈 데이터를 불러오지 못했습니다.'
 }
 
-export function useHomeDashboard({ clubId, userName }: UseHomeDashboardParams): HomeDashboardState {
+export function useHomeDashboard({ clubId, userName, userId }: UseHomeDashboardParams): HomeDashboardState {
   const [dashboard, setDashboard] = useState<HomeDashboard>(() => createEmptyHomeDashboard())
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -25,7 +26,7 @@ export function useHomeDashboard({ clubId, userName }: UseHomeDashboardParams): 
     setLoading(true)
     setError(null)
 
-    getHomeDashboard(clubId, userName)
+    getHomeDashboard(clubId, userName, userId)
       .then((nextDashboard) => {
         if (mounted) setDashboard(nextDashboard)
       })
@@ -41,7 +42,7 @@ export function useHomeDashboard({ clubId, userName }: UseHomeDashboardParams): 
     return () => {
       mounted = false
     }
-  }, [clubId, userName, refreshKey])
+  }, [clubId, userName, userId, refreshKey])
 
   const refresh = useCallback(() => {
     setRefreshKey((value) => value + 1)

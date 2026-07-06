@@ -1,10 +1,10 @@
 # GogoPar Project Status
 
 ## Current Version
-Live Data Foundation Sprint v2.2
+AI Shot Plan Sprint v2.8
 
 ## Current Sprint
-Home Real Binding v2.2
+AI Shot Plan v2.8
 
 ## Progress
 
@@ -13,35 +13,38 @@ Home Real Binding v2.2
 ✅ Design Token
 ✅ Architecture
 ✅ Component Library (Base)
-✅ Home Experience v1.0
-✅ Premium Hero v1.1
-✅ Gogo Caddie Card v1.2
-✅ Recent Stats Cards v1.3
-✅ Upcoming Round Ticket v1.4
-✅ Quick Menu Polish v1.5
-✅ Bottom Navigation Polish v1.6
-✅ Motion Animation v1.7
+✅ Home Experience v1.0 ~ v1.7
 ✅ Live Data Foundation v2.1
 ✅ Home Real Binding v2.2
-🚧 AI Engine v2.3
+✅ AI Engine Foundation v2.3
+✅ AI Caddie Data Binding v2.4
+✅ CaddieBook Entry v2.5
+✅ CaddieBook Live Detail v2.6
+✅ AI Hole Strategy v2.7
+✅ AI Shot Plan v2.8
 
 ## Current Task
 
-Home 화면을 `Repository → Service → Mapper → Hook → Screen` 구조로 전환했다.
+캐디북에서 홀별 설명을 넘어, 경기 전 18홀 전체 실행 계획을 볼 수 있는 AI Shot Plan을 추가했다.
 
-Hero와 Upcoming Round는 `club_round_schedules` 기반의 다음 예정 라운드를 사용한다.
-Recent Stats 계산은 Screen에서 제거하고 `homeMapper`로 이동했다.
+- 홀별 추천 클럽 플랜
+- 샷별 예상 거리와 남은 거리
+- 홀별 예상 타수
+- Par / Bogey / Double 확률
+- 18홀 예상 스코어
+- 오늘 목표 미션
 
 ## Verified
 
-- `npx tsc --noEmit` 통과
+- 순수 AI Shot Plan Engine TypeScript 검증 통과
+- 전체 앱 TypeScript 검증은 전체 프로젝트 루트와 의존성 부재로 미실행
 
 ## Next Task
 
-- AI Caddie Engine v2.3
-- `user_distance_profiles` 기반 클럽 추천
-- `course_hole_guides` 기반 홀 공략 데이터 연결
-- Home AI Caddie Card 실제 추천 메시지 연결
+- AI Shot Plan Polish v2.8.1
+- Shot Plan Timeline UI 개선
+- 18홀 전략표 프리미엄 UI 정리
+- SAFE / BALANCED / ATTACK 토글 검토
 
 ## Do Not Touch
 

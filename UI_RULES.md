@@ -1,57 +1,8 @@
-# UI_RULES
+# UI_RULES - v2.7 Addendum
 
-Rule 1
+## AI Caddie UI
 
-Screen
-
-↓
-
-Section
-
-↓
-
-Card
-
-↓
-
-Widget
-
-Rule 2
-
-Section 안에는 Section 금지
-
-Rule 3
-
-Card 안에는 Card 금지
-
-Rule 4
-
-Spacing는 Design Token만 사용
-
-Rule 5
-
-색상 하드코딩 금지
-
-Rule 6
-
-Hero처럼 이미지 위에 올라가는 Overlay / Glass / Muted Text 색상은 `src/design/tokens.ts`의 `colorLayers`를 사용한다.
-
-Rule 7
-
-Screen은 Supabase를 직접 호출하지 않는다.
-
-Screen
-
-↓
-
-Hook
-
-↓
-
-Service
-
-↓
-
-Repository
-
-순서로 데이터에 접근한다.
+- AI 추천 영역은 원본 캐디북 정보와 분리한다.
+- 추천 클럽만 표시하지 않고 추천 이유와 위험 포인트를 함께 표시한다.
+- 추천 모드와 신뢰도는 Badge / Score 형태로 간결하게 표시한다.
+- UI 컴포넌트는 AI 계산을 직접 수행하지 않는다.

@@ -28,9 +28,21 @@ import {
   type PremiumRecentStatItem,
 } from '../features/home/components'
 import { useHomeDashboard } from '../features/home/hooks/useHomeDashboard'
-import type { HomeRecentRound } from '../features/home/types/home'
+import type { HomeRecentRound, HomeUpcomingRound } from '../features/home/types/home'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
+
+
+function caddieBookParams(round: HomeUpcomingRound | null) {
+  if (!round) return undefined
+  return {
+    courseId: round.courseId,
+    layoutId: round.layoutId,
+    courseName: round.courseName,
+    layoutName: round.layoutName,
+    scheduleId: round.id,
+  }
+}
 
 function timeGreeting() {
   const hour = new Date().getHours()
@@ -117,8 +129,8 @@ export default function HomeExperienceScreen() {
   const insets = useSafeAreaInsets()
   const nav = useNavigation<Nav>()
   const { activeClub: club, clubsLoaded } = useClub()
-  const { name: myName } = useUserProfile()
-  const { dashboard, loading, error, refresh } = useHomeDashboard({ clubId: club?.id, userName: myName })
+  const { name: myName, userId } = useUserProfile()
+  const { dashboard, loading, error, refresh } = useHomeDashboard({ clubId: club?.id, userName: myName, userId })
 
   const recentStats = useMemo(
     () => applyStatNavigation(dashboard.stats.items, nav),
@@ -127,11 +139,12 @@ export default function HomeExperienceScreen() {
 
   const quickActions: PremiumQuickMenuItem[] = useMemo(() => [
     { key: 'round-record', icon: 'edit', title: '라운드 기록', subtitle: '스코어 입력', featured: true, onPress: () => nav.navigate('RoundSetup', {}) },
+    { key: 'caddie-book', icon: 'target', title: '캐디북', subtitle: '홀별 공략', badge: 'AI', featured: true, onPress: () => nav.navigate('CaddieBook', caddieBookParams(dashboard.upcomingRound)) },
     { key: 'score-stats', icon: 'chart', title: '스코어 통계', subtitle: '최근 기록', onPress: () => nav.navigate('Main', { screen: 'History' }) },
     { key: 'club-board', icon: 'mail', title: '클럽 게시판', subtitle: '공지 확인', onPress: () => nav.navigate('NoticePrototype') },
     { key: 'club-friends', icon: 'users', title: '친구/동호회', subtitle: '멤버 관리', onPress: () => nav.navigate('Main', { screen: 'Club' }) },
     { key: 'club-skin', icon: 'settings', title: '동호회 스킨', subtitle: '테마 설정', badge: 'Skin', onPress: () => nav.navigate('Profile') },
-  ], [nav])
+  ], [dashboard.upcomingRound, nav])
 
   if (clubsLoaded && !club) {
     return (
@@ -202,7 +215,7 @@ export default function HomeExperienceScreen() {
               onCreate={() => nav.navigate('RoundSchedulePrototype', { openCreate: true })}
               onPress={() => nav.navigate('RoundSchedulePrototype')}
               actions={[
-                { key: 'course-map', icon: '🗺️', label: '코스맵', onPress: () => nav.navigate('RoundSchedulePrototype') },
+                { key: 'caddie-book', icon: '📗', label: '캐디북', onPress: () => nav.navigate('CaddieBook', caddieBookParams(dashboard.upcomingRound)) },
                 { key: 'groups', icon: '👥', label: '조편성', onPress: () => nav.navigate('RoundSchedulePrototype') },
                 { key: 'lotto', icon: '🎱', label: 'Lotto 6/18', onPress: () => nav.navigate('RoundSchedulePrototype') },
               ]}
@@ -218,7 +231,12 @@ export default function HomeExperienceScreen() {
               dday={dashboard.aiCaddie.dday}
               averageScore={dashboard.aiCaddie.averageScore}
               hasUpcomingRound={dashboard.aiCaddie.hasUpcomingRound}
-              onPress={() => nav.navigate('RoundSchedulePrototype')}
+              title={dashboard.aiCaddie.title}
+              message={dashboard.aiCaddie.message}
+              primaryChip={dashboard.aiCaddie.primaryChip}
+              secondaryChip={dashboard.aiCaddie.secondaryChip}
+              hasLiveAdvice={dashboard.aiCaddie.hasLiveAdvice}
+              onPress={() => nav.navigate('CaddieBook', caddieBookParams(dashboard.upcomingRound))}
             />
           </GPSection>
         </PremiumHomeMotion>

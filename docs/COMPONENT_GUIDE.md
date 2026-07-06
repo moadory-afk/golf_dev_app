@@ -12,80 +12,60 @@
 ## Home Components
 
 - PremiumHomeHeroSection
-  - Home Experience v1.1에서 추가
-  - 이미지 기반 Hero Header
-  - 인사, 클럽 선택, 알림, 코스명, 보조 위치/코스 정보, 날씨, D-Day, Tee Off, 인디케이터 포함
-  - 색상은 `useSkin().palette`와 `colorLayers` 토큰 사용
-
 - PremiumGogoCaddieCard
-  - Home Experience v1.2에서 추가
-  - Hero 아래에 배치되는 대형 AI Caddie 안내 카드
-  - 예정 라운드 유무에 따라 코스/티오프/평균 스코어 기반 메시지 표시
-  - GogoPar 로고 이미지를 임시 캐디 Visual로 사용
-  - 색상, Shadow, Radius, Spacing은 Skin Palette와 Design Token만 사용
-
+  - Mock 상태와 Live AI Advice 상태를 모두 지원한다.
+  - `title`, `message`, `primaryChip`, `secondaryChip`, `hasLiveAdvice`를 받을 수 있다.
 - PremiumRecentStatsSection
-  - Home Experience v1.3에서 추가
-  - 핸디캡, 평균 스코어, 최근 라운드, 베스트 스코어를 2x2 Premium Mini Card로 표시
-  - 각 카드에 아이콘 Badge, 핵심 숫자, 보조 설명, 미니 트렌드 라인 포함
-  - 기록이 없는 상태에서도 안전한 Empty State 표시
-  - 색상, Shadow, Radius, Spacing은 Skin Palette와 Design Token만 사용
-
-
 - PremiumUpcomingRoundCard
-  - Home Experience v1.4에서 추가
-  - 예정 라운드를 대형 Premium Ticket Card로 표시
-  - 코스 이미지, 상태 Badge, 골프장명, 코스명, 날짜, Tee Off, 인원, 날씨 정보 포함
-  - 우측 액션 영역에 코스맵, 조편성, Lotto 6/18 버튼 구조 포함
-  - 예정 라운드가 없을 때 라운드 일정 생성 CTA Empty State 제공
-  - 색상, Shadow, Radius, Spacing은 Skin Palette와 Design Token만 사용
-
-
 - PremiumQuickMenuSection
-  - Home Experience v1.5에서 추가
-  - Home 하단 주요 기능을 5개 Premium Quick Menu Card로 표시
-  - 라운드 기록, 스코어 통계, 클럽 게시판, 친구/동호회, 동호회 스킨 진입 포함
-  - 각 메뉴는 기존 Navigation 화면으로 실제 연결
-  - 색상, Shadow, Radius, Spacing은 Skin Palette와 Design Token만 사용
-
-
-
 - PremiumHomeMotion
-  - Home Experience v1.7에서 추가
-  - Home 주요 섹션의 순차 등장 애니메이션을 담당
-  - opacity + translateY만 사용해 Premium 앱에 맞는 미세한 Motion 제공
-  - duration과 stagger는 `src/design/tokens.ts`의 `motion` 토큰 사용
 
 ## Navigation Components
 
 - AppTabBar
-  - Home Experience v1.6에서 Premium Floating Navigation 스타일로 개선
-  - Main Bottom Tab과 동일한 Icon Pill, Gold Border, Floating Shadow 사용
-  - Stack 내부 화면에서도 Home / History / Club 이동 경험을 동일하게 제공
-  - 색상, Radius, Spacing, Typography는 Skin Palette와 Design Token만 사용
-
 - Main Bottom Tab
-  - Home Experience v1.6에서 Premium Floating Bar 형태로 개선
-  - Home / Club / History 3개 탭 구조는 유지
-  - Active Tab은 Pill + Gold Border로 강조
-  - Navigation 구조 변경 없이 시각 품질만 개선
+
+## Home Data Components / Hooks
+
+- useHomeDashboard
+  - Home 화면이 사용하는 단일 Dashboard Hook
+  - `dashboard`, `loading`, `error`, `refresh`를 제공
+  - Screen에서 Supabase를 직접 호출하지 않도록 한다.
+  - v2.4부터 `userId`를 받아 AI Caddie Data Binding에 전달한다.
+
+## AI Caddie Engine
+
+- `src/features/caddie/engine/distanceCalculator.ts`
+  - 남은 거리, 바람, 고저차, 라이를 반영해 유효거리를 계산한다.
+
+- `src/features/caddie/engine/clubRecommendation.ts`
+  - 사용자 클럽별 평균 거리와 유효거리를 비교해 추천 클럽, 신뢰도, 대체 클럽을 반환한다.
+
+- `src/features/caddie/engine/riskAnalyzer.ts`
+  - `course_hole_guides`의 summary, strategy, caution, JSON 필드에서 OB, 해저드, 벙커, 도그렉 등 위험 신호를 분석한다.
+
+- `src/features/caddie/engine/shotPlanner.ts`
+  - 위험도와 추천 클럽을 바탕으로 attack, safe, layup, recovery 공략 의도를 결정한다.
+
+- `src/features/caddie/engine/holeStrategy.ts`
+  - 홀 공략 메시지와 추천 근거를 사용자에게 보여줄 수 있는 형태로 조합한다.
+
+## AI Caddie Data Binding
+
+- `src/features/caddie/api/caddieRepository.ts`
+  - Supabase에서 `user_distance_profiles`, `user_preferences`, `course_hole_guides`를 조회한다.
+
+- `src/features/caddie/mappers/caddieMapper.ts`
+  - DB Row를 AI Engine 입력 모델로 변환한다.
+
+- `src/features/caddie/services/caddieService.ts`
+  - Home에서 사용할 AI Caddie Preview를 생성한다.
+
+- `src/features/caddie/hooks/useAICaddieData.ts`
+  - 향후 화면에서 AI Caddie Preview를 직접 사용할 때 쓰는 Hook이다.
 
 ## Component Rule
 
 새 Home 컴포넌트는 Screen 내부에 직접 구현하지 않고 `src/features/home/components`에 재사용 가능한 단위로 둔다.
 
-
-## Home Data Foundation
-
-- useHomeDashboard
-  - Live Data Foundation v2.1에서 추가
-  - Home 화면의 데이터 진입점
-  - Screen에서 Supabase 또는 store 함수를 직접 호출하지 않도록 Repository / Service / Mapper를 감싼다.
-
-- homeRepository
-  - 기존 `getRounds`, `getRoundSchedules`를 조합해 Home 원천 데이터를 조회한다.
-  - DB Schema는 변경하지 않는다.
-
-- homeService / homeMapper
-  - HomeDashboard 모델을 생성한다.
-  - Hero, Upcoming Round, AI Caddie, Recent Stats 표시 데이터를 Screen 밖에서 계산한다.
+AI 계산 로직은 UI 컴포넌트에 넣지 않고 `src/features/caddie/engine`의 순수 함수로 유지한다.
