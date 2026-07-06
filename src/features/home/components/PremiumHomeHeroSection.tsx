@@ -3,7 +3,6 @@ import { useState } from 'react'
 
 import { colorLayers, radius, spacing } from '../../../design/tokens'
 import { useSkin } from '../../../skins'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { HomeHeroRound } from '../types/home'
 
 const gogoMark = require('../../../../assets/gogopar_i.png')
@@ -11,7 +10,6 @@ const gogoMark = require('../../../../assets/gogopar_i.png')
 const HERO_DISPLAY_ASPECT_RATIO = 16 / (10.5 * 1.5)
 const HERO_DISPLAY_HEIGHT_RATIO = (10.5 / 16) * 1.5
 const HERO_MIN_WIDTH = 280
-const HERO_MAX_WIDTH = 430
 
 type PremiumHomeHeroSectionProps = {
   greeting: string
@@ -31,6 +29,7 @@ type PremiumHomeHeroSectionProps = {
   onProfilePress?: () => void
   onCreateRound: () => void
   heroImageSource?: ImageSourcePropType
+  topInset?: number
 }
 
 export function PremiumHomeHeroSection({
@@ -49,15 +48,15 @@ export function PremiumHomeHeroSection({
   onProfilePress,
   onCreateRound,
   heroImageSource,
+  topInset = 0,
 }: PremiumHomeHeroSectionProps) {
   const { palette } = useSkin()
-  const insets = useSafeAreaInsets()
   const { width: windowWidth } = useWindowDimensions()
   const [activeIndex, setActiveIndex] = useState(0)
   const [measuredHeroWidth, setMeasuredHeroWidth] = useState(0)
-  const fallbackHeroWidth = Math.max(HERO_MIN_WIDTH, Math.min(windowWidth, HERO_MAX_WIDTH))
+  const fallbackHeroWidth = Math.max(HERO_MIN_WIDTH, windowWidth)
   const heroWidth = measuredHeroWidth || fallbackHeroWidth
-  const heroHeight = Math.round(heroWidth * HERO_DISPLAY_HEIGHT_RATIO)
+  const heroHeight = Math.round(heroWidth * HERO_DISPLAY_HEIGHT_RATIO + topInset)
   const hasRounds = rounds.length > 0
   const totalCount = Math.max(1, rounds.length + (isAdmin ? 1 : 0))
   const dots = Array.from({ length: totalCount })
@@ -74,12 +73,12 @@ export function PremiumHomeHeroSection({
           const nextWidth = Math.round(event.nativeEvent.layout.width)
           if (nextWidth > 0 && nextWidth !== measuredHeroWidth) setMeasuredHeroWidth(nextWidth)
         }}
-        style={[styles.heroCard, { borderRadius: 0 }]}
+        style={[styles.heroCard, { height: heroHeight }]}
       > 
         <View style={styles.heroImage}>
           {heroImageSource ? <Image source={heroImageSource} style={styles.heroBackgroundImage} resizeMode="cover" /> : null}
           <View style={styles.scrim} />
-          <View style={[styles.headerRow, { top: insets.top + 8 }]} pointerEvents="box-none">
+          <View style={[styles.headerRow, { top: topInset + 10 }]} pointerEvents="box-none">
             <TouchableOpacity activeOpacity={0.84} onPress={onClubPress} style={styles.clubPill}> 
               <Text style={styles.clubIcon}>⛳</Text>
               <Text style={styles.clubText} numberOfLines={1}>{clubName}</Text>
@@ -107,11 +106,12 @@ export function PremiumHomeHeroSection({
             style={styles.carousel}
           >
             {hasRounds ? rounds.map((round) => (
-              <HeroRoundCard key={round.id} width={heroWidth} height={heroHeight} round={round} safeTop={insets.top} />
+              <HeroRoundCard key={round.id} width={heroWidth} height={heroHeight} topInset={topInset} round={round} />
             )) : (
               <HeroEmptyCard
                 width={heroWidth}
                 height={heroHeight}
+                topInset={topInset}
                 courseName={fallbackCourseName}
                 address={fallbackAddress}
                 weatherText={fallbackWeatherText}
@@ -119,14 +119,13 @@ export function PremiumHomeHeroSection({
                 dday={fallbackDday}
                 roundDate={fallbackRoundDate}
                 teeTime={fallbackTeeTime}
-                safeTop={insets.top}
                 isAdmin={isAdmin}
                 onCreateRound={onCreateRound}
               />
             )}
 
             {isAdmin && hasRounds && (
-              <HeroCreateRoundCard width={heroWidth} height={heroHeight} safeTop={insets.top} onCreateRound={onCreateRound} />
+              <HeroCreateRoundCard width={heroWidth} height={heroHeight} topInset={topInset} onCreateRound={onCreateRound} />
             )}
           </ScrollView>
 
@@ -152,11 +151,11 @@ export function PremiumHomeHeroSection({
   )
 }
 
-function HeroRoundCard({ width, height, round, safeTop }: { width: number; height: number; round: HomeHeroRound; safeTop: number }) {
+function HeroRoundCard({ width, height, topInset, round }: { width: number; height: number; topInset: number; round: HomeHeroRound }) {
   const { palette } = useSkin()
 
   return (
-    <View style={[styles.slide, { width, height, paddingTop: safeTop + 52 }]}> 
+    <View style={[styles.slide, { width, height, paddingTop: topInset + 52 }]}> 
       <View style={styles.courseBlock}>
         <View style={[styles.ddayPill, { backgroundColor: palette.green }]}> 
           <Text style={styles.ddayText}>{round.dday}</Text>
@@ -194,12 +193,13 @@ function HeroEmptyCard({
   dday,
   roundDate,
   teeTime,
-  safeTop,
   isAdmin,
   onCreateRound,
+  topInset,
 }: {
   width: number
   height: number
+  topInset: number
   courseName: string
   address: string
   weatherText: string
@@ -207,14 +207,13 @@ function HeroEmptyCard({
   dday: string
   roundDate: string
   teeTime: string
-  safeTop: number
   isAdmin: boolean
   onCreateRound: () => void
 }) {
   const { palette } = useSkin()
 
   return (
-    <View style={[styles.slide, { width, height, paddingTop: safeTop + 52 }]}> 
+    <View style={[styles.slide, { width, height, paddingTop: topInset + 52 }]}> 
       <View style={styles.courseBlock}>
         <View style={[styles.ddayPill, { backgroundColor: palette.green }]}> 
           <Text style={styles.ddayText}>{dday}</Text>
@@ -239,11 +238,11 @@ function HeroEmptyCard({
   )
 }
 
-function HeroCreateRoundCard({ width, height, safeTop, onCreateRound }: { width: number; height: number; safeTop: number; onCreateRound: () => void }) {
+function HeroCreateRoundCard({ width, height, topInset, onCreateRound }: { width: number; height: number; topInset: number; onCreateRound: () => void }) {
   const { palette } = useSkin()
 
   return (
-    <View style={[styles.slide, { width, height, paddingTop: safeTop + 52 }]}> 
+    <View style={[styles.slide, { width, height, paddingTop: topInset + 52 }]}> 
       <TouchableOpacity activeOpacity={0.9} onPress={onCreateRound} style={[styles.createCard, { borderColor: palette.gold }]}> 
         <Text style={styles.createIcon}>＋</Text>
         <Text style={[styles.createTitle, { color: palette.text }]}>새 라운딩 등록</Text>
@@ -269,11 +268,9 @@ const styles = StyleSheet.create({
   shell: {
     marginBottom: 0,
     width: '100%',
-    alignSelf: 'stretch',
   },
   headerRow: {
     position: 'absolute',
-    top: 14,
     left: 14,
     right: 14,
     zIndex: 5,
@@ -285,9 +282,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    maxWidth: '38%',
-    minHeight: 26,
-    paddingHorizontal: 8,
+    maxWidth: '44%',
+    minHeight: 28,
+    paddingHorizontal: 9,
     borderRadius: radius.pill,
     backgroundColor: 'rgba(0,0,0,0.22)',
   },
@@ -327,8 +324,8 @@ const styles = StyleSheet.create({
   profileImage: { width: 32, height: 32 },
   heroCard: {
     width: '100%',
-    aspectRatio: HERO_DISPLAY_ASPECT_RATIO,
     overflow: 'hidden',
+    borderRadius: 0,
   },
   heroImage: { flex: 1, backgroundColor: '#10261B' },
   heroBackgroundImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
@@ -339,7 +336,6 @@ const styles = StyleSheet.create({
   carousel: { flex: 1 },
   slide: {
     paddingHorizontal: 14,
-    paddingTop: 52,
     paddingBottom: 28,
     justifyContent: 'space-between',
   },

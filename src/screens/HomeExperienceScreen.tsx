@@ -3,6 +3,7 @@ import {
   Modal,
   RefreshControl,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -180,6 +181,7 @@ export default function HomeExperienceScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: palette.bg }]}> 
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={palette.green} />}
@@ -208,6 +210,7 @@ export default function HomeExperienceScreen() {
                   onProfilePress={() => nav.navigate('Profile')}
                   onCreateRound={() => nav.navigate('RoundSchedulePrototype', { openCreate: true })}
                   heroImageSource={activeHeroImageSource}
+                  topInset={insets.top}
                 />
               </PremiumHomeMotion>
             ),
