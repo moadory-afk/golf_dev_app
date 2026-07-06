@@ -54,21 +54,10 @@ Home Hero를 예정 라운드 Carousel 기반의 Round Hub로 전환했다.
 
 ---
 
-## Home Layout Engine v3.11
+## Home v4.0 Step 5
 
-### Current Sprint
-Home Layout Engine Foundation
+Hero Display System을 단순화했다.
 
-### Completed
-- Home에 Slot 기반 Layout Engine 1차 도입
-- Premium Golf Wave 레이아웃 등록
-- Hero와 Concierge 곡선 연결 구조 적용
-- Stats 정수 절상 및 `타` 제거
-- Quick/Upcoming/Recent/Community 중복 섹션 제거
-
-### Verified
-- 변경 파일 기준 TypeScript 부분 검증 통과
-- 전체 TypeScript 검증은 제한 시간 내 완료되지 않음
-
-### Next
-- Layout Definition을 더 세분화해 실제 스킨 교체 수준으로 확장
+- 앱의 Home Hero 표시 규격은 `16:10.5`로 고정한다.
+- 이미지 원본 생성 규격과 앱 표시 규격을 분리한다.
+- 앱에서는 카드 폭 기준으로 높이를 계산하고, 이미지는 해당 영역에 맞춰 cover 출력한다.

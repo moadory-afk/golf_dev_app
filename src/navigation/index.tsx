@@ -11,6 +11,7 @@ import HomeScreen from '../screens/HomeExperienceScreen'
 import ClubScreen from '../screens/ClubScreen'
 import HistoryScreen from '../screens/HistoryScreen'
 import ProfileScreen from '../screens/ProfileScreen'
+import HeroLabScreen from '../screens/HeroLabScreen'
 import RoundDetailScreen from '../screens/RoundDetailScreen'
 import ScoreCaptureScreen from '../screens/ScoreCaptureScreen'
 import ScoreReviewScreen from '../screens/ScoreReviewScreen'
@@ -177,6 +178,7 @@ function NavigationStack({ session }: { session: import('@supabase/supabase-js')
           <Stack.Screen name="SignUp" component={SignUpScreen} options={{ title: '회원가입' }} />
           <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} initialParams={undefined} />
           <Stack.Screen name="Profile" component={ProfileScreen} options={({ navigation }) => ({ title: '프로필 · 설정', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="HeroLab" component={HeroLabScreen} options={({ navigation }) => ({ title: 'Hero Lab', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="FeePrototype" component={FeePrototypeScreen} options={({ navigation, route }) => ({ title: clubScreenTitle(clubName, '회비 관리'), headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => closeToManageMenu(navigation, route.params?.returnToManageMenu)} /> })} />
           <Stack.Screen name="RoundSchedulePrototype" component={RoundSchedulePrototypeScreen} options={({ navigation, route }) => {
             const modalOnly = route.params?.modalOnly

@@ -1,6 +1,7 @@
 import { computeHandicaps, playerTotal, totalPar, type SavedRound } from '../../../lib/store'
 import type { PremiumRecentStatItem } from '../components'
 import type { HomeCourseRow, HomeDashboardRawData, HomeLayoutRow, HomeScheduleGroupMemberRow, HomeScheduleGroupRow, HomeScheduleRow } from '../api/homeRepository'
+import { buildHomeFeedEvents, selectPrimaryHomeFeedEvent } from '../engine'
 import type { HomeDashboard, HomeHeroRound, HomeRecentRound, HomeRoundStatus, HomeUpcomingRound } from '../types/home'
 
 function formatRoundDate(date?: string) {
@@ -106,11 +107,14 @@ function firstTeeTime(schedule: HomeScheduleRow, groups: HomeScheduleGroupRow[])
 }
 
 function resolveCourseName(schedule: HomeScheduleRow, course?: HomeCourseRow) {
-  return schedule.course_name?.trim() || course?.name || '다음 라운드'
+  // Home Hero는 실제 DB에 저장된 golf_courses 값을 우선 표시한다.
+  // schedule.course_name은 과거 입력/캐시값이므로 course_id 조회가 실패할 때만 fallback으로 사용한다.
+  return course?.name || schedule.course_name?.trim() || '다음 라운드'
 }
 
 function resolveLayoutName(schedule: HomeScheduleRow, layout?: HomeLayoutRow) {
-  return schedule.layout_name?.trim() || layout?.name || undefined
+  // 코스 정보도 실제 course_layouts 값을 우선 표시한다.
+  return layout?.name || schedule.layout_name?.trim() || undefined
 }
 
 function countMembers(groups: HomeScheduleGroupRow[], members: HomeScheduleGroupMemberRow[]) {
@@ -237,6 +241,13 @@ function mapStats(rounds: SavedRound[], userName?: string | null): HomeDashboard
 }
 
 export function createEmptyHomeDashboard(): HomeDashboard {
+  const stats = {
+    averageScore: '-',
+    items: [],
+    recentRounds: [],
+  }
+  const feedEvents = buildHomeFeedEvents({ upcomingRound: null, recentRounds: [], stats: [] })
+
   return {
     hero: {
       courseName: 'GogoPar',
@@ -254,11 +265,9 @@ export function createEmptyHomeDashboard(): HomeDashboard {
       averageScore: '-',
       hasUpcomingRound: false,
     },
-    stats: {
-      averageScore: '-',
-      items: [],
-      recentRounds: [],
-    },
+    feed: selectPrimaryHomeFeedEvent(feedEvents),
+    feedEvents,
+    stats,
   }
 }
 
@@ -267,6 +276,12 @@ export function mapHomeDashboard(raw: HomeDashboardRawData, userName?: string | 
   const upcomingRound = mapUpcomingRound(raw)
   const stats = mapStats(raw.rounds, userName)
   const firstHeroRound = heroRounds[0]
+
+  const feedEvents = buildHomeFeedEvents({
+    upcomingRound,
+    recentRounds: stats.recentRounds,
+    stats: stats.items,
+  })
 
   return {
     hero: {
@@ -288,6 +303,8 @@ export function mapHomeDashboard(raw: HomeDashboardRawData, userName?: string | 
       averageScore: stats.averageScore,
       hasUpcomingRound: !!upcomingRound,
     },
+    feed: selectPrimaryHomeFeedEvent(feedEvents),
+    feedEvents,
     stats,
   }
 }

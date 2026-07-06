@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   RefreshControl,
   ScrollView,
@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useNavigation } from '@react-navigation/native'
+import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 
 import { GPButton, GPCard } from '../design'
@@ -24,6 +24,8 @@ import {
 } from '../features/home/components'
 import { useHomeDashboard } from '../features/home/hooks/useHomeDashboard'
 import type { HomeHeroRound, HomeUpcomingRound } from '../features/home/types/home'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { COURSE_HERO_STORAGE_KEY, getCourseHeroAssetByKey, getCourseHeroImageSource } from '../data/courseHeroImages'
 import { HomeLayoutRenderer, premiumGolfHomeLayout } from '../features/home/layout'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
@@ -47,6 +49,18 @@ function caddieBookHeroParams(round: HomeHeroRound) {
     layoutName: round.layoutName,
     scheduleId: round.id,
   }
+}
+
+function resolveFeedNavigation(nav: Nav, actionType: string, round: HomeUpcomingRound | null) {
+  if (actionType === 'open_caddie_map') {
+    const params = caddieBookParams(round)
+    if (params) return nav.navigate('CaddieBook', params)
+    return nav.navigate('RoundSchedulePrototype', { openCreate: true })
+  }
+  if (actionType === 'open_groups' || actionType === 'open_lotto') return nav.navigate('RoundSchedulePrototype')
+  if (actionType === 'open_notice') return nav.navigate('NoticePrototype')
+  if (actionType === 'open_result') return nav.navigate('Main', { screen: 'History' })
+  return nav.navigate('RoundSchedulePrototype', { openCreate: true })
 }
 
 function applyStatNavigation(stats: PremiumRecentStatItem[], nav: Nav): PremiumRecentStatItem[] {
@@ -76,6 +90,25 @@ export default function HomeExperienceScreen() {
   const { activeClub: club, clubsLoaded } = useClub()
   const { name: myName, userId } = useUserProfile()
   const { dashboard, loading, error, refresh } = useHomeDashboard({ clubId: club?.id, userName: myName, userId })
+  const [selectedHeroKey, setSelectedHeroKey] = useState<string | null>(null)
+
+  useFocusEffect(
+    useCallback(() => {
+      let mounted = true
+      AsyncStorage.getItem(COURSE_HERO_STORAGE_KEY)
+        .then((value) => {
+          if (mounted) setSelectedHeroKey(value)
+        })
+        .catch(() => {
+          if (mounted) setSelectedHeroKey(null)
+        })
+      return () => { mounted = false }
+    }, []),
+  )
+
+  const activeHeroImageSource = selectedHeroKey
+    ? getCourseHeroAssetByKey(selectedHeroKey).source
+    : getCourseHeroImageSource(dashboard.hero.rounds[0]?.courseName ?? dashboard.hero.courseName)
 
   const recentStats = useMemo(
     () => applyStatNavigation(dashboard.stats.items, nav),
@@ -89,9 +122,9 @@ export default function HomeExperienceScreen() {
   ], [nav])
 
   const conciergeActions = useMemo(() => [
-    { key: 'ai-caddie-book', icon: '🗺️', title: 'AI 캐디북', subtitle: '코스 공략', onPress: () => nav.navigate('CaddieBook', caddieBookParams(dashboard.upcomingRound)) },
+    { key: 'caddie-map', icon: '🗺️', title: '캐디맵', subtitle: '공략 보기', onPress: () => resolveFeedNavigation(nav, 'open_caddie_map', dashboard.upcomingRound) },
     { key: 'groups', icon: '👥', title: '조편성', subtitle: '멤버 확인', onPress: () => nav.navigate('RoundSchedulePrototype') },
-    { key: 'lotto', icon: '🎱', title: 'Lotto', subtitle: '행운 뽑기', onPress: () => nav.navigate('RoundSchedulePrototype') },
+    { key: 'lotto', icon: '🎱', title: 'Lotto', subtitle: '확인하기', onPress: () => nav.navigate('RoundSchedulePrototype') },
   ], [dashboard.upcomingRound, nav])
 
   if (clubsLoaded && !club) {
@@ -134,6 +167,7 @@ export default function HomeExperienceScreen() {
                   onClubPress={() => nav.navigate('Main', { screen: 'Club' })}
                   onNotificationPress={() => nav.navigate('NoticePrototype')}
                   onCreateRound={() => nav.navigate('RoundSchedulePrototype', { openCreate: true })}
+                  heroImageSource={activeHeroImageSource}
                 />
               </PremiumHomeMotion>
             ),
@@ -148,18 +182,11 @@ export default function HomeExperienceScreen() {
                   userName={myName || '골퍼'}
                   courseName={dashboard.aiCaddie.courseName}
                   teeTime={dashboard.aiCaddie.teeTime}
-                  dday={dashboard.aiCaddie.dday}
                   averageScore={dashboard.aiCaddie.averageScore}
                   hasUpcomingRound={dashboard.aiCaddie.hasUpcomingRound}
-                  title={`안녕하세요,\n${myName || '골퍼'}님 👋`}
-                  message={dashboard.aiCaddie.hasUpcomingRound
-                    ? `오늘 ${dashboard.aiCaddie.courseName || '예정 골프장'} · ${dashboard.aiCaddie.teeTime || 'Tee Off'} 라운드를 준비했습니다.`
-                    : dashboard.aiCaddie.message}
-                  primaryChip={dashboard.aiCaddie.primaryChip}
-                  secondaryChip={dashboard.aiCaddie.secondaryChip}
-                  hasLiveAdvice={dashboard.aiCaddie.hasLiveAdvice}
+                  feed={dashboard.feed}
                   actions={conciergeActions}
-                  onPress={() => nav.navigate('CaddieBook', caddieBookParams(dashboard.upcomingRound))}
+                  onPress={() => resolveFeedNavigation(nav, dashboard.feed.actionType, dashboard.upcomingRound)}
                 />
               </PremiumHomeMotion>
             ),

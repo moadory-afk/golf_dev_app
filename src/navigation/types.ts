@@ -13,6 +13,7 @@ export type RootStackParamList = {
   SignUpRoute: undefined
   Main: NavigatorScreenParams<MainTabParamList> | undefined
   Profile: undefined
+  HeroLab: undefined
   FeePrototype: { returnToManageMenu?: boolean } | undefined
   RoundSchedulePrototype: { returnToManageMenu?: boolean; openCreate?: boolean; editScheduleId?: string; modalOnly?: boolean } | undefined
   CaddieBook: { courseId?: string | null; layoutId?: string | null; courseName?: string | null; layoutName?: string | null; scheduleId?: string | null } | undefined

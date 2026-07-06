@@ -327,6 +327,13 @@ export default function ClubScreen() {
       icon: 'mail' as const,
       onPress: () => nav.navigate('NoticePrototype', { returnToManageMenu: true }),
     },
+    {
+      key: 'heroLab',
+      title: 'Hero Lab',
+      subtitle: '골프장 Hero 이미지를 미리보고 홈 화면에 적용합니다',
+      icon: 'settings' as const,
+      onPress: () => nav.navigate('HeroLab'),
+    },
   ] : []
 
   return (

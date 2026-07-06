@@ -34,7 +34,8 @@
     "build:web": "expo export -p web",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build:course-assets": "node scripts/build-course-assets.mjs"
   },
   "private": true
 }

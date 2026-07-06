@@ -1,4 +1,5 @@
 import type { PremiumRecentStatItem } from '../components'
+import type { HomeFeedEvent } from '../engine'
 
 export type HomeRoundStatus = 'planned' | 'recruiting' | 'closed' | 'finished'
 
@@ -18,7 +19,6 @@ export type HomeUpcomingRound = {
   weatherText: string
   temperature: string
   windText?: string
-  weatherIcon?: string
   courseId?: string
   layoutId?: string
 }
@@ -75,6 +75,8 @@ export type HomeDashboard = {
   hero: HomeHero
   upcomingRound: HomeUpcomingRound | null
   aiCaddie: HomeAiCaddie
+  feed: HomeFeedEvent
+  feedEvents: HomeFeedEvent[]
   stats: HomeStats
 }
 

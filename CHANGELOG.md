@@ -39,28 +39,14 @@
 
 ---
 
-# CHANGELOG - Home Layout Engine v3.11
-
-## Added
-- Home 전용 Slot 기반 Layout Engine 1차 도입.
-  - `HomeLayoutDefinition`
-  - `HomeLayoutRenderer`
-  - `premiumGolfHomeLayout`
-- Home 화면을 데이터 슬롯 중심으로 렌더링하도록 정리.
-- 향후 스킨이 색/폰트뿐 아니라 섹션 순서, 슬롯 위치, 표시 여부까지 바꿀 수 있는 기반 추가.
+# Home v4.0 Step 5 - Hero Fixed Display Ratio
 
 ## Changed
-- Home 구조를 `Hero → Concierge → Stats` 중심으로 단순화.
-- Hero와 Concierge 사이를 곡선 Wave 레이어로 시각적으로 연결.
-- Header는 클럽 선택, 공지, 프로필 중심으로 정리.
-- Concierge 카드에는 인사, 라운드 준비 안내, `AI 캐디북 / 조편성 / Lotto` 액션을 배치.
-- Stats는 4개 지표 한 줄 compact 표시로 정리.
-- 기록 숫자는 소수점 이하 절상 후 정수만 표시.
-- 평균/최근/베스트 스코어의 `타` 단위 표시 제거.
+- Home Hero 표시 규격을 앱 내부 고정 비율로 정리했다.
+- Hero 원본 이미지는 여유 있는 비율로 보유하되, 앱 표시 영역은 `16:10.5` 기준으로 출력한다.
+- Hero 카드 높이를 고정 숫자가 아니라 카드 폭 기준 `height = width × 10.5 / 16`으로 계산한다.
+- Hero 이미지는 표시 카드 영역에 `resizeMode="cover"`로 맞춰 출력한다.
+- Hero 내부 텍스트와 하단 정보 스트립을 축소된 표시 영역에 맞게 compact 조정했다.
 
 ## DB
 - DB 변경 없음.
-
-## Verified
-- Home 변경 파일 기준 TypeScript 부분 검증 통과.
-- 전체 TypeScript 검증은 프로젝트 전체 검사 시간이 제한을 초과하여 완료하지 못함.

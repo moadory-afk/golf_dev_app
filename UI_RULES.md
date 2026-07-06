@@ -9,10 +9,10 @@
 
 ---
 
-# Home Layout UI Rules v3.11
+## Home Hero Display Rule
 
-- Hero와 Concierge는 시각적으로 단절하지 않고 Wave/Overlap으로 연결할 수 있다.
-- Home 기록 숫자는 정수 중심으로 표시한다.
-- 평균/최근/베스트 스코어에는 `타` 단위를 붙이지 않는다.
-- Home의 핵심 섹션은 `Hero`, `Concierge`, `Stats`로 제한한다.
-- 스킨 변경은 색상 변경이 아니라 슬롯 배치 변경까지 고려한다.
+- Home Hero 표시 비율은 `16:10.5`를 기본으로 한다.
+- 구현 공식은 `height = cardWidth × 10.5 / 16`이다.
+- 원본 이미지는 표시 영역보다 세로 여유가 있는 `16:12`를 권장한다.
+- 앱에서는 `resizeMode="cover"`로 카드 영역에 맞춰 출력한다.
+- 중요한 골프장 피사체는 원본 이미지 중앙 안전 영역에 배치한다.

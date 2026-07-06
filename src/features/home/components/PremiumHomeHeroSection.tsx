@@ -8,6 +8,11 @@ import type { HomeHeroRound } from '../types/home'
 const defaultHeroImage = require('../../../../assets/course-heroes/bomun-hero-v2.png')
 const gogoMark = require('../../../../assets/gogopar_i.png')
 
+const HERO_DISPLAY_ASPECT_RATIO = 16 / 10.5
+const HERO_DISPLAY_HEIGHT_RATIO = 10.5 / 16
+const HERO_MIN_WIDTH = 280
+const HERO_MAX_WIDTH = 430
+
 type HeroAction = {
   key: string
   icon: string
@@ -50,9 +55,12 @@ export function PremiumHomeHeroSection({
   onCreateRound,
 }: PremiumHomeHeroSectionProps) {
   const { palette } = useSkin()
-  const { width } = useWindowDimensions()
+  const { width: windowWidth } = useWindowDimensions()
   const [activeIndex, setActiveIndex] = useState(0)
-  const heroWidth = width - 40
+  const [measuredHeroWidth, setMeasuredHeroWidth] = useState(0)
+  const fallbackHeroWidth = Math.max(HERO_MIN_WIDTH, Math.min(windowWidth - 40, HERO_MAX_WIDTH))
+  const heroWidth = measuredHeroWidth || fallbackHeroWidth
+  const heroHeight = Math.round(heroWidth * HERO_DISPLAY_HEIGHT_RATIO)
   const hasRounds = rounds.length > 0
   const totalCount = Math.max(1, rounds.length + (isAdmin ? 1 : 0))
   const dots = Array.from({ length: totalCount })
@@ -84,7 +92,13 @@ export function PremiumHomeHeroSection({
         </View>
       </View>
 
-      <View style={[styles.heroCard, { borderRadius: palette.cardRadius + 12 }]}> 
+      <View
+        onLayout={(event) => {
+          const nextWidth = Math.round(event.nativeEvent.layout.width)
+          if (nextWidth > 0 && nextWidth !== measuredHeroWidth) setMeasuredHeroWidth(nextWidth)
+        }}
+        style={[styles.heroCard, { borderRadius: palette.cardRadius + 12 }]}
+      > 
         <ImageBackground source={defaultHeroImage} style={styles.heroImage} imageStyle={styles.heroImageRadius} resizeMode="cover">
           <View style={styles.scrim} />
           <ScrollView
@@ -96,10 +110,11 @@ export function PremiumHomeHeroSection({
             style={styles.carousel}
           >
             {hasRounds ? rounds.map((round) => (
-              <HeroRoundCard key={round.id} width={heroWidth} round={round} />
+              <HeroRoundCard key={round.id} width={heroWidth} height={heroHeight} round={round} />
             )) : (
               <HeroEmptyCard
                 width={heroWidth}
+                height={heroHeight}
                 courseName={fallbackCourseName}
                 address={fallbackAddress}
                 weatherText={fallbackWeatherText}
@@ -113,7 +128,7 @@ export function PremiumHomeHeroSection({
             )}
 
             {isAdmin && hasRounds && (
-              <HeroCreateRoundCard width={heroWidth} onCreateRound={onCreateRound} />
+              <HeroCreateRoundCard width={heroWidth} height={heroHeight} onCreateRound={onCreateRound} />
             )}
           </ScrollView>
 
@@ -139,11 +154,11 @@ export function PremiumHomeHeroSection({
   )
 }
 
-function HeroRoundCard({ width, round }: { width: number; round: HomeHeroRound }) {
+function HeroRoundCard({ width, height, round }: { width: number; height: number; round: HomeHeroRound }) {
   const { palette } = useSkin()
 
   return (
-    <View style={[styles.slide, { width }]}> 
+    <View style={[styles.slide, { width, height }]}> 
       <View style={styles.courseBlock}>
         <View style={[styles.ddayPill, { backgroundColor: palette.green }]}> 
           <Text style={styles.ddayText}>{round.dday}</Text>
@@ -171,6 +186,7 @@ function HeroRoundCard({ width, round }: { width: number; round: HomeHeroRound }
 
 function HeroEmptyCard({
   width,
+  height,
   courseName,
   address,
   weatherText,
@@ -182,6 +198,7 @@ function HeroEmptyCard({
   onCreateRound,
 }: {
   width: number
+  height: number
   courseName: string
   address: string
   weatherText: string
@@ -195,7 +212,7 @@ function HeroEmptyCard({
   const { palette } = useSkin()
 
   return (
-    <View style={[styles.slide, { width }]}> 
+    <View style={[styles.slide, { width, height }]}> 
       <View style={styles.courseBlock}>
         <View style={[styles.ddayPill, { backgroundColor: palette.green }]}> 
           <Text style={styles.ddayText}>{dday}</Text>
@@ -220,11 +237,11 @@ function HeroEmptyCard({
   )
 }
 
-function HeroCreateRoundCard({ width, onCreateRound }: { width: number; onCreateRound: () => void }) {
+function HeroCreateRoundCard({ width, height, onCreateRound }: { width: number; height: number; onCreateRound: () => void }) {
   const { palette } = useSkin()
 
   return (
-    <View style={[styles.slide, { width }]}> 
+    <View style={[styles.slide, { width, height }]}> 
       <TouchableOpacity activeOpacity={0.9} onPress={onCreateRound} style={[styles.createCard, { borderColor: palette.gold }]}> 
         <Text style={styles.createIcon}>＋</Text>
         <Text style={[styles.createTitle, { color: palette.text }]}>새 라운딩 등록</Text>
@@ -249,9 +266,10 @@ function HeroInfo({ icon, value, label, accent = false }: { icon: string; value:
 const styles = StyleSheet.create({
   shell: {
     marginBottom: 0,
+    width: '100%',
   },
   headerRow: {
-    height: 70,
+    height: 58,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -261,90 +279,90 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     maxWidth: '58%',
-    minHeight: 52,
+    minHeight: 44,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.pill,
     borderWidth: 1,
   },
-  clubIcon: { fontSize: 19 },
-  clubText: { flex: 1, fontSize: 18, lineHeight: 23, fontWeight: '900', letterSpacing: -0.6 },
-  clubArrow: { fontSize: 18, lineHeight: 18, fontWeight: '900' },
+  clubIcon: { fontSize: 18 },
+  clubText: { flex: 1, fontSize: 17, lineHeight: 22, fontWeight: '900', letterSpacing: -0.6 },
+  clubArrow: { fontSize: 17, lineHeight: 17, fontWeight: '900' },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   circleButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
   },
-  bellText: { fontSize: 24 },
+  bellText: { fontSize: 22 },
   badge: {
     position: 'absolute',
     top: -5,
     right: -3,
-    minWidth: 24,
-    height: 24,
-    borderRadius: 12,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
   badgeText: { color: '#fff', fontSize: 12, fontWeight: '900' },
   profileButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
     borderWidth: 1,
   },
-  profileImage: { width: 62, height: 62 },
+  profileImage: { width: 52, height: 52 },
   heroCard: {
-    height: 420,
+    width: '100%',
+    aspectRatio: HERO_DISPLAY_ASPECT_RATIO,
     overflow: 'hidden',
   },
   heroImage: { flex: 1 },
   heroImageRadius: { borderRadius: radius.xxl },
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.38)',
+    backgroundColor: 'rgba(0,0,0,0.32)',
   },
   carousel: { flex: 1 },
   slide: {
-    height: 420,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xl,
-    paddingBottom: 56,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 28,
     justifyContent: 'space-between',
   },
-  courseBlock: { flex: 1, justifyContent: 'center' },
+  courseBlock: { flex: 1, justifyContent: 'center', paddingTop: 4, paddingBottom: 6 },
   ddayPill: {
     alignSelf: 'flex-start',
     borderRadius: radius.pill,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.lg,
+    paddingHorizontal: 11,
+    paddingVertical: 4,
+    marginBottom: 6,
   },
-  ddayText: { color: '#fff', fontSize: 18, lineHeight: 23, fontWeight: '900' },
+  ddayText: { color: '#fff', fontSize: 12, lineHeight: 16, fontWeight: '900' },
   titleRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, maxWidth: '100%' },
   courseName: {
     maxWidth: '72%',
-    fontSize: 42,
-    lineHeight: 48,
+    fontSize: 28,
+    lineHeight: 33,
     fontWeight: '900',
-    letterSpacing: -2.0,
+    letterSpacing: -1.4,
   },
-  layoutName: { color: '#fff', fontSize: 20, lineHeight: 30, fontWeight: '900', marginBottom: 4 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.md, marginTop: spacing.lg },
-  metaText: { color: '#fff', fontSize: 14, lineHeight: 19, fontWeight: '900' },
-  emptyAddress: { color: colorLayers.heroTextMuted, fontSize: 14, lineHeight: 20, fontWeight: '800', marginTop: spacing.sm },
+  layoutName: { color: '#fff', fontSize: 14, lineHeight: 19, fontWeight: '900', marginBottom: 4 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  metaText: { color: '#fff', fontSize: 10, lineHeight: 14, fontWeight: '900' },
+  emptyAddress: { color: colorLayers.heroTextMuted, fontSize: 13, lineHeight: 18, fontWeight: '800', marginTop: spacing.xs },
   infoStrip: {
     flexDirection: 'row',
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.22)',
-    paddingTop: spacing.md,
+    paddingTop: 7,
   },
   infoItem: {
     flex: 1,
@@ -352,24 +370,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.xs,
+    gap: 2,
+    paddingHorizontal: 2,
     borderRightWidth: 1,
     borderRightColor: 'rgba(255,255,255,0.20)',
   },
-  infoIcon: { fontSize: 22 },
+  infoIcon: { fontSize: 14 },
   infoTextWrap: { minWidth: 0, alignItems: 'center' },
-  infoValue: { color: '#fff', fontSize: 19, lineHeight: 24, fontWeight: '900', letterSpacing: -0.5 },
+  infoValue: { color: '#fff', fontSize: 13, lineHeight: 16, fontWeight: '900', letterSpacing: -0.4 },
   infoAccent: { color: '#45C26B' },
-  infoLabel: { color: '#fff', opacity: 0.9, fontSize: 10, lineHeight: 13, fontWeight: '900' },
-  dotsRow: { position: 'absolute', left: 0, right: 0, bottom: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
+  infoLabel: { color: '#fff', opacity: 0.9, fontSize: 8, lineHeight: 10, fontWeight: '900' },
+  dotsRow: { position: 'absolute', left: 0, right: 0, bottom: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
   dot: { borderRadius: radius.pill },
   heroWave: {
     position: 'absolute',
     left: -20,
     right: -20,
-    bottom: -36,
-    height: 72,
+    bottom: -22,
+    height: 44,
     borderTopLeftRadius: 260,
     borderTopRightRadius: 260,
   },
@@ -394,7 +412,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.xxl,
   },
-  createIcon: { color: '#fff', fontSize: 56, lineHeight: 62, fontWeight: '900' },
-  createTitle: { fontSize: 25, lineHeight: 31, fontWeight: '900', letterSpacing: -1.0, marginTop: spacing.md },
-  createSubtitle: { color: '#fff', opacity: 0.8, fontSize: 14, lineHeight: 20, fontWeight: '800', textAlign: 'center', marginTop: spacing.sm },
+  createIcon: { color: '#fff', fontSize: 42, lineHeight: 46, fontWeight: '900' },
+  createTitle: { fontSize: 20, lineHeight: 25, fontWeight: '900', letterSpacing: -0.8, marginTop: spacing.sm },
+  createSubtitle: { color: '#fff', opacity: 0.8, fontSize: 12, lineHeight: 17, fontWeight: '800', textAlign: 'center', marginTop: spacing.xs },
 })

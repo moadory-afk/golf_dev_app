@@ -27,21 +27,8 @@
 
 ---
 
-# Home Layout Engine v3.11
+## PremiumHomeHeroSection - Hero Display
 
-## Files
-
-- `src/features/home/layout/homeLayoutTypes.ts`
-  - Home Layout Definition 타입을 정의한다.
-
-- `src/features/home/layout/premiumGolfHomeLayout.ts`
-  - 현재 Home 디자인을 `Premium Golf Wave` 레이아웃으로 등록한다.
-
-- `src/features/home/layout/HomeLayoutRenderer.tsx`
-  - Layout Definition의 section 순서에 따라 슬롯을 렌더링한다.
-
-## Rules
-
-- Home Screen은 개별 섹션 순서를 직접 하드코딩하지 않고 Layout Renderer를 통해 출력한다.
-- 데이터는 Screen에서 준비하고, 배치는 Layout Definition이 결정한다.
-- 새로운 Home 디자인은 컴포넌트 재작성보다 Layout Definition 추가를 우선 검토한다.
+- `HERO_DISPLAY_ASPECT_RATIO = 16 / 10.5`를 사용한다.
+- 실제 slide 높이는 `heroWidth × 10.5 / 16`으로 계산한다.
+- 화면 크기가 달라져도 Hero 표시 높이는 카드 폭 기준으로 일관되게 유지한다.
