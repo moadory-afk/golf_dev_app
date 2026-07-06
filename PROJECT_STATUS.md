@@ -1,10 +1,10 @@
 # GogoPar Project Status
 
 ## Current Version
-Home Redesign v3.0 Phase 1
+Home Redesign v3.9 Premium Polish
 
 ## Current Sprint
-Home Round Hub Hero Carousel
+Home No-Scroll Premium Dashboard Polish
 
 ## Progress
 
@@ -23,27 +23,35 @@ Home Round Hub Hero Carousel
 ✅ AI Hole Strategy v2.7
 ✅ AI Shot Plan v2.8 ~ v2.8.1
 ✅ Home Redesign v3.0 Phase 1
+✅ Home Concierge v3.6
+✅ Home Visual Polish v3.7 ~ v3.8
+✅ Home Premium Polish v3.9
 
 ## Current Task
 
-Home Hero를 예정 라운드 Carousel 기반의 Round Hub로 전환했다.
+Home 화면을 스크롤 없는 Premium Dashboard 방향으로 정리했다.
 
-- 여러 예정 라운드 Swipe 표시
-- Hero 내부 라운드 액션 통합
-- 관리자 전용 새 라운딩 등록 카드 추가
-- 이동시간 / 추천 출발시간 표시 영역 추가
+- Header는 클럽 선택 / 공지 / 프로필 중심으로 정리
+- Hero는 예정 라운드 Swipe와 핵심 라운드 정보를 유지
+- Hero 하단 4개 정보 유지: 날씨 / 풍속 / 이동시간 / 출발추천
+- Greeting은 Gogo Concierge 카드로 이동
+- Concierge 카드에 AI 캐디북 / 조편성 / Lotto 진입점 제공
+- Concierge 교통상황 블록 삭제
+- Stats는 4개 한 줄 숫자 중심으로 정리
 
 ## Verified
 
-- 변경 파일 기준 TypeScript transpile syntax check 통과
-- 전체 TypeScript 검증은 전체 프로젝트 루트와 의존성 부재로 미실행
+- 변경 파일 TypeScript transpile syntax check 통과
+- 전체 TypeScript 검증은 제한 시간 내 완료되지 않음
 
 ## Next Task
 
-- Home Redesign v3.0 Phase 2
-- Upcoming Round Card 제거
-- Home 중복 섹션 정리
-- AI Card / Quick Menu 단순화
+Home v4.0 Data Quality & Runtime Polish
+
+- 실제 기기에서 Home 높이/겹침 확인
+- Hero 이미지 어두움 정도 및 골프장명 가독성 확인
+- 날씨/풍속/이동시간/출발추천 실제 데이터 연동 고도화
+- Bottom Navigation Safe Area 재확인
 
 ## Do Not Touch
 
@@ -53,25 +61,22 @@ Home Hero를 예정 라운드 Carousel 기반의 Round Hub로 전환했다.
 - Existing DB Schema without explicit SQL approval
 
 
-# PROJECT_STATUS - Home v3.7 Update
-
-## Current Version
-Home Redesign v3.7 Concierge Visual Polish
+# PROJECT_STATUS - Home v3.10
 
 ## Current Sprint
-Home v3.7 No-Scroll Concierge Layout
+Home v3.10 No Scroll Balance Polish
 
-## Current Task Completed
-- 상단 Header 단순화
-- Hero 핵심 정보 Strip 유지
-- Greeting을 Concierge 카드로 이동
-- Concierge 카드 중복 교통상황 블록 삭제
-- Concierge 액션 3개 배치
-- Stats 4개 한 줄 compact 유지
+## Current Task
+Home 화면에서 Hero / Concierge / Stats / Bottom Navigation의 높이 균형을 재조정했다.
 
-## Verified
-- 전체 TypeScript 검증 실행 결과, 기존 CaddieBook/AI Shot Plan 오류 3건으로 실패.
-- Home 변경 파일의 신규 오류는 확인되지 않음.
+## Result
+- 기록 4개 카드가 홈 화면 하단에서 보이도록 Hero와 Concierge를 compact화했다.
+- Hero의 핵심 정보 4개는 유지했다.
+- Concierge는 Greeting + 라운드 요약 + 3개 액션 + AI 한줄로 축소했다.
 
-## Next Task
-Home v3.8 Data Reliability
+## Do Not Touch
+- DB Schema
+- Authentication
+- Invite
+- Payment
+- Bottom Navigation 구조

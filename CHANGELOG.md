@@ -1,62 +1,65 @@
-# CHANGELOG - AI Shot Plan Polish Sprint v2.8.1
-
-## Added
-- AI Shot Plan Engine 추가
-  - 홀별 추천 샷 시퀀스 생성
-  - 샷별 예상 캐리 거리와 남은 거리 계산
-  - 홀별 예상 타수 계산
-  - Par / Bogey / Double 확률 계산
-  - 18홀 예상 스코어와 오늘 목표 스코어 산출
-- 캐디북 상세 화면에 AI Shot Plan Card 추가
-  - Shot Timeline 표시
-  - 추천 플랜 compact 표기
-  - 예상타수 / 구간 / 난이도 표시
-  - 스코어 확률 표시
-- 캐디북 상단에 18 Hole Strategy 요약 카드 추가
-  - 홀별 `D → 4H` 형태의 전략표
-  - 오늘 AI 예상 스코어
-  - 오늘 목표 스코어
-  - Par / Bogey / Double 예상 개수
+# CHANGELOG - Home v3.9 Premium Polish
 
 ## Changed
-- `CaddieBookHole` 모델에 `shotPlan` 필드를 추가했다.
-- `CaddieBookData` 모델에 `shotPlanSummary` 필드를 추가했다.
-- 캐디북 Mapper에서 사용자 비거리와 홀 거리 기반 Shot Plan을 함께 생성하도록 변경했다.
-- 캐디북 화면의 AI 영역을 정보 표시 중심에서 실행 계획 중심으로 보강했다.
-
-## DB
-- DB 변경 없음.
-
-## Verified
-- 순수 AI Shot Plan Engine / Mapper 관련 TypeScript 부분 검증 통과.
-- 전체 앱 TypeScript 검증은 업로드 범위가 `src.zip`이고 프로젝트 루트 의존성이 없어 실행하지 못함.
-
-## Preserved
-- 기존 Navigation 구조 유지.
-- 기존 Home UI 유지.
-- Authentication, Invite, Payment 변경 없음.
-- 기존 DB Schema 변경 없음.
-
-
-# CHANGELOG - Home v3.7 Concierge Visual Polish
-
-## Changed
-- Home 상단을 클럽 선택, 공지사항, 프로필만 남기는 1줄 Header로 정리했다.
-- Hero 카드의 하단 핵심 정보 영역을 유지했다.
+- Home 화면을 `Header → Hero → Gogo Concierge → Stats` 구조로 정리했다.
+- Header는 클럽 선택, 공지, 프로필만 남기고 Greeting을 제거했다.
+- Greeting은 Gogo Concierge 카드로 이동했다.
+- Hero 카드 하단의 4개 핵심 정보는 유지했다.
   - 날씨
   - 풍속
   - 예상 소요시간
-  - 출발 추천 시간
-- Greeting을 Home 상단에서 Concierge 카드 내부로 이동했다.
-- Concierge 카드 아래의 중복 교통상황 블록을 삭제했다.
-- Concierge 카드 액션을 `AI 캐디북 / 조편성 / Lotto` 3개로 정리했다.
-- Home 통계 4개를 한 줄 compact 카드로 재정리했다.
-- Home에서 Quick Menu, Upcoming Round, Recent Round, Community 섹션을 제거했다.
+  - 출발 추천시간
+- Hero의 골프장명, 코스명, 일정 정보, 정보 스트립의 폰트 크기와 정렬을 조정했다.
+- Gogo Concierge 카드를 단일 카드 구조로 리디자인했다.
+  - 캐릭터 축소
+  - Greeting 2줄 구조
+  - 라운드 안내 문구 압축
+  - `AI 캐디북 / 조편성 / Lotto` 버튼 3개 배치
+  - 교통상황 블록 삭제 유지
+  - AI 한줄 코멘트 영역 정리
+- Statistics를 4개 한 줄 숫자 중심 카드로 재정리했다.
+  - HCP
+  - AVG
+  - LAST
+  - BEST
+- Home의 Quick Menu, Upcoming Round, Recent Round, Community, Theme 섹션은 Home v3 철학에 맞춰 노출하지 않도록 정리했다.
+
+## Fixed
+- 버튼 텍스트가 `A...`, `조...`, `L...`처럼 과도하게 잘리던 문제를 완화했다.
+- Concierge 카드에서 Greeting과 안내 문구가 한 줄에서 잘리는 문제를 개선했다.
+- Bottom Navigation과 Stats가 겹치지 않도록 하단 여백을 조정했다.
 
 ## DB
 - DB 변경 없음.
 
 ## Verified
-- `npx tsc --noEmit` 실행.
-- 기존 CaddieBook / AI Shot Plan TypeScript 오류 3건은 유지됨.
-- 이번 Home 변경 파일에서 신규 TypeScript 오류는 확인되지 않음.
+- 변경 파일 기준 TypeScript transpile syntax check 통과.
+- 전체 `tsc --noEmit`은 실행 시간이 길어 제한 시간 내 완료되지 못했다.
+
+## Preserved
+- 기존 Navigation 구조 유지.
+- 기존 DB Schema 유지.
+- CaddieBook / AI Shot Plan 로직 변경 없음.
+
+
+# CHANGELOG - Home v3.10 No Scroll Balance Polish
+
+## Changed
+- Home 화면에서 기록 4개 카드가 하단 Navigation에 가려지지 않도록 전체 높이 균형을 재조정했다.
+- Hero 카드 높이를 compact하게 줄이면서 하단 4개 정보(날씨 / 바람 / 예상 소요 / 출발 추천)는 유지했다.
+- Gogo Concierge 카드를 더 작고 명확하게 재정리했다.
+  - 캐릭터 크기 축소
+  - Greeting 폰트 축소
+  - 버튼 높이 축소
+  - AI 한줄 코멘트 1줄 고정
+- Statistics 영역을 화면 안에 보이도록 compact 유지했다.
+
+## Removed
+- HeroInfo에서 중복 렌더링되던 label 텍스트를 제거했다.
+
+## DB
+- DB 변경 없음.
+
+## Verified
+- Home 변경 파일 4개 TypeScript transpile syntax check 통과.
+- 전체 `tsc --noEmit`은 제한 시간 내 완료되지 않아 완료 검증하지 못함.

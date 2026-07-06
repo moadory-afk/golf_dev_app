@@ -53,12 +53,16 @@ function routeTimeText() {
 }
 
 function departureTimeText(teeTime?: string | null) {
-  if (!teeTime || !/^\d{1,2}:\d{2}$/.test(teeTime)) return '10:55'
-  const [hourText, minuteText] = teeTime.split(':')
-  const target = new Date()
-  target.setHours(Number(hourText), Number(minuteText), 0, 0)
-  target.setMinutes(target.getMinutes() - 77)
-  return `${String(target.getHours()).padStart(2, '0')}:${String(target.getMinutes()).padStart(2, '0')}`
+  const match = teeTime?.match(/^(\d{1,2}):(\d{2})/)
+  if (!match) return '10:55'
+  const hour = Number(match[1])
+  const minute = Number(match[2])
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return '10:55'
+  const totalMinutes = hour * 60 + minute - 77
+  const normalized = ((totalMinutes % 1440) + 1440) % 1440
+  const departureHour = Math.floor(normalized / 60)
+  const departureMinute = normalized % 60
+  return `${String(departureHour).padStart(2, '0')}:${String(departureMinute).padStart(2, '0')}`
 }
 
 function average(values: number[]) {
