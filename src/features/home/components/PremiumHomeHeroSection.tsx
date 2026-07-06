@@ -1,15 +1,14 @@
-import { Image, ImageBackground, NativeScrollEvent, NativeSyntheticEvent, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native'
+import { Image, ImageSourcePropType, NativeScrollEvent, NativeSyntheticEvent, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native'
 import { useState } from 'react'
 
 import { colorLayers, radius, spacing } from '../../../design/tokens'
 import { useSkin } from '../../../skins'
 import type { HomeHeroRound } from '../types/home'
 
-const defaultHeroImage = require('../../../../assets/course-heroes/bomun-hero-v2.png')
 const gogoMark = require('../../../../assets/gogopar_i.png')
 
-const HERO_DISPLAY_ASPECT_RATIO = 16 / 10.5
-const HERO_DISPLAY_HEIGHT_RATIO = 10.5 / 16
+const HERO_DISPLAY_ASPECT_RATIO = 16 / (10.5 * 1.5)
+const HERO_DISPLAY_HEIGHT_RATIO = (10.5 / 16) * 1.5
 const HERO_MIN_WIDTH = 280
 const HERO_MAX_WIDTH = 430
 
@@ -37,6 +36,7 @@ type PremiumHomeHeroSectionProps = {
   onNotificationPress: () => void
   onCreateRound: () => void
   actions: HeroAction[]
+  heroImageSource?: ImageSourcePropType
 }
 
 export function PremiumHomeHeroSection({
@@ -53,6 +53,8 @@ export function PremiumHomeHeroSection({
   onClubPress,
   onNotificationPress,
   onCreateRound,
+  actions,
+  heroImageSource,
 }: PremiumHomeHeroSectionProps) {
   const { palette } = useSkin()
   const { width: windowWidth } = useWindowDimensions()
@@ -99,7 +101,8 @@ export function PremiumHomeHeroSection({
         }}
         style={[styles.heroCard, { borderRadius: palette.cardRadius + 12 }]}
       > 
-        <ImageBackground source={defaultHeroImage} style={styles.heroImage} imageStyle={styles.heroImageRadius} resizeMode="cover">
+        <View style={styles.heroImage}>
+          {heroImageSource ? <Image source={heroImageSource} style={styles.heroBackgroundImage} resizeMode="cover" /> : null}
           <View style={styles.scrim} />
           <ScrollView
             horizontal
@@ -110,7 +113,7 @@ export function PremiumHomeHeroSection({
             style={styles.carousel}
           >
             {hasRounds ? rounds.map((round) => (
-              <HeroRoundCard key={round.id} width={heroWidth} height={heroHeight} round={round} />
+              <HeroRoundCard key={round.id} width={heroWidth} height={heroHeight} round={round} actions={actions} />
             )) : (
               <HeroEmptyCard
                 width={heroWidth}
@@ -147,14 +150,14 @@ export function PremiumHomeHeroSection({
               />
             ))}
           </View>
-        </ImageBackground>
+        </View>
       </View>
       <View style={[styles.heroWave, { backgroundColor: palette.bg }]} pointerEvents="none" />
     </View>
   )
 }
 
-function HeroRoundCard({ width, height, round }: { width: number; height: number; round: HomeHeroRound }) {
+function HeroRoundCard({ width, height, round, actions }: { width: number; height: number; round: HomeHeroRound; actions: HeroAction[] }) {
   const { palette } = useSkin()
 
   return (
@@ -174,11 +177,21 @@ function HeroRoundCard({ width, height, round }: { width: number; height: number
         </View>
       </View>
 
-      <View style={styles.infoStrip}>
-        <HeroInfo icon="☀️" value={round.temperature} label={round.weatherText} />
-        <HeroInfo icon="🌬" value={round.windText || '2m/s'} label="풍속" />
-        <HeroInfo icon="🚗" value={round.routeTimeText} label="이동" />
-        <HeroInfo icon="🕒" value={round.departureTimeText} label="출발추천" accent />
+      <View>
+        <View style={styles.infoStrip}>
+          <HeroInfo icon="☀️" value={round.temperature} label={round.weatherText} />
+          <HeroInfo icon="🌬" value={round.windText || '2m/s'} label="풍속" />
+          <HeroInfo icon="🚗" value={round.routeTimeText} label="이동" />
+          <HeroInfo icon="🕒" value={round.departureTimeText} label="출발추천" accent />
+        </View>
+        <View style={styles.heroActionRow}>
+          {actions.slice(0, 3).map((action) => (
+            <TouchableOpacity key={action.key} activeOpacity={0.86} onPress={() => action.onPress(round)} style={styles.heroActionButton}>
+              <Text style={styles.heroActionIcon}>{action.icon}</Text>
+              <Text style={styles.heroActionLabel} numberOfLines={1}>{action.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
     </View>
   )
@@ -323,8 +336,8 @@ const styles = StyleSheet.create({
     aspectRatio: HERO_DISPLAY_ASPECT_RATIO,
     overflow: 'hidden',
   },
-  heroImage: { flex: 1 },
-  heroImageRadius: { borderRadius: radius.xxl },
+  heroImage: { flex: 1, backgroundColor: '#10261B' },
+  heroBackgroundImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
   scrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.32)',
@@ -380,6 +393,10 @@ const styles = StyleSheet.create({
   infoValue: { color: '#fff', fontSize: 13, lineHeight: 16, fontWeight: '900', letterSpacing: -0.4 },
   infoAccent: { color: '#45C26B' },
   infoLabel: { color: '#fff', opacity: 0.9, fontSize: 8, lineHeight: 10, fontWeight: '900' },
+  heroActionRow: { flexDirection: 'row', gap: spacing.sm, marginTop: 10 },
+  heroActionButton: { flex: 1, minHeight: 40, borderRadius: radius.xl, backgroundColor: 'rgba(255,255,255,0.20)', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4, paddingHorizontal: 6 },
+  heroActionIcon: { fontSize: 14, lineHeight: 17 },
+  heroActionLabel: { color: '#fff', fontSize: 12, lineHeight: 16, fontWeight: '900', letterSpacing: -0.3 },
   dotsRow: { position: 'absolute', left: 0, right: 0, bottom: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
   dot: { borderRadius: radius.pill },
   heroWave: {

@@ -71,21 +71,6 @@ function PremiumStatCard({ stat }: { stat: PremiumRecentStatItem }) {
       <Text style={[styles.value, { color: accent }]} numberOfLines={1}>{normalizeValue(stat.value)}</Text>
       <Text style={[styles.caption, { color: palette.muted }]} numberOfLines={1}>{stat.caption}</Text>
 
-      <View style={styles.trendRow}>
-        {trend.slice(0, 5).map((point, index) => (
-          <View
-            key={`${stat.key}-${index}`}
-            style={[
-              styles.trendSegment,
-              {
-                backgroundColor: point === 'down' ? palette.border : accent,
-                opacity: point === 'flat' ? 0.58 : 1,
-                height: point === 'up' ? 4 : point === 'down' ? 2 : 3,
-              },
-            ]}
-          />
-        ))}
-      </View>
     </TouchableOpacity>
   )
 }

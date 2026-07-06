@@ -1,8 +1,7 @@
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { colorLayers, createShadow, radius, spacing, typography } from '../../../design/tokens'
 import { useSkin } from '../../../skins'
 
-const courseThumb = require('../../../../assets/course-heroes/bomun-thumb.png')
 
 export type PremiumRoundAction = {
   key: string
@@ -60,7 +59,7 @@ export function PremiumUpcomingRoundCard({
   return (
     <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={[styles.shell, createShadow(palette, 2), { backgroundColor: palette.card, borderColor: palette.border, borderRadius: palette.cardRadius + 12 }]}> 
       <View style={[styles.ticketMain, { backgroundColor: palette.headerBg }]}> 
-        <Image source={courseThumb} style={styles.courseImage} resizeMode="cover" />
+        <View style={[styles.courseImage, { backgroundColor: palette.green }]} />
         <View style={styles.mainScrim} />
         <View style={styles.roundInfo}> 
           <View style={[styles.statusBadge, { backgroundColor: palette.greenLight }]}> 
@@ -80,20 +79,6 @@ export function PremiumUpcomingRoundCard({
             <Text style={[styles.weatherText, { color: palette.headerText }]}>{temperature} {weatherText}</Text>
           </View>
         </View>
-      </View>
-
-      <View style={[styles.actionRail, { backgroundColor: palette.card }]}> 
-        {actions.map((action, index) => (
-          <TouchableOpacity
-            key={action.key}
-            activeOpacity={0.82}
-            onPress={action.onPress}
-            style={[styles.actionItem, index < actions.length - 1 && { borderBottomColor: palette.border, borderBottomWidth: 1 }]}
-          >
-            <Text style={[styles.actionIcon, { color: palette.green }]}>{action.icon}</Text>
-            <Text style={[styles.actionLabel, { color: palette.text }]} numberOfLines={1}>{action.label}</Text>
-          </TouchableOpacity>
-        ))}
       </View>
     </TouchableOpacity>
   )
@@ -174,19 +159,6 @@ const styles = StyleSheet.create({
   },
   weatherIcon: { fontSize: 23 },
   weatherText: { ...typography.bodyLg },
-  actionRail: {
-    width: 116,
-    paddingHorizontal: spacing.md,
-    justifyContent: 'center',
-  },
-  actionItem: {
-    minHeight: 58,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-  },
-  actionIcon: { fontSize: 25, lineHeight: 29 },
-  actionLabel: { fontSize: 12, lineHeight: 16, fontWeight: '900' },
   emptyCard: {
     borderWidth: 1,
     padding: spacing.xl,

@@ -37,7 +37,6 @@ export function PremiumGogoCaddieCard({
   message: liveMessage,
   feed,
   onPress,
-  actions = [],
 }: PremiumGogoCaddieCardProps) {
   const { palette } = useSkin()
   const displayName = userName || '골퍼'
@@ -47,7 +46,6 @@ export function PremiumGogoCaddieCard({
     : `최근 평균 ${averageScore} 기준으로 다음 라운드 전략을 준비할게요.`)
   const label = feed?.label || '오늘의 GOGO'
   const icon = feed?.icon || '⛳'
-  const ctaLabel = feed?.ctaLabel || (hasUpcomingRound ? '캐디맵 보기' : '라운드 등록')
 
   return (
     <View
@@ -73,24 +71,6 @@ export function PremiumGogoCaddieCard({
         </View>
       </TouchableOpacity>
 
-      <TouchableOpacity activeOpacity={0.88} onPress={onPress} style={[styles.primaryAction, { backgroundColor: palette.green }]}> 
-        <Text style={styles.primaryActionText}>{ctaLabel}</Text>
-        <Text style={styles.primaryArrow}>›</Text>
-      </TouchableOpacity>
-
-      {actions.length > 0 && (
-        <View style={[styles.actionRow, { borderTopColor: palette.border }]}> 
-          {actions.slice(0, 3).map((action) => (
-            <TouchableOpacity key={action.key} activeOpacity={0.86} onPress={action.onPress} style={styles.actionButton}> 
-              <Text style={styles.actionIcon}>{action.icon}</Text>
-              <View style={styles.actionTextWrap}>
-                <Text style={[styles.actionTitle, { color: palette.text }]} numberOfLines={1}>{action.title}</Text>
-                <Text style={[styles.actionSubtitle, { color: palette.muted }]} numberOfLines={1}>{action.subtitle}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
     </View>
   )
 }
@@ -107,16 +87,16 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   characterStage: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
+    width: 132,
+    height: 74,
+    borderRadius: 37,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   characterImage: {
-    width: 84,
-    height: 84,
+    width: 132,
+    height: 132,
   },
   content: { flex: 1, minWidth: 0 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },

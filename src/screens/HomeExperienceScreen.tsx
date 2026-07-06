@@ -1,9 +1,11 @@
 import { useCallback, useMemo, useState } from 'react'
 import {
+  Modal,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -27,6 +29,7 @@ import type { HomeHeroRound, HomeUpcomingRound } from '../features/home/types/ho
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { COURSE_HERO_STORAGE_KEY, getCourseHeroAssetByKey, getCourseHeroImageSource } from '../data/courseHeroImages'
 import { HomeLayoutRenderer, premiumGolfHomeLayout } from '../features/home/layout'
+import { getRoundSchedules, type ScheduledRound } from '../lib/roundSchedule'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
 
@@ -49,6 +52,18 @@ function caddieBookHeroParams(round: HomeHeroRound) {
     layoutName: round.layoutName,
     scheduleId: round.id,
   }
+}
+
+function groupLines(round?: ScheduledRound | null) {
+  if (!round) return []
+  return round.groups
+    .filter((group) => group.members.length > 0)
+    .map((group) => ({
+      id: group.id,
+      title: `${group.name}${group.time ? ` · ${group.time}` : ''}`,
+      members: group.members.map((member) => member.name).join(' · ') || '편성 멤버 없음',
+      course: [group.frontLayoutName, group.backLayoutName].filter(Boolean).join(' / '),
+    }))
 }
 
 function resolveFeedNavigation(nav: Nav, actionType: string, round: HomeUpcomingRound | null) {
@@ -91,6 +106,9 @@ export default function HomeExperienceScreen() {
   const { name: myName, userId } = useUserProfile()
   const { dashboard, loading, error, refresh } = useHomeDashboard({ clubId: club?.id, userName: myName, userId })
   const [selectedHeroKey, setSelectedHeroKey] = useState<string | null>(null)
+  const [roundPopupMode, setRoundPopupMode] = useState<'groups' | 'lotto' | null>(null)
+  const [popupRound, setPopupRound] = useState<ScheduledRound | null>(null)
+  const [popupLoading, setPopupLoading] = useState(false)
 
   useFocusEffect(
     useCallback(() => {
@@ -110,22 +128,32 @@ export default function HomeExperienceScreen() {
     ? getCourseHeroAssetByKey(selectedHeroKey).source
     : getCourseHeroImageSource(dashboard.hero.rounds[0]?.courseName ?? dashboard.hero.courseName)
 
+  const openRoundPopup = useCallback(async (round: HomeHeroRound, mode: 'groups' | 'lotto') => {
+    setRoundPopupMode(mode)
+    setPopupRound(null)
+    if (!club?.id) return
+    setPopupLoading(true)
+    try {
+      const schedules = await getRoundSchedules(club.id)
+      setPopupRound(schedules.find((item) => item.id === round.id) ?? null)
+    } catch {
+      setPopupRound(null)
+    } finally {
+      setPopupLoading(false)
+    }
+  }, [club?.id])
+
   const recentStats = useMemo(
     () => applyStatNavigation(dashboard.stats.items, nav),
     [dashboard.stats.items, nav],
   )
 
   const heroActions = useMemo(() => [
-    { key: 'caddie-book', icon: '📖', label: '캐디북', onPress: (round: HomeHeroRound) => nav.navigate('CaddieBook', caddieBookHeroParams(round)) },
-    { key: 'groups', icon: '👥', label: '조편성', onPress: () => nav.navigate('RoundSchedulePrototype') },
-    { key: 'lotto', icon: '🎲', label: 'Lotto', onPress: () => nav.navigate('RoundSchedulePrototype') },
-  ], [nav])
+    { key: 'caddie-map', icon: '🗺️', label: '캐디맵', onPress: (round: HomeHeroRound) => nav.navigate('CaddieBook', caddieBookHeroParams(round)) },
+    { key: 'groups', icon: '👥', label: '조편성', onPress: (round: HomeHeroRound) => openRoundPopup(round, 'groups') },
+    { key: 'lotto', icon: '🎲', label: 'Lotto', onPress: (round: HomeHeroRound) => openRoundPopup(round, 'lotto') },
+  ], [nav, openRoundPopup])
 
-  const conciergeActions = useMemo(() => [
-    { key: 'caddie-map', icon: '🗺️', title: '캐디맵', subtitle: '공략 보기', onPress: () => resolveFeedNavigation(nav, 'open_caddie_map', dashboard.upcomingRound) },
-    { key: 'groups', icon: '👥', title: '조편성', subtitle: '멤버 확인', onPress: () => nav.navigate('RoundSchedulePrototype') },
-    { key: 'lotto', icon: '🎱', title: 'Lotto', subtitle: '확인하기', onPress: () => nav.navigate('RoundSchedulePrototype') },
-  ], [dashboard.upcomingRound, nav])
 
   if (clubsLoaded && !club) {
     return (
@@ -185,7 +213,6 @@ export default function HomeExperienceScreen() {
                   averageScore={dashboard.aiCaddie.averageScore}
                   hasUpcomingRound={dashboard.aiCaddie.hasUpcomingRound}
                   feed={dashboard.feed}
-                  actions={conciergeActions}
                   onPress={() => resolveFeedNavigation(nav, dashboard.feed.actionType, dashboard.upcomingRound)}
                 />
               </PremiumHomeMotion>
@@ -198,7 +225,83 @@ export default function HomeExperienceScreen() {
           }}
         />
       </ScrollView>
+
+      <RoundInfoModal
+        visible={roundPopupMode !== null}
+        mode={roundPopupMode}
+        round={popupRound}
+        loading={popupLoading}
+        onClose={() => setRoundPopupMode(null)}
+        onManage={() => {
+          const editScheduleId = popupRound?.id
+          setRoundPopupMode(null)
+          nav.navigate('RoundSchedulePrototype', editScheduleId ? { editScheduleId, modalOnly: true } : undefined)
+        }}
+      />
     </View>
+  )
+}
+
+function RoundInfoModal({
+  visible,
+  mode,
+  round,
+  loading,
+  onClose,
+  onManage,
+}: {
+  visible: boolean
+  mode: 'groups' | 'lotto' | null
+  round: ScheduledRound | null
+  loading: boolean
+  onClose: () => void
+  onManage: () => void
+}) {
+  const { palette } = useSkin()
+  const groups = groupLines(round)
+  const isGroups = mode === 'groups'
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <View style={[styles.modalCard, { backgroundColor: palette.card }]}>
+          <View style={styles.modalHeader}>
+            <Text style={[styles.modalTitle, { color: palette.text }]}>{isGroups ? '조편성 결과' : 'Lotto 구매 및 결과'}</Text>
+            <TouchableOpacity onPress={onClose} style={styles.modalClose} activeOpacity={0.8}>
+              <Text style={styles.modalCloseText}>×</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={[styles.modalSubTitle, { color: palette.muted }]} numberOfLines={2}>
+            {round ? `${round.courseName ?? '골프장 미정'} · ${round.date} ${round.time || ''}` : '선택된 라운드 정보를 불러옵니다'}
+          </Text>
+
+          {loading ? (
+            <Text style={[styles.modalEmpty, { color: palette.muted }]}>불러오는 중입니다.</Text>
+          ) : isGroups ? (
+            groups.length > 0 ? groups.map((group) => (
+              <View key={group.id} style={[styles.groupRow, { borderColor: palette.border }]}>
+                <Text style={[styles.groupTitle, { color: palette.text }]}>{group.title}</Text>
+                {!!group.course && <Text style={[styles.groupCourse, { color: palette.muted }]}>{group.course}</Text>}
+                <Text style={[styles.groupMembers, { color: palette.text }]}>{group.members}</Text>
+              </View>
+            )) : (
+              <Text style={[styles.modalEmpty, { color: palette.muted }]}>아직 실제 조편성 결과가 없습니다.</Text>
+            )
+          ) : (
+            <View style={[styles.groupRow, { borderColor: palette.border }]}>
+              <Text style={[styles.groupTitle, { color: palette.text }]}>Lotto 6/18</Text>
+              <Text style={[styles.groupCourse, { color: palette.muted }]}>선택된 라운드 기준으로 구매와 결과 확인을 진행합니다.</Text>
+              <Text style={[styles.groupMembers, { color: palette.text }]}>구매/결과 상세 관리는 아래 버튼에서 이어서 확인하세요.</Text>
+            </View>
+          )}
+
+          <TouchableOpacity activeOpacity={0.86} onPress={onManage} style={[styles.modalAction, { backgroundColor: palette.green }]}>
+            <Text style={styles.modalActionText}>{isGroups ? '조편성 관리로 이동' : 'Lotto 구매/결과 확인'}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   )
 }
 
@@ -210,6 +313,20 @@ const styles = StyleSheet.create({
   emptyRoundIcon: { fontSize: 34, marginBottom: 10 },
   emptyRoundTitle: { fontSize: 18, fontWeight: '900', textAlign: 'center', marginBottom: 8 },
   emptyRoundText: { fontSize: 13, lineHeight: 19, fontWeight: '600', textAlign: 'center' },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.42)', alignItems: 'center', justifyContent: 'center', padding: 22 },
+  modalCard: { width: '100%', maxWidth: 420, borderRadius: 24, padding: 18 },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  modalTitle: { fontSize: 20, lineHeight: 25, fontWeight: '900', letterSpacing: -0.7 },
+  modalClose: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(0,0,0,0.08)', alignItems: 'center', justifyContent: 'center' },
+  modalCloseText: { fontSize: 24, lineHeight: 28, fontWeight: '900' },
+  modalSubTitle: { marginTop: 4, fontSize: 12, lineHeight: 17, fontWeight: '800' },
+  modalEmpty: { paddingVertical: 28, textAlign: 'center', fontSize: 13, lineHeight: 19, fontWeight: '800' },
+  groupRow: { borderWidth: 1, borderRadius: 16, padding: 14, marginTop: 12 },
+  groupTitle: { fontSize: 15, lineHeight: 20, fontWeight: '900' },
+  groupCourse: { marginTop: 4, fontSize: 12, lineHeight: 17, fontWeight: '800' },
+  groupMembers: { marginTop: 8, fontSize: 14, lineHeight: 20, fontWeight: '900' },
+  modalAction: { minHeight: 46, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginTop: 16 },
+  modalActionText: { color: '#fff', fontSize: 15, lineHeight: 20, fontWeight: '900' },
   errorCard: { alignItems: 'center', padding: 18, marginBottom: 4 },
   errorIcon: { fontSize: 28, marginBottom: 8 },
   errorTitle: { fontSize: 16, fontWeight: '900', textAlign: 'center', marginBottom: 6 },
