@@ -2,8 +2,7 @@ import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { C } from '../theme'
-import { SkinProvider, useSkin } from '../skins'
+import { useSkin } from '../skins'
 import { Icon, type IconName } from '../components/Icon'
 import { ClubProvider, useClub } from '../lib/ClubContext'
 import { UserProfileProvider } from '../lib/UserProfileContext'
@@ -190,13 +189,11 @@ function NavigationStack({ session }: { session: import('@supabase/supabase-js')
 
 export default function Navigation({ session }: { session: import('@supabase/supabase-js').Session | null }) {
   return (
-    <SkinProvider>
-      <UserProfileProvider>
-        <ClubProvider>
-          <NavigationStack session={session} />
-        </ClubProvider>
-      </UserProfileProvider>
-    </SkinProvider>
+    <UserProfileProvider>
+      <ClubProvider>
+        <NavigationStack session={session} />
+      </ClubProvider>
+    </UserProfileProvider>
   )
 }
 

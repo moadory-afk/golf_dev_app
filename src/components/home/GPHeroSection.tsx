@@ -1,5 +1,6 @@
 import { ImageBackground, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native'
 import type { RoundWeather } from '../../lib/weather'
+import { useSkin } from '../../skins'
 
 export type GPHeroSectionProps = {
   heroImage: ImageSourcePropType
@@ -34,6 +35,7 @@ export function GPHeroSection({
   courseLayoutName,
   weather,
 }: GPHeroSectionProps) {
+  const { palette } = useSkin()
   const dateLabel = compactDate(roundDateText)
   const weatherLabel = weather ? `${weather.icon} ${weather.tempC}°` : '⛳ Golf day'
   const weatherSub = weather?.condition ?? (hasUpcomingRound ? '라운드 준비' : '오늘의 추천')
@@ -43,7 +45,12 @@ export function GPHeroSection({
     : '새 라운드를 등록해보세요'
 
   return (
-    <ImageBackground source={heroImage} style={styles.hero} imageStyle={styles.image} resizeMode="cover">
+    <ImageBackground
+      source={heroImage}
+      style={[styles.hero, { borderRadius: palette.cardRadius + 8, shadowColor: palette.greenDark }] }
+      imageStyle={[styles.image, { borderRadius: palette.cardRadius + 8 }]}
+      resizeMode="cover"
+    >
       <View style={styles.gradient} />
       <View style={styles.content}>
         <View style={styles.topLine}>
@@ -51,8 +58,8 @@ export function GPHeroSection({
             <Text style={styles.greeting}>{greeting}</Text>
             <Text style={styles.tagline}>{hasUpcomingRound ? '오늘도 버디를 향해!' : '새로운 추억을 준비해볼까요?'}</Text>
           </View>
-          <View style={styles.ddayPill}>
-            <Text style={styles.ddayText}>{ddayLabel}</Text>
+          <View style={[styles.ddayPill, { borderColor: 'rgba(255,255,255,0.36)' }]}>
+            <Text style={[styles.ddayText, { color: '#fff' }]}>{ddayLabel}</Text>
           </View>
         </View>
 

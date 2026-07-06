@@ -9,7 +9,7 @@ import Navigation from './src/navigation'
 import InviteScreen from './src/screens/InviteScreen'
 import PromoScreen from './src/screens/PromoScreen'
 import { Platform, View, ActivityIndicator, Text, ScrollView, StyleSheet } from 'react-native'
-import { C } from './src/theme'
+import { SkinProvider, useSkin } from './src/skins'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null }
@@ -40,6 +40,15 @@ function WebFrame({ children }: { children: ReactNode }) {
       } as any}>
         {children}
       </View>
+    </View>
+  )
+}
+
+function LoadingScreen() {
+  const { palette } = useSkin()
+  return (
+    <View style={[js.center, { backgroundColor: palette.bg }]}>
+      <ActivityIndicator color={palette.green} size="large" />
     </View>
   )
 }
@@ -75,9 +84,6 @@ export default function App() {
   const [joinDone, setJoinDone] = useState(false)
   const [showPromo, setShowPromo] = useState(() => getPromo())
 
-  // 카카오톡 인앱 브라우저면 외부 브라우저(사파리/크롬)로 강제 전환.
-  // 인앱 브라우저에선 ?join= 딥링크가 불안정해 초대화면이 안 뜨므로,
-  // 현재 URL(초대코드 포함)을 그대로 외부 브라우저로 넘긴다.
   useEffect(() => {
     if (Platform.OS !== 'web') return
     const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || ''
@@ -122,29 +128,28 @@ export default function App() {
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
-        <WebFrame>
-          {loading ? (
-            <View style={js.center}>
-              <ActivityIndicator color={C.green} size="large" />
-            </View>
-          ) : showPromo && !session ? (
-            <PromoScreen onDismiss={() => { clearJoinParam(); setShowPromo(false) }} />
-          ) : showInvite ? (
-            <InviteScreen
-              joinCode={joinCode!}
-              onJoined={handleJoined}
-              onDismiss={handleDismiss}
-            />
-          ) : (
-            <Navigation session={session} />
-          )}
-        </WebFrame>
+        <SkinProvider>
+          <WebFrame>
+            {loading ? (
+              <LoadingScreen />
+            ) : showPromo && !session ? (
+              <PromoScreen onDismiss={() => { clearJoinParam(); setShowPromo(false) }} />
+            ) : showInvite ? (
+              <InviteScreen
+                joinCode={joinCode!}
+                onJoined={handleJoined}
+                onDismiss={handleDismiss}
+              />
+            ) : (
+              <Navigation session={session} />
+            )}
+          </WebFrame>
+        </SkinProvider>
       </SafeAreaProvider>
     </ErrorBoundary>
   )
 }
 
 const js = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg },
-  joinText: { marginTop: 12, color: C.muted, fontSize: 14 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 })

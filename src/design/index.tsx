@@ -1,37 +1,68 @@
 import { type ReactNode } from 'react'
-import { StyleSheet, Text, TouchableOpacity, View, type ViewStyle } from 'react-native'
+import { StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native'
 import type { RoundWeather } from '../lib/weather'
-import { useSkin, type SkinPalette } from '../skins'
+import { useSkin } from '../skins'
+import { createTheme, radius, spacing, typography, type GPTheme } from './tokens'
 
-export const radius = { sm: 10, md: 14, lg: 18, xl: 24, xxl: 30 }
-export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28 }
+export { createTheme, radius, spacing, typography, type GPTheme } from './tokens'
 
-function shadow(palette: SkinPalette, level: 1 | 2 | 3 = 1): ViewStyle {
-  const opacity = palette.shadowOpacity * level
+export function useTheme() {
+  const { palette, skin, skinId, skins, setSkinId, isModern } = useSkin()
   return {
-    shadowColor: palette.greenDark,
-    shadowOpacity: opacity,
-    shadowRadius: 8 + level * 4,
-    shadowOffset: { width: 0, height: 3 + level * 2 },
-    elevation: level + 1,
+    ...createTheme(palette),
+    palette,
+    skin,
+    skinId,
+    skins,
+    setSkinId,
+    isModern,
   }
 }
 
-export function GPCard({ children, style, elevated = true }: { children: ReactNode; style?: ViewStyle | ViewStyle[]; elevated?: boolean }) {
-  const { palette } = useSkin()
+export function GPCard({
+  children,
+  style,
+  elevated = true,
+}: {
+  children: ReactNode
+  style?: StyleProp<ViewStyle>
+  elevated?: boolean
+}) {
+  const theme = useTheme()
   return (
-    <View style={[ds.card, { backgroundColor: palette.card, borderColor: palette.border, borderRadius: palette.cardRadius }, elevated && shadow(palette, 1), style]}>
+    <View
+      style={[
+        ds.card,
+        {
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.border,
+          borderRadius: theme.radius.card,
+        },
+        elevated && theme.shadow(1),
+        style,
+      ]}
+    >
       {children}
     </View>
   )
 }
 
-export function GPSection({ title, right, children, style }: { title: string; right?: ReactNode; children: ReactNode; style?: ViewStyle | ViewStyle[] }) {
-  const { palette } = useSkin()
+export function GPSection({
+  title,
+  right,
+  children,
+  style,
+}: {
+  title: string
+  right?: ReactNode
+  children: ReactNode
+  style?: StyleProp<ViewStyle>
+}) {
+  const theme = useTheme()
   return (
     <View style={[ds.section, style]}>
       <View style={ds.sectionHeader}>
-        <Text style={[ds.sectionTitle, { color: palette.text }]}>{title}</Text>
+        <Text style={[theme.typography.sectionTitle, { color: theme.colors.text }]}>{title}</Text>
         {right}
       </View>
       {children}
@@ -39,49 +70,117 @@ export function GPSection({ title, right, children, style }: { title: string; ri
   )
 }
 
-export function GPButton({ label, onPress, disabled, variant = 'primary', style }: { label: string; onPress?: () => void; disabled?: boolean; variant?: 'primary' | 'soft' | 'ghost'; style?: ViewStyle | ViewStyle[] }) {
-  const { palette } = useSkin()
-  const bg = variant === 'primary' ? palette.green : variant === 'soft' ? palette.greenLight : 'transparent'
-  const color = variant === 'primary' ? palette.accentText : palette.green
+export function GPButton({
+  label,
+  onPress,
+  disabled,
+  variant = 'primary',
+  style,
+}: {
+  label: string
+  onPress?: () => void
+  disabled?: boolean
+  variant?: 'primary' | 'soft' | 'ghost'
+  style?: StyleProp<ViewStyle>
+}) {
+  const theme = useTheme()
+  const bg = variant === 'primary' ? theme.colors.primary : variant === 'soft' ? theme.colors.primarySoft : 'transparent'
+  const color = variant === 'primary' ? theme.colors.accentText : theme.colors.primary
   return (
     <TouchableOpacity
       activeOpacity={0.84}
       onPress={onPress}
       disabled={disabled}
-      style={[ds.button, { backgroundColor: bg, borderColor: variant === 'ghost' ? palette.border : bg }, disabled && { opacity: 0.45 }, style]}
+      style={[
+        ds.button,
+        { backgroundColor: bg, borderColor: variant === 'ghost' ? theme.colors.border : bg },
+        disabled && { opacity: 0.45 },
+        style,
+      ]}
     >
       <Text style={[ds.buttonText, { color }]}>{label}</Text>
     </TouchableOpacity>
   )
 }
 
-export function GPStatCard({ label, value, sub, accent, onPress, style }: { label: string; value: string; sub?: string; accent?: string; onPress?: () => void; style?: ViewStyle | ViewStyle[] }) {
-  const { palette } = useSkin()
+export function GPBadge({
+  label,
+  tone = 'primary',
+  style,
+}: {
+  label: string
+  tone?: 'primary' | 'info' | 'warning' | 'danger' | 'neutral'
+  style?: StyleProp<ViewStyle>
+}) {
+  const theme = useTheme()
+  const toneColor =
+    tone === 'info' ? theme.colors.info
+      : tone === 'warning' ? theme.colors.warning
+        : tone === 'danger' ? theme.colors.danger
+          : tone === 'neutral' ? theme.colors.muted
+            : theme.colors.primary
   return (
-    <TouchableOpacity activeOpacity={0.86} onPress={onPress} disabled={!onPress} style={[ds.statCard, { backgroundColor: palette.card, borderColor: palette.border, borderRadius: palette.cardRadius }, shadow(palette, 1), style]}>
-      <Text style={[ds.statLabel, { color: palette.muted }]}>{label}</Text>
-      <Text style={[ds.statValue, { color: accent ?? palette.text }]} numberOfLines={1}>{value}</Text>
-      {!!sub && <Text style={[ds.statSub, { color: palette.muted }]} numberOfLines={1}>{sub}</Text>}
+    <View style={[ds.badge, { backgroundColor: theme.colors.primarySoft, borderColor: theme.colors.border }, style]}>
+      <Text style={[ds.badgeText, { color: toneColor }]}>{label}</Text>
+    </View>
+  )
+}
+
+export function GPStatCard({
+  label,
+  value,
+  sub,
+  accent,
+  onPress,
+  style,
+}: {
+  label: string
+  value: string
+  sub?: string
+  accent?: string
+  onPress?: () => void
+  style?: StyleProp<ViewStyle>
+}) {
+  const theme = useTheme()
+  return (
+    <TouchableOpacity
+      activeOpacity={0.86}
+      onPress={onPress}
+      disabled={!onPress}
+      style={[
+        ds.statCard,
+        {
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.border,
+          borderRadius: theme.radius.card,
+        },
+        theme.shadow(1),
+        style,
+      ]}
+    >
+      <Text style={[ds.statLabel, { color: theme.colors.muted }]}>{label}</Text>
+      <Text style={[ds.statValue, { color: accent ?? theme.colors.text }]} numberOfLines={1}>{value}</Text>
+      {!!sub && <Text style={[ds.statSub, { color: theme.colors.muted }]} numberOfLines={1}>{sub}</Text>}
     </TouchableOpacity>
   )
 }
 
 export function GPMascotHero({ title, message, stat }: { title: string; message: string; stat?: string }) {
-  const { palette } = useSkin()
+  const theme = useTheme()
   return (
-    <View style={[ds.hero, { backgroundColor: palette.greenLight, borderColor: palette.border, borderRadius: palette.cardRadius + 4 }, shadow(palette, 1)]}>
+    <View style={[ds.hero, { backgroundColor: theme.colors.primarySoft, borderColor: theme.colors.border, borderRadius: theme.radius.card + 4 }, theme.shadow(1)]}>
       <View style={ds.heroTextBox}>
-        <Text style={[ds.heroEyebrow, { color: palette.green }]}>GogoPar Caddie</Text>
-        <Text style={[ds.heroTitle, { color: palette.text }]}>{title}</Text>
-        <Text style={[ds.heroMessage, { color: palette.muted }]}>{message}</Text>
-        {!!stat && <View style={[ds.heroChip, { backgroundColor: palette.card }]}><Text style={[ds.heroChipText, { color: palette.green }]}>{stat}</Text></View>}
+        <Text style={[ds.heroEyebrow, { color: theme.colors.primary }]}>GogoPar Caddie</Text>
+        <Text style={[ds.heroTitle, { color: theme.colors.text }]}>{title}</Text>
+        <Text style={[ds.heroMessage, { color: theme.colors.muted }]}>{message}</Text>
+        {!!stat && <View style={[ds.heroChip, { backgroundColor: theme.colors.surface }]}><Text style={[ds.heroChipText, { color: theme.colors.primary }]}>{stat}</Text></View>}
       </View>
       <View style={ds.mascotWrap}>
-        <View style={[ds.mascotHead, { borderColor: palette.green, backgroundColor: '#fff' }]}> 
+        <View style={[ds.mascotHead, { borderColor: theme.colors.primary, backgroundColor: theme.colors.surface }]}> 
           <View style={ds.mascotEyeRow}><View style={ds.mascotEye} /><View style={ds.mascotEye} /></View>
-          <View style={[ds.mascotSmile, { borderColor: palette.green }]} />
+          <View style={[ds.mascotSmile, { borderColor: theme.colors.primary }]} />
         </View>
-        <View style={[ds.mascotBody, { backgroundColor: palette.green }]} />
+        <View style={[ds.mascotBody, { backgroundColor: theme.colors.primary }]} />
       </View>
     </View>
   )
@@ -108,69 +207,83 @@ export function GPRoundTicket({
   weather?: RoundWeather | null
   onPress?: () => void
 }) {
-  const { palette } = useSkin()
+  const theme = useTheme()
   return (
-    <TouchableOpacity activeOpacity={0.88} onPress={onPress} disabled={!onPress} style={[ds.ticket, { backgroundColor: palette.card, borderColor: selected ? palette.green : palette.border, borderRadius: palette.cardRadius }, shadow(palette, selected ? 2 : 1)]}>
-      <View style={[ds.ticketHole, ds.ticketHoleLeft, { backgroundColor: palette.bg }]} />
-      <View style={[ds.ticketHole, ds.ticketHoleRight, { backgroundColor: palette.bg }]} />
+    <TouchableOpacity
+      activeOpacity={0.88}
+      onPress={onPress}
+      disabled={!onPress}
+      style={[
+        ds.ticket,
+        {
+          backgroundColor: theme.colors.surface,
+          borderColor: selected ? theme.colors.primary : theme.colors.border,
+          borderRadius: theme.radius.card,
+        },
+        theme.shadow(selected ? 2 : 1),
+      ]}
+    >
+      <View style={[ds.ticketHole, ds.ticketHoleLeft, { backgroundColor: theme.colors.background }]} />
+      <View style={[ds.ticketHole, ds.ticketHoleRight, { backgroundColor: theme.colors.background }]} />
       <View style={ds.ticketTop}>
         <View style={{ flex: 1 }}>
-          <Text style={[ds.ticketDate, { color: palette.green }]}>{date}</Text>
-          <Text style={[ds.ticketCourse, { color: palette.text }]} numberOfLines={1}>{course}</Text>
+          <Text style={[ds.ticketDate, { color: theme.colors.primary }]}>{date}</Text>
+          <Text style={[ds.ticketCourse, { color: theme.colors.text }]} numberOfLines={1}>{course}</Text>
         </View>
-        <View style={[ds.ticketBadge, { backgroundColor: palette.greenLight }]}><Text style={[ds.ticketBadgeText, { color: palette.green }]}>{status}</Text></View>
+        <View style={[ds.ticketBadge, { backgroundColor: theme.colors.primarySoft }]}><Text style={[ds.ticketBadgeText, { color: theme.colors.primary }]}>{status}</Text></View>
       </View>
-      {!!sub && <Text style={[ds.ticketSub, { color: palette.muted }]}>{sub}</Text>}
+      {!!sub && <Text style={[ds.ticketSub, { color: theme.colors.muted }]}>{sub}</Text>}
       {weather ? (
-        <View style={[ds.weatherPill, { backgroundColor: palette.greenLight, borderColor: palette.border }]}>
-          <Text style={[ds.weatherText, { color: palette.text }]}>{weather.icon} {weather.tempC}°C</Text>
-          {typeof weather.windMs === 'number' ? <Text style={[ds.weatherSubText, { color: palette.muted }]}>바람 {weather.windMs}m/s</Text> : null}
-          {typeof weather.pop === 'number' ? <Text style={[ds.weatherSubText, { color: palette.muted }]}>강수 {weather.pop}%</Text> : null}
+        <View style={[ds.weatherPill, { backgroundColor: theme.colors.primarySoft, borderColor: theme.colors.border }]}> 
+          <Text style={[ds.weatherText, { color: theme.colors.text }]}>{weather.icon} {weather.tempC}°C</Text>
+          {typeof weather.windMs === 'number' ? <Text style={[ds.weatherSubText, { color: theme.colors.muted }]}>바람 {weather.windMs}m/s</Text> : null}
+          {typeof weather.pop === 'number' ? <Text style={[ds.weatherSubText, { color: theme.colors.muted }]}>강수 {weather.pop}%</Text> : null}
         </View>
       ) : null}
-      {!!award && <Text style={[ds.ticketAward, { color: palette.muted }]} numberOfLines={2}>{award}</Text>}
+      {!!award && <Text style={[ds.ticketAward, { color: theme.colors.muted }]} numberOfLines={2}>{award}</Text>}
       {actions ? <View style={ds.ticketActions}>{actions}</View> : null}
     </TouchableOpacity>
   )
 }
 
 const ds = StyleSheet.create({
-  card: { borderWidth: 1, padding: 18, marginBottom: 14 },
-  section: { marginBottom: 14 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  sectionTitle: { fontSize: 18, fontWeight: '900', letterSpacing: -0.3 },
-  button: { minHeight: 40, borderRadius: 999, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  buttonText: { fontSize: 13, fontWeight: '900' },
-  statCard: { width: '48.5%', minHeight: 106, borderWidth: 1, padding: 16, justifyContent: 'center' },
-  statLabel: { fontSize: 12, fontWeight: '800', marginBottom: 7 },
+  card: { borderWidth: 1, padding: spacing.xl, marginBottom: spacing.lg },
+  section: { marginBottom: spacing.lg },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
+  button: { minHeight: 40, borderRadius: radius.pill, paddingHorizontal: spacing.lg, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  buttonText: { ...typography.body, fontWeight: '900' },
+  badge: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: radius.pill, paddingVertical: 6, paddingHorizontal: spacing.md },
+  badgeText: { ...typography.caption, fontWeight: '900' },
+  statCard: { width: '48.5%', minHeight: 106, borderWidth: 1, padding: spacing.lg, justifyContent: 'center' },
+  statLabel: { ...typography.bodySm, marginBottom: 7 },
   statValue: { fontSize: 25, fontWeight: '900', letterSpacing: -0.8 },
-  statSub: { fontSize: 11, fontWeight: '600', marginTop: 5 },
-  hero: { borderWidth: 1, padding: 18, marginBottom: 16, flexDirection: 'row', overflow: 'hidden' },
-  heroTextBox: { flex: 1, paddingRight: 8 },
-  heroEyebrow: { fontSize: 12, fontWeight: '900', marginBottom: 6 },
-  heroTitle: { fontSize: 21, fontWeight: '900', letterSpacing: -0.6, marginBottom: 6 },
-  heroMessage: { fontSize: 13, lineHeight: 19, fontWeight: '600' },
-  heroChip: { alignSelf: 'flex-start', borderRadius: 999, paddingVertical: 6, paddingHorizontal: 10, marginTop: 12 },
-  heroChipText: { fontSize: 12, fontWeight: '900' },
+  statSub: { ...typography.caption, marginTop: 5 },
+  hero: { borderWidth: 1, padding: spacing.xl, marginBottom: spacing.lg, flexDirection: 'row', overflow: 'hidden' },
+  heroTextBox: { flex: 1, paddingRight: spacing.sm },
+  heroEyebrow: { ...typography.eyebrow, marginBottom: 6 },
+  heroTitle: { ...typography.title, marginBottom: 6 },
+  heroMessage: { ...typography.body },
+  heroChip: { alignSelf: 'flex-start', borderRadius: radius.pill, paddingVertical: 6, paddingHorizontal: spacing.md, marginTop: spacing.md },
+  heroChipText: { ...typography.bodySm, fontWeight: '900' },
   mascotWrap: { width: 92, alignItems: 'center', justifyContent: 'center' },
   mascotHead: { width: 72, height: 72, borderRadius: 36, borderWidth: 3, alignItems: 'center', justifyContent: 'center' },
   mascotEyeRow: { flexDirection: 'row', gap: 18, marginTop: 2 },
   mascotEye: { width: 7, height: 10, borderRadius: 5, backgroundColor: '#18251d' },
   mascotSmile: { width: 25, height: 12, borderBottomWidth: 3, borderRadius: 20, marginTop: 8 },
-  mascotBody: { width: 52, height: 18, borderRadius: 999, marginTop: -4 },
-  ticket: { position: 'relative', borderWidth: 1, padding: 16, marginBottom: 12, overflow: 'hidden' },
+  mascotBody: { width: 52, height: 18, borderRadius: radius.pill, marginTop: -4 },
+  ticket: { position: 'relative', borderWidth: 1, padding: spacing.lg, marginBottom: spacing.md, overflow: 'hidden' },
   ticketHole: { position: 'absolute', top: '50%', width: 22, height: 22, borderRadius: 11, marginTop: -11 },
   ticketHoleLeft: { left: -11 },
   ticketHoleRight: { right: -11 },
-  ticketTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  ticketDate: { fontSize: 12, fontWeight: '900', marginBottom: 5 },
-  ticketCourse: { fontSize: 17, fontWeight: '900', letterSpacing: -0.4 },
-  ticketBadge: { borderRadius: 999, paddingVertical: 6, paddingHorizontal: 10 },
-  ticketBadgeText: { fontSize: 11, fontWeight: '900' },
-  ticketSub: { fontSize: 13, fontWeight: '700', marginTop: 8 },
-  ticketAward: { fontSize: 12, fontWeight: '600', marginTop: 5, lineHeight: 17 },
-  weatherPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 10, marginTop: 10 },
-  weatherText: { fontSize: 12, fontWeight: '900' },
-  weatherSubText: { fontSize: 11, fontWeight: '800' },
-  ticketActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 13 },
+  ticketTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+  ticketDate: { ...typography.eyebrow, marginBottom: 5 },
+  ticketCourse: { ...typography.cardTitle },
+  ticketBadge: { borderRadius: radius.pill, paddingVertical: 6, paddingHorizontal: 10 },
+  ticketBadgeText: { ...typography.caption, fontWeight: '900' },
+  ticketSub: { ...typography.body, marginTop: spacing.sm },
+  ticketAward: { ...typography.bodySm, marginTop: 5 },
+  weatherPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderRadius: radius.pill, paddingVertical: 7, paddingHorizontal: 10, marginTop: 10 },
+  weatherText: { ...typography.bodySm, fontWeight: '900' },
+  weatherSubText: { ...typography.caption, fontWeight: '800' },
+  ticketActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: 13 },
 })

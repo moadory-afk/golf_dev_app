@@ -27,6 +27,7 @@ import { GPHeroSection } from '../components/home/GPHeroSection'
 import { getOpenWeatherForRound, type RoundWeather } from '../lib/weather'
 import { UserAvatarBtn } from '../components/UserAvatar'
 import { AppHeader } from '../components/AppHeader'
+import { SkinSwitcher } from '../components/SkinSwitcher'
 import { EmojiIcon } from '../components/EmojiIcon'
 import { Icon } from '../components/Icon'
 import { AWARD_CATEGORIES } from '../lib/awardConfig'
@@ -1075,12 +1076,14 @@ export default function HomeScreen() {
       )}
       <ScrollView
         style={{ flex: 1 }}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} tintColor={C.green} />}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} tintColor={palette.green} />}
       >
         {/* 헤더 (공용) */}
         <AppHeader myName={myName} />
 
         <View style={s.content}>
+          <SkinSwitcher />
+
           {/* Home V2 Hero */}
           <GPHeroSection
             heroImage={bomunHeroImage}
