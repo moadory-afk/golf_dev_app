@@ -8,3 +8,6 @@ export * from './PremiumHomeHeroSection'
 export * from './PremiumGogoCaddieCard'
 export * from './PremiumRecentStatsSection'
 export * from './PremiumUpcomingRoundCard'
+export * from './PremiumQuickMenuSection'
+
+export { PremiumHomeMotion } from './PremiumHomeMotion'

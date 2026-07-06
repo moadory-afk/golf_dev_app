@@ -40,6 +40,36 @@
   - 예정 라운드가 없을 때 라운드 일정 생성 CTA Empty State 제공
   - 색상, Shadow, Radius, Spacing은 Skin Palette와 Design Token만 사용
 
+
+- PremiumQuickMenuSection
+  - Home Experience v1.5에서 추가
+  - Home 하단 주요 기능을 5개 Premium Quick Menu Card로 표시
+  - 라운드 기록, 스코어 통계, 클럽 게시판, 친구/동호회, 동호회 스킨 진입 포함
+  - 각 메뉴는 기존 Navigation 화면으로 실제 연결
+  - 색상, Shadow, Radius, Spacing은 Skin Palette와 Design Token만 사용
+
+
+
+- PremiumHomeMotion
+  - Home Experience v1.7에서 추가
+  - Home 주요 섹션의 순차 등장 애니메이션을 담당
+  - opacity + translateY만 사용해 Premium 앱에 맞는 미세한 Motion 제공
+  - duration과 stagger는 `src/design/tokens.ts`의 `motion` 토큰 사용
+
+## Navigation Components
+
+- AppTabBar
+  - Home Experience v1.6에서 Premium Floating Navigation 스타일로 개선
+  - Main Bottom Tab과 동일한 Icon Pill, Gold Border, Floating Shadow 사용
+  - Stack 내부 화면에서도 Home / History / Club 이동 경험을 동일하게 제공
+  - 색상, Radius, Spacing, Typography는 Skin Palette와 Design Token만 사용
+
+- Main Bottom Tab
+  - Home Experience v1.6에서 Premium Floating Bar 형태로 개선
+  - Home / Club / History 3개 탭 구조는 유지
+  - Active Tab은 Pill + Gold Border로 강조
+  - Navigation 구조 변경 없이 시각 품질만 개선
+
 ## Component Rule
 
 새 Home 컴포넌트는 Screen 내부에 직접 구현하지 않고 `src/features/home/components`에 재사용 가능한 단위로 둔다.

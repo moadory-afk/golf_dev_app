@@ -1,10 +1,10 @@
 # GogoPar Project Status
 
 ## Current Version
-Home Experience Sprint v1.4
+Home Experience Sprint v1.7
 
 ## Current Sprint
-Home Experience Sprint v1.4 - Upcoming Round Ticket
+Home Experience Sprint v1.7 - Motion Animation
 
 ## Progress
 
@@ -18,11 +18,14 @@ Home Experience Sprint v1.4 - Upcoming Round Ticket
 ✅ Gogo Caddie Card v1.2
 ✅ Recent Stats Cards v1.3
 ✅ Upcoming Round Ticket v1.4
-🚧 Quick Menu Polish v1.5
+✅ Quick Menu Polish v1.5
+✅ Bottom Navigation Polish v1.6
+✅ Motion Animation v1.7
+🚧 Skeleton Loading v1.8
 
 ## Current Task
 
-예정 라운드를 Premium Ticket Card로 전환 완료. 코스 이미지, 상태 Badge, 날짜, Tee Off, 인원, 날씨, 코스맵/조편성/Lotto 6/18 액션 구조를 Home에 반영.
+Home 주요 섹션에 순차 등장 애니메이션을 적용했다. `PremiumHomeMotion`은 opacity와 translateY만 사용하며, duration과 stagger는 Design Token을 기준으로 동작한다.
 
 ## Verified
 
@@ -30,9 +33,9 @@ Home Experience Sprint v1.4 - Upcoming Round Ticket
 
 ## Next Task
 
-- Quick Menu Polish
-- Bottom Navigation Polish
-- Motion Animation
+- Skeleton Loading
+- Dark Theme
+- Home Data Binding
 
 ## Do Not Touch
 

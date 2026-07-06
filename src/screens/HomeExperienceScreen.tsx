@@ -30,17 +30,9 @@ import {
   type ScheduledRound,
 } from '../lib/roundSchedule'
 import type { RootStackParamList } from '../navigation/types'
-import { PremiumGogoCaddieCard, PremiumHomeHeroSection, PremiumRecentStatsSection, PremiumUpcomingRoundCard, type PremiumRecentStatItem } from '../features/home/components'
+import { PremiumGogoCaddieCard, PremiumHomeHeroSection, PremiumHomeMotion, PremiumQuickMenuSection, PremiumRecentStatsSection, PremiumUpcomingRoundCard, type PremiumQuickMenuItem, type PremiumRecentStatItem } from '../features/home/components'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
-
-type QuickAction = {
-  key: string
-  icon: string
-  title: string
-  caption: string
-  onPress: () => void
-}
 
 function todayLabel() {
   const now = new Date()
@@ -198,26 +190,6 @@ function HeroStat({ label, value, suffix }: { label: string; value: string; suff
       <Text style={[styles.heroStatValue, { color: palette.headerText }]}>
         {value}<Text style={styles.heroStatSuffix}>{suffix ?? ''}</Text>
       </Text>
-    </View>
-  )
-}
-
-function QuickMenuGrid({ actions }: { actions: QuickAction[] }) {
-  const { palette } = useSkin()
-  return (
-    <View style={styles.quickGrid}>
-      {actions.map((action) => (
-        <TouchableOpacity
-          key={action.key}
-          activeOpacity={0.84}
-          onPress={action.onPress}
-          style={[styles.quickCard, { backgroundColor: palette.card, borderColor: palette.border, borderRadius: palette.cardRadius }]}
-        >
-          <Text style={styles.quickIcon}>{action.icon}</Text>
-          <Text style={[styles.quickTitle, { color: palette.text }]}>{action.title}</Text>
-          <Text style={[styles.quickCaption, { color: palette.muted }]} numberOfLines={1}>{action.caption}</Text>
-        </TouchableOpacity>
-      ))}
     </View>
   )
 }
@@ -425,13 +397,12 @@ export default function HomeExperienceScreen() {
 
   const onRefresh = useCallback(() => setRefreshKey((value) => value + 1), [])
 
-  const quickActions: QuickAction[] = [
-    { key: 'round', icon: '🏌️', title: '라운드', caption: '스코어 입력', onPress: () => nav.navigate('RoundSchedulePrototype') },
-    { key: 'schedule', icon: '📅', title: '일정', caption: '라운드 예약', onPress: () => nav.navigate('RoundSchedulePrototype') },
-    { key: 'caddie', icon: '📒', title: '캐디북', caption: '홀 공략', onPress: () => nav.navigate('RoundSchedulePrototype') },
-    { key: 'ai', icon: '🤖', title: 'AI', caption: '추천 준비중', onPress: () => nav.navigate('RoundSchedulePrototype') },
-    { key: 'records', icon: '📊', title: '기록', caption: '최근 스코어', onPress: () => nav.navigate('Main', { screen: 'History' }) },
-    { key: 'club', icon: '👥', title: '클럽', caption: '회원 관리', onPress: () => nav.navigate('Main', { screen: 'Club' }) },
+  const quickActions: PremiumQuickMenuItem[] = [
+    { key: 'round-record', icon: 'edit', title: '라운드 기록', subtitle: '스코어 입력', featured: true, onPress: () => nav.navigate('RoundSetup', {}) },
+    { key: 'score-stats', icon: 'chart', title: '스코어 통계', subtitle: '최근 기록', onPress: () => nav.navigate('Main', { screen: 'History' }) },
+    { key: 'club-board', icon: 'mail', title: '클럽 게시판', subtitle: '공지 확인', onPress: () => nav.navigate('NoticePrototype') },
+    { key: 'club-friends', icon: 'users', title: '친구/동호회', subtitle: '멤버 관리', onPress: () => nav.navigate('Main', { screen: 'Club' }) },
+    { key: 'club-skin', icon: 'settings', title: '동호회 스킨', subtitle: '테마 설정', badge: 'Skin', onPress: () => nav.navigate('Profile') },
   ]
 
   if (clubsLoaded && !club) {
@@ -452,77 +423,93 @@ export default function HomeExperienceScreen() {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} tintColor={palette.green} />}
         showsVerticalScrollIndicator={false}
       >
-        <PremiumHomeHeroSection
-          greeting={timeGreeting()}
-          userName={myName || '골퍼'}
-          clubName={club?.name || 'GogoPar Club'}
-          courseName={upcoming?.courseName || upcoming?.course || '보문CC'}
-          address={upcoming?.layoutName ? `${upcoming.layoutName} 코스` : '코스 주소는 캐디북에서 연결 예정'}
-          weatherText="맑음"
-          temperature="24°"
-          dday={formatDday(upcoming?.date) || 'D-1'}
-          roundDate={upcoming?.date ? formatRoundDate(upcoming.date) : '다음 라운드'}
-          teeTime={upcoming?.time || '12:12'}
-          totalCount={Math.max(1, Math.min(3, visibleSchedules.length || 3))}
-          onClubPress={() => nav.navigate('Main', { screen: 'Club' })}
-          onNotificationPress={() => nav.navigate('NoticePrototype')}
-        />
-
-        <GPSection title="테마">
-          <ThemeSelectorCompact />
-        </GPSection>
-
-        <GPSection title="Quick Menu">
-          <QuickMenuGrid actions={quickActions} />
-        </GPSection>
-
-        <GPSection title="Upcoming Round" right={loading ? <ActivityIndicator color={palette.green} /> : null}>
-          <PremiumUpcomingRoundCard
-            empty={!upcoming}
-            statusLabel={roundStatusLabel(upcoming?.status)}
-            courseName={upcoming?.courseName || upcoming?.course || '다음 라운드'}
-            layoutName={upcoming?.layoutName}
-            dateLabel={upcoming?.date ? formatRoundDate(upcoming.date) : '일정 미정'}
-            teeTime={upcoming?.time || '시간 미정'}
-            memberCount={roundMemberCount(upcoming)}
+        <PremiumHomeMotion index={0}>
+          <PremiumHomeHeroSection
+            greeting={timeGreeting()}
+            userName={myName || '골퍼'}
+            clubName={club?.name || 'GogoPar Club'}
+            courseName={upcoming?.courseName || upcoming?.course || '보문CC'}
+            address={upcoming?.layoutName ? `${upcoming.layoutName} 코스` : '코스 주소는 캐디북에서 연결 예정'}
             weatherText="맑음"
             temperature="24°"
-            onCreate={() => nav.navigate('RoundSchedulePrototype', { openCreate: true })}
-            onPress={() => nav.navigate('RoundSchedulePrototype')}
-            actions={[
-              { key: 'course-map', icon: '🗺️', label: '코스맵', onPress: () => nav.navigate('RoundSchedulePrototype') },
-              { key: 'groups', icon: '👥', label: '조편성', onPress: () => nav.navigate('RoundSchedulePrototype') },
-              { key: 'lotto', icon: '🎱', label: 'Lotto 6/18', onPress: () => nav.navigate('RoundSchedulePrototype') },
-            ]}
-          />
-        </GPSection>
-
-        <GPSection title="AI Caddie">
-          <PremiumGogoCaddieCard
-            courseName={upcoming?.courseName || upcoming?.course}
-            teeTime={upcoming?.time}
             dday={formatDday(upcoming?.date) || 'D-1'}
-            averageScore={statText(myAverage, 1)}
-            hasUpcomingRound={!!upcoming}
-            onPress={() => nav.navigate('RoundSchedulePrototype')}
+            roundDate={upcoming?.date ? formatRoundDate(upcoming.date) : '다음 라운드'}
+            teeTime={upcoming?.time || '12:12'}
+            totalCount={Math.max(1, Math.min(3, visibleSchedules.length || 3))}
+            onClubPress={() => nav.navigate('Main', { screen: 'Club' })}
+            onNotificationPress={() => nav.navigate('NoticePrototype')}
           />
-        </GPSection>
+        </PremiumHomeMotion>
 
-        <GPSection title="Recent Stats">
-          <PremiumRecentStatsSection stats={recentStats} />
-        </GPSection>
+        <PremiumHomeMotion index={1}>
+          <GPSection title="테마">
+            <ThemeSelectorCompact />
+          </GPSection>
+        </PremiumHomeMotion>
 
-        <GPSection title="최근 라운드">
-          <RecentRoundList rounds={safeRounds} userName={myName} onOpenHistory={() => nav.navigate('Main', { screen: 'History' })} />
-        </GPSection>
+        <PremiumHomeMotion index={2}>
+          <GPSection title="Quick Menu">
+            <PremiumQuickMenuSection items={quickActions} />
+          </GPSection>
+        </PremiumHomeMotion>
 
-        <GPSection title="Community">
-          <GPCard style={styles.communityCard}>
-            <Text style={[styles.communityTitle, { color: palette.text }]}>함께 치면 더 즐거운 라운드</Text>
-            <Text style={[styles.communityText, { color: palette.muted }]}>클럽 공지, 회비, 대회, 친구 활동을 하나의 흐름으로 연결할 예정입니다.</Text>
-            <GPButton label="클럽 관리" variant="soft" onPress={() => nav.navigate('Main', { screen: 'Club' })} style={{ marginTop: 14 }} />
-          </GPCard>
-        </GPSection>
+        <PremiumHomeMotion index={3}>
+          <GPSection title="Upcoming Round" right={loading ? <ActivityIndicator color={palette.green} /> : null}>
+            <PremiumUpcomingRoundCard
+              empty={!upcoming}
+              statusLabel={roundStatusLabel(upcoming?.status)}
+              courseName={upcoming?.courseName || upcoming?.course || '다음 라운드'}
+              layoutName={upcoming?.layoutName}
+              dateLabel={upcoming?.date ? formatRoundDate(upcoming.date) : '일정 미정'}
+              teeTime={upcoming?.time || '시간 미정'}
+              memberCount={roundMemberCount(upcoming)}
+              weatherText="맑음"
+              temperature="24°"
+              onCreate={() => nav.navigate('RoundSchedulePrototype', { openCreate: true })}
+              onPress={() => nav.navigate('RoundSchedulePrototype')}
+              actions={[
+                { key: 'course-map', icon: '🗺️', label: '코스맵', onPress: () => nav.navigate('RoundSchedulePrototype') },
+                { key: 'groups', icon: '👥', label: '조편성', onPress: () => nav.navigate('RoundSchedulePrototype') },
+                { key: 'lotto', icon: '🎱', label: 'Lotto 6/18', onPress: () => nav.navigate('RoundSchedulePrototype') },
+              ]}
+            />
+          </GPSection>
+        </PremiumHomeMotion>
+
+        <PremiumHomeMotion index={4}>
+          <GPSection title="AI Caddie">
+            <PremiumGogoCaddieCard
+              courseName={upcoming?.courseName || upcoming?.course}
+              teeTime={upcoming?.time}
+              dday={formatDday(upcoming?.date) || 'D-1'}
+              averageScore={statText(myAverage, 1)}
+              hasUpcomingRound={!!upcoming}
+              onPress={() => nav.navigate('RoundSchedulePrototype')}
+            />
+          </GPSection>
+        </PremiumHomeMotion>
+
+        <PremiumHomeMotion index={5}>
+          <GPSection title="Recent Stats">
+            <PremiumRecentStatsSection stats={recentStats} />
+          </GPSection>
+        </PremiumHomeMotion>
+
+        <PremiumHomeMotion index={6}>
+          <GPSection title="최근 라운드">
+            <RecentRoundList rounds={safeRounds} userName={myName} onOpenHistory={() => nav.navigate('Main', { screen: 'History' })} />
+          </GPSection>
+        </PremiumHomeMotion>
+
+        <PremiumHomeMotion index={7}>
+          <GPSection title="Community">
+            <GPCard style={styles.communityCard}>
+              <Text style={[styles.communityTitle, { color: palette.text }]}>함께 치면 더 즐거운 라운드</Text>
+              <Text style={[styles.communityText, { color: palette.muted }]}>클럽 공지, 회비, 대회, 친구 활동을 하나의 흐름으로 연결할 예정입니다.</Text>
+              <GPButton label="클럽 관리" variant="soft" onPress={() => nav.navigate('Main', { screen: 'Club' })} style={{ marginTop: 14 }} />
+            </GPCard>
+          </GPSection>
+        </PremiumHomeMotion>
       </ScrollView>
     </View>
   )
@@ -548,11 +535,6 @@ const styles = StyleSheet.create({
   heroStatLabel: { fontSize: 11, fontWeight: '800', marginBottom: 5 },
   heroStatValue: { fontSize: 21, fontWeight: '900', letterSpacing: -0.6 },
   heroStatSuffix: { fontSize: 12, fontWeight: '900' },
-  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  quickCard: { width: '31.8%', minHeight: 104, borderWidth: 1, padding: 12, justifyContent: 'center' },
-  quickIcon: { fontSize: 25, marginBottom: 8 },
-  quickTitle: { fontSize: 14, fontWeight: '900', marginBottom: 3 },
-  quickCaption: { fontSize: 10, fontWeight: '700' },
   emptyRoundCard: { alignItems: 'center', paddingVertical: 24 },
   emptyRoundIcon: { fontSize: 34, marginBottom: 10 },
   emptyRoundTitle: { fontSize: 18, fontWeight: '900', textAlign: 'center', marginBottom: 8 },

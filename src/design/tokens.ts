@@ -39,6 +39,7 @@ export const motion = {
   fast: 120,
   base: 180,
   slow: 260,
+  stagger: 54,
 } as const
 
 export const colorLayers = {

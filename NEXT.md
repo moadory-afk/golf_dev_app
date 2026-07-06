@@ -1,18 +1,18 @@
-# NEXT - Home Experience Sprint v1.5
+# NEXT - Home Experience Sprint v1.8
 
-다음 작업은 `Quick Menu Polish` 제품화입니다.
+다음 작업은 `Skeleton Loading` 제품화입니다.
 
 ## Priority
 
-1. Quick Menu를 레퍼런스형 하단 5개 주요 메뉴 카드로 재설계
-2. 라운드 기록, 스코어 통계, 클럽 게시판, 친구/동호회, 동호회 스킨 진입 구조 정리
-3. 각 메뉴를 기존 화면으로 실제 navigation 연결
-4. 아이콘 크기, Radius, Spacing, Shadow를 Home Dashboard 디자인 언어와 통일
+1. Home 데이터 로딩 중 카드 레이아웃이 흔들리지 않도록 Skeleton UI 적용
+2. Hero / Upcoming Round / Stats 중심으로 우선 적용
+3. 실제 데이터 로직 변경 금지
+4. 색상/간격은 Skin Palette와 Design Token만 사용
 
 ## Acceptance Criteria
 
-- Screen → Section → Card → Widget 구조 유지
-- 색상은 Skin Palette / Design Token만 사용
-- 기존 기능 삭제 금지
+- Home 로딩 상태에서 Premium Skeleton 표시
+- 기존 ActivityIndicator 의존 최소화
+- 화면 높이와 카드 리듬 유지
 - `npx tsc --noEmit` 통과
 - 작업 후 CHANGELOG.md, NEXT.md, PROJECT_STATUS.md, COMPONENT_GUIDE.md 업데이트

@@ -2,9 +2,9 @@ import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { C } from '../theme'
 import { SkinProvider, useSkin } from '../skins'
 import { Icon, type IconName } from '../components/Icon'
+import { colorLayers, radius, spacing, typography } from '../design/tokens'
 import { ClubProvider, useClub } from '../lib/ClubContext'
 import { UserProfileProvider } from '../lib/UserProfileContext'
 import HomeScreen from '../screens/HomeExperienceScreen'
@@ -62,8 +62,14 @@ function TabIcon({
   }
 
   return (
-    <View style={[navStyles.tabIconPill, focused && { backgroundColor: palette.tabActiveBg }]}>
-      <Icon name={icon} size={20} color={focused ? palette.accentText : palette.muted} strokeWidth={focused ? 2.2 : 1.8} />
+    <View
+      style={[
+        navStyles.tabIconPill,
+        { borderColor: focused ? palette.gold : palette.border },
+        focused && { backgroundColor: palette.tabActiveBg },
+      ]}
+    >
+      <Icon name={icon} size={20} color={focused ? palette.accentText : palette.muted} strokeWidth={focused ? 2.3 : 1.8} />
     </View>
   )
 }
@@ -81,16 +87,41 @@ function MainTabs() {
         headerShown: false,
         tabBarActiveTintColor: isModern ? palette.text : palette.green,
         tabBarInactiveTintColor: palette.muted,
-        tabBarStyle: {
-          borderTopColor: palette.border,
-          backgroundColor: palette.tabBg,
-          height: isModern ? 66 : 58,
-          paddingTop: isModern ? 7 : 0,
-          paddingBottom: 8,
-        },
+        tabBarStyle: isModern
+          ? {
+              position: 'absolute',
+              left: spacing.lg,
+              right: spacing.lg,
+              bottom: spacing.md,
+              height: 72,
+              borderTopWidth: 0,
+              borderRadius: radius.xxl,
+              borderWidth: 1,
+              borderColor: colorLayers.cardHairline,
+              backgroundColor: palette.tabBg,
+              paddingTop: spacing.sm,
+              paddingBottom: spacing.sm,
+              shadowColor: palette.greenDark,
+              shadowOpacity: palette.shadowOpacity * 2,
+              shadowRadius: 18,
+              shadowOffset: { width: 0, height: 10 },
+              elevation: 8,
+            }
+          : {
+              borderTopColor: palette.border,
+              backgroundColor: palette.tabBg,
+              height: 58,
+              paddingBottom: spacing.sm,
+            },
+        tabBarItemStyle: isModern
+          ? {
+              borderRadius: radius.xl,
+              paddingVertical: spacing.xs,
+            }
+          : undefined,
         tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: isModern ? '700' : '600',
+          ...typography.caption,
+          fontWeight: isModern ? '900' : '700',
         },
       }}
     >
@@ -214,11 +245,11 @@ const navStyles = StyleSheet.create({
     fontWeight: '700',
   },
   tabIconPill: {
-    minWidth: 46,
-    height: 28,
-    borderRadius: 14,
+    minWidth: 48,
+    height: 30,
+    borderRadius: radius.pill,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tabIconPillActive: {},
 })
