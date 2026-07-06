@@ -1,17 +1,19 @@
-# CHANGELOG
+# CHANGELOG - Home Experience Sprint v1.4
 
-## Framework Sprint v1.0 - Sprint 5-1 UI Component Library
+## Added
+- Premium Upcoming Round 전용 컴포넌트 `src/features/home/components/PremiumUpcomingRoundCard.tsx` 추가
+- 예정 라운드를 대형 Ticket Card 형태로 표시
+- 코스 썸네일, 상태 Badge, 골프장명, 코스명, 날짜, Tee Off, 인원, 날씨 정보 적용
+- 우측 Quick Action 영역에 코스맵, 조편성, Lotto 6/18 버튼 구조 추가
+- 예정 라운드가 없는 경우 라운드 일정 생성 CTA Empty State 추가
 
-### Added
-- `src/components/ui` 폴더 추가
-- `GPText` 공통 텍스트 컴포넌트 추가
-- `GPCard` 공통 카드 컴포넌트 추가
-- `GPButton` 공통 버튼 컴포넌트 추가
-- `GPSection` 섹션 레이아웃 컴포넌트 추가
-- `GPBadge`, `GPChip`, `GPIconButton`, `GPAvatar`, `GPDivider` 추가
-- `src/components/ui/index.ts` 배럴 export 추가
+## Changed
+- `HomeExperienceScreen`의 `TodayRoundCard` 섹션을 `PremiumUpcomingRoundCard` 기반 `Upcoming Round` 섹션으로 교체
+- 기존 라운드 일정 화면 이동 흐름은 유지하면서 Home 카드 UI만 Premium Dashboard 구조로 개선
+- Home 컴포넌트 export 목록에 `PremiumUpcomingRoundCard` 추가
 
-### Notes
-- 이번 Sprint는 기존 화면을 직접 변경하지 않고, 다음 Home 리팩터링을 위한 UI 기반만 추가한다.
-- 기존 `src/design/index.tsx`에 있던 컴포넌트는 유지한다.
-- 새 화면/리팩터링 화면은 앞으로 `src/components/ui`를 우선 사용한다.
+## Verified
+- `npx tsc --noEmit` 통과
+
+## Preserved
+- 기존 `HomeScreen.tsx`, 라운드, 클럽, 기록, 인증, 결제, DB Schema는 삭제/변경하지 않음

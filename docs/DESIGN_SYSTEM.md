@@ -55,3 +55,8 @@ Widget
 ```
 
 Home, Round, AI Caddie, Community 등 모든 화면은 같은 규칙으로 구성한다.
+
+## Home Experience v1.1 - Premium Hero Tokens
+
+Premium Hero는 이미지 기반 Header이며 Overlay, Glass, Muted Text 색상은 `src/design/tokens.ts`의 `colorLayers`를 사용한다.
+Hero 내부 색상은 Skin Palette와 Design Token만 사용한다.

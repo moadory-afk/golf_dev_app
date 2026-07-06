@@ -36,6 +36,14 @@ export type RootStackParamList = {
     ocrPlayers?: Array<{ name: string; strokes: number[] }>
     settlement?: SettlementConfig
   }
+  PlayerSetup: {
+    date: string
+    courseName: string
+    pars: number[]
+    golfCourseId?: string
+    ocrPlayers?: Array<{ name: string; strokes: number[] }>
+    settlement?: SettlementConfig
+  }
   ScoreEntry: {
     date: string
     courseName: string

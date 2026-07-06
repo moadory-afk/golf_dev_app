@@ -686,7 +686,7 @@ export default function RoundSetupScreen() {
               style={[s.modeBtn, inputMode === 'direct' && s.modeBtnOn]}
               onPress={() => setInputMode('direct')}
             >
-              <View style={s.modeIcon}><EmojiIcon char="✏️" size={16} color={C.green} /></View>
+              <Text style={s.modeIcon}><EmojiIcon char="✏️" size={16} color={C.green} /></Text>
               <Text style={[s.modeBtnText, inputMode === 'direct' && s.modeBtnTextOn]}>직접 입력</Text>
             </TouchableOpacity>
             <TouchableOpacity

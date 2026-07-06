@@ -41,6 +41,16 @@ export const motion = {
   slow: 260,
 } as const
 
+export const colorLayers = {
+  heroScrim: 'rgba(0,0,0,0.46)',
+  heroScrimSoft: 'rgba(0,0,0,0.18)',
+  heroGlass: 'rgba(255,255,255,0.18)',
+  heroGlassStrong: 'rgba(255,255,255,0.28)',
+  heroTextMuted: 'rgba(255,255,255,0.82)',
+  heroTextSoft: 'rgba(255,255,255,0.68)',
+  cardHairline: 'rgba(16,20,18,0.08)',
+} as const
+
 export function createShadow(palette: SkinPalette, level: 0 | 1 | 2 | 3 = 1): ViewStyle {
   if (level === 0) return { elevation: 0, shadowOpacity: 0 }
   const opacity = palette.shadowOpacity * level
@@ -86,6 +96,7 @@ export function createTheme(palette: SkinPalette) {
     },
     typography,
     motion,
+    colorLayers,
     shadow: (level: 0 | 1 | 2 | 3 = 1) => createShadow(palette, level),
   }
 }
