@@ -22,8 +22,7 @@ import { supabase } from '../lib/supabase'
 import { loadHandicapBasis, type HandicapBasis } from '../lib/handicapBasis'
 import { C } from '../theme'
 import { useSkin } from '../skins'
-import { GPRoundTicket, GPStatCard } from '../design'
-import { GPHeroSection } from '../components/home/GPHeroSection'
+import { GPMascotHero, GPRoundTicket, GPStatCard } from '../design'
 import { getOpenWeatherForRound, type RoundWeather } from '../lib/weather'
 import { UserAvatarBtn } from '../components/UserAvatar'
 import { AppHeader } from '../components/AppHeader'
@@ -50,24 +49,6 @@ function formatShortDate(input: string) {
   if (input.includes('-')) return input.slice(5).replace('-', '.')
   return input
 }
-
-function formatDday(date?: string) {
-  if (!date || date.length < 10) return ''
-  const base = new Date(todayKey())
-  const target = new Date(date.slice(0, 10))
-  const diff = Math.round((target.getTime() - base.getTime()) / 86400000)
-  if (diff === 0) return 'D-DAY'
-  return diff > 0 ? `D-${diff}` : `D+${Math.abs(diff)}`
-}
-
-function timeGreeting() {
-  const hour = new Date().getHours()
-  if (hour < 11) return 'Good Morning'
-  if (hour < 17) return 'Good Afternoon'
-  return 'Good Evening'
-}
-
-const bomunHeroImage = require('../../assets/course-heroes/bomun-hero-v2.png')
 
 function todayKey() {
   const now = new Date()
@@ -654,15 +635,6 @@ export default function HomeScreen() {
       : (nextRound?.layoutName ?? '코스 미정')
   const teeTime = myRoundGroup?.time || nextRound?.time || '티오프 미정'
   const allGroupSummary = hasAssignedGroups ? `${assignedGroups.length}개 조 편성` : '조 미편성'
-  const homeHeroWeather = nextRound ? roundWeatherMap[nextRound.id] : null
-  const homeHeroDateLabel = nextRound ? formatDday(nextRound.date) : '추천'
-  const homeHeroCourseLabel = hasUpcomingRound ? roundCourseName : '보문CC'
-  const homeHeroSubtitle = hasUpcomingRound
-    ? `${nextRound?.date ?? ''} · ${teeTime} · ${roundCourseSummary}`
-    : '오늘의 추천 골프장 · 라운드를 등록하고 추억을 만들어보세요'
-  const caddieMessage = hasUpcomingRound
-    ? `${myName || '회원'}님, ${homeHeroCourseLabel} 일정이 준비되어 있어요. 날씨와 조편성을 확인하고 오늘도 버디 가볼까요?`
-    : `${myName || '회원'}님, 아직 예정된 라운드가 없네요. 새 라운드를 등록하고 즐거운 골프를 준비해볼까요?`
 
 
   useEffect(() => {
@@ -1081,44 +1053,21 @@ export default function HomeScreen() {
         <AppHeader myName={myName} />
 
         <View style={s.content}>
-          {/* Home V2 Hero */}
-          <GPHeroSection
-            heroImage={bomunHeroImage}
-            greeting={timeGreeting()}
-            courseName={homeHeroCourseLabel}
-            courseLocation={hasUpcomingRound ? undefined : '경북 경주시 보문로'}
-            hasUpcomingRound={hasUpcomingRound}
-            ddayText={homeHeroDateLabel}
-            roundDateText={nextRound?.date}
-            teeTimeText={teeTime}
-            courseLayoutName={roundCourseSummary}
-            weather={homeHeroWeather}
-          />
-
-          {/* Gogo Caddie */}
-          <View style={s.homeV2CaddieCard}>
-            <View style={s.homeV2CaddieText}>
-              <Text style={s.homeV2CaddieEyebrow}>Gogo Caddie</Text>
-              <Text style={s.homeV2CaddieTitle}>{hasUpcomingRound ? '라운드 준비 완료' : '라운드를 준비해볼까요?'}</Text>
-              <Text style={s.homeV2CaddieMessage}>{caddieMessage}</Text>
-              {myHandicap !== null ? <Text style={s.homeV2CaddieChip}>현재 핸디 {diffText(myHandicap)}</Text> : null}
-            </View>
-            <View style={s.homeV2MascotWrap}>
-              <View style={s.homeV2MascotCap} />
-              <View style={s.homeV2MascotFace}>
-                <View style={s.homeV2MascotEyes}><View style={s.homeV2MascotEye} /><View style={s.homeV2MascotEye} /></View>
-                <View style={s.homeV2MascotSmile} />
-              </View>
-              <Text style={s.homeV2MascotClub}>⛳</Text>
-            </View>
-          </View>
+          {skinId === 'cuteGolf' ? (
+            <GPMascotHero
+              title={`${myName || '회원'}님, 오늘도 굿샷!`}
+              message={hasUpcomingRound ? `${roundCourseName} 일정이 준비되어 있어요. 캐디북과 조편성을 확인해보세요.` : '아직 예정된 라운드가 없어요. 새 라운드를 잡아볼까요?'}
+              stat={myHandicap !== null ? `현재 핸디 ${diffText(myHandicap)}` : '첫 기록을 기다리는 중'}
+            />
+          ) : null}
 
           {/* 상단 요약 카드 */}
           <View style={s.designStatsGrid}>
             <GPStatCard label="핸디캡" value={myHandicap !== null ? diffText(myHandicap) : '-'} sub={`최근 ${handicapBasis}경기`} onPress={() => setPersonalDetail('handicap')} />
             <GPStatCard label="평균" value={myAverage !== null ? `${myAverage}타` : '-'} sub="전체 경기 평균" onPress={() => setPersonalDetail('average')} />
-            <GPStatCard label="최근라운드" value={recentRoundSummary.value} sub={recentRoundSummary.sub} onPress={() => recent3[0] && setRecentRoundOpen(true)} style={s.homeV2WideStat} />
             <GPStatCard label="베스트" value={myBest ? `${myBest.total}타` : '-'} sub={myBest?.courseName.slice(0, 5) ?? ''} accent={palette.gold} onPress={() => setPersonalDetail('best')} />
+            <GPStatCard label="최근라운드" value={recentRoundSummary.value} sub={recentRoundSummary.sub} onPress={() => recent3[0] && setRecentRoundOpen(true)} />
+            <GPStatCard label="상대전적" value={`${diffText(headToHeadHandicapDiff)}타`} sub="핸디차이" onPress={() => setH2hPlayer(myName)} />
             <GPStatCard label="보유기록" value={`${ginnessRecords.length}개`} sub="클럽 기준" onPress={() => setPersonalDetail('records')} />
           </View>
 
@@ -1245,18 +1194,9 @@ export default function HomeScreen() {
                         })}
                       </View>
                     ) : (
-                      <TouchableOpacity
-                        style={s.homeV2EmptyRoundCard}
-                        onPress={() => isAdmin ? nav.navigate('RoundSchedulePrototype', { openCreate: true, modalOnly: true }) : Alert.alert('안내', '운영진에게 새 라운드 등록을 요청해보세요.')}
-                        activeOpacity={0.86}
-                      >
-                        <Text style={s.homeV2EmptyRoundIcon}>🏌️</Text>
-                        <View style={{ flex: 1 }}>
-                          <Text style={s.homeV2EmptyRoundTitle}>현재 예정된 라운딩이 없습니다</Text>
-                          <Text style={s.homeV2EmptyRoundSub}>{isAdmin ? '새 라운드를 등록하고 회원들과 추억을 만들어보세요.' : '운영진이 일정을 등록하면 이곳에 표시됩니다.'}</Text>
-                        </View>
-                        <Icon name="chevronRight" size={18} color={C.muted} />
-                      </TouchableOpacity>
+                      <View style={[s.roundRow, s.roundRowDisabled]}>
+                        <Text style={s.roundCourse}>현재 예정된 라운딩이 없습니다</Text>
+                      </View>
                     )}
                   </>
                 ) : (

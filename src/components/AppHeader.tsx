@@ -44,7 +44,7 @@ export function AppHeader({ myName, showSettings = false, rightExtra }: {
     <View style={[s.header, { paddingTop: insets.top + 16, backgroundColor: palette.headerBg }]}>
       <View style={{ flex: 1 }}>
         <Text style={s.greeting} numberOfLines={1}>
-          {myName ? <Text style={s.greetingName}>{myName}님 </Text> : null}
+          {myName ? <Text style={s.greetingName}>{shortName(myName)}님 </Text> : null}
           {greeting}.
         </Text>
         <View style={s.identityRow}>

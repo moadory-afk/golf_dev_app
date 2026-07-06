@@ -1,8 +1,9 @@
-import { useState } from 'react'
-import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
-import { supabase } from '../lib/supabase'
-import { ensureProfile } from '../lib/store'
-import { C } from '../theme'
+import { useState } from 'react';
+
+import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { supabase } from '../lib/supabase';
+import { ensureProfile } from '../lib/store';
+import { C } from '../theme';
 
 function nameToEmail(name: string): string {
   const hex = Array.from(name.trim())
@@ -11,8 +12,9 @@ function nameToEmail(name: string): string {
   return `${hex}@gogopar.app`
 }
 
-export default function LoginScreen() {
-  const [name, setName] = useState('')
+export default function LoginScreen({ navigation }: { navigation: any }) {
+
+  const [name, setName] = useState('');
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -39,6 +41,7 @@ export default function LoginScreen() {
       } catch {
         // 로그인은 성공했으므로 프로필 보정 실패는 막지 않습니다.
       }
+      navigation.navigate('Main')
     }
   }
 
@@ -87,18 +90,10 @@ export default function LoginScreen() {
 
         <View style={s.signupCard}>
           <Text style={s.signupTitle}>아직 회원이 아니신가요?</Text>
-          <Text style={s.signupSub}>회원가입 연결은 다음 단계에서 작업합니다.</Text>
-          <View style={s.socialRow}>
-            <TouchableOpacity style={[s.socialBtn, s.googleBtn]} activeOpacity={0.86}>
-              <Text style={s.googleText}>Google</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[s.socialBtn, s.kakaoBtn]} activeOpacity={0.86}>
-              <Text style={s.kakaoText}>Kakao</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[s.socialBtn, s.naverBtn]} activeOpacity={0.86}>
-              <Text style={s.naverText}>Naver</Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={s.signupSub}>회원가입을 위해 아래 버튼을 눌러 주세요.</Text>
+          <TouchableOpacity style={s.signupBtn} onPress={() => navigation.navigate('SignUp')} activeOpacity={0.86}>
+            <Text style={s.signupBtnText}>회원가입</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -125,8 +120,6 @@ const s = StyleSheet.create({
   socialBtn: { borderRadius: 12, paddingVertical: 13, alignItems: 'center', justifyContent: 'center' },
   googleBtn: { backgroundColor: '#fff', borderWidth: 1, borderColor: C.border },
   kakaoBtn: { backgroundColor: '#fee500' },
-  naverBtn: { backgroundColor: '#03c75a' },
-  googleText: { fontSize: 12, fontWeight: '900', color: C.text },
-  kakaoText: { fontSize: 12, fontWeight: '900', color: '#181600' },
-  naverText: { fontSize: 12, fontWeight: '900', color: '#fff' },
+  signupBtn: { backgroundColor: C.green, borderRadius: 12, paddingVertical: 10, alignItems: 'center' },
+  signupBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
 })

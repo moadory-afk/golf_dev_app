@@ -5,7 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { supabase } from './src/lib/supabase'
 import { ensureProfile } from './src/lib/store'
 import Navigation from './src/navigation'
-import LoginScreen from './src/screens/LoginScreen'
+
 import InviteScreen from './src/screens/InviteScreen'
 import PromoScreen from './src/screens/PromoScreen'
 import { Platform, View, ActivityIndicator, Text, ScrollView, StyleSheet } from 'react-native'
@@ -135,10 +135,8 @@ export default function App() {
               onJoined={handleJoined}
               onDismiss={handleDismiss}
             />
-          ) : session ? (
-            <Navigation />
           ) : (
-            <LoginScreen />
+            <Navigation session={session} />
           )}
         </WebFrame>
       </SafeAreaProvider>

@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View, type ViewStyle } from 'react-native'
+import type { RoundWeather } from '../lib/weather'
 import { useSkin, type SkinPalette } from '../skins'
 
 export const radius = { sm: 10, md: 14, lg: 18, xl: 24, xxl: 30 }
@@ -54,10 +55,10 @@ export function GPButton({ label, onPress, disabled, variant = 'primary', style 
   )
 }
 
-export function GPStatCard({ label, value, sub, accent, onPress }: { label: string; value: string; sub?: string; accent?: string; onPress?: () => void }) {
+export function GPStatCard({ label, value, sub, accent, onPress, style }: { label: string; value: string; sub?: string; accent?: string; onPress?: () => void; style?: ViewStyle | ViewStyle[] }) {
   const { palette } = useSkin()
   return (
-    <TouchableOpacity activeOpacity={0.86} onPress={onPress} disabled={!onPress} style={[ds.statCard, { backgroundColor: palette.card, borderColor: palette.border, borderRadius: palette.cardRadius }, shadow(palette, 1)]}>
+    <TouchableOpacity activeOpacity={0.86} onPress={onPress} disabled={!onPress} style={[ds.statCard, { backgroundColor: palette.card, borderColor: palette.border, borderRadius: palette.cardRadius }, shadow(palette, 1), style]}>
       <Text style={[ds.statLabel, { color: palette.muted }]}>{label}</Text>
       <Text style={[ds.statValue, { color: accent ?? palette.text }]} numberOfLines={1}>{value}</Text>
       {!!sub && <Text style={[ds.statSub, { color: palette.muted }]} numberOfLines={1}>{sub}</Text>}
@@ -94,6 +95,7 @@ export function GPRoundTicket({
   award,
   actions,
   selected,
+  weather,
   onPress,
 }: {
   date: string
@@ -103,6 +105,7 @@ export function GPRoundTicket({
   award?: string
   actions?: ReactNode
   selected?: boolean
+  weather?: RoundWeather | null
   onPress?: () => void
 }) {
   const { palette } = useSkin()
@@ -118,6 +121,13 @@ export function GPRoundTicket({
         <View style={[ds.ticketBadge, { backgroundColor: palette.greenLight }]}><Text style={[ds.ticketBadgeText, { color: palette.green }]}>{status}</Text></View>
       </View>
       {!!sub && <Text style={[ds.ticketSub, { color: palette.muted }]}>{sub}</Text>}
+      {weather ? (
+        <View style={[ds.weatherPill, { backgroundColor: palette.greenLight, borderColor: palette.border }]}>
+          <Text style={[ds.weatherText, { color: palette.text }]}>{weather.icon} {weather.tempC}°C</Text>
+          {typeof weather.windMs === 'number' ? <Text style={[ds.weatherSubText, { color: palette.muted }]}>바람 {weather.windMs}m/s</Text> : null}
+          {typeof weather.pop === 'number' ? <Text style={[ds.weatherSubText, { color: palette.muted }]}>강수 {weather.pop}%</Text> : null}
+        </View>
+      ) : null}
       {!!award && <Text style={[ds.ticketAward, { color: palette.muted }]} numberOfLines={2}>{award}</Text>}
       {actions ? <View style={ds.ticketActions}>{actions}</View> : null}
     </TouchableOpacity>
@@ -159,5 +169,8 @@ const ds = StyleSheet.create({
   ticketBadgeText: { fontSize: 11, fontWeight: '900' },
   ticketSub: { fontSize: 13, fontWeight: '700', marginTop: 8 },
   ticketAward: { fontSize: 12, fontWeight: '600', marginTop: 5, lineHeight: 17 },
+  weatherPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 10, marginTop: 10 },
+  weatherText: { fontSize: 12, fontWeight: '900' },
+  weatherSubText: { fontSize: 11, fontWeight: '800' },
   ticketActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 13 },
 })

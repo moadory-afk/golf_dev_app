@@ -26,25 +26,8 @@ const emptyProfile: UserProfileState = {
 
 const UserProfileContext = createContext<UserProfileContextValue | null>(null)
 
-function emailToName(email: string | undefined): string | null {
-  if (!email || !email.endsWith('@gogopar.app')) return null
-  const hexStr = email.split('@')[0]
-  if (!hexStr || hexStr.length % 4 !== 0) return null
-  try {
-    let name = ''
-    for (let i = 0; i < hexStr.length; i += 4) {
-      const code = parseInt(hexStr.substring(i, i + 4), 16)
-      if (isNaN(code)) return null
-      name += String.fromCharCode(code)
-    }
-    return name
-  } catch {
-    return null
-  }
-}
-
 function fallbackName(user: User): string {
-  return user.user_metadata?.name ?? emailToName(user.email) ?? user.email ?? ''
+  return user.user_metadata?.name ?? user.email ?? ''
 }
 
 export function UserProfileProvider({ children }: { children: ReactNode }) {
@@ -65,8 +48,8 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
           .from('profiles')
           .select('name')
           .eq('id', user.id)
-          .limit(1)
-        profileName = data?.[0]?.name ?? null
+          .maybeSingle()
+        profileName = data?.name ?? null
       } catch {
         profileName = null
       }

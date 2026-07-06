@@ -18,6 +18,8 @@ import ResultScreen from '../screens/ResultScreen'
 import MemberScreen from '../screens/MemberScreen'
 import FeePrototypeScreen from '../screens/FeePrototypeScreen'
 import FeeMemberPrototypeScreen from '../screens/FeeMemberPrototypeScreen'
+import SignUpScreen from '../screens/SignUpScreen'
+import LoginScreen from '../screens/LoginScreen'
 import NoticePrototypeScreen from '../screens/NoticePrototypeScreen'
 import TreasuryEntryPrototypeScreen from '../screens/TreasuryEntryPrototypeScreen'
 import TreasuryLedgerPrototypeScreen from '../screens/TreasuryLedgerPrototypeScreen'
@@ -123,7 +125,7 @@ function clubScreenTitle(clubName: string | undefined, title: string) {
   return clubName ? `${clubName} ${title}` : title
 }
 
-function NavigationStack() {
+function NavigationStack({ session }: { session: import('@supabase/supabase-js').Session | null }) {
   const { palette } = useSkin()
   const { activeClub } = useClub()
   const clubName = activeClub?.name
@@ -131,6 +133,7 @@ function NavigationStack() {
   return (
     <NavigationContainer>
       <Stack.Navigator
+        initialRouteName={session ? 'Main' : 'Login'}
         screenOptions={{
           headerStyle: { backgroundColor: palette.headerBg },
           headerTintColor: palette.headerText,
@@ -138,7 +141,9 @@ function NavigationStack() {
           headerBackVisible: false,
         }}
       >
-          <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} />
+          <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="SignUp" component={SignUpScreen} options={{ title: '회원가입' }} />
+          <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} initialParams={undefined} />
           <Stack.Screen name="Profile" component={ProfileScreen} options={({ navigation }) => ({ title: '프로필 · 설정', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="FeePrototype" component={FeePrototypeScreen} options={({ navigation, route }) => ({ title: clubScreenTitle(clubName, '회비 관리'), headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => closeToManageMenu(navigation, route.params?.returnToManageMenu)} /> })} />
           <Stack.Screen name="RoundSchedulePrototype" component={RoundSchedulePrototypeScreen} options={({ navigation, route }) => {
@@ -177,17 +182,18 @@ function NavigationStack() {
           <Stack.Screen name="Result" component={ResultScreen} options={({ navigation }) => ({ title: '라운드 결과', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="RoundSetup" component={RoundSetupScreen} options={({ navigation }) => ({ title: '코스 · 날짜 선택', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen name="ScoreEntry" component={ScoreEntryScreen} options={({ navigation }) => ({ title: '스코어 입력', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.navigate('Main', { screen: 'History' })} /> })} />
+
       </Stack.Navigator>
     </NavigationContainer>
   )
 }
 
-export default function Navigation() {
+export default function Navigation({ session }: { session: import('@supabase/supabase-js').Session | null }) {
   return (
     <SkinProvider>
       <UserProfileProvider>
         <ClubProvider>
-          <NavigationStack />
+          <NavigationStack session={session} />
         </ClubProvider>
       </UserProfileProvider>
     </SkinProvider>

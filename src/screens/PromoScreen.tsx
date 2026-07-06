@@ -1,14 +1,12 @@
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
 } from 'react-native'
-import { useState } from 'react'
+
 import { C } from '../theme'
-import LoginScreen from './LoginScreen'
+
 
 export default function PromoScreen({ onDismiss }: { onDismiss: () => void }) {
-  const [showLogin, setShowLogin] = useState(false)
-
-  if (showLogin) return <LoginScreen />
+  
 
   return (
     <ScrollView style={s.container} contentContainerStyle={s.scroll}>
@@ -22,7 +20,7 @@ export default function PromoScreen({ onDismiss }: { onDismiss: () => void }) {
 
       {/* CTA - 히어로 바로 아래 */}
       <View style={s.ctaSection}>
-        <TouchableOpacity style={s.ctaBtn} onPress={() => setShowLogin(true)}>
+        <TouchableOpacity style={s.ctaBtn} onPress={onDismiss}>
           <Text style={s.ctaBtnText}>⛳ 무료로 시작하기</Text>
         </TouchableOpacity>
         <Text style={s.ctaNote}>가입비 없음 · 언제든 무료 사용</Text>

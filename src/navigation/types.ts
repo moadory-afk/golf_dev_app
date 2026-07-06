@@ -9,6 +9,8 @@ export type MainTabParamList = {
 }
 
 export type RootStackParamList = {
+  Login: undefined
+  SignUpRoute: undefined
   Main: NavigatorScreenParams<MainTabParamList> | undefined
   Profile: undefined
   FeePrototype: { returnToManageMenu?: boolean } | undefined
@@ -63,7 +65,8 @@ export type RootStackParamList = {
     players: Array<{ name: string; strokes: number[] }>
     photoUris?: string[]
     settlement?: SettlementConfig
-  }
+  },
+  SignUp: undefined
 }
 
 export type RootStackProps<T extends keyof RootStackParamList> =
