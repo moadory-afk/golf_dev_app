@@ -4,23 +4,6 @@ import { useSkin } from '../../../skins'
 
 const gogoMark = require('../../../../assets/gogopar_i.png')
 
-type PremiumGogoCaddieCardProps = {
-  userName: string
-  courseName?: string | null
-  teeTime?: string | null
-  dday?: string | null
-  averageScore: string
-  hasUpcomingRound: boolean
-  title?: string | null
-  message?: string | null
-  hasLiveAdvice?: boolean
-  recommendedClub?: string | null
-  riskLabel?: string | null
-  onCaddieBookPress: () => void
-  onGroupPress: () => void
-  onLottoPress: () => void
-}
-
 type ConciergeAction = {
   key: string
   icon: string
@@ -29,47 +12,20 @@ type ConciergeAction = {
   onPress: () => void
 }
 
-function resolveRoundLine(hasUpcomingRound: boolean, courseName?: string | null, teeTime?: string | null) {
-  if (!hasUpcomingRound) return '예정 라운드를 등록하면 캐디북과 조편성을 바로 준비해드릴게요.'
-  return `오늘 ${courseName || '예정 라운드'} · ${teeTime || 'Tee Off'} 라운드를 준비했습니다.`
-}
-
-function resolveAiComment({
-  title,
-  message,
-  recommendedClub,
-  riskLabel,
-  averageScore,
-  hasUpcomingRound,
-}: {
-  title?: string | null
-  message?: string | null
-  recommendedClub?: string | null
-  riskLabel?: string | null
+type PremiumGogoCaddieCardProps = {
+  userName?: string | null
+  courseName?: string | null
+  teeTime?: string | null
+  dday?: string | null
   averageScore: string
   hasUpcomingRound: boolean
-}) {
-  if (recommendedClub) return `${recommendedClub} 추천 · ${riskLabel || '안정적인 공략이 좋습니다.'}`
-  if (title) return title
-  if (message) return message
-  if (hasUpcomingRound) return '오늘은 바람과 코스 흐름을 확인하고 첫 홀부터 안정적으로 시작하세요.'
-  return `최근 평균 ${averageScore}타 기준으로 다음 라운드 전략을 준비해드릴게요.`
-}
-
-function ConciergeActionButton({ action }: { action: ConciergeAction }) {
-  const { palette } = useSkin()
-
-  return (
-    <TouchableOpacity
-      activeOpacity={0.86}
-      onPress={action.onPress}
-      style={[styles.actionButton, { backgroundColor: palette.bg, borderColor: palette.border }]}
-    >
-      <Text style={styles.actionIcon}>{action.icon}</Text>
-      <Text style={[styles.actionTitle, { color: palette.text }]} numberOfLines={1}>{action.title}</Text>
-      <Text style={[styles.actionSubtitle, { color: palette.muted }]} numberOfLines={1}>{action.subtitle}</Text>
-    </TouchableOpacity>
-  )
+  title?: string | null
+  message?: string | null
+  primaryChip?: string | null
+  secondaryChip?: string | null
+  hasLiveAdvice?: boolean
+  onPress: () => void
+  actions?: ConciergeAction[]
 }
 
 export function PremiumGogoCaddieCard({
@@ -78,23 +34,21 @@ export function PremiumGogoCaddieCard({
   teeTime,
   averageScore,
   hasUpcomingRound,
-  title,
-  message,
+  title: liveTitle,
+  message: liveMessage,
   hasLiveAdvice,
-  recommendedClub,
-  riskLabel,
-  onCaddieBookPress,
-  onGroupPress,
-  onLottoPress,
+  onPress,
+  actions = [],
 }: PremiumGogoCaddieCardProps) {
   const { palette } = useSkin()
-  const roundLine = resolveRoundLine(hasUpcomingRound, courseName, teeTime)
-  const aiComment = resolveAiComment({ title, message, recommendedClub, riskLabel, averageScore, hasUpcomingRound })
-  const actions: ConciergeAction[] = [
-    { key: 'caddie-book', icon: '🗺️', title: 'AI 캐디북', subtitle: '코스 공략', onPress: onCaddieBookPress },
-    { key: 'groups', icon: '👥', title: '조편성', subtitle: '멤버 확인', onPress: onGroupPress },
-    { key: 'lotto', icon: '🎱', title: 'Lotto', subtitle: '행운 뽑기', onPress: onLottoPress },
-  ]
+  const displayName = userName || '골퍼'
+  const title = liveTitle || `안녕하세요,\n${displayName}님 👋`
+  const message = liveMessage || (hasUpcomingRound
+    ? `오늘 ${courseName || '예정 골프장'} · ${teeTime || 'Tee Off'} 라운드를 준비했습니다.`
+    : `최근 평균 ${averageScore} 기준으로 다음 라운드 전략을 준비할게요.`)
+  const aiComment = hasLiveAdvice && liveMessage ? liveMessage : (hasUpcomingRound
+    ? '오늘은 코스 공략을 먼저 확인해보세요.'
+    : '예정 라운드를 등록하면 출발 시간과 캐디북을 안내할게요.')
 
   return (
     <View
@@ -104,39 +58,40 @@ export function PremiumGogoCaddieCard({
         { backgroundColor: palette.card, borderColor: palette.border, borderRadius: palette.cardRadius + 10 },
       ]}
     >
-      <View style={styles.heroRow}>
-        <View style={[styles.characterStage, { backgroundColor: palette.greenLight }]}> 
+      <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={styles.topArea}>
+        <View style={styles.characterStage}> 
           <Image source={gogoMark} style={styles.characterImage} resizeMode="cover" />
         </View>
 
         <View style={styles.content}> 
           <View style={styles.labelRow}>
             <Text style={[styles.label, { color: palette.green }]}>Gogo Concierge</Text>
-            {hasLiveAdvice && <View style={[styles.liveDot, { backgroundColor: palette.gold }]} />}
+            <View style={[styles.liveDot, { backgroundColor: palette.gold }]} />
           </View>
-          <Text style={[styles.greetingLead, { color: palette.text }]}>안녕하세요,</Text>
-          <Text style={[styles.greetingName, { color: palette.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.86}>{userName}님 👋</Text>
-          <Text style={[styles.roundLine, { color: palette.muted }]} numberOfLines={2}>{roundLine}</Text>
+          <Text style={[styles.title, { color: palette.text }]} numberOfLines={2}>{title}</Text>
+          <Text style={[styles.message, { color: palette.muted }]} numberOfLines={2}>{message}</Text>
         </View>
-      </View>
+      </TouchableOpacity>
 
-      <View style={[styles.divider, { backgroundColor: palette.border }]} />
-
-      <View style={styles.actionRow}>
-        {actions.map((action) => (
-          <ConciergeActionButton key={action.key} action={action} />
-        ))}
-      </View>
-
-      <View style={[styles.aiCommentBox, { backgroundColor: palette.greenLight }]}> 
-        <View style={[styles.sparkBadge, { backgroundColor: palette.card }]}> 
-          <Text style={styles.sparkIcon}>✨</Text>
+      {actions.length > 0 && (
+        <View style={[styles.actionRow, { borderTopColor: palette.border }]}> 
+          {actions.map((action) => (
+            <TouchableOpacity key={action.key} activeOpacity={0.86} onPress={action.onPress} style={[styles.actionButton, { backgroundColor: palette.bg, borderColor: palette.border }]}> 
+              <Text style={styles.actionIcon}>{action.icon}</Text>
+              <Text style={[styles.actionTitle, { color: palette.text }]} numberOfLines={1}>{action.title}</Text>
+              <Text style={[styles.actionSubtitle, { color: palette.muted }]} numberOfLines={1}>{action.subtitle}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
-        <View style={styles.aiCopy}>
+      )}
+
+      <TouchableOpacity activeOpacity={0.88} onPress={onPress} style={[styles.aiComment, { backgroundColor: palette.greenLight }]}> 
+        <Text style={styles.aiIcon}>✨</Text>
+        <View style={styles.aiTextWrap}>
           <Text style={[styles.aiLabel, { color: palette.green }]}>AI 한줄 코멘트</Text>
-          <Text style={[styles.aiComment, { color: palette.text }]} numberOfLines={1}>{aiComment}</Text>
+          <Text style={[styles.aiText, { color: palette.text }]} numberOfLines={1}>{aiComment}</Text>
         </View>
-      </View>
+      </TouchableOpacity>
     </View>
   )
 }
@@ -144,74 +99,62 @@ export function PremiumGogoCaddieCard({
 const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 10,
+    padding: spacing.md,
     overflow: 'hidden',
   },
-  heroRow: {
+  topArea: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: spacing.md,
   },
   characterStage: {
-    width: 58,
-    height: 58,
-    borderRadius: 16,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   characterImage: {
-    width: 78,
-    height: 78,
-    transform: [{ translateY: 7 }],
+    width: 96,
+    height: 96,
   },
   content: { flex: 1, minWidth: 0 },
-  labelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: 3 },
-  label: { fontSize: 13, lineHeight: 16, fontWeight: '900', letterSpacing: -0.2 },
-  liveDot: { width: 7, height: 7, borderRadius: radius.pill },
-  greetingLead: { fontSize: 14, lineHeight: 17, fontWeight: '900', letterSpacing: -0.35 },
-  greetingName: { fontSize: 19, lineHeight: 23, fontWeight: '900', letterSpacing: -0.85 },
-  roundLine: { marginTop: 3, fontSize: 11, lineHeight: 14, fontWeight: '800' },
-  divider: { height: 1, marginVertical: 10, opacity: 0.68 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: 2 },
+  label: { fontSize: 14, lineHeight: 18, fontWeight: '900', letterSpacing: -0.2 },
+  liveDot: { width: 6, height: 6, borderRadius: radius.pill },
+  title: { fontSize: 24, lineHeight: 28, fontWeight: '900', letterSpacing: -1.0 },
+  message: { marginTop: spacing.xs, fontSize: 13, lineHeight: 18, fontWeight: '800' },
   actionRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: spacing.sm,
+    borderTopWidth: 1,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
   },
   actionButton: {
     flex: 1,
-    minWidth: 0,
-    minHeight: 54,
+    minHeight: 70,
     borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 6,
+    paddingHorizontal: spacing.xs,
   },
-  actionIcon: { fontSize: 17, marginBottom: 2 },
-  actionTitle: { fontSize: 11, lineHeight: 14, fontWeight: '900', letterSpacing: -0.2, textAlign: 'center' },
-  actionSubtitle: { marginTop: 1, fontSize: 8, lineHeight: 10, fontWeight: '800', textAlign: 'center' },
-  aiCommentBox: {
-    minHeight: 42,
-    marginTop: 8,
-    borderRadius: 16,
+  actionIcon: { fontSize: 24, lineHeight: 27, marginBottom: 2 },
+  actionTitle: { fontSize: 13, lineHeight: 17, fontWeight: '900', letterSpacing: -0.3 },
+  actionSubtitle: { fontSize: 10, lineHeight: 13, fontWeight: '800', marginTop: 1 },
+  aiComment: {
+    marginTop: spacing.md,
+    minHeight: 52,
+    borderRadius: radius.xl,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
-  sparkBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sparkIcon: { fontSize: 14 },
-  aiCopy: { flex: 1, minWidth: 0 },
-  aiLabel: { fontSize: 10, lineHeight: 12, fontWeight: '900', marginBottom: 1 },
-  aiComment: { fontSize: 12, lineHeight: 15, fontWeight: '900', letterSpacing: -0.28 },
+  aiIcon: { fontSize: 20 },
+  aiTextWrap: { flex: 1, minWidth: 0 },
+  aiLabel: { fontSize: 11, lineHeight: 14, fontWeight: '900', marginBottom: 1 },
+  aiText: { fontSize: 14, lineHeight: 18, fontWeight: '900', letterSpacing: -0.3 },
 })

@@ -1,82 +1,47 @@
-# COMPONENT_GUIDE - Home v3.9 Premium Polish
+# COMPONENT_GUIDE - v2.8.1 Update
 
-## HomeExperienceScreen
+## AI Shot Plan
 
-Home 화면은 다음 순서로 구성한다.
+- `src/features/caddie/engine/shotPlanEngine.ts`
+  - 홀별 추천 샷 플랜을 생성한다.
+  - 샷별 클럽, 예상 거리, 남은 거리, 예상타수, 스코어 확률을 반환한다.
+  - 18홀 예상 스코어와 목표 스코어를 요약한다.
 
-1. `PremiumHomeHeroSection`
-2. `PremiumGogoCaddieCard`
-3. `PremiumRecentStatsSection`
+## CaddieBook Screen
 
-Home에서 제거한 섹션:
+- `AIShotPlanCard`
+  - 선택 홀의 AI Shot Plan을 보여준다.
+  - Shot Timeline, 예상타수, 스코어 확률, 추천 이유를 표시한다.
 
-- Theme Selector
-- Quick Menu
-- Upcoming Round Card
-- Recent Round List
-- Community Card
+- `ShotPlanSummaryCard`
+  - 18홀 전략표와 오늘 예상 스코어를 보여준다.
 
-## PremiumHomeHeroSection
+- `ShotPlanTimeline`
+  - Tee → Approach → Green 흐름을 시각적으로 표시한다.
 
-역할:
+## Rules
 
-- 클럽 선택 / 공지 / 프로필 Header 제공
-- 예정 라운드 Swipe Hero 제공
-- Hero 하단 핵심 정보 4개 제공
+- Shot Plan 계산은 UI에서 하지 않는다.
+- UI는 Mapper가 제공한 `shotPlan`, `shotPlanSummary`를 표시한다.
+- 배열 렌더링은 항상 `?? []` 또는 길이 확인 후 수행한다.
 
-Hero 하단 정보:
+---
 
-- 날씨
-- 풍속
-- 예상 소요시간
-- 출발 추천시간
+# Home Layout Engine v3.11
 
-규칙:
+## Files
 
-- Greeting은 Hero에 넣지 않는다.
-- 캐디북 진입은 Concierge 카드에서 제공한다.
-- Hero는 라운드 상태와 출발 판단 정보를 보여준다.
+- `src/features/home/layout/homeLayoutTypes.ts`
+  - Home Layout Definition 타입을 정의한다.
 
-## PremiumGogoCaddieCard
+- `src/features/home/layout/premiumGolfHomeLayout.ts`
+  - 현재 Home 디자인을 `Premium Golf Wave` 레이아웃으로 등록한다.
 
-역할:
+- `src/features/home/layout/HomeLayoutRenderer.tsx`
+  - Layout Definition의 section 순서에 따라 슬롯을 렌더링한다.
 
-- 사용자를 맞이하는 Greeting 제공
-- 예정 라운드 안내 제공
-- `AI 캐디북 / 조편성 / Lotto` 진입점 제공
-- AI 한줄 코멘트 제공
+## Rules
 
-규칙:
-
-- 교통상황 상세 블록은 넣지 않는다. Hero 하단 정보와 중복되기 때문이다.
-- 버튼 텍스트는 말줄임이 심하지 않도록 짧게 유지한다.
-- 카드 안에 과도한 중첩 카드를 만들지 않는다.
-
-## PremiumRecentStatsSection
-
-역할:
-
-- 핸디 / 평균 / 최근 / 베스트를 한 줄로 표시한다.
-
-규칙:
-
-- 숫자가 주인공이다.
-- 라벨은 HCP / AVG / LAST / BEST 중심으로 짧게 표시한다.
-- 4개 카드가 한 줄을 벗어나지 않도록 한다.
-
-
-# COMPONENT_GUIDE - Home v3.10 Addendum
-
-## PremiumHomeHeroSection
-- Home Hero는 compact dashboard 역할을 한다.
-- 하단 정보 4개(날씨, 바람, 예상 소요, 출발 추천)는 유지한다.
-- 정보 라벨은 한 번만 표시한다.
-
-## PremiumGogoCaddieCard
-- Home Concierge는 긴 설명 카드가 아니라 짧은 실행 카드다.
-- 구성은 Greeting, 라운드 요약, AI 캐디북/조편성/Lotto, AI 한줄 코멘트로 제한한다.
-- 교통상황 상세 블록은 Hero와 중복되므로 넣지 않는다.
-
-## PremiumRecentStatsSection
-- Home에서는 4개 기록이 반드시 한 화면에 보여야 한다.
-- 라벨은 HCP / AVG / LAST / BEST를 우선 사용한다.
+- Home Screen은 개별 섹션 순서를 직접 하드코딩하지 않고 Layout Renderer를 통해 출력한다.
+- 데이터는 Screen에서 준비하고, 배치는 Layout Definition이 결정한다.
+- 새로운 Home 디자인은 컴포넌트 재작성보다 Layout Definition 추가를 우선 검토한다.

@@ -6,7 +6,7 @@ import { useSkin } from '../../../skins'
 import type { HomeHeroRound } from '../types/home'
 
 const defaultHeroImage = require('../../../../assets/course-heroes/bomun-hero-v2.png')
-const profileMark = require('../../../../assets/gogopar_i.png')
+const gogoMark = require('../../../../assets/gogopar_i.png')
 
 type HeroAction = {
   key: string
@@ -16,6 +16,8 @@ type HeroAction = {
 }
 
 type PremiumHomeHeroSectionProps = {
+  greeting: string
+  userName: string
   clubName: string
   rounds: HomeHeroRound[]
   fallbackCourseName: string
@@ -28,22 +30,8 @@ type PremiumHomeHeroSectionProps = {
   isAdmin?: boolean
   onClubPress: () => void
   onNotificationPress: () => void
-  onProfilePress?: () => void
   onCreateRound: () => void
   actions: HeroAction[]
-}
-
-function splitCourseName(courseName: string, layoutName?: string) {
-  return {
-    title: courseName || 'GogoPar',
-    layout: layoutName ? `${layoutName} 코스` : undefined,
-  }
-}
-
-function safeInfo(value?: string | null, fallback = '--') {
-  const normalized = value?.trim()
-  if (!normalized || normalized.includes('준비중') || normalized.includes('등록 후')) return fallback
-  return normalized
 }
 
 export function PremiumHomeHeroSection({
@@ -59,13 +47,12 @@ export function PremiumHomeHeroSection({
   isAdmin = false,
   onClubPress,
   onNotificationPress,
-  onProfilePress,
   onCreateRound,
 }: PremiumHomeHeroSectionProps) {
   const { palette } = useSkin()
   const { width } = useWindowDimensions()
   const [activeIndex, setActiveIndex] = useState(0)
-  const heroWidth = Math.max(280, width - 40)
+  const heroWidth = width - 40
   const hasRounds = rounds.length > 0
   const totalCount = Math.max(1, rounds.length + (isAdmin ? 1 : 0))
   const dots = Array.from({ length: totalCount })
@@ -85,19 +72,19 @@ export function PremiumHomeHeroSection({
         </TouchableOpacity>
 
         <View style={styles.headerActions}>
-          <TouchableOpacity activeOpacity={0.84} onPress={onNotificationPress} style={[styles.iconButton, { backgroundColor: palette.card, borderColor: palette.border }]}> 
+          <TouchableOpacity activeOpacity={0.84} onPress={onNotificationPress} style={[styles.circleButton, { backgroundColor: palette.card, borderColor: palette.border }]}> 
             <Text style={styles.bellText}>🔔</Text>
             <View style={[styles.badge, { backgroundColor: palette.danger }]}> 
               <Text style={styles.badgeText}>3</Text>
             </View>
           </TouchableOpacity>
-          <TouchableOpacity activeOpacity={0.84} onPress={onProfilePress} style={[styles.profileButton, { backgroundColor: palette.card, borderColor: palette.border }]}> 
-            <Image source={profileMark} style={styles.profileImage} resizeMode="cover" />
+          <TouchableOpacity activeOpacity={0.84} style={[styles.profileButton, { backgroundColor: palette.card, borderColor: palette.border }]}> 
+            <Image source={gogoMark} style={styles.profileImage} resizeMode="cover" />
           </TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.heroCard}> 
+      <View style={[styles.heroCard, { borderRadius: palette.cardRadius + 12 }]}> 
         <ImageBackground source={defaultHeroImage} style={styles.heroImage} imageStyle={styles.heroImageRadius} resizeMode="cover">
           <View style={styles.scrim} />
           <ScrollView
@@ -107,7 +94,6 @@ export function PremiumHomeHeroSection({
             showsHorizontalScrollIndicator={false}
             onMomentumScrollEnd={handleScrollEnd}
             style={styles.carousel}
-            contentContainerStyle={styles.carouselContent}
           >
             {hasRounds ? rounds.map((round) => (
               <HeroRoundCard key={round.id} width={heroWidth} round={round} />
@@ -131,14 +117,16 @@ export function PremiumHomeHeroSection({
             )}
           </ScrollView>
 
-          <View style={styles.dotsRow}>
+          <View style={styles.dotsRow} pointerEvents="none">
             {dots.map((_, index) => (
               <View
                 key={index}
                 style={[
                   styles.dot,
                   {
-                    backgroundColor: index === activeIndex ? '#111827' : 'rgba(255,255,255,0.35)',
+                    backgroundColor: index === activeIndex ? palette.text : 'rgba(255,255,255,0.48)',
+                    width: index === activeIndex ? 9 : 7,
+                    height: index === activeIndex ? 9 : 7,
                   },
                 ]}
               />
@@ -146,41 +134,36 @@ export function PremiumHomeHeroSection({
           </View>
         </ImageBackground>
       </View>
+      <View style={[styles.heroWave, { backgroundColor: palette.bg }]} pointerEvents="none" />
     </View>
   )
 }
 
 function HeroRoundCard({ width, round }: { width: number; round: HomeHeroRound }) {
-  const { title, layout } = splitCourseName(round.courseName, round.layoutName)
-  const weather = safeInfo(round.temperature, '--°')
-  const wind = safeInfo(round.windText, '2m/s')
-  const route = safeInfo(round.routeTimeText, '48분')
-  const departure = safeInfo(round.departureTimeText, '10:55')
+  const { palette } = useSkin()
 
   return (
     <View style={[styles.slide, { width }]}> 
       <View style={styles.courseBlock}>
-        <View style={styles.statusPill}> 
-          <Text style={styles.statusText}>{round.dday}</Text>
+        <View style={[styles.ddayPill, { backgroundColor: palette.green }]}> 
+          <Text style={styles.ddayText}>{round.dday}</Text>
         </View>
-
-        <View style={styles.courseTitleRow}>
-          <Text style={styles.courseName} numberOfLines={1}>{title}</Text>
-          {!!layout && <Text style={styles.layoutName} numberOfLines={1}>{layout}</Text>}
+        <View style={styles.titleRow}>
+          <Text style={[styles.courseName, { color: palette.text }]} numberOfLines={1}>{round.courseName}</Text>
+          {!!round.layoutName && <Text style={styles.layoutName} numberOfLines={1}>{round.layoutName} 코스</Text>}
         </View>
-
         <View style={styles.metaRow}>
-          <Text style={styles.metaText} numberOfLines={1}>🗓️ {round.dateLabel}</Text>
+          <Text style={styles.metaText} numberOfLines={1}>🗓 {round.dateLabel}</Text>
           <Text style={styles.metaText} numberOfLines={1}>◷ {round.teeTime || '--:--'} Tee Off</Text>
           <Text style={styles.metaText} numberOfLines={1}>👥 {round.memberCount}명</Text>
         </View>
       </View>
 
       <View style={styles.infoStrip}>
-        <HeroInfo icon="☀️" value={weather} label={round.weatherText} />
-        <HeroInfo icon="💨" value={wind} label="바람" />
-        <HeroInfo icon="🚗" value={route} label="예상 소요" />
-        <HeroInfo icon="🕒" value={departure} label="출발 추천" accent />
+        <HeroInfo icon="☀️" value={round.temperature} label={round.weatherText} />
+        <HeroInfo icon="🌬" value={round.windText || '2m/s'} label="풍속" />
+        <HeroInfo icon="🚗" value={round.routeTimeText} label="이동" />
+        <HeroInfo icon="🕒" value={round.departureTimeText} label="출발추천" accent />
       </View>
     </View>
   )
@@ -209,29 +192,27 @@ function HeroEmptyCard({
   isAdmin: boolean
   onCreateRound: () => void
 }) {
+  const { palette } = useSkin()
+
   return (
     <View style={[styles.slide, { width }]}> 
       <View style={styles.courseBlock}>
-        <View style={styles.statusPill}> 
-          <Text style={styles.statusText}>{dday}</Text>
+        <View style={[styles.ddayPill, { backgroundColor: palette.green }]}> 
+          <Text style={styles.ddayText}>{dday}</Text>
         </View>
-        <Text style={styles.courseName} numberOfLines={1}>{courseName}</Text>
-        <Text style={styles.emptyGuideText} numberOfLines={2}>📍 {address}</Text>
-        <View style={styles.metaRow}>
-          <Text style={styles.metaText}>🗓️ {roundDate}</Text>
-          <Text style={styles.metaText}>◷ {teeTime} Tee Off</Text>
-        </View>
+        <Text style={[styles.courseName, { color: palette.text }]} numberOfLines={1}>{courseName}</Text>
+        <Text style={styles.emptyAddress} numberOfLines={2}>📍 {address}</Text>
       </View>
 
       <View style={styles.infoStrip}>
         <HeroInfo icon="☀️" value={temperature} label={weatherText} />
-        <HeroInfo icon="💨" value="2m/s" label="바람" />
-        <HeroInfo icon="🚗" value="48분" label="예상 소요" />
-        <HeroInfo icon="🕒" value="--:--" label="출발 추천" accent />
+        <HeroInfo icon="🌬" value="--" label="풍속" />
+        <HeroInfo icon="🚗" value="--" label="이동" />
+        <HeroInfo icon="🕒" value={teeTime || roundDate} label="출발추천" accent />
       </View>
 
       {isAdmin && (
-        <TouchableOpacity activeOpacity={0.88} onPress={onCreateRound} style={styles.emptyCreateButton}> 
+        <TouchableOpacity activeOpacity={0.88} onPress={onCreateRound} style={[styles.emptyCreateButton, { borderColor: palette.gold }]}> 
           <Text style={styles.emptyCreateText}>＋ 새 라운딩 등록</Text>
         </TouchableOpacity>
       )}
@@ -240,11 +221,13 @@ function HeroEmptyCard({
 }
 
 function HeroCreateRoundCard({ width, onCreateRound }: { width: number; onCreateRound: () => void }) {
+  const { palette } = useSkin()
+
   return (
     <View style={[styles.slide, { width }]}> 
-      <TouchableOpacity activeOpacity={0.9} onPress={onCreateRound} style={styles.createCard}> 
+      <TouchableOpacity activeOpacity={0.9} onPress={onCreateRound} style={[styles.createCard, { borderColor: palette.gold }]}> 
         <Text style={styles.createIcon}>＋</Text>
-        <Text style={styles.createTitle}>새 라운딩 등록</Text>
+        <Text style={[styles.createTitle, { color: palette.text }]}>새 라운딩 등록</Text>
         <Text style={styles.createSubtitle}>다음 일정을 등록하고 참가자를 모집하세요.</Text>
       </TouchableOpacity>
     </View>
@@ -255,9 +238,9 @@ function HeroInfo({ icon, value, label, accent = false }: { icon: string; value:
   return (
     <View style={styles.infoItem}>
       <Text style={styles.infoIcon}>{icon}</Text>
-      <View style={styles.infoCopy}>
-        <Text style={[styles.infoValue, accent && styles.infoValueAccent]} numberOfLines={1}>{value}</Text>
-        <Text style={[styles.infoLabel, accent && styles.infoLabelAccent]} numberOfLines={1}>{label}</Text>
+      <View style={styles.infoTextWrap}>
+        <Text style={[styles.infoValue, accent && styles.infoAccent]} numberOfLines={1}>{value}</Text>
+        <Text style={styles.infoLabel} numberOfLines={1}>{label}</Text>
       </View>
     </View>
   )
@@ -265,126 +248,103 @@ function HeroInfo({ icon, value, label, accent = false }: { icon: string; value:
 
 const styles = StyleSheet.create({
   shell: {
-    gap: 12,
+    marginBottom: 0,
   },
   headerRow: {
-    minHeight: 54,
+    height: 70,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
   },
   clubPill: {
-    maxWidth: '58%',
-    minHeight: 46,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: spacing.sm,
+    maxWidth: '58%',
+    minHeight: 52,
+    paddingHorizontal: spacing.lg,
     borderRadius: radius.pill,
     borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
   },
-  clubIcon: { fontSize: 18 },
-  clubText: { flexShrink: 1, fontSize: 17, lineHeight: 21, fontWeight: '900', letterSpacing: -0.3 },
-  clubArrow: { fontSize: 16, lineHeight: 18, fontWeight: '900', marginLeft: 4 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  iconButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1,
+  clubIcon: { fontSize: 19 },
+  clubText: { flex: 1, fontSize: 18, lineHeight: 23, fontWeight: '900', letterSpacing: -0.6 },
+  clubArrow: { fontSize: 18, lineHeight: 18, fontWeight: '900' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  circleButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
   },
-  bellText: { fontSize: 20 },
+  bellText: { fontSize: 24 },
   badge: {
     position: 'absolute',
-    top: -3,
-    right: -2,
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
+    top: -5,
+    right: -3,
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   badgeText: { color: '#fff', fontSize: 12, fontWeight: '900' },
   profileButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+    borderWidth: 1,
   },
-  profileImage: { width: 48, height: 48 },
+  profileImage: { width: 62, height: 62 },
   heroCard: {
-    height: 292,
-    borderRadius: 32,
+    height: 420,
     overflow: 'hidden',
-    backgroundColor: '#0F2418',
   },
   heroImage: { flex: 1 },
-  heroImageRadius: { borderRadius: 32 },
+  heroImageRadius: { borderRadius: radius.xxl },
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.42)',
+    backgroundColor: 'rgba(0,0,0,0.38)',
   },
   carousel: { flex: 1 },
-  carouselContent: { alignItems: 'stretch' },
   slide: {
-    minHeight: 266,
-    paddingHorizontal: 22,
-    paddingTop: 24,
-    paddingBottom: 48,
+    height: 420,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
+    paddingBottom: 56,
     justifyContent: 'space-between',
   },
-  courseBlock: { gap: 9 },
-  statusPill: {
+  courseBlock: { flex: 1, justifyContent: 'center' },
+  ddayPill: {
     alignSelf: 'flex-start',
-    minHeight: 34,
     borderRadius: radius.pill,
-    paddingHorizontal: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#218F5A',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.lg,
   },
-  statusText: { color: '#fff', fontSize: 15, lineHeight: 19, fontWeight: '900', letterSpacing: -0.3 },
-  courseTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 10,
-  },
+  ddayText: { color: '#fff', fontSize: 18, lineHeight: 23, fontWeight: '900' },
+  titleRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, maxWidth: '100%' },
   courseName: {
-    flexShrink: 1,
-    color: '#111827',
-    fontSize: 31,
-    lineHeight: 36,
+    maxWidth: '72%',
+    fontSize: 42,
+    lineHeight: 48,
     fontWeight: '900',
     letterSpacing: -2.0,
-    textShadowColor: 'rgba(255,255,255,0.18)',
-    textShadowRadius: 1,
   },
-  layoutName: { color: '#fff', fontSize: 16, lineHeight: 22, fontWeight: '900', marginBottom: 5 },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  metaText: { color: '#fff', fontSize: 12, lineHeight: 16, fontWeight: '900' },
+  layoutName: { color: '#fff', fontSize: 20, lineHeight: 30, fontWeight: '900', marginBottom: 4 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.md, marginTop: spacing.lg },
+  metaText: { color: '#fff', fontSize: 14, lineHeight: 19, fontWeight: '900' },
+  emptyAddress: { color: colorLayers.heroTextMuted, fontSize: 14, lineHeight: 20, fontWeight: '800', marginTop: spacing.sm },
   infoStrip: {
-    minHeight: 62,
     flexDirection: 'row',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.24)',
-    backgroundColor: 'rgba(0,0,0,0.14)',
-    marginHorizontal: -22,
-    marginBottom: -48,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    borderTopColor: 'rgba(255,255,255,0.22)',
+    paddingTop: spacing.md,
   },
   infoItem: {
     flex: 1,
@@ -392,50 +352,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingHorizontal: 4,
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
     borderRightWidth: 1,
-    borderRightColor: 'rgba(255,255,255,0.22)',
+    borderRightColor: 'rgba(255,255,255,0.20)',
   },
-  infoIcon: { fontSize: 16 },
-  infoCopy: { minWidth: 0, alignItems: 'flex-start' },
-  infoValue: { color: '#fff', fontSize: 16, lineHeight: 20, fontWeight: '900', letterSpacing: -0.8 },
-  infoLabel: { color: 'rgba(255,255,255,0.86)', fontSize: 8, lineHeight: 10, fontWeight: '800', marginTop: 2 },
-  infoValueAccent: { color: '#56C777' },
-  infoLabelAccent: { color: '#56C777' },
-  dotsRow: {
+  infoIcon: { fontSize: 22 },
+  infoTextWrap: { minWidth: 0, alignItems: 'center' },
+  infoValue: { color: '#fff', fontSize: 19, lineHeight: 24, fontWeight: '900', letterSpacing: -0.5 },
+  infoAccent: { color: '#45C26B' },
+  infoLabel: { color: '#fff', opacity: 0.9, fontSize: 10, lineHeight: 13, fontWeight: '900' },
+  dotsRow: { position: 'absolute', left: 0, right: 0, bottom: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
+  dot: { borderRadius: radius.pill },
+  heroWave: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 7,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
+    left: -20,
+    right: -20,
+    bottom: -36,
+    height: 72,
+    borderTopLeftRadius: 260,
+    borderTopRightRadius: 260,
   },
-  dot: { width: 8, height: 8, borderRadius: radius.pill },
-  emptyGuideText: { color: 'rgba(255,255,255,0.86)', fontSize: 14, lineHeight: 20, fontWeight: '800' },
   emptyCreateButton: {
-    marginTop: 12,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    marginTop: spacing.md,
+    borderWidth: 1.5,
+    borderRadius: radius.xl,
+    borderStyle: 'dashed',
+    backgroundColor: colorLayers.heroGlass,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.md,
   },
-  emptyCreateText: { color: '#fff', fontSize: 15, fontWeight: '900' },
+  emptyCreateText: { color: '#fff', fontSize: 15, lineHeight: 20, fontWeight: '900' },
   createCard: {
-    minHeight: 260,
+    flex: 1,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: 'rgba(255,255,255,0.62)',
-    borderRadius: 28,
+    borderRadius: radius.xxl,
     backgroundColor: colorLayers.heroGlass,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    padding: spacing.xxl,
   },
-  createIcon: { color: '#fff', fontSize: 54, lineHeight: 60, fontWeight: '900' },
-  createTitle: { color: '#fff', fontSize: 24, lineHeight: 30, fontWeight: '900', letterSpacing: -1.0, marginTop: 10 },
-  createSubtitle: { color: 'rgba(255,255,255,0.78)', fontSize: 13, lineHeight: 19, fontWeight: '800', textAlign: 'center', marginTop: 8 },
+  createIcon: { color: '#fff', fontSize: 56, lineHeight: 62, fontWeight: '900' },
+  createTitle: { fontSize: 25, lineHeight: 31, fontWeight: '900', letterSpacing: -1.0, marginTop: spacing.md },
+  createSubtitle: { color: '#fff', opacity: 0.8, fontSize: 14, lineHeight: 20, fontWeight: '800', textAlign: 'center', marginTop: spacing.sm },
 })

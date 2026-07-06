@@ -49,20 +49,11 @@ function urgencyTone(date?: string): HomeHeroRound['urgencyTone'] {
 }
 
 function routeTimeText() {
-  return '48분'
+  return '이동시간 준비중'
 }
 
-function departureTimeText(teeTime?: string | null) {
-  const match = teeTime?.match(/^(\d{1,2}):(\d{2})/)
-  if (!match) return '10:55'
-  const hour = Number(match[1])
-  const minute = Number(match[2])
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return '10:55'
-  const totalMinutes = hour * 60 + minute - 77
-  const normalized = ((totalMinutes % 1440) + 1440) % 1440
-  const departureHour = Math.floor(normalized / 60)
-  const departureMinute = normalized % 60
-  return `${String(departureHour).padStart(2, '0')}:${String(departureMinute).padStart(2, '0')}`
+function departureTimeText() {
+  return '출발 추천 준비중'
 }
 
 function average(values: number[]) {
@@ -70,19 +61,20 @@ function average(values: number[]) {
   return values.reduce((sum, value) => sum + value, 0) / values.length
 }
 
-function scoreDisplay(value: number | null, suffix = '타') {
+function scoreDisplay(value: number | null) {
   if (value === null || !Number.isFinite(value)) return '-'
-  return `${Math.round(value)}${suffix}`
+  return `${Math.ceil(value)}`
 }
 
-function statText(value: number | null, digits = 1) {
+function statText(value: number | null) {
   if (value === null || !Number.isFinite(value)) return '-'
-  return value.toFixed(digits)
+  return `${Math.ceil(value)}`
 }
 
 function handicapDisplay(value: number | null) {
   if (value === null || !Number.isFinite(value)) return '-'
-  return value > 0 ? `+${value.toFixed(1)}` : value.toFixed(1)
+  const rounded = Math.ceil(value)
+  return rounded > 0 ? `+${rounded}` : `${rounded}`
 }
 
 function roundTotalForUser(round: SavedRound, userName?: string | null) {
@@ -149,14 +141,14 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow):
     memberCount: countMembers(groups, members),
     groupCount: groups.length,
     note: schedule.note ?? undefined,
-    weatherText: '맑음',
-    temperature: '24°',
-    windText: '2m/s',
+    weatherText: '날씨 준비중',
+    temperature: '--°',
+    windText: '풍속 준비중',
     courseId: schedule.course_id ?? course?.id,
     layoutId: schedule.layout_id ?? layout?.id,
     locationLabel: locationParts.join(' · ') || '골프장 위치 준비중',
     routeTimeText: routeTimeText(),
-    departureTimeText: departureTimeText(teeTime),
+    departureTimeText: departureTimeText(),
     urgencyTone: urgencyTone(schedule.round_date),
   }
 }
@@ -238,7 +230,7 @@ function mapStats(rounds: SavedRound[], userName?: string | null): HomeDashboard
   ]
 
   return {
-    averageScore: statText(myAverage, 1),
+    averageScore: statText(myAverage),
     items,
     recentRounds: mapRecentRounds(rounds, userName),
   }

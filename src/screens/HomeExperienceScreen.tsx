@@ -24,6 +24,7 @@ import {
 } from '../features/home/components'
 import { useHomeDashboard } from '../features/home/hooks/useHomeDashboard'
 import type { HomeHeroRound, HomeUpcomingRound } from '../features/home/types/home'
+import { HomeLayoutRenderer, premiumGolfHomeLayout } from '../features/home/layout'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
 
@@ -61,11 +62,9 @@ function HomeErrorCard({ message, onRetry }: { message: string; onRetry: () => v
   return (
     <GPCard style={styles.errorCard}>
       <Text style={styles.errorIcon}>⚠️</Text>
-      <View style={styles.errorCopy}>
-        <Text style={[styles.errorTitle, { color: palette.text }]}>홈 데이터를 불러오지 못했습니다</Text>
-        <Text style={[styles.errorMessage, { color: palette.muted }]} numberOfLines={2}>{message}</Text>
-      </View>
-      <GPButton label="재시도" variant="soft" onPress={onRetry} style={styles.errorButton} />
+      <Text style={[styles.errorTitle, { color: palette.text }]}>홈 데이터를 불러오지 못했습니다</Text>
+      <Text style={[styles.errorMessage, { color: palette.muted }]}>{message}</Text>
+      <GPButton label="다시 시도" variant="soft" onPress={onRetry} style={styles.errorButton} />
     </GPCard>
   )
 }
@@ -84,10 +83,16 @@ export default function HomeExperienceScreen() {
   )
 
   const heroActions = useMemo(() => [
+    { key: 'caddie-book', icon: '📖', label: '캐디북', onPress: (round: HomeHeroRound) => nav.navigate('CaddieBook', caddieBookHeroParams(round)) },
     { key: 'groups', icon: '👥', label: '조편성', onPress: () => nav.navigate('RoundSchedulePrototype') },
-    { key: 'lotto', icon: '🎱', label: 'Lotto', onPress: () => nav.navigate('RoundSchedulePrototype') },
-    { key: 'start', icon: '▶', label: 'Start', onPress: () => nav.navigate('RoundSetup', {}) },
+    { key: 'lotto', icon: '🎲', label: 'Lotto', onPress: () => nav.navigate('RoundSchedulePrototype') },
   ], [nav])
+
+  const conciergeActions = useMemo(() => [
+    { key: 'ai-caddie-book', icon: '🗺️', title: 'AI 캐디북', subtitle: '코스 공략', onPress: () => nav.navigate('CaddieBook', caddieBookParams(dashboard.upcomingRound)) },
+    { key: 'groups', icon: '👥', title: '조편성', subtitle: '멤버 확인', onPress: () => nav.navigate('RoundSchedulePrototype') },
+    { key: 'lotto', icon: '🎱', title: 'Lotto', subtitle: '행운 뽑기', onPress: () => nav.navigate('RoundSchedulePrototype') },
+  ], [dashboard.upcomingRound, nav])
 
   if (clubsLoaded && !club) {
     return (
@@ -103,59 +108,68 @@ export default function HomeExperienceScreen() {
   return (
     <View style={[styles.root, { backgroundColor: palette.bg }]}> 
       <ScrollView
-        scrollEnabled={false}
-        contentContainerStyle={[styles.content, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 76 }]}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 24 }]}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={palette.green} />}
         showsVerticalScrollIndicator={false}
       >
-        <PremiumHomeMotion index={0}>
-          <PremiumHomeHeroSection
-            clubName={club?.name || 'GogoPar Club'}
-            rounds={dashboard.hero.rounds}
-            fallbackCourseName={dashboard.hero.courseName}
-            fallbackAddress={dashboard.hero.address}
-            fallbackWeatherText={dashboard.hero.weatherText}
-            fallbackTemperature={dashboard.hero.temperature}
-            fallbackDday={dashboard.hero.dday}
-            fallbackRoundDate={dashboard.hero.roundDate}
-            fallbackTeeTime={dashboard.hero.teeTime}
-            isAdmin={club?.role === 'admin'}
-            actions={heroActions}
-            onClubPress={() => nav.navigate('Main', { screen: 'Club' })}
-            onNotificationPress={() => nav.navigate('NoticePrototype')}
-            onProfilePress={() => nav.navigate('Profile')}
-            onCreateRound={() => nav.navigate('RoundSchedulePrototype', { openCreate: true })}
-          />
-        </PremiumHomeMotion>
-
-        {!!error && (
-          <PremiumHomeMotion index={1}>
-            <HomeErrorCard message={error} onRetry={refresh} />
-          </PremiumHomeMotion>
-        )}
-
-        <PremiumHomeMotion index={2}>
-          <PremiumGogoCaddieCard
-            userName={myName || '골퍼'}
-            courseName={dashboard.aiCaddie.courseName}
-            teeTime={dashboard.aiCaddie.teeTime}
-            dday={dashboard.aiCaddie.dday}
-            averageScore={dashboard.aiCaddie.averageScore}
-            hasUpcomingRound={dashboard.aiCaddie.hasUpcomingRound}
-            title={dashboard.aiCaddie.title}
-            message={dashboard.aiCaddie.message}
-            hasLiveAdvice={dashboard.aiCaddie.hasLiveAdvice}
-            recommendedClub={dashboard.aiCaddie.recommendedClub}
-            riskLabel={dashboard.aiCaddie.riskLabel}
-            onCaddieBookPress={() => nav.navigate('CaddieBook', caddieBookParams(dashboard.upcomingRound))}
-            onGroupPress={() => nav.navigate('RoundSchedulePrototype')}
-            onLottoPress={() => nav.navigate('RoundSchedulePrototype')}
-          />
-        </PremiumHomeMotion>
-
-        <PremiumHomeMotion index={3}>
-          <PremiumRecentStatsSection stats={recentStats} />
-        </PremiumHomeMotion>
+        <HomeLayoutRenderer
+          layout={premiumGolfHomeLayout}
+          slots={{
+            hero: (
+              <PremiumHomeMotion index={0}>
+                <PremiumHomeHeroSection
+                  greeting=""
+                  userName={myName || '골퍼'}
+                  clubName={club?.name || 'GogoPar Club'}
+                  rounds={dashboard.hero.rounds}
+                  fallbackCourseName={dashboard.hero.courseName}
+                  fallbackAddress={dashboard.hero.address}
+                  fallbackWeatherText={dashboard.hero.weatherText}
+                  fallbackTemperature={dashboard.hero.temperature}
+                  fallbackDday={dashboard.hero.dday}
+                  fallbackRoundDate={dashboard.hero.roundDate}
+                  fallbackTeeTime={dashboard.hero.teeTime}
+                  isAdmin={club?.role === 'admin'}
+                  actions={heroActions}
+                  onClubPress={() => nav.navigate('Main', { screen: 'Club' })}
+                  onNotificationPress={() => nav.navigate('NoticePrototype')}
+                  onCreateRound={() => nav.navigate('RoundSchedulePrototype', { openCreate: true })}
+                />
+              </PremiumHomeMotion>
+            ),
+            error: error ? (
+              <PremiumHomeMotion index={1}>
+                <HomeErrorCard message={error} onRetry={refresh} />
+              </PremiumHomeMotion>
+            ) : null,
+            concierge: (
+              <PremiumHomeMotion index={2}>
+                <PremiumGogoCaddieCard
+                  userName={myName || '골퍼'}
+                  courseName={dashboard.aiCaddie.courseName}
+                  teeTime={dashboard.aiCaddie.teeTime}
+                  dday={dashboard.aiCaddie.dday}
+                  averageScore={dashboard.aiCaddie.averageScore}
+                  hasUpcomingRound={dashboard.aiCaddie.hasUpcomingRound}
+                  title={`안녕하세요,\n${myName || '골퍼'}님 👋`}
+                  message={dashboard.aiCaddie.hasUpcomingRound
+                    ? `오늘 ${dashboard.aiCaddie.courseName || '예정 골프장'} · ${dashboard.aiCaddie.teeTime || 'Tee Off'} 라운드를 준비했습니다.`
+                    : dashboard.aiCaddie.message}
+                  primaryChip={dashboard.aiCaddie.primaryChip}
+                  secondaryChip={dashboard.aiCaddie.secondaryChip}
+                  hasLiveAdvice={dashboard.aiCaddie.hasLiveAdvice}
+                  actions={conciergeActions}
+                  onPress={() => nav.navigate('CaddieBook', caddieBookParams(dashboard.upcomingRound))}
+                />
+              </PremiumHomeMotion>
+            ),
+            stats: recentStats.length > 0 ? (
+              <PremiumHomeMotion index={3}>
+                <PremiumRecentStatsSection stats={recentStats} />
+              </PremiumHomeMotion>
+            ) : null,
+          }}
+        />
       </ScrollView>
     </View>
   )
@@ -163,23 +177,15 @@ export default function HomeExperienceScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  content: { paddingHorizontal: 20, gap: 10 },
+  content: { paddingHorizontal: 20 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
   clubButton: { marginTop: 16 },
   emptyRoundIcon: { fontSize: 34, marginBottom: 10 },
   emptyRoundTitle: { fontSize: 18, fontWeight: '900', textAlign: 'center', marginBottom: 8 },
   emptyRoundText: { fontSize: 13, lineHeight: 19, fontWeight: '600', textAlign: 'center' },
-  errorCard: {
-    minHeight: 76,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  errorIcon: { fontSize: 22 },
-  errorCopy: { flex: 1, minWidth: 0 },
-  errorTitle: { fontSize: 14, fontWeight: '900', marginBottom: 2 },
-  errorMessage: { fontSize: 11, fontWeight: '700', lineHeight: 15 },
-  errorButton: { minWidth: 72 },
+  errorCard: { alignItems: 'center', padding: 18, marginBottom: 4 },
+  errorIcon: { fontSize: 28, marginBottom: 8 },
+  errorTitle: { fontSize: 16, fontWeight: '900', textAlign: 'center', marginBottom: 6 },
+  errorMessage: { fontSize: 13, fontWeight: '600', lineHeight: 19, textAlign: 'center' },
+  errorButton: { marginTop: 14 },
 })
