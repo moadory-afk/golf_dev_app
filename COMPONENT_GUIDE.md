@@ -73,3 +73,27 @@
 ## Component Rule
 
 새 Home 컴포넌트는 Screen 내부에 직접 구현하지 않고 `src/features/home/components`에 재사용 가능한 단위로 둔다.
+
+## Home Data Components / Hooks
+
+- useHomeDashboard
+  - Live Data Foundation v2.2에서 추가
+  - Home 화면이 사용하는 단일 Dashboard Hook
+  - `dashboard`, `loading`, `error`, `refresh`를 제공
+  - Screen에서 Supabase를 직접 호출하지 않도록 한다.
+
+## Home Data Flow
+
+```text
+HomeExperienceScreen
+  ↓
+useHomeDashboard
+  ↓
+homeService
+  ↓
+homeRepository
+  ↓
+Supabase
+```
+
+Home 화면은 화면 조립과 Navigation 연결만 담당한다.

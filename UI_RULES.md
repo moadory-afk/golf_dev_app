@@ -35,3 +35,23 @@ Rule 5
 Rule 6
 
 Hero처럼 이미지 위에 올라가는 Overlay / Glass / Muted Text 색상은 `src/design/tokens.ts`의 `colorLayers`를 사용한다.
+
+Rule 7
+
+Screen은 Supabase를 직접 호출하지 않는다.
+
+Screen
+
+↓
+
+Hook
+
+↓
+
+Service
+
+↓
+
+Repository
+
+순서로 데이터에 접근한다.
