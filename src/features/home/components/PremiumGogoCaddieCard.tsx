@@ -92,8 +92,8 @@ const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
     overflow: 'hidden',
   },
   cardBody: {
