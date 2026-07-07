@@ -1,7 +1,8 @@
 import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { useMemo, type ReactNode } from 'react'
+import { PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SkinProvider, useSkin } from '../skins'
 import { Icon, type IconName } from '../components/Icon'
 import { colorLayers, radius, spacing, typography } from '../design/tokens'
@@ -37,6 +38,49 @@ const TAB_META: Record<keyof MainTabParamList, { title: string; emoji: string; i
   Home: { title: '홈', emoji: '🏠', icon: 'home' },
   Club: { title: '클럽', emoji: '⛳', icon: 'flag' },
   History: { title: '기록', emoji: '📋', icon: 'list' },
+}
+
+const MAIN_TAB_ORDER: (keyof MainTabParamList)[] = ['Home', 'Club', 'History']
+const SWIPE_MIN_DISTANCE = 64
+const SWIPE_DIRECTION_LOCK = 1.25
+
+function SwipeableTabScene({
+  current,
+  navigation,
+  children,
+}: {
+  current: keyof MainTabParamList
+  navigation: any
+  children: ReactNode
+}) {
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) => {
+          const absX = Math.abs(gesture.dx)
+          const absY = Math.abs(gesture.dy)
+          return absX > 18 && absX > absY * SWIPE_DIRECTION_LOCK
+        },
+        onPanResponderTerminationRequest: () => true,
+        onPanResponderRelease: (_, gesture) => {
+          const absX = Math.abs(gesture.dx)
+          const absY = Math.abs(gesture.dy)
+          if (absX < SWIPE_MIN_DISTANCE || absX < absY * SWIPE_DIRECTION_LOCK) return
+
+          const currentIndex = MAIN_TAB_ORDER.indexOf(current)
+          const nextIndex = gesture.dx < 0 ? currentIndex + 1 : currentIndex - 1
+          const nextTab = MAIN_TAB_ORDER[nextIndex]
+          if (nextTab) navigation.navigate(nextTab)
+        },
+      }),
+    [current, navigation],
+  )
+
+  return (
+    <View style={navStyles.swipeScene} {...panResponder.panHandlers}>
+      {children}
+    </View>
+  )
 }
 
 function CloseBtn({ onPress }: { onPress: () => void }) {
@@ -127,21 +171,27 @@ function MainTabs() {
         },
       }}
     >
-      <Tab.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{ title: TAB_META.Home.title, tabBarIcon: tabBarIcon('Home') }}
-      />
-      <Tab.Screen
-        name="Club"
-        component={ClubScreen}
-        options={{ title: TAB_META.Club.title, tabBarIcon: tabBarIcon('Club') }}
-      />
-      <Tab.Screen
-        name="History"
-        component={HistoryScreen}
-        options={{ title: TAB_META.History.title, tabBarIcon: tabBarIcon('History') }}
-      />
+      <Tab.Screen name="Home" options={{ title: TAB_META.Home.title, tabBarIcon: tabBarIcon('Home') }}>
+        {({ navigation }) => (
+          <SwipeableTabScene current="Home" navigation={navigation}>
+            <HomeScreen />
+          </SwipeableTabScene>
+        )}
+      </Tab.Screen>
+      <Tab.Screen name="Club" options={{ title: TAB_META.Club.title, tabBarIcon: tabBarIcon('Club') }}>
+        {({ navigation }) => (
+          <SwipeableTabScene current="Club" navigation={navigation}>
+            <ClubScreen />
+          </SwipeableTabScene>
+        )}
+      </Tab.Screen>
+      <Tab.Screen name="History" options={{ title: TAB_META.History.title, tabBarIcon: tabBarIcon('History') }}>
+        {({ navigation }) => (
+          <SwipeableTabScene current="History" navigation={navigation}>
+            <HistoryScreen />
+          </SwipeableTabScene>
+        )}
+      </Tab.Screen>
     </Tab.Navigator>
   )
 }
@@ -236,6 +286,9 @@ export default function Navigation({ session }: { session: import('@supabase/sup
 }
 
 const navStyles = StyleSheet.create({
+  swipeScene: {
+    flex: 1,
+  },
   closeBtn: {
     backgroundColor: 'rgba(255,255,255,0.18)',
     borderRadius: 14,

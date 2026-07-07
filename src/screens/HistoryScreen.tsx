@@ -792,6 +792,29 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
         </Modal>
       )}
 
+      <View style={s.playerReportHero}>
+        <View style={s.playerReportHeaderRow}>
+          <View>
+            <Text style={s.playerReportEyebrow}>MY GOLF REPORT</Text>
+            <Text style={s.playerReportTitle}>나의 골프 리포트</Text>
+          </View>
+          <View style={s.playerReportBadge}>
+            <Text style={s.playerReportBadgeText}>최근 {handicapBasis}경기</Text>
+          </View>
+        </View>
+        <View style={s.playerReportScoreRow}>
+          <View>
+            <Text style={s.playerReportScoreLabel}>평균 스코어</Text>
+            <Text style={s.playerReportScore}>{avg}타</Text>
+          </View>
+          <View style={s.playerReportTrendBox}>
+            <Text style={s.playerReportTrendLabel}>최근 흐름</Text>
+            <Text style={s.playerReportTrendValue}>{recent5Avg < avg ? `-${avg - recent5Avg}타` : recent5Avg > avg ? `+${recent5Avg - avg}타` : '유지'}</Text>
+          </View>
+        </View>
+        <Text style={s.playerReportInsight} numberOfLines={2}>{trendText}</Text>
+      </View>
+
       <View style={s.metricGridCompact}>
         <MetricCard label="평균" value={`${avg}타`} />
         <MetricCard label="핸디" value={diffText(handicap)} />
@@ -1610,6 +1633,31 @@ const s = StyleSheet.create({
   pillText: { fontSize: 13, fontWeight: '700', color: C.green },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: C.greenLight, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
   badgeText: { fontSize: 10, fontWeight: '700', color: C.green },
+  playerReportHero: {
+    backgroundColor: C.greenDark,
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 16,
+    marginBottom: 12,
+    shadowColor: '#0f3d2a',
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
+  },
+  playerReportHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  playerReportEyebrow: { color: 'rgba(255,255,255,0.62)', fontSize: 10, lineHeight: 13, fontWeight: '900', letterSpacing: 0.8 },
+  playerReportTitle: { color: '#fff', fontSize: 20, lineHeight: 25, fontWeight: '900', letterSpacing: -0.8, marginTop: 2 },
+  playerReportBadge: { borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 10, paddingVertical: 5 },
+  playerReportBadgeText: { color: '#fff', fontSize: 11, lineHeight: 14, fontWeight: '900' },
+  playerReportScoreRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 18, gap: 14 },
+  playerReportScoreLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 12, lineHeight: 16, fontWeight: '800' },
+  playerReportScore: { color: '#fff', fontSize: 38, lineHeight: 44, fontWeight: '900', letterSpacing: -1.5, marginTop: 1 },
+  playerReportTrendBox: { minWidth: 86, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 12, paddingVertical: 10, alignItems: 'flex-end' },
+  playerReportTrendLabel: { color: 'rgba(255,255,255,0.72)', fontSize: 11, lineHeight: 14, fontWeight: '800' },
+  playerReportTrendValue: { color: C.gold, fontSize: 20, lineHeight: 24, fontWeight: '900', letterSpacing: -0.7, marginTop: 2 },
+  playerReportInsight: { color: 'rgba(255,255,255,0.82)', fontSize: 13, lineHeight: 19, fontWeight: '800', marginTop: 12 },
   metricGridCompact: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 8 },
   metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
   metricCard: { flexBasis: '47%', flexGrow: 1, backgroundColor: C.card, borderRadius: 14, padding: 10, borderWidth: 1, borderColor: C.border },
