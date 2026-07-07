@@ -145,11 +145,6 @@ export function PremiumHomeHeroSection({
           </View>
         </View>
       </View>
-      <View style={styles.heroConvexBump} pointerEvents="none">
-        {heroImageSource ? <Image source={heroImageSource} style={styles.heroBackgroundImage} resizeMode="cover" /> : null}
-        <View style={styles.scrim} />
-      </View>
-      <View style={[styles.heroWave, { backgroundColor: palette.bg }]} pointerEvents="none" />
     </View>
   )
 }
@@ -285,7 +280,7 @@ function HeroBottomSummary({
 
 const styles = StyleSheet.create({
   shell: {
-    marginBottom: 34,
+    marginBottom: 18,
     width: '100%',
     overflow: 'visible',
   },
@@ -347,27 +342,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
-    borderBottomLeftRadius: 34,
-    borderBottomRightRadius: 34,
+    borderBottomLeftRadius: 56,
+    borderBottomRightRadius: 56,
   },
   heroImage: { flex: 1, backgroundColor: '#10261B', overflow: 'hidden' },
   heroBackgroundImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
   scrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.32)',
-  },
-  heroConvexBump: {
-    position: 'absolute',
-    left: '50%',
-    bottom: -34,
-    width: 232,
-    height: 68,
-    marginLeft: -116,
-    borderBottomLeftRadius: 116,
-    borderBottomRightRadius: 116,
-    overflow: 'hidden',
-    backgroundColor: '#10261B',
-    zIndex: 1,
   },
   carousel: { flex: 1 },
   slide: {

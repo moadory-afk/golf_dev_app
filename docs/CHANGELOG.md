@@ -47,9 +47,3 @@
 
 ### Notes
 - DB 변경 없음.
-
-## 2026-07-07 - Home Hero middle D-Day cleanup
-
-- Home Hero 중앙 정보 영역의 D-Day pill 표시를 제거했다.
-- 하단 요약 영역의 D-Day/일정 정보는 유지했다.
-- 모바일 날씨 미표시 원인을 `.env` 번들/빌드 환경 설정 이슈로 점검 대상으로 정리했다.

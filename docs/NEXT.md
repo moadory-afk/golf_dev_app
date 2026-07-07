@@ -22,9 +22,3 @@
 - 실제 기기에서 Hero 하단 곡선과 캐디 카드 notch의 겹침 정도 확인.
 - 클럽이 4개 이상일 때 클럽 선택 모달 스크롤 처리 필요 여부 점검.
 - Android 상태바/상단 inset에서 Hero full bleed 유지 여부 확인.
-
-## Next - Weather mobile verification
-
-- 모바일 실행 환경에서 `EXPO_PUBLIC_OPENWEATHER_API_KEY`가 번들에 포함되는지 확인한다.
-- `.env` 변경 후 Expo 캐시 초기화 재시작이 필요한지 확인한다.
-- EAS/배포 빌드에서는 EAS environment variable 또는 app config extra 주입 방식을 적용한다.
