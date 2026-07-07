@@ -11,3 +11,4 @@ export * from './PremiumUpcomingRoundCard'
 export * from './PremiumQuickMenuSection'
 
 export { PremiumHomeMotion } from './PremiumHomeMotion'
+export * from './PremiumRecordExtrasSection'

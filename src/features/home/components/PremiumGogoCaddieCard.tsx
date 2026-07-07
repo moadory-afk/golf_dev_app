@@ -56,35 +56,34 @@ export function PremiumGogoCaddieCard({
         { backgroundColor: palette.card, borderColor: palette.border, borderRadius: palette.cardRadius + 10 },
       ]}
     >
-      <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={styles.feedArea}>
-        <View style={styles.characterStage}> 
+      <View style={styles.cardBody}>
+        <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={styles.characterStage}> 
           <Image source={gogoMark} style={styles.characterImage} resizeMode="cover" />
-        </View>
+        </TouchableOpacity>
 
-        <View style={styles.content}> 
-          <View style={styles.labelRow}>
-            <Text style={styles.feedIcon}>{icon}</Text>
-            <Text style={[styles.label, { color: palette.green }]} numberOfLines={1}>{label}</Text>
-            <View style={[styles.liveDot, { backgroundColor: palette.gold }]} />
-          </View>
-          <Text style={[styles.title, { color: palette.text }]} numberOfLines={2}>{title}</Text>
-          <Text style={[styles.message, { color: palette.muted }]} numberOfLines={2}>{message}</Text>
-        </View>
-      </TouchableOpacity>
+        <View style={styles.rightColumn}> 
+          <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={styles.content}>
+            <View style={styles.labelRow}>
+              <Text style={styles.feedIcon}>{icon}</Text>
+              <Text style={[styles.label, { color: palette.green }]} numberOfLines={1}>{label}</Text>
+              <View style={[styles.liveDot, { backgroundColor: palette.gold }]} />
+            </View>
+            <Text style={[styles.title, { color: palette.text }]} numberOfLines={2}>{title}</Text>
+            <Text style={[styles.message, { color: palette.muted }]} numberOfLines={2}>{message}</Text>
+          </TouchableOpacity>
 
-      {actions.length > 0 && (
-        <View style={[styles.actionRow, { borderTopColor: palette.border }]}>
-          {actions.slice(0, 3).map((action) => (
-            <TouchableOpacity key={action.key} activeOpacity={0.86} onPress={action.onPress} style={styles.actionButton}>
-              <Text style={styles.actionIcon}>{action.icon}</Text>
-              <View style={styles.actionTextWrap}>
-                <Text style={[styles.actionTitle, { color: palette.text }]} numberOfLines={1}>{action.title}</Text>
-                <Text style={[styles.actionSubtitle, { color: palette.muted }]} numberOfLines={1}>{action.subtitle}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+          {actions.length > 0 && (
+            <View style={styles.actionRow}>
+              {actions.slice(0, 3).map((action) => (
+                <TouchableOpacity key={action.key} activeOpacity={0.86} onPress={action.onPress} style={styles.actionButton}>
+                  <Text style={styles.actionIcon}>{action.icon}</Text>
+                  <Text style={[styles.actionTitle, { color: palette.text }]} numberOfLines={1}>{action.title}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
-      )}
+      </View>
     </View>
   )
 }
@@ -97,64 +96,53 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
     overflow: 'hidden',
   },
-  feedArea: {
-    zIndex: 4,
+  cardBody: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
     gap: spacing.md,
   },
   characterStage: {
-    width: 132,
-    height: 74,
-    borderRadius: 37,
+    width: 126,
+    minHeight: 136,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   characterImage: {
-    width: 132,
-    height: 132,
+    width: 142,
+    height: 142,
   },
-  content: { flex: 1, minWidth: 0 },
+  rightColumn: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'space-between',
+  },
+  content: {
+    minWidth: 0,
+    paddingTop: 2,
+  },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
   feedIcon: { fontSize: 15, lineHeight: 18 },
   label: { fontSize: 13, lineHeight: 17, fontWeight: '900', letterSpacing: -0.2 },
   liveDot: { width: 5, height: 5, borderRadius: radius.pill },
   title: { fontSize: 20, lineHeight: 24, fontWeight: '900', letterSpacing: -0.8 },
   message: { marginTop: 4, fontSize: 12, lineHeight: 17, fontWeight: '800' },
-  primaryAction: {
-    minHeight: 44,
-    borderRadius: radius.xl,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.md,
-  },
-  primaryActionText: { color: '#fff', fontSize: 15, lineHeight: 20, fontWeight: '900', letterSpacing: -0.3 },
-  primaryArrow: { color: '#fff', fontSize: 24, lineHeight: 24, fontWeight: '900', marginTop: -1 },
   actionRow: {
-    zIndex: 4,
     flexDirection: 'row',
-    gap: spacing.sm,
-    borderTopWidth: 1,
+    gap: 6,
     marginTop: spacing.md,
-    paddingTop: spacing.md,
   },
   actionButton: {
     flex: 1,
     minWidth: 0,
-    minHeight: 50,
-    borderRadius: radius.xl,
+    minHeight: 48,
+    borderRadius: radius.lg,
     backgroundColor: 'rgba(0,0,0,0.045)',
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 6,
+    paddingHorizontal: 3,
   },
-  actionIcon: { fontSize: 18, lineHeight: 21 },
-  actionTextWrap: { minWidth: 0, alignItems: 'flex-start' },
-  actionTitle: { fontSize: 12, lineHeight: 15, fontWeight: '900', letterSpacing: -0.3 },
-  actionSubtitle: { fontSize: 9, lineHeight: 12, fontWeight: '800', marginTop: 1 },
+  actionIcon: { fontSize: 17, lineHeight: 20, marginBottom: 2 },
+  actionTitle: { fontSize: 10, lineHeight: 13, fontWeight: '900', letterSpacing: -0.4, textAlign: 'center' },
 })

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export type HomeLayoutSlot = 'hero' | 'error' | 'concierge' | 'stats'
+export type HomeLayoutSlot = 'hero' | 'error' | 'concierge' | 'stats' | 'recordExtras'
 
 export type HomeLayoutSection = {
   key: string

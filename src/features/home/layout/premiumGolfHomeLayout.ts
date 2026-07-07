@@ -11,6 +11,7 @@ export const premiumGolfHomeLayout: HomeLayoutDefinition = {
     { key: 'hero', slot: 'hero', variant: 'heroWave', marginBottom: 11 },
     { key: 'error', slot: 'error', variant: 'card', marginTop: 0, marginBottom: 10 },
     { key: 'concierge', slot: 'concierge', variant: 'card', marginTop: 0, marginBottom: 14 },
-    { key: 'stats', slot: 'stats', variant: 'compact', marginTop: 0, marginBottom: 0 },
+    { key: 'stats', slot: 'stats', variant: 'compact', marginTop: 0, marginBottom: 8 },
+    { key: 'record-extras', slot: 'recordExtras', variant: 'compact', marginTop: 0, marginBottom: 0 },
   ],
 }

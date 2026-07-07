@@ -23,6 +23,7 @@ import {
   PremiumHomeHeroSection,
   PremiumHomeMotion,
   PremiumRecentStatsSection,
+  PremiumRecordExtrasSection,
   type PremiumRecentStatItem,
 } from '../features/home/components'
 import { useHomeDashboard } from '../features/home/hooks/useHomeDashboard'
@@ -240,6 +241,11 @@ export default function HomeExperienceScreen() {
                 <PremiumRecentStatsSection stats={recentStats} />
               </PremiumHomeMotion>
             ) : null,
+            recordExtras: (
+              <PremiumHomeMotion index={4}>
+                <PremiumRecordExtrasSection />
+              </PremiumHomeMotion>
+            ),
           }}
         />
       </ScrollView>
