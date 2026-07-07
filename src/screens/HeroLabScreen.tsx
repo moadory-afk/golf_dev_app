@@ -113,9 +113,6 @@ export default function HeroLabScreen() {
           fallbackRoundDate="7.18(토)"
           fallbackTeeTime="08:00"
           isAdmin
-          actions={[]}
-          onClubPress={() => {}}
-          onNotificationPress={() => {}}
           onCreateRound={() => {}}
           heroImageSource={selectedAsset.source}
         />

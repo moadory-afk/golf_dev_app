@@ -1,11 +1,9 @@
 import {
   ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Dimensions, TextInput,
 } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useState, useCallback, useEffect } from 'react'
-import { AppHeader } from '../components/AppHeader'
 import Svg, { Polyline, Circle, Line, Text as SvgText, G, Polygon } from 'react-native-svg'
 import { getRounds, getRound, getPersonalRoundStat, playerTotal, totalPar, getHandicapsForRound, computeHandicaps, shortName, type PersonalRoundFir, type PersonalRoundHoleStat, type SavedRound } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
@@ -127,7 +125,6 @@ function getPlayerBadges(rounds: SavedRound[], basis = 5): Map<string, Badge[]> 
 }
 
 export default function HistoryScreen() {
-  const insets = useSafeAreaInsets()
   const nav = useNavigation<Nav>()
   const [tab, setTab] = useState<Tab>('byPlayer')
   const [refreshKey, setRefreshKey] = useState(0)
@@ -150,7 +147,6 @@ export default function HistoryScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <AppHeader myName={myName} />
       <View style={s.tabs}>
         {(['byPlayer', 'byRound', 'club', 'hall'] as Tab[]).map((t) => (
           <TouchableOpacity key={t} style={[s.tab, tab === t && s.tabActive]} onPress={() => setTab(t)}>

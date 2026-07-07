@@ -4,11 +4,10 @@ import { useState } from 'react'
 import { colorLayers, radius, spacing } from '../../../design/tokens'
 import { getCourseHeroImageSource } from '../../../data/courseHeroImages'
 import { useSkin } from '../../../skins'
+import { TopActionButtons } from '../../../components/TopActionButtons'
 import type { HomeHeroRound } from '../types/home'
 
-const gogoMark = require('../../../../assets/gogopar_i.png')
-
-const HERO_DISPLAY_HEIGHT_RATIO = (10.5 / 16) * 1.5 * 0.85
+const HERO_DISPLAY_HEIGHT_RATIO = (10.5 / 16) * 1.5 * 0.85 * 0.9
 const HERO_MIN_WIDTH = 280
 
 type PremiumHomeHeroSectionProps = {
@@ -24,16 +23,12 @@ type PremiumHomeHeroSectionProps = {
   fallbackRoundDate: string
   fallbackTeeTime: string
   isAdmin?: boolean
-  onClubPress: () => void
-  onNotificationPress: () => void
-  onProfilePress?: () => void
   onCreateRound: () => void
   heroImageSource?: ImageSourcePropType
   topInset?: number
 }
 
 export function PremiumHomeHeroSection({
-  clubName,
   rounds,
   fallbackCourseName,
   fallbackAddress,
@@ -43,9 +38,6 @@ export function PremiumHomeHeroSection({
   fallbackRoundDate,
   fallbackTeeTime,
   isAdmin = false,
-  onClubPress,
-  onNotificationPress,
-  onProfilePress,
   onCreateRound,
   heroImageSource,
   topInset = 0,
@@ -76,25 +68,7 @@ export function PremiumHomeHeroSection({
         style={[styles.heroCard, { height: heroHeight }]}
       > 
         <View style={styles.heroImage}>
-          <View style={[styles.headerRow, { top: topInset + 10 }]} pointerEvents="box-none">
-            <TouchableOpacity activeOpacity={0.84} onPress={onClubPress} style={styles.clubPill}> 
-              <Text style={styles.clubIcon}>⛳</Text>
-              <Text style={styles.clubText} numberOfLines={1}>{clubName}</Text>
-              <Text style={styles.clubArrow}>⌄</Text>
-            </TouchableOpacity>
-
-            <View style={styles.headerActions}>
-              <TouchableOpacity activeOpacity={0.84} onPress={onNotificationPress} style={styles.circleButton}> 
-                <Text style={styles.bellText}>🔔</Text>
-                <View style={[styles.badge, { backgroundColor: palette.danger }]}> 
-                  <Text style={styles.badgeText}>3</Text>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity activeOpacity={0.84} onPress={onProfilePress} style={styles.profileButton}> 
-                <Image source={gogoMark} style={styles.profileImage} resizeMode="cover" />
-              </TouchableOpacity>
-            </View>
-          </View>
+          <TopActionButtons topInset={topInset} floating />
           <ScrollView
             horizontal
             pagingEnabled
@@ -258,7 +232,8 @@ function HeroBottomSummary({
   groupCount?: number
   routeTimeText?: string
 }) {
-  const scheduleLine = teeTime ? `${teeTime} Tee Off${groupCount ? ` (${groupCount}조)` : ''}` : '--:-- Tee Off'
+  const scheduleLine = teeTime ? `Tee Off ${teeTime}` : 'Tee Off --:--'
+  void groupCount
   const travelTimeText = routeTimeText && !routeTimeText.includes('준비중') ? routeTimeText : '50분 소요'
 
   return (
@@ -279,15 +254,16 @@ function HeroBottomSummary({
         <View style={styles.summaryDivider} />
 
         <View style={styles.scheduleSummary}>
-          <View style={styles.scheduleTopRow}>
-            <Text style={styles.summaryDday} numberOfLines={1}>{dday}</Text>
-            <View style={styles.travelSummary}>
-              <Text style={styles.travelLabel} numberOfLines={1}>지금 출발시</Text>
-              <Text style={styles.travelTime} numberOfLines={1}>{travelTimeText}</Text>
-            </View>
-          </View>
+          <Text style={styles.summaryDday} numberOfLines={1}>{dday}</Text>
           <Text style={styles.summaryDate} numberOfLines={1}>🗓 {dateLabel}</Text>
           <Text style={styles.summaryTeeTime} numberOfLines={1}>◷ {scheduleLine}</Text>
+        </View>
+
+        <View style={styles.summaryDivider} />
+
+        <View style={styles.travelSummary}>
+          <Text style={styles.travelLabel} numberOfLines={1}>지금 출발시</Text>
+          <Text style={styles.travelTime} numberOfLines={1}>{travelTimeText}</Text>
         </View>
       </View>
     </View>
@@ -397,7 +373,7 @@ const styles = StyleSheet.create({
   metaText: { color: '#fff', fontSize: 10, lineHeight: 14, fontWeight: '900' },
   emptyAddress: { color: colorLayers.heroTextMuted, fontSize: 13, lineHeight: 18, fontWeight: '800', marginTop: spacing.xs },
   bottomSummary: {
-    width: '76%',
+    width: '100%',
     minWidth: 292,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.26)',
@@ -405,18 +381,17 @@ const styles = StyleSheet.create({
   },
   summaryCourseName: { color: '#fff', fontSize: 21, lineHeight: 25, fontWeight: '900', letterSpacing: -0.8, marginBottom: 8 },
   summaryContentRow: { flexDirection: 'row', alignItems: 'stretch' },
-  weatherSummary: { flex: 1.35, minWidth: 116, flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 10 },
+  weatherSummary: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent:'center', gap: 8, paddingHorizontal: 8 },
   summaryWeatherIcon: { fontSize: 29, lineHeight: 34 },
   weatherTextWrap: { flex: 1, minWidth: 0 },
   summaryTemperature: { color: '#fff', fontSize: 24, lineHeight: 28, fontWeight: '900', letterSpacing: -0.6 },
   windRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
   windIcon: { color: 'rgba(255,255,255,0.82)', fontSize: 12, lineHeight: 14 },
   summaryWindText: { flex: 1, color: 'rgba(255,255,255,0.88)', fontSize: 13, lineHeight: 16, fontWeight: '900', letterSpacing: -0.25 },
-  summaryDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.44)', marginHorizontal: 9 },
-  scheduleSummary: { flex: 1.75, minWidth: 174, paddingLeft: 2 },
-  scheduleTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
-  summaryDday: { color: '#B6FF8F', fontSize: 21, lineHeight: 25, fontWeight: '900', letterSpacing: -0.5 },
-  travelSummary: { alignItems: 'flex-start', justifyContent: 'flex-start', paddingTop: 1, minWidth: 70 },
+  summaryDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.44)', marginHorizontal: 6 },
+  scheduleSummary: { flex: 1, minWidth: 0, alignItems:'center', justifyContent:'center', paddingHorizontal:8 },
+    summaryDday: { color: '#B6FF8F', fontSize: 21, lineHeight: 25, fontWeight: '900', letterSpacing: -0.5 },
+  travelSummary: { flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'center', paddingHorizontal:8 },
   travelLabel: { color: '#fff', fontSize: 12, lineHeight: 15, fontWeight: '900', letterSpacing: -0.3 },
   travelTime: { color: '#fff', fontSize: 13, lineHeight: 16, fontWeight: '900', letterSpacing: -0.3, marginTop: 1 },
   summaryDate: { color: '#fff', fontSize: 13, lineHeight: 17, fontWeight: '900', marginTop: 2 },

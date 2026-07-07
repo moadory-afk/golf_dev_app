@@ -25,9 +25,10 @@ export function useUserAvatar(): AvatarData {
 interface UserAvatarBtnProps {
   size?: number
   borderColor?: string
+  backgroundColor?: string
 }
 
-export function UserAvatarBtn({ size = 38, borderColor = 'rgba(255,255,255,0.4)' }: UserAvatarBtnProps) {
+export function UserAvatarBtn({ size = 38, borderColor = 'rgba(255,255,255,0.4)', backgroundColor = C.gold }: UserAvatarBtnProps) {
   const nav = useNavigation<Nav>()
   const avatar = useUserAvatar()
 
@@ -38,7 +39,7 @@ export function UserAvatarBtn({ size = 38, borderColor = 'rgba(255,255,255,0.4)'
     borderWidth: 2,
     borderColor,
     overflow: 'hidden' as const,
-    backgroundColor: C.gold,
+    backgroundColor,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   }
@@ -68,7 +69,7 @@ interface UserAvatarDisplayProps {
 export function UserAvatarDisplay({ avatarUrl, icon, initial, size = 64 }: UserAvatarDisplayProps) {
   const circleStyle: any = {
     width: size, height: size, borderRadius: size / 2,
-    backgroundColor: C.gold, overflow: 'hidden',
+    backgroundColor, overflow: 'hidden',
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)',
   }

@@ -1,5 +1,5 @@
 import {
-  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Image, Share, Alert, TextInput, ActivityIndicator,
+  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Image, Share, Alert, TextInput, ActivityIndicator, useWindowDimensions,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CommonActions, useNavigation, useRoute } from '@react-navigation/native'
@@ -14,7 +14,7 @@ import { useUserProfile } from '../lib/UserProfileContext'
 import { useAsync } from '../lib/useAsync'
 import { loadHandicapBasis, saveHandicapBasis, type HandicapBasis } from '../lib/handicapBasis'
 import { C } from '../theme'
-import { AppHeader } from '../components/AppHeader'
+import { TopActionButtons } from '../components/TopActionButtons'
 import { Icon } from '../components/Icon'
 import { EmojiIcon } from '../components/EmojiIcon'
 import { ImageCropModal, type ImageCropRect } from '../components/ImageCropModal'
@@ -60,6 +60,7 @@ function getWinner(r: SavedRound, handicaps: Map<string, number>): string | null
 
 export default function ClubScreen() {
   const insets = useSafeAreaInsets()
+  const { width: windowWidth } = useWindowDimensions()
   const nav = useNavigation<Nav>()
   const route = useRoute<ClubRoute>()
   const [refreshKey, setRefreshKey] = useState(0)
@@ -290,6 +291,8 @@ export default function ClubScreen() {
   const MEDAL_BG = ['#fffbe8', '#f4f6f8', '#fdf5f0']
   const MEDAL_COLOR = [C.gold, C.silver, C.bronze]
   const isManagerView = club?.role === 'admin'
+  const clubHeroWidth = Math.max(280, windowWidth)
+  const clubHeroHeight = Math.round(clubHeroWidth * (10.5 / 16) * 1.5 * 0.85 * 0.9 + insets.top)
 
   useEffect(() => {
     if (!route.params?.openManageMenu || !isManagerView) return
@@ -439,23 +442,16 @@ export default function ClubScreen() {
         style={{ flex: 1 }}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} tintColor={C.green} />}
       >
-        {/* 헤더 (공용) – 클럽명 오른쪽 멤버 버튼 */}
-        <AppHeader
-          myName={myName}
-          rightExtra={isManagerView ? (
-            <TouchableOpacity style={s.headerIconButton} onPress={() => setManageMenuOpen(true)} activeOpacity={0.82}>
-              <Icon name="settings" size={19} color="rgba(255,255,255,0.9)" strokeWidth={2.2} />
-            </TouchableOpacity>
-          ) : undefined}
-        />
-
         <View style={s.content}>
           {club && (
             <>
-                  <View style={s.clubHeroCard}>
+                  <View style={[s.clubHeroCard, { height: clubHeroHeight }]}> 
                     <Image source={{ uri: club.coverImage || CLUB_HERO_IMAGE }} style={s.clubHeroImage} resizeMode="cover" />
+                    <View style={s.clubHeroScrim} />
+                    <TopActionButtons topInset={insets.top} floating />
                     <View style={s.clubHeroBody}>
                       <View style={{ flex: 1 }}>
+                        <Text style={s.clubHeroLabel}>MY CLUB</Text>
                         <Text style={s.clubHeroName} numberOfLines={1}>{club.name}</Text>
                         <Text style={s.clubHeroMeta} numberOfLines={2}>
                           {club.subtitle?.trim() ? club.subtitle : '운영 중인 골프 클럽'}
@@ -1009,7 +1005,7 @@ const s = StyleSheet.create({
   clubPillText: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600' },
   clubPillTextActive: { color: C.greenDark },
 
-  content: { padding: 16 },
+  content: { padding: 16, paddingTop: 12 },
   pageSectionTitle: {
     fontSize: 15,
     fontWeight: '800',
@@ -1027,38 +1023,52 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   clubHeroCard: {
-    backgroundColor: C.card,
-    borderRadius: 20,
+    width: 'auto',
+    marginHorizontal: -16,
+    marginTop: -12,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 56,
+    borderBottomRightRadius: 56,
     overflow: 'hidden',
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: C.border,
-    shadowColor: '#1a6b44',
-    shadowOpacity: 0.07,
-    shadowRadius: 10,
-    elevation: 2,
+    backgroundColor: '#10291d',
+    shadowColor: '#10291d',
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
   },
   clubHeroImage: {
+    ...StyleSheet.absoluteFillObject,
     width: '100%',
-    height: 150,
+    height: '100%',
+  },
+  clubHeroScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.32)',
   },
   clubHeroBody: {
-    padding: 16,
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    bottom: 20,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: 12,
   },
-  clubHeroName: { fontSize: 24, fontWeight: '900', color: C.text },
-  clubHeroMeta: { fontSize: 13, color: C.muted, marginTop: 6, lineHeight: 19 },
+  clubHeroLabel: { fontSize: 11, fontWeight: '900', color: 'rgba(255,255,255,0.72)', letterSpacing: 1.2, marginBottom: 6 },
+  clubHeroName: { fontSize: 26, fontWeight: '900', color: '#fff', letterSpacing: -0.4 },
+  clubHeroMeta: { fontSize: 13, color: 'rgba(255,255,255,0.82)', marginTop: 7, lineHeight: 19 },
   clubInfoBtn: {
-    borderRadius: 12,
-    paddingHorizontal: 14,
+    borderRadius: 999,
+    paddingHorizontal: 15,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: C.border,
-    backgroundColor: '#f7faf7',
+    borderColor: 'rgba(255,255,255,0.42)',
+    backgroundColor: 'rgba(255,255,255,0.16)',
   },
-  clubInfoBtnText: { fontSize: 13, fontWeight: '800', color: C.text },
+  clubInfoBtnText: { fontSize: 13, fontWeight: '900', color: '#fff' },
   managementModalBody: { gap: 10, paddingBottom: 4 },
   managementModalRow: {
     flexDirection: 'row',
