@@ -4,6 +4,7 @@ import {
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useState, useCallback, useEffect } from 'react'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Polyline, Circle, Line, Text as SvgText, G, Polygon } from 'react-native-svg'
 import { getRounds, getRound, getPersonalRoundStat, playerTotal, totalPar, getHandicapsForRound, computeHandicaps, shortName, type PersonalRoundFir, type PersonalRoundHoleStat, type SavedRound } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
@@ -13,6 +14,7 @@ import { loadHandicapBasis, type HandicapBasis } from '../lib/handicapBasis'
 import { C } from '../theme'
 import { EmojiIcon } from '../components/EmojiIcon'
 import { Icon } from '../components/Icon'
+import { TopActionButtons } from '../components/TopActionButtons'
 import type { RootStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
@@ -126,6 +128,7 @@ function getPlayerBadges(rounds: SavedRound[], basis = 5): Map<string, Badge[]> 
 
 export default function HistoryScreen() {
   const nav = useNavigation<Nav>()
+  const insets = useSafeAreaInsets()
   const [tab, setTab] = useState<Tab>('byPlayer')
   const [refreshKey, setRefreshKey] = useState(0)
   const { name: myName, userId: myUserId } = useUserProfile()
@@ -147,6 +150,9 @@ export default function HistoryScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <View style={[s.topActions, { paddingTop: insets.top + 10 }]}>
+        <TopActionButtons />
+      </View>
       <View style={s.tabs}>
         {(['byPlayer', 'byRound', 'club', 'hall'] as Tab[]).map((t) => (
           <TouchableOpacity key={t} style={[s.tab, tab === t && s.tabActive]} onPress={() => setTab(t)}>
@@ -792,29 +798,6 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
         </Modal>
       )}
 
-      <View style={s.playerReportHero}>
-        <View style={s.playerReportHeaderRow}>
-          <View>
-            <Text style={s.playerReportEyebrow}>MY GOLF REPORT</Text>
-            <Text style={s.playerReportTitle}>나의 골프 리포트</Text>
-          </View>
-          <View style={s.playerReportBadge}>
-            <Text style={s.playerReportBadgeText}>최근 {handicapBasis}경기</Text>
-          </View>
-        </View>
-        <View style={s.playerReportScoreRow}>
-          <View>
-            <Text style={s.playerReportScoreLabel}>평균 스코어</Text>
-            <Text style={s.playerReportScore}>{avg}타</Text>
-          </View>
-          <View style={s.playerReportTrendBox}>
-            <Text style={s.playerReportTrendLabel}>최근 흐름</Text>
-            <Text style={s.playerReportTrendValue}>{recent5Avg < avg ? `-${avg - recent5Avg}타` : recent5Avg > avg ? `+${recent5Avg - avg}타` : '유지'}</Text>
-          </View>
-        </View>
-        <Text style={s.playerReportInsight} numberOfLines={2}>{trendText}</Text>
-      </View>
-
       <View style={s.metricGridCompact}>
         <MetricCard label="평균" value={`${avg}타`} />
         <MetricCard label="핸디" value={diffText(handicap)} />
@@ -841,11 +824,33 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
 
       {playerPanel === 'summary' && (
         <>
-          <View style={s.card}>
-            <Text style={s.cardTitle}>AI 코멘트</Text>
-            {aiComments.slice(0, 2).map((comment) => (
-              <BulletText key={comment} text={comment} />
-            ))}
+          <View style={s.aiCaddieCard}>
+            <View style={s.aiCaddieHeader}>
+              <View style={s.aiCaddieIconWrap}>
+                <Text style={s.aiCaddieIcon}>🤖</Text>
+              </View>
+              <View style={s.aiCaddieTitleBlock}>
+                <Text style={s.aiCaddieEyebrow}>AI Caddie</Text>
+                <Text style={s.aiCaddieTitle}>개인 기록 분석</Text>
+              </View>
+            </View>
+
+            <View style={s.aiCaddieInsightBox}>
+              <Text style={s.aiCaddieLead}>{trendText}</Text>
+              {aiComments.slice(0, 3).map((comment) => (
+                <View key={comment} style={s.aiCaddieBulletRow}>
+                  <Text style={s.aiCaddieBulletDot}>•</Text>
+                  <Text style={s.aiCaddieBulletText}>{comment}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={s.aiCaddieRecommendRow}>
+              <Text style={s.aiCaddieRecommendLabel}>추천</Text>
+              <Text style={s.aiCaddieRecommendText} numberOfLines={2}>
+                {weakness ? `${weakness.label} 공략을 안정적으로 가져가면 평균 스코어 개선 여지가 큽니다.` : '최근 라운드 패턴을 더 쌓으면 맞춤 개선 포인트를 제안할게요.'}
+              </Text>
+            </View>
           </View>
 
           <View style={s.detailGrid}>
@@ -1598,6 +1603,10 @@ function TrendModal({ title, data, onClose }: {
 // ─── 스타일 ──────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
+  topActions: {
+    backgroundColor: C.greenDark,
+    paddingBottom: 12,
+  },
   appHeader: { backgroundColor: C.greenDark, paddingBottom: 18, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
   headerTitle: { color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
   profileBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' },
@@ -1612,6 +1621,59 @@ const s = StyleSheet.create({
     shadowColor: '#1a6b44', shadowOpacity: 0.07, shadowRadius: 12, shadowOffset: { width: 0, height: 3 }, elevation: 3,
   },
   cardTitle: { fontSize: 15, fontWeight: '700', color: C.text, marginBottom: 14 },
+  aiCaddieCard: {
+    backgroundColor: C.card,
+    borderRadius: 22,
+    padding: 18,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(32,160,91,0.18)',
+    shadowColor: '#1a6b44',
+    shadowOpacity: 0.09,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  aiCaddieHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 13 },
+  aiCaddieIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: C.greenLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 11,
+  },
+  aiCaddieIcon: { fontSize: 20, lineHeight: 24 },
+  aiCaddieTitleBlock: { flex: 1, minWidth: 0 },
+  aiCaddieEyebrow: { fontSize: 11, lineHeight: 14, fontWeight: '900', color: C.green, letterSpacing: 0.2 },
+  aiCaddieTitle: { fontSize: 17, lineHeight: 22, fontWeight: '900', color: C.text, letterSpacing: -0.5, marginTop: 1 },
+  aiCaddieInsightBox: {
+    borderRadius: 16,
+    backgroundColor: C.greenLight,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+  },
+  aiCaddieLead: { fontSize: 14, lineHeight: 20, fontWeight: '900', color: C.text, marginBottom: 9, letterSpacing: -0.25 },
+  aiCaddieBulletRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 5 },
+  aiCaddieBulletDot: { width: 12, fontSize: 13, lineHeight: 19, color: C.green, fontWeight: '900' },
+  aiCaddieBulletText: { flex: 1, fontSize: 12, lineHeight: 19, color: C.muted, fontWeight: '800' },
+  aiCaddieRecommendRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    marginTop: 13,
+    paddingTop: 12,
+  },
+  aiCaddieRecommendLabel: {
+    width: 44,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '900',
+    color: C.green,
+  },
+  aiCaddieRecommendText: { flex: 1, fontSize: 12, lineHeight: 18, fontWeight: '800', color: C.text },
   cardBold: { fontSize: 15, fontWeight: '700', color: C.text },
   bold: { fontWeight: '700', color: C.text },
   muted: { fontSize: 13, color: C.muted },
@@ -1633,31 +1695,6 @@ const s = StyleSheet.create({
   pillText: { fontSize: 13, fontWeight: '700', color: C.green },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: C.greenLight, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
   badgeText: { fontSize: 10, fontWeight: '700', color: C.green },
-  playerReportHero: {
-    backgroundColor: C.greenDark,
-    borderRadius: 24,
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 16,
-    marginBottom: 12,
-    shadowColor: '#0f3d2a',
-    shadowOpacity: 0.16,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 5,
-  },
-  playerReportHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
-  playerReportEyebrow: { color: 'rgba(255,255,255,0.62)', fontSize: 10, lineHeight: 13, fontWeight: '900', letterSpacing: 0.8 },
-  playerReportTitle: { color: '#fff', fontSize: 20, lineHeight: 25, fontWeight: '900', letterSpacing: -0.8, marginTop: 2 },
-  playerReportBadge: { borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 10, paddingVertical: 5 },
-  playerReportBadgeText: { color: '#fff', fontSize: 11, lineHeight: 14, fontWeight: '900' },
-  playerReportScoreRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 18, gap: 14 },
-  playerReportScoreLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 12, lineHeight: 16, fontWeight: '800' },
-  playerReportScore: { color: '#fff', fontSize: 38, lineHeight: 44, fontWeight: '900', letterSpacing: -1.5, marginTop: 1 },
-  playerReportTrendBox: { minWidth: 86, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 12, paddingVertical: 10, alignItems: 'flex-end' },
-  playerReportTrendLabel: { color: 'rgba(255,255,255,0.72)', fontSize: 11, lineHeight: 14, fontWeight: '800' },
-  playerReportTrendValue: { color: C.gold, fontSize: 20, lineHeight: 24, fontWeight: '900', letterSpacing: -0.7, marginTop: 2 },
-  playerReportInsight: { color: 'rgba(255,255,255,0.82)', fontSize: 13, lineHeight: 19, fontWeight: '800', marginTop: 12 },
   metricGridCompact: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 8 },
   metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
   metricCard: { flexBasis: '47%', flexGrow: 1, backgroundColor: C.card, borderRadius: 14, padding: 10, borderWidth: 1, borderColor: C.border },
