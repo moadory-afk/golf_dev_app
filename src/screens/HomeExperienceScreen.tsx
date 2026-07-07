@@ -31,6 +31,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { COURSE_HERO_STORAGE_KEY, getCourseHeroAssetByKey, getCourseHeroImageSource } from '../data/courseHeroImages'
 import { HomeLayoutRenderer, premiumGolfHomeLayout } from '../features/home/layout'
 import { getRoundSchedules, type ScheduledRound } from '../lib/roundSchedule'
+import type { ClubInfo } from '../lib/store'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
 
@@ -103,13 +104,14 @@ export default function HomeExperienceScreen() {
   const { palette } = useSkin()
   const insets = useSafeAreaInsets()
   const nav = useNavigation<Nav>()
-  const { activeClub: club, clubsLoaded } = useClub()
+  const { activeClub: club, myClubs, clubsLoaded, setActiveClub } = useClub()
   const { name: myName, userId } = useUserProfile()
   const { dashboard, loading, error, refresh } = useHomeDashboard({ clubId: club?.id, userName: myName, userId })
   const [selectedHeroKey, setSelectedHeroKey] = useState<string | null>(null)
   const [roundPopupMode, setRoundPopupMode] = useState<'groups' | 'lotto' | null>(null)
   const [popupRound, setPopupRound] = useState<ScheduledRound | null>(null)
   const [popupLoading, setPopupLoading] = useState(false)
+  const [clubPickerVisible, setClubPickerVisible] = useState(false)
 
   useFocusEffect(
     useCallback(() => {
@@ -205,7 +207,7 @@ export default function HomeExperienceScreen() {
                   fallbackRoundDate={dashboard.hero.roundDate}
                   fallbackTeeTime={dashboard.hero.teeTime}
                   isAdmin={club?.role === 'admin'}
-                  onClubPress={() => nav.navigate('Main', { screen: 'Club' })}
+                  onClubPress={() => setClubPickerVisible(true)}
                   onNotificationPress={() => nav.navigate('NoticePrototype')}
                   onProfilePress={() => nav.navigate('Profile')}
                   onCreateRound={() => nav.navigate('RoundSchedulePrototype', { openCreate: true })}
@@ -242,6 +244,21 @@ export default function HomeExperienceScreen() {
         />
       </ScrollView>
 
+      <ClubPickerModal
+        visible={clubPickerVisible}
+        clubs={myClubs}
+        activeClubId={club?.id}
+        onClose={() => setClubPickerVisible(false)}
+        onSelect={(nextClub) => {
+          setActiveClub(nextClub)
+          setClubPickerVisible(false)
+        }}
+        onManage={() => {
+          setClubPickerVisible(false)
+          nav.navigate('Main', { screen: 'Club' })
+        }}
+      />
+
       <RoundInfoModal
         visible={roundPopupMode !== null}
         mode={roundPopupMode}
@@ -255,6 +272,65 @@ export default function HomeExperienceScreen() {
         }}
       />
     </View>
+  )
+}
+
+
+function ClubPickerModal({
+  visible,
+  clubs,
+  activeClubId,
+  onClose,
+  onSelect,
+  onManage,
+}: {
+  visible: boolean
+  clubs: ClubInfo[]
+  activeClubId?: string
+  onClose: () => void
+  onSelect: (club: ClubInfo) => void
+  onManage: () => void
+}) {
+  const { palette } = useSkin()
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity activeOpacity={1} onPress={onClose} style={styles.clubPickerBackdrop}>
+        <View style={[styles.clubPickerCard, { backgroundColor: palette.card }]}>
+          <View style={styles.clubPickerHeader}>
+            <Text style={[styles.clubPickerTitle, { color: palette.text }]}>클럽 선택</Text>
+            <TouchableOpacity activeOpacity={0.82} onPress={onClose} style={styles.modalClose}>
+              <Text style={styles.modalCloseText}>×</Text>
+            </TouchableOpacity>
+          </View>
+
+          {clubs.length > 0 ? clubs.map((item) => {
+            const selected = item.id === activeClubId
+            return (
+              <TouchableOpacity
+                key={item.id}
+                activeOpacity={0.86}
+                onPress={() => onSelect(item)}
+                style={[styles.clubPickerRow, { borderColor: selected ? palette.green : palette.border }]}
+              >
+                <Text style={styles.clubPickerIcon}>{item.icon || '⛳'}</Text>
+                <View style={styles.clubPickerTextWrap}>
+                  <Text style={[styles.clubPickerName, { color: palette.text }]} numberOfLines={1}>{item.name}</Text>
+                  <Text style={[styles.clubPickerSubtitle, { color: palette.muted }]} numberOfLines={1}>{item.subtitle || (item.role === 'admin' ? '관리자' : '회원')}</Text>
+                </View>
+                {selected && <Text style={[styles.clubPickerSelected, { color: palette.green }]}>선택됨</Text>}
+              </TouchableOpacity>
+            )
+          }) : (
+            <Text style={[styles.modalEmpty, { color: palette.muted }]}>참여 중인 클럽이 없습니다.</Text>
+          )}
+
+          <TouchableOpacity activeOpacity={0.86} onPress={onManage} style={[styles.clubManageButton, { backgroundColor: palette.green }]}> 
+            <Text style={styles.clubManageButtonText}>클럽 관리</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Modal>
   )
 }
 
@@ -329,6 +405,18 @@ const styles = StyleSheet.create({
   emptyRoundIcon: { fontSize: 34, marginBottom: 10 },
   emptyRoundTitle: { fontSize: 18, fontWeight: '900', textAlign: 'center', marginBottom: 8 },
   emptyRoundText: { fontSize: 13, lineHeight: 19, fontWeight: '600', textAlign: 'center' },
+  clubPickerBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.28)', paddingTop: 76, paddingHorizontal: 18 },
+  clubPickerCard: { borderRadius: 24, padding: 16 },
+  clubPickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 6 },
+  clubPickerTitle: { fontSize: 18, lineHeight: 23, fontWeight: '900', letterSpacing: -0.6 },
+  clubPickerRow: { minHeight: 58, borderWidth: 1, borderRadius: 17, paddingHorizontal: 13, marginTop: 9, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  clubPickerIcon: { fontSize: 19, lineHeight: 22 },
+  clubPickerTextWrap: { flex: 1, minWidth: 0 },
+  clubPickerName: { fontSize: 15, lineHeight: 20, fontWeight: '900', letterSpacing: -0.35 },
+  clubPickerSubtitle: { fontSize: 11, lineHeight: 15, fontWeight: '800', marginTop: 1 },
+  clubPickerSelected: { fontSize: 11, lineHeight: 15, fontWeight: '900' },
+  clubManageButton: { minHeight: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginTop: 14 },
+  clubManageButtonText: { color: '#fff', fontSize: 14, lineHeight: 19, fontWeight: '900' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.42)', alignItems: 'center', justifyContent: 'center', padding: 22 },
   modalCard: { width: '100%', maxWidth: 420, borderRadius: 24, padding: 18 },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },

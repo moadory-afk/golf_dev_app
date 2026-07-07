@@ -56,6 +56,7 @@ export function PremiumGogoCaddieCard({
         { backgroundColor: palette.card, borderColor: palette.border, borderRadius: palette.cardRadius + 10 },
       ]}
     >
+      <View style={[styles.topConcaveNotch, { backgroundColor: palette.bg }]} pointerEvents="none" />
       <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={styles.feedArea}>
         <View style={styles.characterStage}> 
           <Image source={gogoMark} style={styles.characterImage} resizeMode="cover" />
@@ -92,10 +93,22 @@ export function PremiumGogoCaddieCard({
 const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
     overflow: 'hidden',
   },
+  topConcaveNotch: {
+    position: 'absolute',
+    top: -31,
+    alignSelf: 'center',
+    width: 210,
+    height: 54,
+    borderRadius: 105,
+    zIndex: 1,
+  },
   feedArea: {
+    zIndex: 2,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
@@ -131,6 +144,7 @@ const styles = StyleSheet.create({
   primaryActionText: { color: '#fff', fontSize: 15, lineHeight: 20, fontWeight: '900', letterSpacing: -0.3 },
   primaryArrow: { color: '#fff', fontSize: 24, lineHeight: 24, fontWeight: '900', marginTop: -1 },
   actionRow: {
+    zIndex: 2,
     flexDirection: 'row',
     gap: spacing.sm,
     borderTopWidth: 1,

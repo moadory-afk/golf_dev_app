@@ -1,3 +1,13 @@
+# GogoPar Project Status
+
+## Current Version
+Home Redesign v3.0 Phase 2
+
+## Current Sprint
+Home Redesign v3.0
+
+## Progress
+
 ✅ Theme System
 ✅ Skin System
 ✅ Design Token
@@ -9,28 +19,28 @@
 ✅ CaddieBook
 ✅ AI Hole Strategy
 ✅ AI Shot Plan
-✅ Home Redesign v3.0 Phase 2
-✅ Home Weather Coordinates
-✅ Home Hero Weather Summary UI
+✅ Home Redesign v3.0 Phase 2 - Hero Top Buttons
+✅ Home Weather Acquisition
 
 ## Current Task
 
-Home Hero 하단 요약 UI를 조정했다.
+Home Hero에서 예정 라운드별 날씨 정보를 입수해 표시하도록 연결했다.
 
-- 온도 아래 날씨 설명 대신 풍속 표시
-- 작은 풍속 아이콘 추가
-- 일정 영역 Tee Off 시간 잘림 방지
-- 라운딩 정보의 전반 코스(`layoutName`)를 일정 항목에 표시
+- OpenWeather 5일 예보 API 사용
+- 라운드 날짜 + Tee Off 시간에 가까운 예보 선택
+- Hero의 날씨/기온/풍속 값에 실제 API 데이터 연결
+- API Key 없거나 호출 실패 시 기존 fallback 유지
 
 ## Verified
 
-- 업로드된 `src.zip`, `docs.zip` 기준 실제 파일 수정 완료
+- 업로드된 `src.zip`, `docs.zip` 기준 실제 소스/문서 수정 완료
 - 전체 프로젝트 루트 설정 파일이 없어 전체 TypeScript 검증은 로컬 프로젝트에서 재실행 필요
 
 ## Next Task
 
-- 실기기/Expo에서 Hero 요약 영역 확인
-- Hero 날씨 아이콘을 실제 날씨 상태와 연동
+- Expo 실기기에서 날씨 표시 확인
+- `EXPO_PUBLIC_OPENWEATHER_API_KEY` 환경변수 적용 확인
+- 골프장 좌표 저장/캐싱 구조 검토
 
 ## Do Not Touch
 
@@ -38,3 +48,15 @@ Home Hero 하단 요약 UI를 조정했다.
 - Invite
 - Payment
 - Existing DB Schema without explicit SQL approval
+
+
+## Current Update - Home v3 Phase 2
+
+- Hero와 캐디 카드의 곡선 연결 UI를 적용했다.
+- 클럽 선택 버튼은 메뉴 이동 대신 드롭다운형 클럽 선택 모달로 동작한다.
+- 선택된 클럽은 `ClubContext`의 activeClub로 반영되며 Home Dashboard hook이 해당 클럽 기준으로 데이터를 다시 조회한다.
+
+## 2026-07-07 Status
+
+- Home Hero 중앙 D-Day 중복 표시는 제거했다.
+- 날씨 API 코드는 존재하지만 모바일 환경의 API key 주입 여부는 실제 기기에서 추가 검증이 필요하다.

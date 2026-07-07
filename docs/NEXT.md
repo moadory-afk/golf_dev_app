@@ -1,11 +1,30 @@
-# NEXT - Home v3 Hero Weather Summary UI
+# NEXT - Home Weather Acquisition
 
 ## 다음 확인 필요
-- 실기기에서 온도 아래 풍속이 정상 표시되는지 확인
-- 작은 화면에서 일정 항목의 Tee Off 시간이 잘리지 않는지 확인
-- 라운딩 정보의 전반 코스명이 `layoutName`으로 정확히 전달되는지 확인
+- `.env` 또는 Expo 환경변수에 `EXPO_PUBLIC_OPENWEATHER_API_KEY` 설정
+- 실제 기기/Expo에서 Hero 날씨, 기온, 풍속 표시 확인
+- 5일 이후 라운드의 경우 OpenWeather 무료 5일 예보 범위를 벗어나 `날씨 준비중`으로 표시되는지 확인
 
 ## 다음 개발 후보
-1. Hero 날씨 아이콘을 OpenWeather condition에 따라 `☀️ / ☁️ / 🌧️`로 자동 변경
-2. 전반/후반 코스가 분리 저장되어 있다면 Hero에는 전반 코스만 명시적으로 매핑
-3. 풍속 기준으로 `바람 약함 / 바람 주의` AI 힌트 추가
+1. 골프장 좌표를 DB에 저장해 Geocoding 호출을 줄이기
+2. 날씨 API 응답을 AsyncStorage 또는 Supabase Edge Function으로 캐싱
+3. 풍향, 강수확률, 체감온도 표시 확장
+4. 추천 출발시간 계산에 날씨/풍속 반영
+
+## 주의
+- DB 변경 없음
+- API Key 미설정 시 날씨 표시가 실패가 아니라 정상 fallback으로 처리됨
+- Home Hero는 예정 라운드 시간 기준 예보를 우선 사용
+
+
+## Next - Home v3 Polish
+
+- 실제 기기에서 Hero 하단 곡선과 캐디 카드 notch의 겹침 정도 확인.
+- 클럽이 4개 이상일 때 클럽 선택 모달 스크롤 처리 필요 여부 점검.
+- Android 상태바/상단 inset에서 Hero full bleed 유지 여부 확인.
+
+## Next - Weather mobile verification
+
+- 모바일 실행 환경에서 `EXPO_PUBLIC_OPENWEATHER_API_KEY`가 번들에 포함되는지 확인한다.
+- `.env` 변경 후 Expo 캐시 초기화 재시작이 필요한지 확인한다.
+- EAS/배포 빌드에서는 EAS environment variable 또는 app config extra 주입 방식을 적용한다.
