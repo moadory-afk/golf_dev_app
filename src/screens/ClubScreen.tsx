@@ -1,5 +1,5 @@
 import {
-  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Image, Share, Alert, TextInput, ActivityIndicator, useWindowDimensions,
+  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Image, Share, Alert, TextInput, ActivityIndicator,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CommonActions, useNavigation, useRoute } from '@react-navigation/native'
@@ -60,7 +60,6 @@ function getWinner(r: SavedRound, handicaps: Map<string, number>): string | null
 
 export default function ClubScreen() {
   const insets = useSafeAreaInsets()
-  const { width: windowWidth } = useWindowDimensions()
   const nav = useNavigation<Nav>()
   const route = useRoute<ClubRoute>()
   const [refreshKey, setRefreshKey] = useState(0)
@@ -291,8 +290,6 @@ export default function ClubScreen() {
   const MEDAL_BG = ['#fffbe8', '#f4f6f8', '#fdf5f0']
   const MEDAL_COLOR = [C.gold, C.silver, C.bronze]
   const isManagerView = club?.role === 'admin'
-  const clubHeroWidth = Math.max(280, windowWidth)
-  const clubHeroHeight = Math.round(clubHeroWidth * (10.5 / 16) * 1.5 * 0.85 * 0.9 + insets.top)
 
   useEffect(() => {
     if (!route.params?.openManageMenu || !isManagerView) return
@@ -445,7 +442,7 @@ export default function ClubScreen() {
         <View style={s.content}>
           {club && (
             <>
-                  <View style={[s.clubHeroCard, { height: clubHeroHeight }]}> 
+                  <View style={s.clubHeroCard}> 
                     <Image source={{ uri: club.coverImage || CLUB_HERO_IMAGE }} style={s.clubHeroImage} resizeMode="cover" />
                     <View style={s.clubHeroScrim} />
                     <TopActionButtons topInset={insets.top} floating />
@@ -650,8 +647,7 @@ function ClubInfoModal({
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [16, 7],
+      allowsEditing: false,
       quality: 0.8,
     })
     if (result.canceled || !result.assets[0]) return
@@ -693,7 +689,7 @@ function ClubInfoModal({
           uri={pendingCoverCrop.uri}
           width={pendingCoverCrop.width}
           height={pendingCoverCrop.height}
-          aspect={[16, 7]}
+          aspect={[16, 10.5]}
           title="클럽 대문사진 자르기"
           onCancel={() => setPendingCoverCrop(null)}
           onConfirm={handleApplyCoverCrop}
@@ -1024,6 +1020,7 @@ const s = StyleSheet.create({
   },
   clubHeroCard: {
     width: 'auto',
+    aspectRatio: 16 / 10.5,
     marginHorizontal: -16,
     marginTop: -12,
     borderTopLeftRadius: 0,

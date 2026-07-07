@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { useRef, useState } from 'react'
+import { Image, Modal, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { C } from '../theme'
 
 export type ImageCropRect = {
@@ -24,12 +24,47 @@ function clamp(value: number, min: number, max: number) {
 }
 
 export function ImageCropModal({ uri, width, height, aspect, title, onCancel, onConfirm }: Props) {
-  const frameWidth = 280
+  const frameWidth = 320
   const aspectValue = aspect[0] / aspect[1]
   const frameHeight = frameWidth / aspectValue
   const [zoom, setZoom] = useState(1)
   const [offsetX, setOffsetX] = useState(0)
   const [offsetY, setOffsetY] = useState(0)
+  const lastPinchDistance = useRef<number | null>(null)
+  const gestureStartOffset = useRef({ x: 0, y: 0 })
+
+  function getPinchDistance(touches: Array<{ pageX: number; pageY: number }>) {
+    if (touches.length < 2) return null
+    const [a, b] = touches
+    return Math.hypot(a.pageX - b.pageX, a.pageY - b.pageY)
+  }
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (event) => {
+        gestureStartOffset.current = { x: offsetX, y: offsetY }
+        lastPinchDistance.current = getPinchDistance(event.nativeEvent.touches as Array<{ pageX: number; pageY: number }>)
+      },
+      onPanResponderMove: (event, gesture) => {
+        const touches = event.nativeEvent.touches as Array<{ pageX: number; pageY: number }>
+        const pinchDistance = getPinchDistance(touches)
+        if (pinchDistance && lastPinchDistance.current) {
+          const ratio = pinchDistance / lastPinchDistance.current
+          setZoom((value) => clamp(value * ratio, 1, 3))
+          lastPinchDistance.current = pinchDistance
+          return
+        }
+
+        lastPinchDistance.current = null
+        setOffsetX(clamp(gestureStartOffset.current.x - gesture.dx / (frameWidth / 2), -1, 1))
+        setOffsetY(clamp(gestureStartOffset.current.y - gesture.dy / (frameHeight / 2), -1, 1))
+      },
+      onPanResponderRelease: () => { lastPinchDistance.current = null },
+      onPanResponderTerminate: () => { lastPinchDistance.current = null },
+    }),
+  ).current
 
   let baseCropWidth = width
   let baseCropHeight = baseCropWidth / aspectValue
@@ -55,17 +90,12 @@ export function ImageCropModal({ uri, width, height, aspect, title, onCancel, on
     height: Math.min(Math.round(cropHeight), height - cropOriginY),
   }
 
-  function move(dx: number, dy: number) {
-    setOffsetX((value) => clamp(value + dx, -1, 1))
-    setOffsetY((value) => clamp(value + dy, -1, 1))
-  }
-
   return (
     <Modal transparent animationType="fade" onRequestClose={onCancel}>
       <View style={s.overlay}>
         <View style={s.card}>
           <Text style={s.title}>{title}</Text>
-          <View style={[s.frame, { width: frameWidth, height: frameHeight }]}>
+          <View style={[s.frame, { width: frameWidth, height: frameHeight }]} {...panResponder.panHandlers}>
             <Image
               source={{ uri }}
               style={{
@@ -77,23 +107,16 @@ export function ImageCropModal({ uri, width, height, aspect, title, onCancel, on
             />
           </View>
 
+          <Text style={s.guideText}>사진을 드래그해서 위치를 맞추고, 두 손가락으로 확대/축소하세요.</Text>
+
           <View style={s.zoomRow}>
             <TouchableOpacity style={s.controlBtn} onPress={() => setZoom((value) => clamp(value - 0.2, 1, 3))}>
-              <Text style={s.controlText}>축소</Text>
+              <Text style={s.controlText}>−</Text>
             </TouchableOpacity>
             <Text style={s.zoomText}>{Math.round(zoom * 100)}%</Text>
             <TouchableOpacity style={s.controlBtn} onPress={() => setZoom((value) => clamp(value + 0.2, 1, 3))}>
-              <Text style={s.controlText}>확대</Text>
+              <Text style={s.controlText}>＋</Text>
             </TouchableOpacity>
-          </View>
-
-          <View style={s.movePad}>
-            <TouchableOpacity style={s.moveBtn} onPress={() => move(0, -0.18)}><Text style={s.moveText}>위</Text></TouchableOpacity>
-            <View style={s.moveRow}>
-              <TouchableOpacity style={s.moveBtn} onPress={() => move(-0.18, 0)}><Text style={s.moveText}>왼쪽</Text></TouchableOpacity>
-              <TouchableOpacity style={s.moveBtn} onPress={() => move(0.18, 0)}><Text style={s.moveText}>오른쪽</Text></TouchableOpacity>
-            </View>
-            <TouchableOpacity style={s.moveBtn} onPress={() => move(0, 0.18)}><Text style={s.moveText}>아래</Text></TouchableOpacity>
           </View>
 
           <View style={s.actionRow}>
@@ -118,17 +141,14 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     padding: 20,
   },
-  card: { width: '100%', maxWidth: 360, borderRadius: 20, backgroundColor: '#fff', padding: 18, alignItems: 'center' },
+  card: { width: '100%', maxWidth: 390, borderRadius: 20, backgroundColor: '#fff', padding: 18, alignItems: 'center' },
   title: { alignSelf: 'stretch', fontSize: 16, fontWeight: '900', color: C.text, marginBottom: 14 },
-  frame: { overflow: 'hidden', borderRadius: 14, backgroundColor: '#eef3ef', borderWidth: 1, borderColor: C.border },
+  frame: { overflow: 'hidden', borderTopLeftRadius: 0, borderTopRightRadius: 0, borderBottomLeftRadius: 34, borderBottomRightRadius: 34, backgroundColor: '#10291d' },
+  guideText: { marginTop: 12, fontSize: 12, lineHeight: 17, fontWeight: '700', color: C.muted, textAlign: 'center' },
   zoomRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
-  controlBtn: { borderRadius: 999, backgroundColor: C.greenLight, paddingHorizontal: 14, paddingVertical: 8 },
-  controlText: { fontSize: 12, fontWeight: '900', color: C.green },
+  controlBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
+  controlText: { fontSize: 20, fontWeight: '900', color: C.green },
   zoomText: { width: 54, textAlign: 'center', fontSize: 12, fontWeight: '900', color: C.text },
-  movePad: { alignItems: 'center', gap: 6, marginTop: 10 },
-  moveRow: { flexDirection: 'row', gap: 52 },
-  moveBtn: { minWidth: 54, borderRadius: 12, backgroundColor: '#f2f4f6', paddingHorizontal: 10, paddingVertical: 8, alignItems: 'center' },
-  moveText: { fontSize: 12, fontWeight: '800', color: C.muted },
   actionRow: { flexDirection: 'row', gap: 10, alignSelf: 'stretch', marginTop: 16 },
   actionBtn: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
   cancelBtn: { backgroundColor: '#f2f4f6' },
