@@ -16,7 +16,7 @@ export function HomeLayoutRenderer({ layout, slots }: Props) {
           <View
             key={section.key}
             style={{
-              paddingHorizontal: section.slot === 'hero' ? 0 : 20,
+              paddingHorizontal: section.slot === 'hero' ? 0 : section.slot === 'concierge' ? 11 : 20,
               marginTop: section.marginTop ?? 0,
               marginBottom: section.marginBottom ?? 0,
               zIndex: section.slot === 'concierge' ? 2 : section.slot === 'hero' ? 1 : 0,

@@ -2,8 +2,10 @@ import type { ImageSourcePropType } from 'react-native'
 
 const hillskyHeroImage = require('../../courses/hillsky.png')
 const bomunHeroImage = require('../../courses/bomun.png')
+const bugokHeroImage = require('../../courses/bugok.png')
+const gayaHeroImage = require('../../courses/gaya.png')
 
-export type CourseHeroKey = 'hillsky' | 'bomun'
+export type CourseHeroKey = 'hillsky' | 'bomun' | 'bugok' | 'gaya'
 
 export type CourseHeroAsset = {
   key: CourseHeroKey
@@ -33,6 +35,22 @@ export const COURSE_HERO_ASSETS: CourseHeroAsset[] = [
     source: bomunHeroImage,
     imagePath: 'courses/bomun.png',
   },
+  {
+    key: 'bugok',
+    label: '창녕 부곡',
+    courseName: '부곡CC',
+    region: '경남 창녕',
+    source: bugokHeroImage,
+    imagePath: 'courses/bugok.png',
+  },
+  {
+    key: 'gaya',
+    label: '김해 가야',
+    courseName: '가야CC',
+    region: '경남 김해',
+    source: gayaHeroImage,
+    imagePath: 'courses/gaya.png',
+  },
 ]
 
 const aliases: Record<string, CourseHeroKey> = {
@@ -53,6 +71,24 @@ const aliases: Record<string, CourseHeroKey> = {
   보문컨트리클럽: 'bomun',
   '보문 cc': 'bomun',
   '보문 컨트리클럽': 'bomun',
+
+  bugok: 'bugok',
+  'bugok cc': 'bugok',
+  'bugok country club': 'bugok',
+  부곡: 'bugok',
+  부곡cc: 'bugok',
+  부곡컨트리클럽: 'bugok',
+  '부곡 cc': 'bugok',
+  '부곡 컨트리클럽': 'bugok',
+
+  gaya: 'gaya',
+  'gaya cc': 'gaya',
+  'gaya country club': 'gaya',
+  가야: 'gaya',
+  가야cc: 'gaya',
+  가야컨트리클럽: 'gaya',
+  '가야 cc': 'gaya',
+  '가야 컨트리클럽': 'gaya',
 }
 
 function normalizeCourseName(value?: string | null) {

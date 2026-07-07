@@ -164,6 +164,7 @@ function HeroRoundCard({ width, height, topInset, round }: { width: number; heig
         dateLabel={round.dateLabel}
         teeTime={round.teeTime}
         groupCount={round.groupCount}
+        routeTimeText={round.routeTimeText}
       />
     </View>
   )
@@ -246,6 +247,7 @@ function HeroBottomSummary({
   dateLabel,
   teeTime,
   groupCount,
+  routeTimeText,
 }: {
   courseName: string
   temperature: string
@@ -254,8 +256,10 @@ function HeroBottomSummary({
   dateLabel: string
   teeTime?: string
   groupCount?: number
+  routeTimeText?: string
 }) {
   const scheduleLine = teeTime ? `${teeTime} Tee Off${groupCount ? ` (${groupCount}조)` : ''}` : '--:-- Tee Off'
+  const travelTimeText = routeTimeText && !routeTimeText.includes('준비중') ? routeTimeText : '50분 소요'
 
   return (
     <View style={styles.bottomSummary}>
@@ -275,7 +279,13 @@ function HeroBottomSummary({
         <View style={styles.summaryDivider} />
 
         <View style={styles.scheduleSummary}>
-          <Text style={styles.summaryDday} numberOfLines={1}>{dday}</Text>
+          <View style={styles.scheduleTopRow}>
+            <Text style={styles.summaryDday} numberOfLines={1}>{dday}</Text>
+            <View style={styles.travelSummary}>
+              <Text style={styles.travelLabel} numberOfLines={1}>지금 출발시</Text>
+              <Text style={styles.travelTime} numberOfLines={1}>{travelTimeText}</Text>
+            </View>
+          </View>
           <Text style={styles.summaryDate} numberOfLines={1}>🗓 {dateLabel}</Text>
           <Text style={styles.summaryTeeTime} numberOfLines={1}>◷ {scheduleLine}</Text>
         </View>
@@ -387,26 +397,30 @@ const styles = StyleSheet.create({
   metaText: { color: '#fff', fontSize: 10, lineHeight: 14, fontWeight: '900' },
   emptyAddress: { color: colorLayers.heroTextMuted, fontSize: 13, lineHeight: 18, fontWeight: '800', marginTop: spacing.xs },
   bottomSummary: {
-    width: '67%',
-    minWidth: 250,
+    width: '76%',
+    minWidth: 292,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.26)',
     paddingTop: 8,
   },
-  summaryCourseName: { color: '#fff', fontSize: 20, lineHeight: 24, fontWeight: '900', letterSpacing: -0.8, marginBottom: 8 },
+  summaryCourseName: { color: '#fff', fontSize: 21, lineHeight: 25, fontWeight: '900', letterSpacing: -0.8, marginBottom: 8 },
   summaryContentRow: { flexDirection: 'row', alignItems: 'stretch' },
-  weatherSummary: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 7, paddingRight: 8 },
-  summaryWeatherIcon: { fontSize: 27, lineHeight: 32 },
+  weatherSummary: { flex: 1.35, minWidth: 116, flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 10 },
+  summaryWeatherIcon: { fontSize: 29, lineHeight: 34 },
   weatherTextWrap: { flex: 1, minWidth: 0 },
-  summaryTemperature: { color: '#fff', fontSize: 22, lineHeight: 26, fontWeight: '900', letterSpacing: -0.6 },
+  summaryTemperature: { color: '#fff', fontSize: 24, lineHeight: 28, fontWeight: '900', letterSpacing: -0.6 },
   windRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
   windIcon: { color: 'rgba(255,255,255,0.82)', fontSize: 12, lineHeight: 14 },
-  summaryWindText: { flex: 1, color: 'rgba(255,255,255,0.88)', fontSize: 12, lineHeight: 15, fontWeight: '900', letterSpacing: -0.25 },
-  summaryDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.44)', marginHorizontal: 8 },
-  scheduleSummary: { flex: 1.45, minWidth: 144, paddingLeft: 1 },
-  summaryDday: { color: '#B6FF8F', fontSize: 20, lineHeight: 24, fontWeight: '900', letterSpacing: -0.5 },
-  summaryDate: { color: '#fff', fontSize: 12, lineHeight: 16, fontWeight: '900', marginTop: 2 },
-  summaryTeeTime: { color: '#fff', fontSize: 12, lineHeight: 16, fontWeight: '900', marginTop: 1, letterSpacing: -0.45 },
+  summaryWindText: { flex: 1, color: 'rgba(255,255,255,0.88)', fontSize: 13, lineHeight: 16, fontWeight: '900', letterSpacing: -0.25 },
+  summaryDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.44)', marginHorizontal: 9 },
+  scheduleSummary: { flex: 1.75, minWidth: 174, paddingLeft: 2 },
+  scheduleTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  summaryDday: { color: '#B6FF8F', fontSize: 21, lineHeight: 25, fontWeight: '900', letterSpacing: -0.5 },
+  travelSummary: { alignItems: 'flex-start', justifyContent: 'flex-start', paddingTop: 1, minWidth: 70 },
+  travelLabel: { color: '#fff', fontSize: 12, lineHeight: 15, fontWeight: '900', letterSpacing: -0.3 },
+  travelTime: { color: '#fff', fontSize: 13, lineHeight: 16, fontWeight: '900', letterSpacing: -0.3, marginTop: 1 },
+  summaryDate: { color: '#fff', fontSize: 13, lineHeight: 17, fontWeight: '900', marginTop: 2 },
+  summaryTeeTime: { color: '#fff', fontSize: 13, lineHeight: 17, fontWeight: '900', marginTop: 1, letterSpacing: -0.45 },
   dotsRow: { position: 'absolute', left: 0, right: 0, bottom: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
   dot: { borderRadius: radius.pill },
   heroWave: {
