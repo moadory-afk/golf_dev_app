@@ -145,28 +145,18 @@ export function PremiumHomeHeroSection({
           </View>
         </View>
       </View>
+      <View style={styles.heroConvexBump} pointerEvents="none">
+        {heroImageSource ? <Image source={heroImageSource} style={styles.heroBackgroundImage} resizeMode="cover" /> : null}
+        <View style={styles.scrim} />
+      </View>
       <View style={[styles.heroWave, { backgroundColor: palette.bg }]} pointerEvents="none" />
     </View>
   )
 }
 
 function HeroRoundCard({ width, height, topInset, round }: { width: number; height: number; topInset: number; round: HomeHeroRound }) {
-  const { palette } = useSkin()
-
   return (
     <View style={[styles.slide, { width, height, paddingTop: topInset + 52 }]}> 
-      <View style={styles.courseBlock}>
-        <View style={styles.titleRow}>
-          <Text style={[styles.courseName, { color: palette.text }]} numberOfLines={1}>{round.courseName}</Text>
-          {!!round.layoutName && <Text style={styles.layoutName} numberOfLines={1}>{round.layoutName} 코스</Text>}
-        </View>
-        <View style={styles.metaRow}>
-          <Text style={styles.metaText} numberOfLines={1}>🗓 {round.dateLabel}</Text>
-          <Text style={styles.metaText} numberOfLines={1}>◷ {round.teeTime || '--:--'} Tee Off</Text>
-          <Text style={styles.metaText} numberOfLines={1}>👥 {round.memberCount}명</Text>
-        </View>
-      </View>
-
       <HeroBottomSummary
         courseName={round.courseName}
         temperature={round.temperature}
@@ -208,14 +198,11 @@ function HeroEmptyCard({
   onCreateRound: () => void
 }) {
   const { palette } = useSkin()
+  void address
+  void weatherText
 
   return (
     <View style={[styles.slide, { width, height, paddingTop: topInset + 52 }]}> 
-      <View style={styles.courseBlock}>
-        <Text style={[styles.courseName, { color: palette.text }]} numberOfLines={1}>{courseName}</Text>
-        <Text style={styles.emptyAddress} numberOfLines={2}>📍 {address}</Text>
-      </View>
-
       <HeroBottomSummary
         courseName={courseName}
         temperature={temperature}
@@ -298,8 +285,9 @@ function HeroBottomSummary({
 
 const styles = StyleSheet.create({
   shell: {
-    marginBottom: 0,
+    marginBottom: 34,
     width: '100%',
+    overflow: 'visible',
   },
   headerRow: {
     position: 'absolute',
@@ -362,17 +350,30 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 34,
     borderBottomRightRadius: 34,
   },
-  heroImage: { flex: 1, backgroundColor: '#10261B' },
+  heroImage: { flex: 1, backgroundColor: '#10261B', overflow: 'hidden' },
   heroBackgroundImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
   scrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.32)',
   },
+  heroConvexBump: {
+    position: 'absolute',
+    left: '50%',
+    bottom: -34,
+    width: 232,
+    height: 68,
+    marginLeft: -116,
+    borderBottomLeftRadius: 116,
+    borderBottomRightRadius: 116,
+    overflow: 'hidden',
+    backgroundColor: '#10261B',
+    zIndex: 1,
+  },
   carousel: { flex: 1 },
   slide: {
     paddingHorizontal: 14,
-    paddingBottom: 36,
-    justifyContent: 'space-between',
+    paddingBottom: 24,
+    justifyContent: 'flex-end',
   },
   courseBlock: { flex: 1, justifyContent: 'center', paddingTop: 4, paddingBottom: 6 },
   ddayPill: {
