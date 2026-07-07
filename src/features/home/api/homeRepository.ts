@@ -1,5 +1,6 @@
 import { supabase } from '../../../lib/supabase'
 import { getRounds, type SavedRound } from '../../../lib/store'
+import { getOpenWeatherForRound, type RoundWeather } from '../../../lib/weather'
 import type { HomeRoundStatus } from '../types/home'
 
 export type HomeScheduleRow = {
@@ -50,6 +51,11 @@ export type HomeWeatherSnapshot = {
   fetchedAt?: string
 }
 
+
+function uniqueValues(values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.filter((value): value is string => !!value)))
+}
+
 export type HomeDashboardRawData = {
   schedules: HomeScheduleRow[]
   groups: HomeScheduleGroupRow[]
@@ -61,85 +67,28 @@ export type HomeDashboardRawData = {
   weatherByScheduleId: Record<string, HomeWeatherSnapshot>
 }
 
-type OpenWeatherForecastItem = {
-  dt?: number
-  main?: { temp?: number }
-  weather?: Array<{ description?: string; main?: string }>
-  wind?: { speed?: number }
-}
-
-function uniqueValues(values: Array<string | null | undefined>) {
-  return Array.from(new Set(values.filter((value): value is string => !!value)))
-}
-
-function openWeatherApiKey() {
-  return process.env.EXPO_PUBLIC_OPENWEATHER_API_KEY?.trim()
-}
-
-function normalizeWeatherText(value?: string) {
-  if (!value) return '날씨 준비중'
-  return value.replace(/^[a-z]/, (char) => char.toUpperCase())
-}
-
-function normalizeTeeTime(value?: string | null) {
-  if (!value) return '09:00'
-  const match = value.match(/^(\d{1,2}):(\d{2})/)
-  if (!match) return '09:00'
-  return `${match[1].padStart(2, '0')}:${match[2]}`
-}
-
-function targetTimestamp(date?: string | null, teeTime?: string | null) {
-  const roundDate = date?.slice(0, 10)
-  if (!roundDate) return null
-  const target = new Date(`${roundDate}T${normalizeTeeTime(teeTime)}:00+09:00`).getTime()
-  return Number.isNaN(target) ? null : Math.round(target / 1000)
-}
-
-function pickNearestForecast(items: OpenWeatherForecastItem[], date?: string | null, teeTime?: string | null) {
-  const target = targetTimestamp(date, teeTime)
-  if (!target || items.length === 0) return null
-  return [...items]
-    .filter((item) => typeof item.dt === 'number')
-    .sort((a, b) => Math.abs((a.dt ?? 0) - target) - Math.abs((b.dt ?? 0) - target))[0] ?? null
-}
-
-function weatherSnapshotFromForecast(item: OpenWeatherForecastItem | null): HomeWeatherSnapshot | null {
-  if (!item) return null
-  const description = item.weather?.[0]?.description || item.weather?.[0]?.main
+function weatherSnapshotFromRoundWeather(weather: RoundWeather | null): HomeWeatherSnapshot | null {
+  if (!weather) return null
 
   return {
-    temperature: typeof item.main?.temp === 'number' ? `${Math.round(item.main.temp)}°` : '--°',
-    weatherText: normalizeWeatherText(description),
-    windText: typeof item.wind?.speed === 'number' ? `${Math.round(item.wind.speed)}m/s` : '풍속 준비중',
-    fetchedAt: new Date().toISOString(),
+    temperature: `${weather.tempC}°`,
+    weatherText: weather.condition || '날씨 준비중',
+    windText: typeof weather.windMs === 'number' ? `${weather.windMs}m/s` : '풍속 준비중',
+    fetchedAt: weather.fetchedAt,
   }
 }
 
-async function geocodeCourse(course: HomeCourseRow, apiKey: string) {
-  const query = encodeURIComponent(`${course.name} ${course.region} Korea`)
-  const geoResponse = await fetch(`https://api.openweathermap.org/geo/1.0/direct?q=${query}&limit=1&appid=${apiKey}`)
-  if (!geoResponse.ok) return null
-
-  const locations = await geoResponse.json() as Array<{ lat?: number; lon?: number }>
-  return locations.find((item) => typeof item.lat === 'number' && typeof item.lon === 'number') ?? null
-}
-
 async function fetchWeatherForSchedule(schedule: HomeScheduleRow, course: HomeCourseRow): Promise<HomeWeatherSnapshot | null> {
-  const apiKey = openWeatherApiKey()
-  if (!apiKey) return null
-
   try {
-    const location = await geocodeCourse(course, apiKey)
-    if (!location?.lat || !location?.lon) return null
+    const courseName = [course.name, course.region].filter(Boolean).join(' ')
+    const weather = await getOpenWeatherForRound({
+      roundId: schedule.id,
+      courseName,
+      date: schedule.round_date,
+      time: schedule.tee_time ?? undefined,
+    })
 
-    const forecastResponse = await fetch(
-      `https://api.openweathermap.org/data/2.5/forecast?lat=${location.lat}&lon=${location.lon}&units=metric&lang=kr&appid=${apiKey}`,
-    )
-    if (!forecastResponse.ok) return null
-
-    const forecast = await forecastResponse.json() as { list?: OpenWeatherForecastItem[] }
-    const picked = pickNearestForecast(forecast.list ?? [], schedule.round_date, schedule.tee_time)
-    return weatherSnapshotFromForecast(picked)
+    return weatherSnapshotFromRoundWeather(weather)
   } catch {
     return null
   }

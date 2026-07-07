@@ -1,5 +1,8 @@
 import type { ImageSourcePropType } from 'react-native'
 
+const hillskyHeroImage = require('../../courses/hillsky.png')
+const bomunHeroImage = require('../../courses/bomun.png')
+
 export type CourseHeroKey = 'hillsky' | 'bomun'
 
 export type CourseHeroAsset = {
@@ -19,16 +22,16 @@ export const COURSE_HERO_ASSETS: CourseHeroAsset[] = [
     label: '경주 힐스카이',
     courseName: '힐스카이CC',
     region: '경북 경주',
-    source: { uri: '/images/courses/hillsky.png' },
-    imagePath: '/images/courses/hillsky.png',
+    source: hillskyHeroImage,
+    imagePath: 'courses/hillsky.png',
   },
   {
     key: 'bomun',
     label: '경주 보문',
     courseName: '보문CC',
     region: '경북 경주',
-    source: { uri: '/images/courses/bomun.png' },
-    imagePath: '/images/courses/bomun.png',
+    source: bomunHeroImage,
+    imagePath: 'courses/bomun.png',
   },
 ]
 

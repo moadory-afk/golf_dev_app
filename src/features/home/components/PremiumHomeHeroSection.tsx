@@ -7,7 +7,6 @@ import type { HomeHeroRound } from '../types/home'
 
 const gogoMark = require('../../../../assets/gogopar_i.png')
 
-const HERO_DISPLAY_ASPECT_RATIO = 16 / (10.5 * 1.5)
 const HERO_DISPLAY_HEIGHT_RATIO = (10.5 / 16) * 1.5
 const HERO_MIN_WIDTH = 280
 
@@ -36,7 +35,6 @@ export function PremiumHomeHeroSection({
   clubName,
   rounds,
   fallbackCourseName,
-  fallbackAddress,
   fallbackWeatherText,
   fallbackTemperature,
   fallbackDday,
@@ -113,7 +111,6 @@ export function PremiumHomeHeroSection({
                 height={heroHeight}
                 topInset={topInset}
                 courseName={fallbackCourseName}
-                address={fallbackAddress}
                 weatherText={fallbackWeatherText}
                 temperature={fallbackTemperature}
                 dday={fallbackDday}
@@ -152,33 +149,19 @@ export function PremiumHomeHeroSection({
 }
 
 function HeroRoundCard({ width, height, topInset, round }: { width: number; height: number; topInset: number; round: HomeHeroRound }) {
-  const { palette } = useSkin()
-
   return (
     <View style={[styles.slide, { width, height, paddingTop: topInset + 52 }]}> 
-      <View style={styles.courseBlock}>
-        <View style={[styles.ddayPill, { backgroundColor: palette.green }]}> 
-          <Text style={styles.ddayText}>{round.dday}</Text>
-        </View>
-        <View style={styles.titleRow}>
-          <Text style={[styles.courseName, { color: palette.text }]} numberOfLines={1}>{round.courseName}</Text>
-          {!!round.layoutName && <Text style={styles.layoutName} numberOfLines={1}>{round.layoutName} 코스</Text>}
-        </View>
-        <View style={styles.metaRow}>
-          <Text style={styles.metaText} numberOfLines={1}>🗓 {round.dateLabel}</Text>
-          <Text style={styles.metaText} numberOfLines={1}>◷ {round.teeTime || '--:--'} Tee Off</Text>
-          <Text style={styles.metaText} numberOfLines={1}>👥 {round.memberCount}명</Text>
-        </View>
-      </View>
+      <View style={styles.heroSpacer} />
 
-      <View>
-        <View style={styles.infoStrip}>
-          <HeroInfo icon="☀️" value={round.temperature} label={round.weatherText} />
-          <HeroInfo icon="🌬" value={round.windText || '2m/s'} label="풍속" />
-          <HeroInfo icon="🚗" value={round.routeTimeText} label="이동" />
-          <HeroInfo icon="🕒" value={round.departureTimeText} label="출발추천" accent />
-        </View>
-      </View>
+      <HeroBottomSummary
+        courseName={round.courseName}
+        weatherText={round.weatherText}
+        temperature={round.temperature}
+        dday={round.dday}
+        dateLabel={round.dateLabel}
+        layoutName={round.layoutName}
+        teeTime={round.teeTime}
+      />
     </View>
   )
 }
@@ -187,7 +170,6 @@ function HeroEmptyCard({
   width,
   height,
   courseName,
-  address,
   weatherText,
   temperature,
   dday,
@@ -201,7 +183,6 @@ function HeroEmptyCard({
   height: number
   topInset: number
   courseName: string
-  address: string
   weatherText: string
   temperature: string
   dday: string
@@ -214,20 +195,16 @@ function HeroEmptyCard({
 
   return (
     <View style={[styles.slide, { width, height, paddingTop: topInset + 52 }]}> 
-      <View style={styles.courseBlock}>
-        <View style={[styles.ddayPill, { backgroundColor: palette.green }]}> 
-          <Text style={styles.ddayText}>{dday}</Text>
-        </View>
-        <Text style={[styles.courseName, { color: palette.text }]} numberOfLines={1}>{courseName}</Text>
-        <Text style={styles.emptyAddress} numberOfLines={2}>📍 {address}</Text>
-      </View>
+      <View style={styles.heroSpacer} />
 
-      <View style={styles.infoStrip}>
-        <HeroInfo icon="☀️" value={temperature} label={weatherText} />
-        <HeroInfo icon="🌬" value="--" label="풍속" />
-        <HeroInfo icon="🚗" value="--" label="이동" />
-        <HeroInfo icon="🕒" value={teeTime || roundDate} label="출발추천" accent />
-      </View>
+      <HeroBottomSummary
+        courseName={courseName}
+        weatherText={weatherText}
+        temperature={temperature}
+        dday={dday}
+        dateLabel={roundDate}
+        teeTime={teeTime}
+      />
 
       {isAdmin && (
         <TouchableOpacity activeOpacity={0.88} onPress={onCreateRound} style={[styles.emptyCreateButton, { borderColor: palette.gold }]}> 
@@ -252,13 +229,40 @@ function HeroCreateRoundCard({ width, height, topInset, onCreateRound }: { width
   )
 }
 
-function HeroInfo({ icon, value, label, accent = false }: { icon: string; value: string; label: string; accent?: boolean }) {
+function HeroBottomSummary({
+  courseName,
+  weatherText,
+  temperature,
+  dday,
+  dateLabel,
+  layoutName,
+  teeTime,
+}: {
+  courseName: string
+  weatherText: string
+  temperature: string
+  dday: string
+  dateLabel: string
+  layoutName?: string
+  teeTime?: string
+}) {
   return (
-    <View style={styles.infoItem}>
-      <Text style={styles.infoIcon}>{icon}</Text>
-      <View style={styles.infoTextWrap}>
-        <Text style={[styles.infoValue, accent && styles.infoAccent]} numberOfLines={1}>{value}</Text>
-        <Text style={styles.infoLabel} numberOfLines={1}>{label}</Text>
+    <View style={styles.bottomSummaryPanel}>
+      <Text style={styles.bottomCourseTitle} numberOfLines={1}>{courseName}</Text>
+      <View style={styles.bottomSummaryRow}>
+        <View style={styles.bottomWeatherColumn}>
+          <Text style={styles.bottomWeatherIcon}>☀️</Text>
+          <View style={styles.bottomWeatherTextWrap}>
+            <Text style={styles.bottomTemperature} numberOfLines={1}>{temperature}</Text>
+            <Text style={styles.bottomWeatherText} numberOfLines={1}>{weatherText}</Text>
+          </View>
+        </View>
+        <View style={styles.bottomDivider} />
+        <View style={styles.bottomScheduleColumn}>
+          <Text style={styles.bottomDday} numberOfLines={1}>{dday}</Text>
+          <Text style={styles.bottomScheduleText} numberOfLines={1}>🗓 {dateLabel}</Text>
+          <Text style={styles.bottomScheduleText} numberOfLines={1}>◷ {layoutName ? `${layoutName} 코스 ` : ''}{teeTime || '--:--'} Tee Off</Text>
+        </View>
       </View>
     </View>
   )
@@ -339,50 +343,77 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
     justifyContent: 'space-between',
   },
-  courseBlock: { flex: 1, justifyContent: 'center', paddingTop: 4, paddingBottom: 6 },
-  ddayPill: {
-    alignSelf: 'flex-start',
-    borderRadius: radius.pill,
-    paddingHorizontal: 11,
-    paddingVertical: 4,
-    marginBottom: 6,
+  heroSpacer: { flex: 1 },
+  bottomSummaryPanel: {
+    width: '52%',
+    minWidth: 178,
+    paddingBottom: 4,
   },
-  ddayText: { color: '#fff', fontSize: 12, lineHeight: 16, fontWeight: '900' },
-  titleRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, maxWidth: '100%' },
-  courseName: {
-    maxWidth: '72%',
-    fontSize: 28,
-    lineHeight: 33,
+  bottomCourseTitle: {
+    color: '#fff',
+    fontSize: 31,
+    lineHeight: 36,
     fontWeight: '900',
-    letterSpacing: -1.4,
+    letterSpacing: -1.6,
+    textShadowColor: 'rgba(0,0,0,0.34)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
   },
-  layoutName: { color: '#fff', fontSize: 14, lineHeight: 19, fontWeight: '900', marginBottom: 4 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 6 },
-  metaText: { color: '#fff', fontSize: 10, lineHeight: 14, fontWeight: '900' },
-  emptyAddress: { color: colorLayers.heroTextMuted, fontSize: 13, lineHeight: 18, fontWeight: '800', marginTop: spacing.xs },
-  infoStrip: {
+  bottomSummaryRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
+    marginTop: 10,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.22)',
-    paddingTop: 7,
+    borderTopColor: 'rgba(255,255,255,0.48)',
   },
-  infoItem: {
+  bottomWeatherColumn: {
     flex: 1,
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-    paddingHorizontal: 2,
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(255,255,255,0.20)',
+    paddingRight: 10,
   },
-  infoIcon: { fontSize: 14 },
-  infoTextWrap: { minWidth: 0, alignItems: 'center' },
-  infoValue: { color: '#fff', fontSize: 13, lineHeight: 16, fontWeight: '900', letterSpacing: -0.4 },
-  infoAccent: { color: '#45C26B' },
-  infoLabel: { color: '#fff', opacity: 0.9, fontSize: 8, lineHeight: 10, fontWeight: '900' },
+  bottomWeatherIcon: {
+    fontSize: 26,
+    lineHeight: 30,
+    marginRight: 6,
+  },
+  bottomWeatherTextWrap: { flex: 1, minWidth: 0 },
+  bottomTemperature: {
+    color: '#fff',
+    fontSize: 20,
+    lineHeight: 24,
+    fontWeight: '900',
+    letterSpacing: -0.8,
+  },
+  bottomWeatherText: {
+    color: 'rgba(255,255,255,0.90)',
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '800',
+  },
+  bottomDivider: {
+    width: 1,
+    alignSelf: 'stretch',
+    backgroundColor: 'rgba(255,255,255,0.50)',
+    marginHorizontal: 10,
+  },
+  bottomScheduleColumn: { flex: 1, minWidth: 0, justifyContent: 'center' },
+  bottomDday: {
+    color: '#B8FF8C',
+    fontSize: 24,
+    lineHeight: 28,
+    fontWeight: '900',
+    letterSpacing: -1,
+  },
+  bottomScheduleText: {
+    color: '#fff',
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '800',
+    letterSpacing: -0.25,
+  },
   dotsRow: { position: 'absolute', left: 0, right: 0, bottom: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
   dot: { borderRadius: radius.pill },
   heroWave: {
