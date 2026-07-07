@@ -3,7 +3,7 @@ import { createShadow, radius, spacing } from '../../../design/tokens'
 import { useSkin } from '../../../skins'
 import type { HomeFeedEvent } from '../engine'
 
-const gogoMark = require('../../../../assets/gogopar_i.png')
+const caddieCharacter = require('../../../../assets/caddy.png')
 
 type ConciergeAction = {
   key: string
@@ -58,7 +58,7 @@ export function PremiumGogoCaddieCard({
     >
       <View style={styles.cardBody}>
         <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={styles.characterStage}> 
-          <Image source={gogoMark} style={styles.characterImage} resizeMode="cover" />
+          <Image source={caddieCharacter} style={styles.characterImage} resizeMode="contain" />
         </TouchableOpacity>
 
         <View style={styles.rightColumn}> 
@@ -106,12 +106,12 @@ const styles = StyleSheet.create({
     minHeight: 136,
     borderRadius: 32,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     overflow: 'hidden',
   },
   characterImage: {
-    width: 142,
-    height: 142,
+    width: 132,
+    height: 150,
   },
   rightColumn: {
     flex: 1,

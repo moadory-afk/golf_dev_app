@@ -8,6 +8,10 @@ interface UserProfileState {
   avatarUrl: string
   icon: string
   initial: string
+  homeAddress: string
+  homeLatitude: number | null
+  homeLongitude: number | null
+  departureBufferMinutes: number
   loading: boolean
 }
 
@@ -21,6 +25,10 @@ const emptyProfile: UserProfileState = {
   avatarUrl: '',
   icon: '',
   initial: '?',
+  homeAddress: '',
+  homeLatitude: null,
+  homeLongitude: null,
+  departureBufferMinutes: 40,
   loading: true,
 }
 
@@ -46,10 +54,29 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
       try {
         const { data } = await supabase
           .from('profiles')
-          .select('name')
+          .select('name, home_address, home_latitude, home_longitude')
           .eq('id', user.id)
           .maybeSingle()
         profileName = data?.name ?? null
+        const homeAddress = data?.home_address ?? ''
+        const homeLatitude = typeof data?.home_latitude === 'number' ? data.home_latitude : null
+        const homeLongitude = typeof data?.home_longitude === 'number' ? data.home_longitude : null
+        setProfile((prev) => {
+          const name = profileName ?? (prev.userId === user.id ? prev.name ?? fallback : fallback)
+          return {
+            userId: user.id,
+            name: name || null,
+            avatarUrl: user.user_metadata?.avatarUrl ?? '',
+            icon: user.user_metadata?.icon ?? '',
+            initial: (name || '?').slice(0, 1),
+            homeAddress,
+            homeLatitude,
+            homeLongitude,
+            departureBufferMinutes: 40,
+            loading: false,
+          }
+        })
+        return
       } catch {
         profileName = null
       }
@@ -62,6 +89,10 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
           avatarUrl: user.user_metadata?.avatarUrl ?? '',
           icon: user.user_metadata?.icon ?? '',
           initial: (name || '?').slice(0, 1),
+          homeAddress: prev.userId === user.id ? prev.homeAddress : '',
+          homeLatitude: prev.userId === user.id ? prev.homeLatitude : null,
+          homeLongitude: prev.userId === user.id ? prev.homeLongitude : null,
+          departureBufferMinutes: 40,
           loading: false,
         }
       })
