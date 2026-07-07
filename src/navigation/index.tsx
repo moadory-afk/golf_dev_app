@@ -1,8 +1,8 @@
 import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
-import { useMemo, type ReactNode } from 'react'
-import { PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { useMemo, useRef, type ReactNode } from 'react'
+import { Animated, Dimensions, Easing, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SkinProvider, useSkin } from '../skins'
 import { Icon, type IconName } from '../components/Icon'
 import { colorLayers, radius, spacing, typography } from '../design/tokens'
@@ -41,8 +41,10 @@ const TAB_META: Record<keyof MainTabParamList, { title: string; emoji: string; i
 }
 
 const MAIN_TAB_ORDER: (keyof MainTabParamList)[] = ['Home', 'Club', 'History']
-const SWIPE_MIN_DISTANCE = 64
+const SWIPE_MIN_DISTANCE = 56
 const SWIPE_DIRECTION_LOCK = 1.25
+const TAB_SLIDE_WIDTH = Dimensions.get('window').width
+const TAB_SLIDE_DURATION = 220
 
 function SwipeableTabScene({
   current,
@@ -53,32 +55,77 @@ function SwipeableTabScene({
   navigation: any
   children: ReactNode
 }) {
+  const translateX = useRef(new Animated.Value(0)).current
+
+  const moveToTab = (nextTab: keyof MainTabParamList, direction: -1 | 1) => {
+    Animated.timing(translateX, {
+      toValue: direction * -TAB_SLIDE_WIDTH,
+      duration: TAB_SLIDE_DURATION,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(() => {
+      translateX.setValue(0)
+      navigation.navigate(nextTab)
+    })
+  }
+
+  const resetPosition = () => {
+    Animated.spring(translateX, {
+      toValue: 0,
+      speed: 18,
+      bounciness: 4,
+      useNativeDriver: true,
+    }).start()
+  }
+
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponder: (_, gesture) => {
           const absX = Math.abs(gesture.dx)
           const absY = Math.abs(gesture.dy)
-          return absX > 18 && absX > absY * SWIPE_DIRECTION_LOCK
+          return absX > 14 && absX > absY * SWIPE_DIRECTION_LOCK
         },
-        onPanResponderTerminationRequest: () => true,
+        onPanResponderGrant: () => {
+          translateX.stopAnimation()
+        },
+        onPanResponderMove: (_, gesture) => {
+          const currentIndex = MAIN_TAB_ORDER.indexOf(current)
+          const isFirst = currentIndex === 0
+          const isLast = currentIndex === MAIN_TAB_ORDER.length - 1
+          const isBlocked = (isFirst && gesture.dx > 0) || (isLast && gesture.dx < 0)
+          translateX.setValue(isBlocked ? gesture.dx * 0.22 : gesture.dx)
+        },
+        onPanResponderTerminationRequest: () => false,
         onPanResponderRelease: (_, gesture) => {
           const absX = Math.abs(gesture.dx)
           const absY = Math.abs(gesture.dy)
-          if (absX < SWIPE_MIN_DISTANCE || absX < absY * SWIPE_DIRECTION_LOCK) return
+          if (absX < SWIPE_MIN_DISTANCE || absX < absY * SWIPE_DIRECTION_LOCK) {
+            resetPosition()
+            return
+          }
 
           const currentIndex = MAIN_TAB_ORDER.indexOf(current)
-          const nextIndex = gesture.dx < 0 ? currentIndex + 1 : currentIndex - 1
+          const direction = gesture.dx < 0 ? 1 : -1
+          const nextIndex = currentIndex + direction
           const nextTab = MAIN_TAB_ORDER[nextIndex]
-          if (nextTab) navigation.navigate(nextTab)
+          if (!nextTab) {
+            resetPosition()
+            return
+          }
+
+          moveToTab(nextTab, direction)
         },
+        onPanResponderTerminate: resetPosition,
       }),
-    [current, navigation],
+    [current, navigation, translateX],
   )
 
   return (
     <View style={navStyles.swipeScene} {...panResponder.panHandlers}>
-      {children}
+      <Animated.View style={[navStyles.swipeAnimatedScene, { transform: [{ translateX }] }]}>
+        {children}
+      </Animated.View>
     </View>
   )
 }
@@ -131,6 +178,7 @@ function MainTabs() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
+        animation: 'shift' as any,
         tabBarActiveTintColor: isModern ? palette.text : palette.green,
         tabBarInactiveTintColor: palette.muted,
         tabBarStyle: isModern
@@ -287,6 +335,10 @@ export default function Navigation({ session }: { session: import('@supabase/sup
 
 const navStyles = StyleSheet.create({
   swipeScene: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  swipeAnimatedScene: {
     flex: 1,
   },
   closeBtn: {
