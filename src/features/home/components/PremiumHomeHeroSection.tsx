@@ -2,12 +2,13 @@ import { Image, ImageSourcePropType, NativeScrollEvent, NativeSyntheticEvent, Sc
 import { useState } from 'react'
 
 import { colorLayers, radius, spacing } from '../../../design/tokens'
+import { getCourseHeroImageSource } from '../../../data/courseHeroImages'
 import { useSkin } from '../../../skins'
 import type { HomeHeroRound } from '../types/home'
 
 const gogoMark = require('../../../../assets/gogopar_i.png')
 
-const HERO_DISPLAY_HEIGHT_RATIO = (10.5 / 16) * 1.5
+const HERO_DISPLAY_HEIGHT_RATIO = (10.5 / 16) * 1.5 * 0.85
 const HERO_MIN_WIDTH = 280
 
 type PremiumHomeHeroSectionProps = {
@@ -75,8 +76,6 @@ export function PremiumHomeHeroSection({
         style={[styles.heroCard, { height: heroHeight }]}
       > 
         <View style={styles.heroImage}>
-          {heroImageSource ? <Image source={heroImageSource} style={styles.heroBackgroundImage} resizeMode="cover" /> : null}
-          <View style={styles.scrim} />
           <View style={[styles.headerRow, { top: topInset + 10 }]} pointerEvents="box-none">
             <TouchableOpacity activeOpacity={0.84} onPress={onClubPress} style={styles.clubPill}> 
               <Text style={styles.clubIcon}>⛳</Text>
@@ -120,6 +119,7 @@ export function PremiumHomeHeroSection({
                 teeTime={fallbackTeeTime}
                 isAdmin={isAdmin}
                 onCreateRound={onCreateRound}
+                heroImageSource={heroImageSource}
               />
             )}
 
@@ -150,16 +150,20 @@ export function PremiumHomeHeroSection({
 }
 
 function HeroRoundCard({ width, height, topInset, round }: { width: number; height: number; topInset: number; round: HomeHeroRound }) {
+  const roundHeroImageSource = getCourseHeroImageSource(round.courseName)
+
   return (
     <View style={[styles.slide, { width, height, paddingTop: topInset + 52 }]}> 
+      <Image source={roundHeroImageSource} style={styles.slideBackgroundImage} resizeMode="cover" />
+      <View style={styles.scrim} />
       <HeroBottomSummary
         courseName={round.courseName}
         temperature={round.temperature}
         windText={round.windText || '--'}
         dday={round.dday}
         dateLabel={round.dateLabel}
-        layoutName={round.layoutName}
         teeTime={round.teeTime}
+        groupCount={round.groupCount}
       />
     </View>
   )
@@ -178,6 +182,7 @@ function HeroEmptyCard({
   isAdmin,
   onCreateRound,
   topInset,
+  heroImageSource,
 }: {
   width: number
   height: number
@@ -191,6 +196,7 @@ function HeroEmptyCard({
   teeTime: string
   isAdmin: boolean
   onCreateRound: () => void
+  heroImageSource?: ImageSourcePropType
 }) {
   const { palette } = useSkin()
   void address
@@ -198,6 +204,8 @@ function HeroEmptyCard({
 
   return (
     <View style={[styles.slide, { width, height, paddingTop: topInset + 52 }]}> 
+      {heroImageSource ? <Image source={heroImageSource} style={styles.slideBackgroundImage} resizeMode="cover" /> : null}
+      <View style={styles.scrim} />
       <HeroBottomSummary
         courseName={courseName}
         temperature={temperature}
@@ -236,20 +244,18 @@ function HeroBottomSummary({
   windText,
   dday,
   dateLabel,
-  layoutName,
   teeTime,
+  groupCount,
 }: {
   courseName: string
   temperature: string
   windText: string
   dday: string
   dateLabel: string
-  layoutName?: string
   teeTime?: string
+  groupCount?: number
 }) {
-  const scheduleLine = [layoutName ? `${layoutName} 코스` : undefined, teeTime ? `${teeTime} Tee Off` : undefined]
-    .filter(Boolean)
-    .join(' · ')
+  const scheduleLine = teeTime ? `${teeTime} Tee Off${groupCount ? ` (${groupCount}조)` : ''}` : '--:-- Tee Off'
 
   return (
     <View style={styles.bottomSummary}>
@@ -271,7 +277,7 @@ function HeroBottomSummary({
         <View style={styles.scheduleSummary}>
           <Text style={styles.summaryDday} numberOfLines={1}>{dday}</Text>
           <Text style={styles.summaryDate} numberOfLines={1}>🗓 {dateLabel}</Text>
-          <Text style={styles.summaryTeeTime} numberOfLines={1}>◷ {scheduleLine || '--:-- Tee Off'}</Text>
+          <Text style={styles.summaryTeeTime} numberOfLines={1}>◷ {scheduleLine}</Text>
         </View>
       </View>
     </View>
@@ -280,7 +286,7 @@ function HeroBottomSummary({
 
 const styles = StyleSheet.create({
   shell: {
-    marginBottom: 18,
+    marginBottom: 0,
     width: '100%',
     overflow: 'visible',
   },
@@ -347,6 +353,7 @@ const styles = StyleSheet.create({
   },
   heroImage: { flex: 1, backgroundColor: '#10261B', overflow: 'hidden' },
   heroBackgroundImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  slideBackgroundImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
   scrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.32)',
@@ -354,7 +361,8 @@ const styles = StyleSheet.create({
   carousel: { flex: 1 },
   slide: {
     paddingHorizontal: 14,
-    paddingBottom: 24,
+    paddingBottom: 22,
+    overflow: 'hidden',
     justifyContent: 'flex-end',
   },
   courseBlock: { flex: 1, justifyContent: 'center', paddingTop: 4, paddingBottom: 6 },
@@ -379,26 +387,26 @@ const styles = StyleSheet.create({
   metaText: { color: '#fff', fontSize: 10, lineHeight: 14, fontWeight: '900' },
   emptyAddress: { color: colorLayers.heroTextMuted, fontSize: 13, lineHeight: 18, fontWeight: '800', marginTop: spacing.xs },
   bottomSummary: {
-    width: '62%',
-    minWidth: 234,
+    width: '67%',
+    minWidth: 250,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.26)',
     paddingTop: 8,
   },
-  summaryCourseName: { color: '#fff', fontSize: 18, lineHeight: 22, fontWeight: '900', letterSpacing: -0.7, marginBottom: 7 },
+  summaryCourseName: { color: '#fff', fontSize: 20, lineHeight: 24, fontWeight: '900', letterSpacing: -0.8, marginBottom: 8 },
   summaryContentRow: { flexDirection: 'row', alignItems: 'stretch' },
   weatherSummary: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 7, paddingRight: 8 },
-  summaryWeatherIcon: { fontSize: 25, lineHeight: 30 },
+  summaryWeatherIcon: { fontSize: 27, lineHeight: 32 },
   weatherTextWrap: { flex: 1, minWidth: 0 },
-  summaryTemperature: { color: '#fff', fontSize: 20, lineHeight: 24, fontWeight: '900', letterSpacing: -0.5 },
+  summaryTemperature: { color: '#fff', fontSize: 22, lineHeight: 26, fontWeight: '900', letterSpacing: -0.6 },
   windRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
-  windIcon: { color: 'rgba(255,255,255,0.82)', fontSize: 11, lineHeight: 13 },
-  summaryWindText: { flex: 1, color: 'rgba(255,255,255,0.88)', fontSize: 11, lineHeight: 14, fontWeight: '900', letterSpacing: -0.2 },
+  windIcon: { color: 'rgba(255,255,255,0.82)', fontSize: 12, lineHeight: 14 },
+  summaryWindText: { flex: 1, color: 'rgba(255,255,255,0.88)', fontSize: 12, lineHeight: 15, fontWeight: '900', letterSpacing: -0.25 },
   summaryDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.44)', marginHorizontal: 8 },
-  scheduleSummary: { flex: 1.35, minWidth: 128, paddingLeft: 1 },
-  summaryDday: { color: '#B6FF8F', fontSize: 18, lineHeight: 22, fontWeight: '900', letterSpacing: -0.4 },
-  summaryDate: { color: '#fff', fontSize: 11, lineHeight: 15, fontWeight: '900', marginTop: 2 },
-  summaryTeeTime: { color: '#fff', fontSize: 11, lineHeight: 15, fontWeight: '900', marginTop: 1, letterSpacing: -0.35 },
+  scheduleSummary: { flex: 1.45, minWidth: 144, paddingLeft: 1 },
+  summaryDday: { color: '#B6FF8F', fontSize: 20, lineHeight: 24, fontWeight: '900', letterSpacing: -0.5 },
+  summaryDate: { color: '#fff', fontSize: 12, lineHeight: 16, fontWeight: '900', marginTop: 2 },
+  summaryTeeTime: { color: '#fff', fontSize: 12, lineHeight: 16, fontWeight: '900', marginTop: 1, letterSpacing: -0.45 },
   dotsRow: { position: 'absolute', left: 0, right: 0, bottom: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs },
   dot: { borderRadius: radius.pill },
   heroWave: {
