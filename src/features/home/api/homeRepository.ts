@@ -36,6 +36,8 @@ export type HomeCourseRow = {
   id: string
   name: string
   region: string
+  latitude?: number | null
+  longitude?: number | null
 }
 
 export type HomeLayoutRow = {
@@ -50,7 +52,6 @@ export type HomeWeatherSnapshot = {
   windText: string
   fetchedAt?: string
 }
-
 
 function uniqueValues(values: Array<string | null | undefined>) {
   return Array.from(new Set(values.filter((value): value is string => !!value)))
@@ -71,19 +72,21 @@ function weatherSnapshotFromRoundWeather(weather: RoundWeather | null): HomeWeat
   if (!weather) return null
 
   return {
-    temperature: `${weather.tempC}°`,
+    temperature: `${Math.round(weather.tempC)}°`,
     weatherText: weather.condition || '날씨 준비중',
-    windText: typeof weather.windMs === 'number' ? `${weather.windMs}m/s` : '풍속 준비중',
+    windText: typeof weather.windMs === 'number' ? `${Math.round(weather.windMs)}m/s` : '풍속 준비중',
     fetchedAt: weather.fetchedAt,
   }
 }
 
 async function fetchWeatherForSchedule(schedule: HomeScheduleRow, course: HomeCourseRow): Promise<HomeWeatherSnapshot | null> {
   try {
-    const courseName = [course.name, course.region].filter(Boolean).join(' ')
     const weather = await getOpenWeatherForRound({
       roundId: schedule.id,
-      courseName,
+      courseName: course.name,
+      region: course.region,
+      latitude: course.latitude,
+      longitude: course.longitude,
       date: schedule.round_date,
       time: schedule.tee_time ?? undefined,
     })
@@ -117,6 +120,23 @@ function buildWeatherByCourseId(schedules: HomeScheduleRow[], weatherByScheduleI
     if (courseId && weather && !acc[courseId]) acc[courseId] = weather
     return acc
   }, {})
+}
+
+async function fetchHomeCourses(courseIds: string[]) {
+  if (!courseIds.length) return { data: [] as HomeCourseRow[], error: null }
+
+  const extendedResult = await supabase
+    .from('golf_courses')
+    .select('id, name, region, latitude, longitude')
+    .in('id', courseIds)
+
+  if (!extendedResult.error) return extendedResult
+
+  // 좌표 컬럼 마이그레이션 전 환경에서도 Home 전체가 깨지지 않도록 기존 컬럼만 fallback 조회한다.
+  return supabase
+    .from('golf_courses')
+    .select('id, name, region')
+    .in('id', courseIds)
 }
 
 export async function getHomeDashboardRawData(clubId: string): Promise<HomeDashboardRawData> {
@@ -154,12 +174,7 @@ export async function getHomeDashboardRawData(clubId: string): Promise<HomeDashb
           .in('schedule_id', scheduleIds)
           .order('sort_order', { ascending: true })
       : Promise.resolve({ data: [], error: null }),
-    courseIds.length
-      ? supabase
-          .from('golf_courses')
-          .select('id, name, region')
-          .in('id', courseIds)
-      : Promise.resolve({ data: [], error: null }),
+    fetchHomeCourses(courseIds),
     layoutIds.length
       ? supabase
           .from('course_layouts')

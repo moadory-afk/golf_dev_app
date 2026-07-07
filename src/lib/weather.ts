@@ -75,9 +75,17 @@ async function writeCache(key: string, value: RoundWeather) {
   }
 }
 
-async function geocodeCourse(courseName: string): Promise<GeoItem | null> {
+function hasCoordinate(latitude?: number | null, longitude?: number | null) {
+  return typeof latitude === 'number'
+    && typeof longitude === 'number'
+    && Number.isFinite(latitude)
+    && Number.isFinite(longitude)
+}
+
+async function geocodeCourse(courseName: string, region?: string): Promise<GeoItem | null> {
   if (!API_KEY) return null
-  const q = encodeURIComponent(`${normalizeCourseName(courseName)}, KR`)
+  const queryParts = [normalizeCourseName(courseName), region, 'Korea'].filter(Boolean)
+  const q = encodeURIComponent(queryParts.join(' '))
   const url = `https://api.openweathermap.org/geo/1.0/direct?q=${q}&limit=1&appid=${API_KEY}`
   const res = await fetch(url)
   if (!res.ok) return null
@@ -85,13 +93,29 @@ async function geocodeCourse(courseName: string): Promise<GeoItem | null> {
   return data?.[0] ?? null
 }
 
-export async function getOpenWeatherForRound(params: { roundId: string; courseName?: string; date: string; time?: string }): Promise<RoundWeather | null> {
-  if (!API_KEY || !params.courseName?.trim()) return null
-  const cacheKey = `@gogopar_weather:${params.roundId}:${params.date}:${params.time ?? ''}`
+export async function getOpenWeatherForRound(params: {
+  roundId: string
+  courseName?: string
+  region?: string
+  latitude?: number | null
+  longitude?: number | null
+  date: string
+  time?: string
+}): Promise<RoundWeather | null> {
+  if (!API_KEY) return null
+
+  const coordinateKey = hasCoordinate(params.latitude, params.longitude)
+    ? `${params.latitude},${params.longitude}`
+    : normalizeCourseName(params.courseName ?? '')
+  const cacheKey = `@gogopar_weather:${params.roundId}:${coordinateKey}:${params.date}:${params.time ?? ''}`
   const cached = await readCache(cacheKey)
   if (cached) return cached
 
-  const geo = await geocodeCourse(params.courseName)
+  const geo = hasCoordinate(params.latitude, params.longitude)
+    ? { lat: params.latitude as number, lon: params.longitude as number }
+    : params.courseName?.trim()
+      ? await geocodeCourse(params.courseName, params.region)
+      : null
   if (!geo) return null
 
   const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${geo.lat}&lon=${geo.lon}&appid=${API_KEY}&units=metric&lang=kr`
