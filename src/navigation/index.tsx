@@ -45,6 +45,9 @@ const SWIPE_MIN_DISTANCE = 56
 const SWIPE_DIRECTION_LOCK = 1.25
 const TAB_SLIDE_WIDTH = Dimensions.get('window').width
 const TAB_SLIDE_DURATION = 220
+// 상단 Hero/대문 카드 안의 가로 스와이프는 카드 캐러셀 전용으로 사용한다.
+// 메뉴 간 스와이프는 Hero 영역 아래에서 시작한 제스처만 처리한다.
+const TAB_SWIPE_GUARD_TOP = 430
 
 function SwipeableTabScene({
   current,
@@ -82,6 +85,8 @@ function SwipeableTabScene({
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponder: (_, gesture) => {
+          if (gesture.y0 <= TAB_SWIPE_GUARD_TOP) return false
+
           const absX = Math.abs(gesture.dx)
           const absY = Math.abs(gesture.dy)
           return absX > 14 && absX > absY * SWIPE_DIRECTION_LOCK
