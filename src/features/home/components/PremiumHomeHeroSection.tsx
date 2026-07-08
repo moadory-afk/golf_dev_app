@@ -284,80 +284,107 @@ function HeroBackSide({
   onLottoPress,
   onAwardPress,
   onEditRoundPress,
-}: {
-  round: HomeHeroRound;
-  isAdmin: boolean;
-  onCaddieBookPress?: (round: HomeHeroRound) => void;
-  onGroupsPress?: (round: HomeHeroRound) => void;
-  onLottoPress?: (round: HomeHeroRound) => void;
-  onAwardPress?: (round: HomeHeroRound) => void;
-  onEditRoundPress?: (round: HomeHeroRound) => void;
-}) {
-  const actionRows = [
-    { key: "caddie", icon: "📖", title: "캐디북", onPress: onCaddieBookPress },
-    { key: "groups", icon: "👥", title: "조편성", onPress: onGroupsPress },
-    { key: "lotto", icon: "🎲", title: "로또", onPress: onLottoPress },
-    { key: "award", icon: "🏆", title: "시상", onPress: onAwardPress },
-  ];
+}: any) {
+  const companionText = formatRoundCompanions(round);
+  const courseLine = `${round.teeTime || "--:--"} ${round.layoutName || "OUT"} 코스`;
 
   return (
     <View style={styles.backCard}>
-      <View>
-        <Text style={styles.backEyebrow}>ROUND DETAIL</Text>
+      <View style={styles.backLeftColumn}>
+        <Text style={styles.backEyebrow}>Round Detail</Text>
         <Text style={styles.backCourseName} numberOfLines={1}>
           {round.courseName}
         </Text>
-        <View style={styles.backInfoGrid}>
-          <BackInfo
-            label="경기 일정"
-            value={`${round.dateLabel} · ${round.teeTime || "--:--"}`}
-          />
-          <BackInfo label="코스" value={round.layoutName || "코스 미정"} />
-          <BackInfo
-            label="조"
-            value={`${round.groupCount || 0}조 · ${round.memberCount || 0}명`}
-          />
-          <BackInfo label="상태" value={round.statusLabel || round.dday} />
+
+        <View style={styles.backDetailList}>
+          <RoundDetailLine icon="📅" value={round.dateLabel} />
+          <RoundDetailLine icon="⛳" value={courseLine} />
+          <RoundDetailLine icon="👥" value={companionText} multiline />
         </View>
       </View>
 
-      <View style={styles.backActionGrid}>
-        {actionRows.map((action) => (
-          <TouchableOpacity
-            key={action.key}
-            activeOpacity={0.86}
-            disabled={!action.onPress}
-            onPress={() => action.onPress?.(round)}
-            style={styles.backActionButton}
-          >
-            <Text style={styles.backActionIcon}>{action.icon}</Text>
-            <Text style={styles.backActionText}>{action.title}</Text>
-          </TouchableOpacity>
-        ))}
-        {isAdmin && (
-          <TouchableOpacity
-            activeOpacity={0.88}
-            disabled={!onEditRoundPress}
-            onPress={() => onEditRoundPress?.(round)}
-            style={[styles.backActionButton, styles.editRoundButton]}
-          >
-            <Text style={styles.backActionIcon}>✏️</Text>
-            <Text style={styles.backActionText}>라운드 수정</Text>
-          </TouchableOpacity>
-        )}
+      <View style={styles.backMenuColumn}>
+        <BackMenuButton icon="📖" label="캐디북" onPress={() => onCaddieBookPress?.(round)} />
+        <BackMenuButton icon="👥" label="조편성" onPress={() => onGroupsPress?.(round)} />
+        <BackMenuButton icon="🎲" label="LOTTO" onPress={() => onLottoPress?.(round)} />
+        <BackMenuButton icon="🏆" label="시상계획" onPress={() => onAwardPress?.(round)} />
+        {isAdmin ? (
+          <BackMenuButton icon="⚙️" label="설정" onPress={() => onEditRoundPress?.(round)} />
+        ) : null}
       </View>
     </View>
   );
 }
 
-function BackInfo({ label, value }: { label: string; value: string }) {
+function formatRoundCompanions(round: any) {
+  const source =
+    round.memberNames ||
+    round.companionNames ||
+    round.groupMemberNames ||
+    round.myGroupMemberNames ||
+    round.members ||
+    round.groupMembers ||
+    round.players;
+
+  if (typeof source === "string" && source.trim()) return source.trim();
+
+  if (Array.isArray(source)) {
+    const names = source
+      .map((member) =>
+        typeof member === "string"
+          ? member
+          : member?.name || member?.displayName || member?.userName || "",
+      )
+      .filter(Boolean);
+
+    if (names.length > 0) return names.join(", ");
+  }
+
+  return round.memberCount ? `${round.memberCount}명` : "동반자 정보 준비중";
+}
+
+function RoundDetailLine({
+  icon,
+  value,
+  multiline = false,
+}: {
+  icon: string;
+  value: string;
+  multiline?: boolean;
+}) {
   return (
-    <View style={styles.backInfoItem}>
-      <Text style={styles.backInfoLabel}>{label}</Text>
-      <Text style={styles.backInfoValue} numberOfLines={1}>
-        {value}
-      </Text>
+    <View style={styles.backDetailLine}>
+      <Text style={styles.backDetailIcon}>{icon}</Text>
+      <View style={styles.backDetailTextWrap}>
+        <Text
+          style={styles.backDetailValue}
+          numberOfLines={multiline ? 2 : 1}
+        >
+          {value}
+        </Text>
+      </View>
     </View>
+  );
+}
+
+function BackMenuButton({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: string;
+  label: string;
+  onPress?: () => void;
+}) {
+  return (
+    <TouchableOpacity activeOpacity={0.86} onPress={onPress} style={styles.backMenuButton}>
+      <View style={styles.backMenuIconBubble}>
+        <Text style={styles.backMenuIcon}>{icon}</Text>
+      </View>
+      <Text style={styles.backMenuLabel} numberOfLines={1}>
+        {label}
+      </Text>
+    </TouchableOpacity>
   );
 }
 
@@ -576,14 +603,14 @@ const styles = StyleSheet.create({
   clubArrow: { color: "#fff", fontSize: 12, lineHeight: 12, fontWeight: "900" },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 7 },
   circleButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(0,0,0,0.18)",
   },
-  bellText: { fontSize: 17 },
+  bellText: { fontSize: 15 },
   badge: {
     position: "absolute",
     top: -5,
@@ -596,9 +623,9 @@ const styles = StyleSheet.create({
   },
   badgeText: { color: "#fff", fontSize: 9, fontWeight: "900" },
   profileButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -683,7 +710,7 @@ const styles = StyleSheet.create({
   metaText: { color: "#fff", fontSize: 10, lineHeight: 14, fontWeight: "900" },
   emptyAddress: {
     color: colorLayers.heroTextMuted,
-    fontSize: 13,
+    fontSize: 11,
     lineHeight: 18,
     fontWeight: "800",
     marginTop: spacing.xs,
@@ -727,7 +754,7 @@ const styles = StyleSheet.create({
   summaryWindText: {
     flex: 1,
     color: "rgba(255,255,255,0.88)",
-    fontSize: 13,
+    fontSize: 11,
     lineHeight: 16,
     fontWeight: "900",
     letterSpacing: -0.25,
@@ -767,7 +794,7 @@ const styles = StyleSheet.create({
   },
   travelTime: {
     color: "#fff",
-    fontSize: 13,
+    fontSize: 11,
     lineHeight: 16,
     fontWeight: "900",
     letterSpacing: -0.3,
@@ -775,14 +802,14 @@ const styles = StyleSheet.create({
   },
   summaryDate: {
     color: "#fff",
-    fontSize: 13,
+    fontSize: 11,
     lineHeight: 17,
     fontWeight: "900",
     marginTop: 2,
   },
   summaryTeeTime: {
     color: "#fff",
-    fontSize: 13,
+    fontSize: 11,
     lineHeight: 17,
     fontWeight: "900",
     marginTop: 1,
@@ -791,26 +818,103 @@ const styles = StyleSheet.create({
   backCard: {
     flex: 1,
     borderRadius: 0,
-    backgroundColor: "#10261B",
-    paddingHorizontal: 18,
-    paddingTop: 72,
-    paddingBottom: 28,
-    justifyContent: "space-between",
+    backgroundColor: "rgba(236,246,238,0.94)",
+    paddingHorizontal: 24,
+    paddingTop: 62,
+    paddingBottom: 24,
+    flexDirection: "row",
+    gap: 16,
+  },
+  backLeftColumn: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "flex-start",
   },
   backEyebrow: {
-    color: "rgba(255,255,255,0.68)",
-    fontSize: 10,
-    lineHeight: 13,
-    fontWeight: "900",
-    letterSpacing: 1.8,
+    color: "#4C9167",
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    marginBottom: 6,
   },
   backCourseName: {
-    color: "#fff",
-    fontSize: 26,
-    lineHeight: 31,
+    color: "#10351F",
+    fontSize: 42,
+    lineHeight: 48,
     fontWeight: "900",
-    letterSpacing: -1.1,
-    marginTop: 6,
+    letterSpacing: -1.8,
+    marginBottom: 10,
+  },
+  backDetailList: {
+    gap: 4,
+  },
+  backDetailLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(16,53,31,0.08)",
+    paddingTop: 5,
+  },
+  backDetailIcon: {
+    width: 31,
+    color: "#19733D",
+    fontSize: 22,
+    lineHeight: 26,
+    textAlign: "center",
+  },
+  backDetailTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  backDetailLabel: {
+    color: "#2F7E50",
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "900",
+    letterSpacing: -0.2,
+    marginBottom: 2,
+  },
+  backDetailValue: {
+    color: "#18251D",
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: "900",
+    letterSpacing: -0.5,
+  },
+  backMenuColumn: {
+    width: 116,
+    justifyContent: "flex-start",
+    gap: 6,
+  },
+  backMenuButton: {
+    minHeight: 34,
+    borderRadius: 12,
+    backgroundColor: "transparent",
+    borderWidth: 0,
+    borderColor: "rgba(16,53,31,0.08)",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 4,
+    gap: 7,
+  },
+  backMenuIconBubble: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(25,115,61,0.12)",
+  },
+  backMenuIcon: { fontSize: 15, lineHeight: 21 },
+  backMenuLabel: {
+    flex: 1,
+    color: "#17251D",
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "900",
+    letterSpacing: -0.45,
   },
   backInfoGrid: {
     marginTop: 16,
@@ -834,7 +938,7 @@ const styles = StyleSheet.create({
   },
   backInfoValue: {
     color: "#fff",
-    fontSize: 13,
+    fontSize: 11,
     lineHeight: 17,
     fontWeight: "900",
     letterSpacing: -0.35,
@@ -856,6 +960,28 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(182,255,143,0.20)",
   },
   backActionIcon: { fontSize: 16, lineHeight: 19 },
+  backRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginVertical: 6,
+  },
+  backLink: { fontSize: 16, fontWeight: "700", color: "#B6FF8F" },
+  backInfoStrong: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "rgba(255,255,255,0.94)",
+    letterSpacing: -0.3,
+  },
+  backIconButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.18)",
+  },
+  backIcon: { fontSize: 18, lineHeight: 22 },
   backActionText: {
     color: "#fff",
     fontSize: 12,
