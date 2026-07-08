@@ -24,6 +24,9 @@ export type CaddieBookHole = {
   strategy?: string | null
   caution?: string | null
   teeDistanceM?: number
+  blueTeeM?: number | null
+  whiteTeeM?: number | null
+  redTeeM?: number | null
   recommendedClub?: string
   effectiveDistanceM?: number
   riskLabel: string
