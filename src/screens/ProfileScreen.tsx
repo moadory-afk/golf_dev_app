@@ -100,6 +100,22 @@ const DEFAULT_DISTANCE_FORM: ClubDistanceForm = CLUB_DISTANCE_FIELDS.reduce(
   {} as ClubDistanceForm,
 );
 
+const DEFAULT_DISTANCE_VALUES: Record<ClubDistanceKey, number> = {
+  driver_m: 200,
+  wood3_m: 180,
+  wood5_m: 170,
+  hybrid4_m: 160,
+  hybrid5_m: 150,
+  iron5_m: 150,
+  iron6_m: 140,
+  iron7_m: 130,
+  iron8_m: 120,
+  iron9_m: 110,
+  pw_m: 100,
+  aw_m: 85,
+  sw_m: 70,
+};
+
 type GeoPoint = { latitude: number; longitude: number };
 
 type KakaoAddressResult = {
@@ -225,11 +241,11 @@ async function geocodeAddress(address: string): Promise<GeoPoint | null> {
   return null;
 }
 
-function normalizeDistanceValue(value: string): number | null {
+function normalizeDistanceValue(value: string, fallback: number): number {
   const trimmed = value.trim();
-  if (!trimmed) return null;
-  const normalized = Number(trimmed.replace(/[^0-9.]/g, ""));
-  if (!Number.isFinite(normalized) || normalized <= 0) return null;
+  if (!trimmed) return fallback;
+  const normalized = Number(trimmed.replace(/[^0-9]/g, ""));
+  if (!Number.isFinite(normalized) || normalized < 0) return fallback;
   return Math.round(normalized);
 }
 
@@ -639,7 +655,7 @@ export default function ProfileScreen() {
           home_address: address,
           home_latitude: point?.latitude ?? null,
           home_longitude: point?.longitude ?? null,
-          home_address_updated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         },
         { onConflict: "id" },
       );
@@ -672,30 +688,29 @@ export default function ProfileScreen() {
   async function handleSaveDistances() {
     if (!user) return;
 
-    const payload: Record<string, number | string | null> = {
+    const payload: Record<string, number | string> = {
       user_id: user.id,
+      updated_at: new Date().toISOString(),
     };
     for (const field of CLUB_DISTANCE_FIELDS) {
-      payload[field.key] = normalizeDistanceValue(distanceForm[field.key]);
+      payload[field.key] = normalizeDistanceValue(
+        distanceForm[field.key],
+        DEFAULT_DISTANCE_VALUES[field.key],
+      );
     }
 
     setSavingDistances(true);
     try {
-      const { data: existing, error: findError } = await supabase
+      const { error } = await supabase
         .from("user_distance_profiles")
-        .select("user_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (findError) throw findError;
-
-      const saveQuery = existing
-        ? supabase
-            .from("user_distance_profiles")
-            .update(payload)
-            .eq("user_id", user.id)
-        : supabase.from("user_distance_profiles").insert(payload);
-      const { error } = await saveQuery;
+        .upsert(payload, { onConflict: "user_id" });
       if (error) throw error;
+
+      const nextForm = { ...DEFAULT_DISTANCE_FORM };
+      CLUB_DISTANCE_FIELDS.forEach((field) => {
+        nextForm[field.key] = String(payload[field.key]);
+      });
+      setDistanceForm(nextForm);
       Alert.alert("저장 완료", "클럽별 거리 정보가 저장되었습니다.");
     } catch (e: unknown) {
       Alert.alert(
