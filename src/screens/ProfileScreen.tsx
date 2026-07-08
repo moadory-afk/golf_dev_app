@@ -122,6 +122,9 @@ type KakaoAddressResult = {
   id: string;
   label: string;
   subLabel?: string;
+  roadAddress?: string;
+  jibunAddress?: string;
+  placeName?: string;
   latitude: number;
   longitude: number;
 };
@@ -154,8 +157,10 @@ async function searchKakaoAddress(
   if (!query || !kakaoKey) return [];
 
   const headers = { Authorization: `KakaoAK ${kakaoKey}` };
-  const addressUrl = `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(query)}&size=10`;
-  const keywordUrl = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=10`;
+  const urls = [
+    `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(query)}&size=15`,
+    `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=15`,
+  ];
 
   const readDocuments = async (url: string) => {
     const response = await fetch(url, { headers });
@@ -164,33 +169,43 @@ async function searchKakaoAddress(
     return Array.isArray(json?.documents) ? json.documents : [];
   };
 
-  const addressDocs = await readDocuments(addressUrl);
-  const docs =
-    addressDocs.length > 0 ? addressDocs : await readDocuments(keywordUrl);
+  const docs = (await Promise.all(urls.map(readDocuments))).flat();
+  const unique = new Map<string, KakaoAddressResult>();
 
-  return docs
-    .map((doc: any, index: number): KakaoAddressResult | null => {
-      const latitude = Number(doc.y);
-      const longitude = Number(doc.x);
-      if (!isValidPoint(latitude, longitude)) return null;
-      const road =
-        doc.road_address?.address_name || doc.road_address_name || "";
-      const address = doc.address?.address_name || doc.address_name || "";
-      const placeName = doc.place_name || "";
-      const label = road || address || placeName;
-      if (!label) return null;
-      const subLabel = [placeName, address]
-        .filter((value) => value && value !== label)
-        .join(" · ");
-      return {
-        id: String(doc.id || `${longitude}-${latitude}-${index}`),
+  docs.forEach((doc: any, index: number) => {
+    const latitude = Number(doc.y);
+    const longitude = Number(doc.x);
+    if (!isValidPoint(latitude, longitude)) return;
+
+    const roadAddress =
+      doc.road_address?.address_name || doc.road_address_name || "";
+    const jibunAddress = doc.address?.address_name || doc.address_name || "";
+    const placeName = doc.place_name || "";
+    const label = roadAddress || jibunAddress || placeName;
+    if (!label) return;
+
+    const subLabel = [placeName, jibunAddress]
+      .filter((value) => value && value !== label)
+      .join(" · ");
+    const id = String(
+      doc.id || `${label}-${longitude}-${latitude}-${index}`,
+    );
+
+    if (!unique.has(id)) {
+      unique.set(id, {
+        id,
         label,
         subLabel: subLabel || undefined,
+        roadAddress: roadAddress || undefined,
+        jibunAddress: jibunAddress || undefined,
+        placeName: placeName || undefined,
         latitude,
         longitude,
-      };
-    })
-    .filter(Boolean) as KakaoAddressResult[];
+      });
+    }
+  });
+
+  return Array.from(unique.values());
 }
 
 async function geocodeAddress(address: string): Promise<GeoPoint | null> {
@@ -360,7 +375,7 @@ function KakaoAddressSearchModal({
               style={p.addressSearchInput}
               value={query}
               onChangeText={setQuery}
-              placeholder="예: 부산 동래구 사직동"
+              placeholder="도로명, 지번, 건물명으로 검색"
               placeholderTextColor={C.muted}
               returnKeyType="search"
               onSubmitEditing={handleSearch}
@@ -647,20 +662,30 @@ export default function ProfileScreen() {
     setSavingHome(true);
     try {
       const point = selectedHomePoint ?? (await geocodeAddress(address));
+      const payload = {
+        name: profileName || user.user_metadata?.name || user.email || null,
+        home_address: address,
+        home_latitude: point?.latitude ?? null,
+        home_longitude: point?.longitude ?? null,
+        updated_at: new Date().toISOString(),
+      };
 
-      const { error } = await supabase.from("profiles").upsert(
-        {
+      const { data: updatedProfile, error: updateError } = await supabase
+        .from("profiles")
+        .update(payload)
+        .eq("id", user.id)
+        .select("id")
+        .maybeSingle();
+
+      if (updateError) throw updateError;
+
+      if (!updatedProfile) {
+        const { error: insertError } = await supabase.from("profiles").insert({
           id: user.id,
-          name: profileName || user.user_metadata?.name || user.email || null,
-          home_address: address,
-          home_latitude: point?.latitude ?? null,
-          home_longitude: point?.longitude ?? null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "id" },
-      );
-
-      if (error) throw error;
+          ...payload,
+        });
+        if (insertError) throw insertError;
+      }
       await refreshProfile();
       if (point) Alert.alert("저장 완료", "출발지 정보가 저장되었습니다.");
       else
@@ -989,7 +1014,7 @@ export default function ProfileScreen() {
             <View>
               <Text style={p.settingTitle}>🏠 집 주소</Text>
               <Text style={p.settingHint}>
-                골프장 이동시간과 추천 출발시간 계산에 사용됩니다.
+                카카오 주소 검색으로 선택한 주소가 골프장 이동시간 계산에 사용됩니다.
               </Text>
             </View>
           </View>
@@ -1002,7 +1027,7 @@ export default function ProfileScreen() {
               style={[p.addressPickerText, !homeAddress && { color: C.muted }]}
               numberOfLines={2}
             >
-              {homeAddress || "주소 검색으로 집 주소를 선택하세요"}
+              {homeAddress || "카카오 주소 검색으로 집 주소를 선택하세요"}
             </Text>
             <Text style={p.addressPickerAction}>검색</Text>
           </TouchableOpacity>
