@@ -326,6 +326,7 @@ function HoleDetailCard({
     inputRange: [0, 1],
     outputRange: ["180deg", "360deg"],
   });
+  const timelineWidth = Math.max(width - 64, planSteps.length * 72);
 
   return (
     <TouchableOpacity
@@ -458,73 +459,91 @@ function HoleDetailCard({
               </View>
             </View>
 
-            <View style={styles.planTimelineWrap}>
-              <View style={styles.planTimelineRail}>
-                {planSteps.slice(0, 3).map((step, index) => (
-                  <View
-                    key={`${step.type}-${index}`}
-                    style={styles.planTimelineNodeWrap}
-                  >
-                    <View
-                      style={[
-                        index === 2
-                          ? styles.planTimelineGreenNode
-                          : styles.planTimelineNode,
-                        {
-                          backgroundColor:
-                            index === 0
-                              ? palette.gold
-                              : index === 1
-                                ? palette.green
-                                : palette.card,
-                          borderColor: palette.green,
-                        },
-                      ]}
-                    />
-                    {index < 2 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.planTimelineScrollContent}
+            >
+              <View style={[styles.planTimelineWrap, { width: timelineWidth }]}>
+                <View style={styles.planTimelineRail}>
+                  {planSteps.map((step, index) => {
+                    const isLast = index === planSteps.length - 1;
+                    return (
                       <View
-                        style={[
-                          styles.planTimelineLine,
-                          { backgroundColor: palette.border },
-                        ]}
-                      />
-                    )}
-                  </View>
-                ))}
-              </View>
-              <View style={styles.planStepLabels}>
-                {planSteps.slice(0, 3).map((step, index) => (
-                  <View
-                    key={`${step.clubLabel}-${index}`}
-                    style={styles.planStepLabel}
-                  >
-                    <Text
-                      style={[styles.planStepTitle, { color: palette.text }]}
-                      numberOfLines={1}
-                    >
-                      {step.clubLabel}
-                    </Text>
-                    <Text
-                      style={[styles.planStepMeta, { color: palette.muted }]}
-                      numberOfLines={1}
-                    >
-                      {index === 2 ? "PUTT" : `${step.carryM || "-"}m`}
-                    </Text>
-                    {index < 2 && (
-                      <Text
-                        style={[
-                          styles.planStepRemain,
-                          { color: palette.green },
-                        ]}
-                        numberOfLines={1}
+                        key={`${step.type}-${index}`}
+                        style={styles.planTimelineNodeWrap}
                       >
-                        남은 {step.remainingAfterM || 0}m
-                      </Text>
-                    )}
-                  </View>
-                ))}
+                        <View
+                          style={[
+                            isLast
+                              ? styles.planTimelineGreenNode
+                              : styles.planTimelineNode,
+                            {
+                              backgroundColor:
+                                index === 0
+                                  ? palette.gold
+                                  : isLast
+                                    ? palette.card
+                                    : palette.green,
+                              borderColor: palette.green,
+                            },
+                          ]}
+                        />
+                        {!isLast && (
+                          <View
+                            style={[
+                              styles.planTimelineLine,
+                              { backgroundColor: palette.border },
+                            ]}
+                          />
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+                <View style={styles.planStepLabels}>
+                  {planSteps.map((step, index) => {
+                    const isLast = index === planSteps.length - 1;
+                    return (
+                      <View
+                        key={`${step.clubLabel}-${index}`}
+                        style={styles.planStepLabel}
+                      >
+                        <Text
+                          style={[
+                            styles.planStepTitle,
+                            { color: palette.text },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {step.clubLabel}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.planStepMeta,
+                            { color: palette.muted },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {isLast ? "PUTT" : `${step.carryM || "-"}m`}
+                        </Text>
+                        {!isLast && (
+                          <Text
+                            style={[
+                              styles.planStepRemain,
+                              { color: palette.green },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            남은 {step.remainingAfterM || 0}m
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
               </View>
-            </View>
+            </ScrollView>
 
             <View style={styles.planMetricRow}>
               <MiniMetric
@@ -979,6 +998,7 @@ const styles = StyleSheet.create({
   safeModeRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   safeDot: { color: "#2AA35F", fontSize: 14, lineHeight: 18 },
   safeTitle: { ...typography.bodySm, fontWeight: "900", letterSpacing: -0.2 },
+  planTimelineScrollContent: { paddingRight: spacing.sm },
   planTimelineWrap: { gap: spacing.sm },
   planTimelineRail: {
     flexDirection: "row",
