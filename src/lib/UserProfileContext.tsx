@@ -5,6 +5,7 @@ import { supabase } from './supabase'
 interface UserProfileState {
   userId: string | null
   name: string | null
+  nickname: string | null
   avatarUrl: string
   icon: string
   initial: string
@@ -22,6 +23,7 @@ interface UserProfileContextValue extends UserProfileState {
 const emptyProfile: UserProfileState = {
   userId: null,
   name: null,
+  nickname: null,
   avatarUrl: '',
   icon: '',
   initial: '?',
@@ -54,10 +56,11 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
       try {
         const { data } = await supabase
           .from('profiles')
-          .select('name, home_address, home_latitude, home_longitude')
+          .select('name, nickname, home_address, home_latitude, home_longitude')
           .eq('id', user.id)
           .maybeSingle()
         profileName = data?.name ?? null
+        const profileNickname = data?.nickname ?? null
         const homeAddress = data?.home_address ?? ''
         const homeLatitude = typeof data?.home_latitude === 'number' ? data.home_latitude : null
         const homeLongitude = typeof data?.home_longitude === 'number' ? data.home_longitude : null
@@ -66,9 +69,10 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
           return {
             userId: user.id,
             name: name || null,
+            nickname: profileNickname || name || null,
             avatarUrl: user.user_metadata?.avatarUrl ?? '',
             icon: user.user_metadata?.icon ?? '',
-            initial: (name || '?').slice(0, 1),
+            initial: (profileNickname || name || '?').slice(0, 1),
             homeAddress,
             homeLatitude,
             homeLongitude,
@@ -86,6 +90,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
         return {
           userId: user.id,
           name: name || null,
+          nickname: name || null,
           avatarUrl: user.user_metadata?.avatarUrl ?? '',
           icon: user.user_metadata?.icon ?? '',
           initial: (name || '?').slice(0, 1),

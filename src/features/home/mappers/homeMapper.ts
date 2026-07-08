@@ -78,10 +78,43 @@ function handicapDisplay(value: number | null) {
   return rounded > 0 ? `+${rounded}` : `${rounded}`
 }
 
+function normalizePlayerName(name?: string | null) {
+  return (name ?? '').trim().replace(/\s+/g, '').toLowerCase()
+}
+
+function decodeGogoParEmailName(value?: string | null) {
+  const email = (value ?? '').trim()
+  const match = email.match(/^([0-9a-f]{4,})@gogopar\.app$/i)
+  if (!match) return ''
+  const hex = match[1]
+  try {
+    const chars: string[] = []
+    for (let i = 0; i < hex.length; i += 4) {
+      const code = Number.parseInt(hex.slice(i, i + 4), 16)
+      if (!Number.isFinite(code)) return ''
+      chars.push(String.fromCharCode(code))
+    }
+    return chars.join('').trim()
+  } catch {
+    return ''
+  }
+}
+
 function roundTotalForUser(round: SavedRound, userName?: string | null) {
-  const player = round.players.find((item) => item.name === userName) ?? round.players[0]
-  if (!player) return null
-  return playerTotal(player.strokes)
+  const candidates = [userName, decodeGogoParEmailName(userName)]
+    .filter((value): value is string => !!value?.trim())
+
+  for (const candidate of candidates) {
+    const exact = round.players.find((item) => item.name === candidate)
+    if (exact) return playerTotal(exact.strokes)
+
+    const normalized = normalizePlayerName(candidate)
+    const normalizedMatch = round.players.find((item) => normalizePlayerName(item.name) === normalized)
+    if (normalizedMatch) return playerTotal(normalizedMatch.strokes)
+  }
+
+  // 사용자와 일치하지 않는 다른 플레이어 기록을 개인 기록으로 표시하지 않는다.
+  return null
 }
 
 function currentMonthRoundCount(rounds: SavedRound[]) {
@@ -122,7 +155,23 @@ function countMembers(groups: HomeScheduleGroupRow[], members: HomeScheduleGroup
   return groups.length > 0 ? groups.length * 4 : 0
 }
 
-function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow): HomeHeroRound {
+function sameGroupMemberNames(groups: HomeScheduleGroupRow[], members: HomeScheduleGroupMemberRow[], userId?: string | null) {
+  if (members.length === 0) return []
+
+  const myMember = userId
+    ? members.find((member) => member.member_user_id === userId)
+    : undefined
+
+  const targetGroupId = myMember?.group_id ?? groups[0]?.id
+  if (!targetGroupId) return members.map((member) => member.member_name).filter(Boolean)
+
+  return members
+    .filter((member) => member.group_id === targetGroupId)
+    .map((member) => member.member_name)
+    .filter(Boolean)
+}
+
+function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow, userId?: string | null): HomeHeroRound {
   const groups = raw.groups.filter((group) => group.schedule_id === schedule.id)
   const members = raw.members.filter((member) => member.schedule_id === schedule.id)
   const course = raw.courses.find((item) => item.id === schedule.course_id)
@@ -146,6 +195,7 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow):
     statusLabel: statusLabel(schedule.status),
     memberCount: countMembers(groups, members),
     groupCount: groups.length,
+    memberNames: sameGroupMemberNames(groups, members, userId),
     note: schedule.note ?? undefined,
     weatherText: weather?.weatherText ?? '날씨 준비중',
     temperature: weather?.temperature ?? '--°',
@@ -159,12 +209,12 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow):
   }
 }
 
-function mapHeroRounds(raw: HomeDashboardRawData): HomeHeroRound[] {
-  return raw.schedules.map((schedule) => mapScheduleRound(raw, schedule))
+function mapHeroRounds(raw: HomeDashboardRawData, userId?: string | null): HomeHeroRound[] {
+  return raw.schedules.map((schedule) => mapScheduleRound(raw, schedule, userId))
 }
 
-function mapUpcomingRound(raw: HomeDashboardRawData): HomeUpcomingRound | null {
-  const [firstRound] = mapHeroRounds(raw)
+function mapUpcomingRound(raw: HomeDashboardRawData, userId?: string | null): HomeUpcomingRound | null {
+  const [firstRound] = mapHeroRounds(raw, userId)
   if (!firstRound) return null
   const { locationLabel: _locationLabel, routeTimeText: _routeTimeText, departureTimeText: _departureTimeText, urgencyTone: _urgencyTone, ...round } = firstRound
   return round
@@ -273,9 +323,9 @@ export function createEmptyHomeDashboard(): HomeDashboard {
   }
 }
 
-export function mapHomeDashboard(raw: HomeDashboardRawData, userName?: string | null): HomeDashboard {
-  const heroRounds = mapHeroRounds(raw)
-  const upcomingRound = mapUpcomingRound(raw)
+export function mapHomeDashboard(raw: HomeDashboardRawData, userName?: string | null, userId?: string | null): HomeDashboard {
+  const heroRounds = mapHeroRounds(raw, userId)
+  const upcomingRound = mapUpcomingRound(raw, userId)
   const stats = mapStats(raw.rounds, userName)
   const firstHeroRound = heroRounds[0]
 

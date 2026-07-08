@@ -7,6 +7,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Polyline, Circle, Line, Text as SvgText, G, Polygon } from 'react-native-svg'
 import { getRounds, getRound, getPersonalRoundStat, playerTotal, totalPar, getHandicapsForRound, computeHandicaps, shortName, type PersonalRoundFir, type PersonalRoundHoleStat, type SavedRound } from '../lib/store'
+import { supabase } from '../lib/supabase'
 import { useClub } from '../lib/ClubContext'
 import { useUserProfile } from '../lib/UserProfileContext'
 import { useAsync } from '../lib/useAsync'
@@ -30,6 +31,56 @@ function formatWinners(names: string[], value: string): string {
     : `${shortName(names[0])} 외 ${names.length - 1}명`
   return `${label} (${value})`
 }
+
+
+function normalizeRecordName(name: string | null | undefined): string {
+  return (name ?? '').trim().replace(/\s+/g, '').toLowerCase()
+}
+
+function decodeGogoParEmailName(value: string | null | undefined): string {
+  const email = (value ?? '').trim()
+  const match = email.match(/^([0-9a-f]{4,})@gogopar\.app$/i)
+  if (!match) return ''
+  const hex = match[1]
+  try {
+    const chars: string[] = []
+    for (let i = 0; i < hex.length; i += 4) {
+      const code = Number.parseInt(hex.slice(i, i + 4), 16)
+      if (!Number.isFinite(code)) return ''
+      chars.push(String.fromCharCode(code))
+    }
+    return chars.join('').trim()
+  } catch {
+    return ''
+  }
+}
+
+function resolvePersonalPlayerName(
+  myName: string | null,
+  byName: Map<string, PlayerRound[]>,
+  scheduleMemberNames: string[] = [],
+): string | null {
+  if (byName.size === 0) return null
+
+  const candidates = [
+    myName,
+    decodeGogoParEmailName(myName),
+    ...scheduleMemberNames,
+  ].filter((value): value is string => !!value?.trim())
+
+  const names = [...byName.keys()]
+  for (const candidate of candidates) {
+    if (byName.has(candidate)) return candidate
+    const normalized = normalizeRecordName(candidate)
+    const matched = names.find((name) => normalizeRecordName(name) === normalized)
+    if (matched) return matched
+  }
+
+  // 실제 사용자명 또는 라운드 조편성의 member_user_id로 확인된 이름이 없으면
+  // 임의의 플레이어 기록을 개인 기록으로 표시하지 않는다.
+  return null
+}
+
 
 function holeStats(strokes: number[], pars: number[]) {
   let birdie = 0, par = 0, bogey = 0, dbl = 0, dblPlus = 0
@@ -202,45 +253,17 @@ function monthLabel(key: string) {
 
 function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicapBasis?: number }) {
   const nav = useNavigation<Nav>()
-  const [month, setMonth] = useState(currentMonthKey())
-
   if (rounds.length === 0) return <Text style={s.muted}>아직 라운드 기록이 없습니다.</Text>
 
-  const months = [...new Set(rounds.map((r) => r.date.slice(0, 7)))].sort((a, b) => b.localeCompare(a))
-  const minMonth = months[months.length - 1]
-  const maxMonth = months[0]
-  const filtered = rounds
-    .filter((r) => r.date.startsWith(month))
-    .sort((a, b) => {
-      if (!a.isComplete && b.isComplete) return -1
-      if (a.isComplete && !b.isComplete) return 1
-      return b.date.localeCompare(a.date)
-    })
+  const filtered = [...rounds].sort((a, b) => {
+    if (!a.isComplete && b.isComplete) return -1
+    if (a.isComplete && !b.isComplete) return 1
+    return b.date.localeCompare(a.date)
+  })
 
   return (
     <>
-      <View style={s.yearNav}>
-        <TouchableOpacity
-          style={[s.yearBtn, month <= minMonth && { opacity: 0.35 }]}
-          onPress={() => setMonth((value) => shiftMonthKey(value, -1))}
-          disabled={month <= minMonth}
-        >
-          <Text style={s.yearBtnText}>‹</Text>
-        </TouchableOpacity>
-        <Text style={s.yearText}>{monthLabel(month)}</Text>
-        <TouchableOpacity
-          style={[s.yearBtn, month >= maxMonth && { opacity: 0.35 }]}
-          onPress={() => setMonth((value) => shiftMonthKey(value, 1))}
-          disabled={month >= maxMonth}
-        >
-          <Text style={s.yearBtnText}>›</Text>
-        </TouchableOpacity>
-      </View>
-
-      {filtered.length === 0 ? (
-        <Text style={s.muted}>{monthLabel(month)} 라운드 기록이 없습니다.</Text>
-      ) : (
-        filtered.map((r) => {
+      {filtered.map((r) => {
           const par = totalPar(r.pars)
           const totals = r.players.map((p) => playerTotal(p.strokes))
           const best = Math.min(...totals)
@@ -428,8 +451,7 @@ function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicap
               </View>
             </TouchableOpacity>
           )
-        })
-      )}
+        })}
     </>
   )
 }
@@ -458,6 +480,7 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
   const [playerPanel, setPlayerPanel] = useState<'summary' | 'shot' | 'detail'>('summary')
   const [detailModal, setDetailModal] = useState<'target' | 'trend' | 'hole' | 'score' | 'rank' | 'improve' | 'rounds' | 'shot' | null>(null)
   const [personalStatsBySchedule, setPersonalStatsBySchedule] = useState<Record<string, PersonalRoundHoleStat[]>>({})
+  const [memberNamesBySchedule, setMemberNamesBySchedule] = useState<Record<string, string>>({})
   const byName = new Map<string, PlayerRound[]>()
 
   for (const r of rounds) {
@@ -486,7 +509,40 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
     }
   }
 
-  const playerRounds = myName ? [...(byName.get(myName) ?? [])].sort((a, b) => b.date.localeCompare(a.date)) : []
+  const allScheduleIds = Array.from(new Set(rounds.map((round) => round.scheduleId).filter((id): id is string => !!id)))
+
+  useEffect(() => {
+    if (!myUserId || allScheduleIds.length === 0) {
+      setMemberNamesBySchedule({})
+      return
+    }
+
+    let cancelled = false
+    supabase
+      .from('club_round_group_members')
+      .select('schedule_id, member_name')
+      .eq('member_user_id', myUserId)
+      .in('schedule_id', allScheduleIds)
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) {
+          setMemberNamesBySchedule({})
+          return
+        }
+
+        const next: Record<string, string> = {}
+        ;(data ?? []).forEach((item) => {
+          if (item.schedule_id && item.member_name) next[item.schedule_id] = item.member_name
+        })
+        setMemberNamesBySchedule(next)
+      })
+
+    return () => { cancelled = true }
+  }, [myUserId, allScheduleIds.join('|')])
+
+  const scheduleMemberNames = Array.from(new Set(Object.values(memberNamesBySchedule).filter(Boolean)))
+  const personalPlayerName = resolvePersonalPlayerName(myName, byName, scheduleMemberNames)
+  const playerRounds = personalPlayerName ? [...(byName.get(personalPlayerName) ?? [])].sort((a, b) => b.date.localeCompare(a.date)) : []
   const scheduleIds = playerRounds
     .map((round) => rounds.find((item) => item.id === round.roundId)?.scheduleId)
     .filter((id): id is string => !!id)
@@ -510,7 +566,7 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
     return () => { cancelled = true }
   }, [myUserId, scheduleIds.join('|')])
 
-  if (!myName || playerRounds.length === 0) return <Text style={s.muted}>내 개인 기록 데이터가 없습니다.</Text>
+  if (!personalPlayerName || playerRounds.length === 0) return <Text style={s.muted}>내 개인 기록 데이터가 없습니다.</Text>
 
   const totals = playerRounds.map((round) => round.total)
   const avg = Math.ceil(totals.reduce((sum, total) => sum + total, 0) / totals.length)
@@ -570,7 +626,7 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
   })
   const rankOf = (items: typeof playerStats, key: 'avg' | 'handicap' | 'birdie', lowerBetter: boolean) => {
     const sorted = [...items].sort((a, b) => lowerBetter ? a[key] - b[key] : b[key] - a[key])
-    return sorted.findIndex((item) => item.name === myName) + 1
+    return sorted.findIndex((item) => item.name === personalPlayerName) + 1
   }
   const totalPlayers = playerStats.length
   const target = Number(targetScore.replace(/[^0-9]/g, ''))

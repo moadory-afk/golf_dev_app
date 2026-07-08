@@ -42,6 +42,7 @@ import {
   premiumGolfHomeLayout,
 } from "../features/home/layout";
 import { getRoundSchedules, type ScheduledRound } from "../lib/roundSchedule";
+import { computeHandicaps, getRounds, playerTotal, totalPar, type SavedRound } from "../lib/store";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -100,14 +101,86 @@ function resolveFeedNavigation(
   return nav.navigate("RoundSchedulePrototype", { openCreate: true });
 }
 
+type HomeRecordDetailMode = "handicap" | "average" | "recent" | "best" | "matchup" | "records";
+
 function applyStatNavigation(
   stats: PremiumRecentStatItem[],
-  nav: Nav,
+  onOpenDetail: (mode: HomeRecordDetailMode) => void,
 ): PremiumRecentStatItem[] {
+  const modeByKey: Record<string, HomeRecordDetailMode> = {
+    handicap: "handicap",
+    average: "average",
+    recent: "recent",
+    best: "best",
+  };
+
   return stats.map((item) => ({
     ...item,
-    onPress: () => nav.navigate("Main", { screen: "History" }),
+    onPress: () => onOpenDetail(modeByKey[item.key] ?? "recent"),
   }));
+}
+
+function diffText(value: number) {
+  if (!Number.isFinite(value)) return "-";
+  return value > 0 ? `+${value}` : `${value}`;
+}
+
+function formatShortDate(date?: string) {
+  if (!date) return "-";
+  return date.length >= 10 ? date.slice(5, 10) : date;
+}
+
+function findPlayer(round: SavedRound, userName?: string | null) {
+  const target = (userName ?? "").trim();
+  if (!target) return null;
+  const normalized = target.replace(/\s+/g, "");
+  return (
+    round.players.find((player) => player.name === target) ??
+    round.players.find((player) => player.name.replace(/\s+/g, "") === normalized) ??
+    null
+  );
+}
+
+function getPersonalRoundRows(rounds: SavedRound[], userName?: string | null) {
+  return rounds
+    .map((round) => {
+      const player = findPlayer(round, userName);
+      if (!player) return null;
+      const total = playerTotal(player.strokes);
+      const par = totalPar(round.pars);
+      const diff = total - par;
+      const birdies = player.strokes.reduce((count, score, index) => count + (score - (round.pars[index] ?? 0) <= -1 ? 1 : 0), 0);
+      const pars = player.strokes.reduce((count, score, index) => count + (score - (round.pars[index] ?? 0) === 0 ? 1 : 0), 0);
+      return {
+        id: round.id,
+        date: round.date,
+        courseName: round.courseName,
+        total,
+        par,
+        diff,
+        birdies,
+        pars,
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => !!row)
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function handicapBeforeHome(name: string, rounds: SavedRound[], beforeDate: string, basis = 5): number {
+  const prior = rounds
+    .filter((round) => round.date < beforeDate && !!findPlayer(round, name))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-basis);
+
+  if (!prior.length) return 0;
+
+  return Math.ceil(
+    prior.reduce((sum, round) => {
+      const player = findPlayer(round, name);
+      if (!player) return sum;
+      return sum + playerTotal(player.strokes) - totalPar(round.pars);
+    }, 0) / prior.length,
+  );
 }
 
 function HomeErrorCard({
@@ -143,7 +216,8 @@ export default function HomeExperienceScreen() {
   const insets = useSafeAreaInsets();
   const nav = useNavigation<Nav>();
   const { activeClub: club, clubsLoaded } = useClub();
-  const { name: myName, userId } = useUserProfile();
+  const { name: myName, nickname, userId } = useUserProfile();
+  const displayName = nickname || myName || "골퍼";
   const { dashboard, loading, error, refresh } = useHomeDashboard({
     clubId: club?.id,
     userName: myName,
@@ -155,6 +229,9 @@ export default function HomeExperienceScreen() {
   >(null);
   const [popupRound, setPopupRound] = useState<ScheduledRound | null>(null);
   const [popupLoading, setPopupLoading] = useState(false);
+  const [recordDetailMode, setRecordDetailMode] = useState<HomeRecordDetailMode | null>(null);
+  const [recordDetailRounds, setRecordDetailRounds] = useState<SavedRound[]>([]);
+  const [recordDetailLoading, setRecordDetailLoading] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -196,9 +273,30 @@ export default function HomeExperienceScreen() {
     [club?.id],
   );
 
+  const openRecordDetail = useCallback(
+    async (mode: HomeRecordDetailMode) => {
+      setRecordDetailMode(mode);
+      if (!club?.id) {
+        setRecordDetailRounds([]);
+        return;
+      }
+
+      setRecordDetailLoading(true);
+      try {
+        const rounds = await getRounds(club.id);
+        setRecordDetailRounds(rounds);
+      } catch {
+        setRecordDetailRounds([]);
+      } finally {
+        setRecordDetailLoading(false);
+      }
+    },
+    [club?.id],
+  );
+
   const recentStats = useMemo(
-    () => applyStatNavigation(dashboard.stats.items, nav),
-    [dashboard.stats.items, nav],
+    () => applyStatNavigation(dashboard.stats.items, openRecordDetail),
+    [dashboard.stats.items, openRecordDetail],
   );
 
   const recordExtraCards = useMemo(() => {
@@ -216,31 +314,31 @@ export default function HomeExperienceScreen() {
         title: "상대 전적",
         subtitle: `${roundCount}경기 기준`,
         icon: "⚔️",
-        onPress: () => nav.navigate("Main", { screen: "History" }),
+        onPress: () => openRecordDetail("matchup"),
       },
       {
         key: "records",
         title: "보유 기록",
         subtitle: best === "-" ? "기록 없음" : `베스트 ${best}`,
         icon: "🏆",
-        onPress: () => nav.navigate("Main", { screen: "History" }),
+        onPress: () => openRecordDetail("records"),
       },
       {
         key: "average",
         title: "평균 기록",
         subtitle: average === "-" ? "기록 없음" : `${average}`,
         icon: "📊",
-        onPress: () => nav.navigate("Main", { screen: "History" }),
+        onPress: () => openRecordDetail("average"),
       },
       {
         key: "recent",
         title: "최근 기록",
         subtitle: recent === "-" ? "기록 없음" : `${recent}`,
         icon: "📝",
-        onPress: () => nav.navigate("Main", { screen: "History" }),
+        onPress: () => openRecordDetail("recent"),
       },
     ];
-  }, [dashboard.stats.items, dashboard.stats.recentRounds.length, nav]);
+  }, [dashboard.stats.items, dashboard.stats.recentRounds.length, nav, openRecordDetail]);
 
 
   if (clubsLoaded && !club) {
@@ -295,7 +393,7 @@ export default function HomeExperienceScreen() {
               <PremiumHomeMotion index={0}>
                 <PremiumHomeHeroSection
                   greeting=""
-                  userName={myName || "골퍼"}
+                  userName={displayName}
                   clubName={club?.name || "GogoPar Club"}
                   rounds={dashboard.hero.rounds}
                   fallbackCourseName={dashboard.hero.courseName}
@@ -339,7 +437,7 @@ export default function HomeExperienceScreen() {
             concierge: (
               <PremiumHomeMotion index={2}>
                 <PremiumGogoCaddieCard
-                  userName={myName || "골퍼"}
+                  userName={displayName}
                   courseName={dashboard.aiCaddie.courseName}
                   teeTime={dashboard.aiCaddie.teeTime}
                   averageScore={dashboard.aiCaddie.averageScore}
@@ -385,7 +483,191 @@ export default function HomeExperienceScreen() {
           );
         }}
       />
+
+      <HomeRecordDetailModal
+        visible={recordDetailMode !== null}
+        mode={recordDetailMode}
+        rounds={recordDetailRounds}
+        userName={myName}
+        loading={recordDetailLoading}
+        onClose={() => setRecordDetailMode(null)}
+      />
     </View>
+  );
+}
+
+function HomeRecordDetailModal({
+  visible,
+  mode,
+  rounds,
+  userName,
+  loading,
+  onClose,
+}: {
+  visible: boolean;
+  mode: HomeRecordDetailMode | null;
+  rounds: SavedRound[];
+  userName?: string | null;
+  loading: boolean;
+  onClose: () => void;
+}) {
+  const { palette } = useSkin();
+  const personalRows = getPersonalRoundRows(rounds, userName);
+  const latestRows = personalRows.slice(0, 5);
+  const basisRows = [...personalRows].sort((a, b) => a.date.localeCompare(b.date)).slice(-5);
+  const average = personalRows.length
+    ? Math.round(personalRows.reduce((sum, row) => sum + row.total, 0) / personalRows.length)
+    : null;
+  const best = personalRows.length ? [...personalRows].sort((a, b) => a.total - b.total)[0] : null;
+  const handicaps = computeHandicaps(rounds, 5);
+  const myHandicap = userName ? handicaps.get(userName) ?? 0 : 0;
+
+  const renderRows = (rows: typeof personalRows, diffFromAverage = false) => (
+    <View style={styles.detailTable}>
+      <View style={styles.detailTableHeader}>
+        <Text style={[styles.detailTh, { flex: 0.9, color: palette.muted }]}>날짜</Text>
+        <Text style={[styles.detailTh, { flex: 2.3, color: palette.muted }]}>코스</Text>
+        <Text style={[styles.detailTh, { flex: 0.9, color: palette.muted, textAlign: "right" }]}>스코어</Text>
+        <Text style={[styles.detailTh, { flex: 0.9, color: palette.muted, textAlign: "right" }]}>파대비</Text>
+      </View>
+      {rows.length ? rows.map((row) => {
+        const diff = diffFromAverage && average !== null ? row.total - average : row.diff;
+        return (
+          <View key={`${row.id}-${mode}`} style={[styles.detailTableRow, { borderColor: palette.border }]}>
+            <Text style={[styles.detailTd, { flex: 0.9, color: palette.text }]}>{formatShortDate(row.date)}</Text>
+            <Text style={[styles.detailTd, { flex: 2.3, color: palette.text }]} numberOfLines={1}>{row.courseName}</Text>
+            <Text style={[styles.detailTdStrong, { flex: 0.9, color: palette.text, textAlign: "right" }]}>{row.total}</Text>
+            <Text style={[styles.detailTdStrong, { flex: 0.9, color: diff <= 0 ? palette.green : "#E68A2E", textAlign: "right" }]}>{diffText(diff)}</Text>
+          </View>
+        );
+      }) : (
+        <Text style={[styles.detailEmpty, { color: palette.muted }]}>표시할 기록이 없습니다.</Text>
+      )}
+    </View>
+  );
+
+  const renderHandicap = () => (
+    <>
+      <Text style={[styles.detailSectionTitle, { color: palette.text }]}>↗ 핸디캡 추이 (5경기 슬라이딩)</Text>
+      <View style={[styles.handicapTrendBox, { backgroundColor: "rgba(31,160,92,0.10)", borderColor: palette.border }]}> 
+        {basisRows.length ? basisRows.map((row, index) => (
+          <View key={row.id} style={styles.handicapTrendItem}>
+            <Text style={[styles.handicapTrendValue, { color: palette.muted }]}>{diffText(row.diff)}</Text>
+            <View style={[styles.handicapTrendLine, { backgroundColor: index === basisRows.length - 1 ? palette.green : "rgba(25,156,89,0.18)" }]} />
+          </View>
+        )) : <Text style={[styles.detailEmpty, { color: palette.muted }]}>핸디캡 추이 데이터가 없습니다.</Text>}
+        {!!basisRows.length && <Text style={[styles.handicapTrendCaption, { color: palette.muted }]}>← 과거   최근 →</Text>}
+      </View>
+      {renderRows([...basisRows].reverse())}
+    </>
+  );
+
+  const renderMatchup = () => {
+    const records = new Map<string, { played: number; wins: number; draws: number; losses: number; handicap: number; diff: number }>();
+    const name = userName ?? "";
+    for (const round of rounds) {
+      const me = findPlayer(round, name);
+      if (!me) continue;
+      const myH = handicapBeforeHome(name, rounds, round.date, 5);
+      const myNet = playerTotal(me.strokes) - myH;
+      for (const opponent of round.players) {
+        if (opponent.name === me.name) continue;
+        const oppH = handicapBeforeHome(opponent.name, rounds, round.date, 5);
+        const oppNet = playerTotal(opponent.strokes) - oppH;
+        const current = records.get(opponent.name) ?? { played: 0, wins: 0, draws: 0, losses: 0, handicap: handicaps.get(opponent.name) ?? 0, diff: myHandicap - (handicaps.get(opponent.name) ?? 0) };
+        current.played += 1;
+        if (myNet < oppNet) current.wins += 1;
+        else if (myNet > oppNet) current.losses += 1;
+        else current.draws += 1;
+        records.set(opponent.name, current);
+      }
+    }
+    const rows = [...records.entries()].sort((a, b) => b[1].played - a[1].played);
+
+    return (
+      <View style={styles.h2hTable}>
+        <View style={styles.h2hHeader}>
+          {['상대', '경기', '승', '무', '패', '승률', '핸디', '핸디차'].map((label) => (
+            <Text key={label} style={[styles.h2hTh, { color: palette.muted }]}>{label}</Text>
+          ))}
+        </View>
+        {rows.length ? rows.map(([opponent, record]) => {
+          const rate = record.played ? Math.round((record.wins / record.played) * 100) : 0;
+          return (
+            <View key={opponent} style={[styles.h2hRow, { borderColor: palette.border }]}>
+              <Text style={[styles.h2hTdName, { color: palette.text }]} numberOfLines={1}>{opponent}</Text>
+              <Text style={[styles.h2hTd, { color: palette.text }]}>{record.played}</Text>
+              <Text style={[styles.h2hTd, { color: "#2F80ED" }]}>{record.wins}</Text>
+              <Text style={[styles.h2hTd, { color: palette.text }]}>{record.draws}</Text>
+              <Text style={[styles.h2hTd, { color: "#E8594F" }]}>{record.losses}</Text>
+              <Text style={[styles.h2hTdStrong, { color: palette.text }]}>{rate}%</Text>
+              <Text style={[styles.h2hTd, { color: palette.text }]}>{diffText(record.handicap)}</Text>
+              <Text style={[styles.h2hTdStrong, { color: record.diff > 0 ? "#E8594F" : palette.green }]}>{diffText(record.diff)}</Text>
+            </View>
+          );
+        }) : <Text style={[styles.detailEmpty, { color: palette.muted }]}>상대 전적 데이터가 없습니다.</Text>}
+      </View>
+    );
+  };
+
+  const renderRecords = () => {
+    const totalBirdies = personalRows.reduce((sum, row) => sum + row.birdies, 0);
+    const totalPars = personalRows.reduce((sum, row) => sum + row.pars, 0);
+    const cards = [
+      { label: "라운드", value: `${personalRows.length}회`, sub: "기록 라운드" },
+      { label: "베스트", value: best ? `${best.total}타` : "-", sub: best?.courseName ?? "기록 없음" },
+      { label: "버디", value: `${totalBirdies}개`, sub: "누적" },
+      { label: "파", value: `${totalPars}개`, sub: "누적" },
+    ];
+    return (
+      <View style={styles.recordsGrid}>
+        {cards.map((card) => (
+          <View key={card.label} style={[styles.recordBadgeCard, { backgroundColor: "rgba(31,160,92,0.10)", borderColor: palette.border }]}> 
+            <Text style={[styles.recordBadgeLabel, { color: palette.muted }]}>{card.label}</Text>
+            <Text style={[styles.recordBadgeValue, { color: palette.text }]}>{card.value}</Text>
+            <Text style={[styles.recordBadgeSub, { color: palette.muted }]} numberOfLines={1}>{card.sub}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  const titleByMode: Record<HomeRecordDetailMode, string> = {
+    handicap: "핸디캡 근거 (최근 5경기)",
+    average: average === null ? "전체 라운드 기록" : `전체 라운드 기록 (평균 ${average}타)`,
+    recent: "최근 라운드 기록",
+    best: "베스트 스코어 순위",
+    matchup: `역대 전적 (핸디 ${diffText(myHandicap)})`,
+    records: "보유 기록",
+  };
+
+  const content = () => {
+    if (loading) return <Text style={[styles.detailEmpty, { color: palette.muted }]}>불러오는 중입니다.</Text>;
+    if (!mode) return null;
+    if (mode === "handicap") return renderHandicap();
+    if (mode === "matchup") return renderMatchup();
+    if (mode === "records") return renderRecords();
+    if (mode === "average") return renderRows(personalRows, true);
+    if (mode === "best") return renderRows([...personalRows].sort((a, b) => a.total - b.total));
+    return renderRows(latestRows);
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.detailModalBackdrop}>
+        <View style={[styles.detailModalCard, { backgroundColor: palette.card }]}> 
+          <View style={styles.detailModalHeader}>
+            <Text style={[styles.detailModalTitle, { color: palette.text }]}>{mode ? titleByMode[mode] : "기록 상세"}</Text>
+            <TouchableOpacity activeOpacity={0.86} onPress={onClose} style={[styles.detailCloseButton, { backgroundColor: palette.green }]}> 
+              <Text style={styles.detailCloseText}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {content()}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -648,6 +930,196 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
     fontWeight: "900",
+  },
+
+  detailModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(11,24,18,0.64)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+  },
+  detailModalCard: {
+    width: "100%",
+    maxWidth: 720,
+    maxHeight: "84%",
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 14,
+  },
+  detailModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 16,
+  },
+  detailModalTitle: {
+    flex: 1,
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: "900",
+    letterSpacing: -0.4,
+  },
+  detailCloseButton: {
+    minWidth: 62,
+    minHeight: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  detailCloseText: {
+    color: "#fff",
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: "900",
+  },
+  detailSectionTitle: {
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: "900",
+    marginBottom: 12,
+  },
+  handicapTrendBox: {
+    minHeight: 74,
+    borderWidth: 1,
+    borderRadius: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    marginBottom: 18,
+  },
+  handicapTrendItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  handicapTrendValue: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "900",
+    marginBottom: 5,
+  },
+  handicapTrendLine: {
+    width: "100%",
+    height: 10,
+    borderRadius: 5,
+  },
+  handicapTrendCaption: {
+    position: "absolute",
+    right: 10,
+    bottom: -20,
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: "800",
+  },
+  detailTable: {
+    marginTop: 10,
+  },
+  detailTableHeader: {
+    flexDirection: "row",
+    paddingBottom: 8,
+  },
+  detailTableRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 38,
+    borderTopWidth: 1,
+  },
+  detailTh: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "900",
+  },
+  detailTd: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700",
+  },
+  detailTdStrong: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+  detailEmpty: {
+    paddingVertical: 28,
+    textAlign: "center",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "800",
+  },
+  h2hTable: {
+    minWidth: 360,
+  },
+  h2hHeader: {
+    flexDirection: "row",
+    paddingBottom: 8,
+  },
+  h2hRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 36,
+    borderTopWidth: 1,
+  },
+  h2hTh: {
+    width: 42,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  h2hTdName: {
+    width: 42,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "800",
+  },
+  h2hTd: {
+    width: 42,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  h2hTdStrong: {
+    width: 42,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  recordsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  recordBadgeCard: {
+    width: "48%",
+    minHeight: 92,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    justifyContent: "center",
+  },
+  recordBadgeLabel: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "900",
+  },
+  recordBadgeValue: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: "900",
+    letterSpacing: -0.7,
+    marginTop: 2,
+  },
+  recordBadgeSub: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "800",
+    marginTop: 4,
   },
   errorCard: { alignItems: "center", padding: 18, marginBottom: 4 },
   errorIcon: { fontSize: 28, marginBottom: 8 },

@@ -20,7 +20,6 @@ import {
   ImageCropModal,
   type ImageCropRect,
 } from "../components/ImageCropModal";
-import { ensureProfile } from "../lib/store";
 import { supabase } from "../lib/supabase";
 import { useUserProfile } from "../lib/UserProfileContext";
 import { C } from "../theme";
@@ -473,10 +472,10 @@ export default function ProfileScreen() {
       if (authUser) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("name, home_address, home_latitude, home_longitude")
+          .select("name, nickname, home_address, home_latitude, home_longitude")
           .eq("id", authUser.id)
           .maybeSingle();
-        fallbackName = profile?.name ?? "";
+        fallbackName = profile?.nickname ?? profile?.name ?? "";
         if (alive && profile) {
           setHomeAddress(profile.home_address ?? "");
           const latitude = Number(profile.home_latitude);
@@ -504,7 +503,7 @@ export default function ProfileScreen() {
           setDistanceForm(nextForm);
         }
       }
-      const displayName = metadataName || fallbackName;
+      const displayName = fallbackName || metadataName;
       if (!alive) return;
       setProfileName(displayName);
       setEditNameVal(displayName);
@@ -623,19 +622,39 @@ export default function ProfileScreen() {
     if (!editNameVal.trim() || !user) return;
     setSavingName(true);
     try {
-      const name = editNameVal.trim();
-      const { error } = await supabase.auth.updateUser({
-        data: { ...user.user_metadata, name },
-      });
-      if (error) throw error;
-      await ensureProfile(user.id, name);
+      const nickname = editNameVal.trim();
+      const { data: existingProfile, error: selectError } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (selectError) throw selectError;
+
+      if (existingProfile) {
+        const { error } = await supabase
+          .from("profiles")
+          .update({
+            nickname,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", user.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("profiles").insert({
+          id: user.id,
+          nickname,
+          updated_at: new Date().toISOString(),
+        });
+        if (error) throw error;
+      }
+
       const { data } = await supabase.auth.getUser();
       setUser(data.user);
-      setProfileName(name);
+      setProfileName(nickname);
       setEditingName(false);
       await refreshProfile();
     } catch {
-      Alert.alert("오류", "이름 변경에 실패했습니다.");
+      Alert.alert("오류", "닉네임 변경에 실패했습니다.");
     } finally {
       setSavingName(false);
     }
@@ -663,7 +682,6 @@ export default function ProfileScreen() {
     try {
       const point = selectedHomePoint ?? (await geocodeAddress(address));
       const payload = {
-        name: profileName || user.user_metadata?.name || user.email || null,
         home_address: address,
         home_latitude: point?.latitude ?? null,
         home_longitude: point?.longitude ?? null,

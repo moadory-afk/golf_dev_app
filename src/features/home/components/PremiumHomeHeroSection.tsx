@@ -886,6 +886,7 @@ const styles = StyleSheet.create({
   backMenuColumn: {
     width: 116,
     justifyContent: "flex-start",
+    alignItems: "flex-end",
     gap: 6,
   },
   backMenuButton: {

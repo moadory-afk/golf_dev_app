@@ -15,6 +15,7 @@ export type HomeUpcomingRound = {
   statusLabel: string
   memberCount: number
   groupCount: number
+  memberNames?: string[]
   note?: string
   weatherText: string
   temperature: string

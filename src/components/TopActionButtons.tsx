@@ -1,16 +1,24 @@
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
-import { useRef, useState } from 'react'
-import { useNavigation } from '@react-navigation/native'
+import { useCallback, useRef, useState } from 'react'
+import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
+
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
 import { useClub } from '../lib/ClubContext'
 import { useSkin } from '../skins'
 import type { RootStackParamList } from '../navigation/types'
 import { UserAvatarBtn } from './UserAvatar'
+import { useUserProfile } from '../lib/UserProfileContext'
+import { getClubNotices } from '../lib/store'
 
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
+
+function noticeReadKey(clubId?: string, userId?: string | null) {
+  return `@gogopar_notice_reads:${clubId ?? 'none'}:${userId ?? 'guest'}`
+}
 
 type TopActionButtonsProps = {
   topInset?: number
@@ -21,8 +29,42 @@ export function TopActionButtons({ topInset = 0, floating = false }: TopActionBu
   const { palette } = useSkin()
   const nav = useNavigation<Nav>()
   const { activeClub: club, myClubs, setActiveClub } = useClub()
+  const { userId } = useUserProfile()
   const clubRef = useRef<View>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; w: number } | null>(null)
+  const [unreadNoticeCount, setUnreadNoticeCount] = useState(0)
+
+  useFocusEffect(
+    useCallback(() => {
+      let mounted = true
+
+      async function loadUnreadNoticeCount() {
+        if (!club?.id) {
+          if (mounted) setUnreadNoticeCount(0)
+          return
+        }
+
+        try {
+          const [items, rawReads] = await Promise.all([
+            getClubNotices(club.id),
+            AsyncStorage.getItem(noticeReadKey(club.id, userId)),
+          ])
+          const readIds = rawReads ? JSON.parse(rawReads) : []
+          const visibleItems = club.role === 'admin' ? items : items.filter((item) => item.isPublished)
+          const unreadCount = visibleItems.filter((item) => !readIds.includes(item.id)).length
+          if (mounted) setUnreadNoticeCount(unreadCount)
+        } catch {
+          if (mounted) setUnreadNoticeCount(0)
+        }
+      }
+
+      loadUnreadNoticeCount()
+
+      return () => {
+        mounted = false
+      }
+    }, [club?.id, club?.role, userId]),
+  )
 
   function openClubMenu() {
     clubRef.current?.measureInWindow((x, y, w, h) => setMenu({ x, y: y + h + 6, w: Math.max(w, 190) }))
@@ -41,9 +83,11 @@ export function TopActionButtons({ topInset = 0, floating = false }: TopActionBu
       <View style={styles.actions}>
         <TouchableOpacity activeOpacity={0.84} onPress={() => nav.navigate('NoticePrototype')} style={styles.circleButton}>
           <BellLineIcon />
-          <View style={[styles.badge, { backgroundColor: palette.danger }]}> 
-            <Text style={styles.badgeText}>3</Text>
-          </View>
+          {unreadNoticeCount > 0 && (
+            <View style={[styles.badge, { backgroundColor: palette.danger }]}> 
+              <Text style={styles.badgeText}>{unreadNoticeCount > 99 ? '99+' : unreadNoticeCount}</Text>
+            </View>
+          )}
         </TouchableOpacity>
         <UserAvatarBtn size={40} borderColor="transparent" backgroundColor="transparent" />
       </View>
@@ -81,7 +125,7 @@ export function TopActionButtons({ topInset = 0, floating = false }: TopActionBu
 
 function BellLineIcon() {
   return (
-    <Svg width={22} height={22} viewBox="0 0 24 24">
+    <Svg width={28} height={28} viewBox="0 0 20 20">
       <Path
         d="M18 10.5c0-3.4-2.2-6-6-6s-6 2.6-6 6v3.2l-1.5 2.5h15l-1.5-2.5v-3.2Z"
         fill="none"

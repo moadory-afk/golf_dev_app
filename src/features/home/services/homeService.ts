@@ -11,7 +11,7 @@ export async function getHomeDashboard(
   if (!clubId) return createEmptyHomeDashboard()
 
   const raw = await getHomeDashboardRawData(clubId)
-  const dashboard = mapHomeDashboard(raw, userName)
+  const dashboard = mapHomeDashboard(raw, userName, userId)
   const upcomingRound = dashboard.upcomingRound
 
   const aiPreview = await getHomeAICaddiePreview({
