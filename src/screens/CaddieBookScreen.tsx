@@ -619,7 +619,7 @@ export default function CaddieBookScreen() {
   const [activeLayoutName, setActiveLayoutName] = useState(
     params.layoutName ?? null,
   );
-  const pagerWidth = Math.max(280, windowWidth - spacing.lg * 3);
+  const pagerWidth = Math.max(280, windowWidth - spacing.lg * 2);
   const { data, loading, error, refresh } = useCaddieBook({
     ...params,
     layoutId: activeLayoutId,
@@ -814,7 +814,6 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.lg,
     gap: spacing.md,
-    overflow: "hidden",
   },
   header: { gap: 3 },
   eyebrow: { ...typography.caption, fontWeight: "900", letterSpacing: 0.4 },
@@ -880,8 +879,8 @@ const styles = StyleSheet.create({
   },
   holePickerNo: { fontSize: 17, lineHeight: 21, fontWeight: "900" },
   holePickerMeta: { ...typography.caption, fontWeight: "900" },
-  holePager: { overflow: "hidden", width: "100%" },
-  flipShell: { minHeight: 360, overflow: "hidden" },
+  holePager: { overflow: "visible", width: "100%" },
+  flipShell: { minHeight: 360, overflow: "visible" },
   flipFace: { width: "100%", backfaceVisibility: "hidden" },
   flipBackFace: { position: "absolute", left: 0, right: 0, top: 0 },
   heroCard: {

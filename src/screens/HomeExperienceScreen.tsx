@@ -201,42 +201,47 @@ export default function HomeExperienceScreen() {
     [dashboard.stats.items, nav],
   );
 
-  const heroActions = useMemo(
-    () => [
-      {
-        key: "caddie-map",
-        icon: "🗺️",
-        label: "캐디맵",
-        onPress: (round: HomeHeroRound) =>
-          nav.navigate("CaddieBook", caddieBookHeroParams(round)),
-      },
-      {
-        key: "groups",
-        icon: "👥",
-        label: "조편성",
-        onPress: (round: HomeHeroRound) => openRoundPopup(round, "groups"),
-      },
-      {
-        key: "lotto",
-        icon: "🎲",
-        label: "Lotto",
-        onPress: (round: HomeHeroRound) => openRoundPopup(round, "lotto"),
-      },
-    ],
-    [nav, openRoundPopup],
-  );
+  const recordExtraCards = useMemo(() => {
+    const statValue = (key: string) =>
+      dashboard.stats.items.find((item) => item.key === key)?.value || "-";
 
-  const caddieQuickActions = useMemo(() => {
-    const primaryRound = dashboard.hero.rounds[0];
-    if (!primaryRound) return [];
-    return heroActions.map((action) => ({
-      key: action.key,
-      icon: action.icon,
-      title: action.label,
-      subtitle: primaryRound.courseName,
-      onPress: () => action.onPress(primaryRound),
-    }));
-  }, [dashboard.hero.rounds, heroActions]);
+    const best = statValue("best");
+    const average = statValue("average");
+    const recent = statValue("recent");
+    const roundCount = dashboard.stats.recentRounds.length;
+
+    return [
+      {
+        key: "matchup",
+        title: "상대 전적",
+        subtitle: `${roundCount}경기 기준`,
+        icon: "⚔️",
+        onPress: () => nav.navigate("Main", { screen: "History" }),
+      },
+      {
+        key: "records",
+        title: "보유 기록",
+        subtitle: best === "-" ? "기록 없음" : `베스트 ${best}`,
+        icon: "🏆",
+        onPress: () => nav.navigate("Main", { screen: "History" }),
+      },
+      {
+        key: "average",
+        title: "평균 기록",
+        subtitle: average === "-" ? "기록 없음" : `${average}`,
+        icon: "📊",
+        onPress: () => nav.navigate("Main", { screen: "History" }),
+      },
+      {
+        key: "recent",
+        title: "최근 기록",
+        subtitle: recent === "-" ? "기록 없음" : `${recent}`,
+        icon: "📝",
+        onPress: () => nav.navigate("Main", { screen: "History" }),
+      },
+    ];
+  }, [dashboard.stats.items, dashboard.stats.recentRounds.length, nav]);
+
 
   if (clubsLoaded && !club) {
     return (
@@ -340,7 +345,6 @@ export default function HomeExperienceScreen() {
                   averageScore={dashboard.aiCaddie.averageScore}
                   hasUpcomingRound={dashboard.aiCaddie.hasUpcomingRound}
                   feed={dashboard.feed}
-                  actions={caddieQuickActions}
                   onPress={() =>
                     resolveFeedNavigation(
                       nav,
@@ -359,7 +363,7 @@ export default function HomeExperienceScreen() {
               ) : null,
             recordExtras: (
               <PremiumHomeMotion index={4}>
-                <PremiumRecordExtrasSection />
+                <PremiumRecordExtrasSection cards={recordExtraCards} />
               </PremiumHomeMotion>
             ),
           }}

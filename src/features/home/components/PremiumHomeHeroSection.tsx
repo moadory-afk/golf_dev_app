@@ -767,7 +767,7 @@ const styles = StyleSheet.create({
   scheduleSummary: {
     flex: 1,
     minWidth: 0,
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "center",
     paddingHorizontal: 8,
   },

@@ -102,17 +102,17 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   characterStage: {
-    width: 146,
-    minHeight: 146,
+    width: 125,
+    minHeight: 125,
     borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'flex-end',
     overflow: 'hidden',
   },
   characterImage: {
-    width: 168,
-    height: 190,
-    marginBottom: -10,
+    width: 145,
+    height: 165,
+    marginBottom: -8,
   },
   rightColumn: {
     flex: 1,
