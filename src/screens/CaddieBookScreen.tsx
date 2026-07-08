@@ -273,9 +273,11 @@ function CourseHoleInfoBar({
 function HoleDetailCard({
   hole,
   width,
+  height,
 }: {
   hole: CaddieBookHole;
   width: number;
+  height: number;
 }) {
   const { palette } = useSkin();
   const [flipped, setFlipped] = useState(false);
@@ -329,7 +331,7 @@ function HoleDetailCard({
     <TouchableOpacity
       activeOpacity={0.96}
       onPress={() => setFlipped((next) => !next)}
-      style={[styles.flipShell, { width }]}
+      style={[styles.flipShell, { width, height }]}
     >
       <Animated.View
         style={[
@@ -338,53 +340,58 @@ function HoleDetailCard({
         ]}
       >
         <GPCard
-          style={[styles.heroCard, { backgroundColor: palette.headerBg }]}
+          style={[
+            styles.heroCard,
+            { height, backgroundColor: palette.headerBg },
+          ]}
         >
-          <View style={styles.detailHeroHeader}>
-            <View style={styles.detailTitleWrap}>
-              <Text style={[styles.heroEyebrow, { color: palette.gold }]}>
-                Hole {hole.holeNo}
-              </Text>
-              <Text
-                style={[styles.heroTitle, { color: palette.headerText }]}
-                numberOfLines={2}
-              >
-                {hole.title}
-              </Text>
-            </View>
-            <View
-              style={[styles.parPill, { backgroundColor: palette.greenLight }]}
-            >
-              <Text style={[styles.parText, { color: palette.green }]}>
-                PAR {hole.par ?? "-"}
-              </Text>
-            </View>
-          </View>
-          <Text
-            style={[styles.heroMessage, { color: palette.headerText }]}
-            numberOfLines={4}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+            contentContainerStyle={styles.heroCardScrollContent}
           >
-            {hole.summary}
-          </Text>
-          {!!hole.strategy && (
-            <Text
-              style={[styles.heroSubMessage, { color: palette.headerText }]}
-              numberOfLines={4}
-            >
-              {hole.strategy}
+            <View style={styles.detailHeroHeader}>
+              <View style={styles.detailTitleWrap}>
+                <Text style={[styles.heroEyebrow, { color: palette.gold }]}>
+                  Hole {hole.holeNo}
+                </Text>
+                <Text
+                  style={[styles.heroTitle, { color: palette.headerText }]}
+                  numberOfLines={2}
+                >
+                  {hole.title}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.parPill,
+                  { backgroundColor: palette.greenLight },
+                ]}
+              >
+                <Text style={[styles.parText, { color: palette.green }]}>
+                  PAR {hole.par ?? "-"}
+                </Text>
+              </View>
+            </View>
+            <Text style={[styles.heroMessage, { color: palette.headerText }]}>
+              {hole.summary}
             </Text>
-          )}
-          {!!hole.caution && (
-            <Text
-              style={[styles.heroWarning, { color: palette.gold }]}
-              numberOfLines={2}
-            >
-              주의 · {hole.caution}
+            {!!hole.strategy && (
+              <Text
+                style={[styles.heroSubMessage, { color: palette.headerText }]}
+              >
+                {hole.strategy}
+              </Text>
+            )}
+            {!!hole.caution && (
+              <Text style={[styles.heroWarning, { color: palette.gold }]}>
+                주의 · {hole.caution}
+              </Text>
+            )}
+            <Text style={[styles.flipHint, { color: palette.headerText }]}>
+              탭하면 AI Shot Plan
             </Text>
-          )}
-          <Text style={[styles.flipHint, { color: palette.headerText }]}>
-            탭하면 AI Shot Plan
-          </Text>
+          </ScrollView>
         </GPCard>
       </Animated.View>
 
@@ -399,168 +406,183 @@ function HoleDetailCard({
           style={[
             styles.heroCard,
             styles.shotPlanBackCard,
-            { backgroundColor: palette.card, borderColor: palette.border },
+            {
+              height,
+              backgroundColor: palette.card,
+              borderColor: palette.border,
+            },
           ]}
         >
-          <View style={styles.safeHeaderRow}>
-            <View style={styles.safeTitleWrap}>
-              <Text style={[styles.heroEyebrow, { color: palette.green }]}>
-                AI Shot Plan
-              </Text>
-              <View style={styles.safeModeRow}>
-                <Text style={styles.safeDot}>●</Text>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+            contentContainerStyle={styles.heroCardScrollContent}
+          >
+            <View style={styles.safeHeaderRow}>
+              <View style={styles.safeTitleWrap}>
+                <Text style={[styles.heroEyebrow, { color: palette.green }]}>
+                  AI Shot Plan
+                </Text>
+                <View style={styles.safeModeRow}>
+                  <Text style={styles.safeDot}>●</Text>
+                  <Text
+                    style={[styles.safeTitle, { color: palette.text }]}
+                    numberOfLines={1}
+                  >
+                    {shotPlan?.modeLabel || "SAFE"} ·{" "}
+                    {shotPlan?.compact ||
+                      hole.planHeadline ||
+                      `${hole.holeNo}번 홀 공략`}
+                  </Text>
+                </View>
+              </View>
+              <View
+                style={[
+                  styles.confidencePill,
+                  {
+                    backgroundColor: palette.greenLight,
+                    borderColor: palette.border,
+                  },
+                ]}
+              >
                 <Text
-                  style={[styles.safeTitle, { color: palette.text }]}
-                  numberOfLines={1}
+                  style={[styles.confidenceValue, { color: palette.green }]}
                 >
-                  {shotPlan?.modeLabel || "SAFE"} ·{" "}
-                  {shotPlan?.compact ||
-                    hole.planHeadline ||
-                    `${hole.holeNo}번 홀 공략`}
+                  {shotPlan?.confidence ?? 89}%
+                </Text>
+                <Text
+                  style={[styles.confidenceLabel, { color: palette.muted }]}
+                >
+                  신뢰도
                 </Text>
               </View>
             </View>
+
+            <View style={styles.planTimelineWrap}>
+              <View style={styles.planTimelineRail}>
+                {planSteps.slice(0, 3).map((step, index) => (
+                  <View
+                    key={`${step.type}-${index}`}
+                    style={styles.planTimelineNodeWrap}
+                  >
+                    <View
+                      style={[
+                        index === 2
+                          ? styles.planTimelineGreenNode
+                          : styles.planTimelineNode,
+                        {
+                          backgroundColor:
+                            index === 0
+                              ? palette.gold
+                              : index === 1
+                                ? palette.green
+                                : palette.card,
+                          borderColor: palette.green,
+                        },
+                      ]}
+                    />
+                    {index < 2 && (
+                      <View
+                        style={[
+                          styles.planTimelineLine,
+                          { backgroundColor: palette.border },
+                        ]}
+                      />
+                    )}
+                  </View>
+                ))}
+              </View>
+              <View style={styles.planStepLabels}>
+                {planSteps.slice(0, 3).map((step, index) => (
+                  <View
+                    key={`${step.clubLabel}-${index}`}
+                    style={styles.planStepLabel}
+                  >
+                    <Text
+                      style={[styles.planStepTitle, { color: palette.text }]}
+                      numberOfLines={1}
+                    >
+                      {step.clubLabel}
+                    </Text>
+                    <Text
+                      style={[styles.planStepMeta, { color: palette.muted }]}
+                      numberOfLines={1}
+                    >
+                      {index === 2 ? "PUTT" : `${step.carryM || "-"}m`}
+                    </Text>
+                    {index < 2 && (
+                      <Text
+                        style={[
+                          styles.planStepRemain,
+                          { color: palette.green },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        남은 {step.remainingAfterM || 0}m
+                      </Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.planMetricRow}>
+              <MiniMetric
+                label="예상타수"
+                value={shotPlan?.expectedStrokes?.toFixed(1) || "4.4"}
+                tone="gold"
+              />
+              <MiniMetric
+                label="구간"
+                value={shotPlan?.expectedScoreLabel || "Par ~ Bogey"}
+              />
+              <MiniMetric
+                label="난이도"
+                value={shotPlan?.difficultyLabel || "NORMAL"}
+                tone="gold"
+              />
+            </View>
+
             <View
               style={[
-                styles.confidencePill,
+                styles.probabilityBox,
                 {
                   backgroundColor: palette.greenLight,
                   borderColor: palette.border,
                 },
               ]}
             >
-              <Text style={[styles.confidenceValue, { color: palette.green }]}>
-                {shotPlan?.confidence ?? 89}%
+              <Text style={[styles.probabilityTitle, { color: palette.text }]}>
+                스코어 확률
               </Text>
-              <Text style={[styles.confidenceLabel, { color: palette.muted }]}>
-                신뢰도
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.planTimelineWrap}>
-            <View style={styles.planTimelineRail}>
-              {planSteps.slice(0, 3).map((step, index) => (
-                <View
-                  key={`${step.type}-${index}`}
-                  style={styles.planTimelineNodeWrap}
+              <View style={styles.probabilityRow}>
+                <Text
+                  style={[styles.probabilityItem, { color: palette.green }]}
                 >
-                  <View
-                    style={[
-                      index === 2
-                        ? styles.planTimelineGreenNode
-                        : styles.planTimelineNode,
-                      {
-                        backgroundColor:
-                          index === 0
-                            ? palette.gold
-                            : index === 1
-                              ? palette.green
-                              : palette.card,
-                        borderColor: palette.green,
-                      },
-                    ]}
-                  />
-                  {index < 2 && (
-                    <View
-                      style={[
-                        styles.planTimelineLine,
-                        { backgroundColor: palette.border },
-                      ]}
-                    />
-                  )}
-                </View>
-              ))}
-            </View>
-            <View style={styles.planStepLabels}>
-              {planSteps.slice(0, 3).map((step, index) => (
-                <View
-                  key={`${step.clubLabel}-${index}`}
-                  style={styles.planStepLabel}
+                  Par {shotPlan?.probability.par ?? 62}%
+                </Text>
+                <Text style={[styles.probabilityItem, { color: palette.gold }]}>
+                  Bogey {shotPlan?.probability.bogey ?? 26}%
+                </Text>
+                <Text
+                  style={[styles.probabilityItem, { color: palette.danger }]}
                 >
-                  <Text
-                    style={[styles.planStepTitle, { color: palette.text }]}
-                    numberOfLines={1}
-                  >
-                    {step.clubLabel}
-                  </Text>
-                  <Text
-                    style={[styles.planStepMeta, { color: palette.muted }]}
-                    numberOfLines={1}
-                  >
-                    {index === 2 ? "PUTT" : `${step.carryM || "-"}m`}
-                  </Text>
-                  {index < 2 && (
-                    <Text
-                      style={[styles.planStepRemain, { color: palette.green }]}
-                      numberOfLines={1}
-                    >
-                      남은 {step.remainingAfterM || 0}m
-                    </Text>
-                  )}
-                </View>
-              ))}
+                  Double {shotPlan?.probability.double ?? 12}%
+                </Text>
+              </View>
             </View>
-          </View>
 
-          <View style={styles.planMetricRow}>
-            <MiniMetric
-              label="예상타수"
-              value={shotPlan?.expectedStrokes?.toFixed(1) || "4.4"}
-              tone="gold"
-            />
-            <MiniMetric
-              label="구간"
-              value={shotPlan?.expectedScoreLabel || "Par ~ Bogey"}
-            />
-            <MiniMetric
-              label="난이도"
-              value={shotPlan?.difficultyLabel || "NORMAL"}
-              tone="gold"
-            />
-          </View>
-
-          <View
-            style={[
-              styles.probabilityBox,
-              {
-                backgroundColor: palette.greenLight,
-                borderColor: palette.border,
-              },
-            ]}
-          >
-            <Text style={[styles.probabilityTitle, { color: palette.text }]}>
-              스코어 확률
+            <Text style={[styles.shotPlanReason, { color: palette.text }]}>
+              {shotPlan?.reason ||
+                hole.planMessage ||
+                "안전한 구간으로 공략하면 그린 앞까지 안정적으로 연결됩니다."}
             </Text>
-            <View style={styles.probabilityRow}>
-              <Text style={[styles.probabilityItem, { color: palette.green }]}>
-                Par {shotPlan?.probability.par ?? 62}%
+            {!!shotPlan?.mission && (
+              <Text style={[styles.shotPlanMission, { color: palette.muted }]}>
+                {shotPlan.mission}
               </Text>
-              <Text style={[styles.probabilityItem, { color: palette.gold }]}>
-                Bogey {shotPlan?.probability.bogey ?? 26}%
-              </Text>
-              <Text style={[styles.probabilityItem, { color: palette.danger }]}>
-                Double {shotPlan?.probability.double ?? 12}%
-              </Text>
-            </View>
-          </View>
-
-          <Text
-            style={[styles.shotPlanReason, { color: palette.text }]}
-            numberOfLines={3}
-          >
-            {shotPlan?.reason ||
-              hole.planMessage ||
-              "안전한 구간으로 공략하면 그린 앞까지 안정적으로 연결됩니다."}
-          </Text>
-          {!!shotPlan?.mission && (
-            <Text
-              style={[styles.shotPlanMission, { color: palette.muted }]}
-              numberOfLines={2}
-            >
-              {shotPlan.mission}
-            </Text>
-          )}
+            )}
+          </ScrollView>
         </GPCard>
       </Animated.View>
     </TouchableOpacity>
@@ -572,11 +594,13 @@ function HoleSwipePager({
   selectedIndex,
   onIndexChange,
   width,
+  height,
 }: {
   holes: CaddieBookHole[];
   selectedIndex: number;
   onIndexChange: (index: number) => void;
   width: number;
+  height: number;
 }) {
   const pagerRef = useRef<ScrollView>(null);
 
@@ -601,7 +625,12 @@ function HoleSwipePager({
       style={styles.holePager}
     >
       {holes.map((hole) => (
-        <HoleDetailCard key={hole.id} hole={hole} width={width} />
+        <HoleDetailCard
+          key={hole.id}
+          hole={hole}
+          width={width}
+          height={height}
+        />
       ))}
     </ScrollView>
   );
@@ -612,7 +641,7 @@ export default function CaddieBookScreen() {
   const insets = useSafeAreaInsets();
   const { palette } = useSkin();
   const { userId } = useUserProfile();
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const params = route.params ?? {};
   const [layoutTabs, setLayoutTabs] = useState<CourseLayoutTab[]>([]);
   const [activeLayoutId, setActiveLayoutId] = useState(params.layoutId ?? null);
@@ -620,6 +649,7 @@ export default function CaddieBookScreen() {
     params.layoutName ?? null,
   );
   const pagerWidth = Math.max(280, windowWidth - spacing.lg * 2);
+  const strategyCardHeight = Math.max(420, windowHeight - insets.top - 292);
   const { data, loading, error, refresh } = useCaddieBook({
     ...params,
     layoutId: activeLayoutId,
@@ -757,9 +787,6 @@ export default function CaddieBookScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <Text style={[styles.eyebrow, { color: palette.green }]}>
-            GogoPar Caddie Book
-          </Text>
           <Text style={[styles.title, { color: palette.text }]}>
             {data.courseName}
           </Text>
@@ -791,16 +818,12 @@ export default function CaddieBookScreen() {
           <EmptyCaddieBook onRetry={refresh} />
         ) : selectedHole ? (
           <>
-            <HolePicker
-              holes={data.holes}
-              selectedHoleNo={selectedHole.holeNo}
-              onSelect={setSelectedHoleNo}
-            />
             <HoleSwipePager
               holes={data.holes}
               selectedIndex={selectedIndex}
               onIndexChange={handleHoleIndexChange}
               width={pagerWidth}
+              height={strategyCardHeight}
             />
           </>
         ) : null}
@@ -818,10 +841,10 @@ const styles = StyleSheet.create({
   header: { gap: 3 },
   eyebrow: { ...typography.caption, fontWeight: "900", letterSpacing: 0.4 },
   title: {
-    fontSize: 28,
-    lineHeight: 34,
+    fontSize: 22,
+    lineHeight: 27,
     fontWeight: "900",
-    letterSpacing: -1.0,
+    letterSpacing: -0.7,
   },
   subtitle: { ...typography.body, fontWeight: "700" },
   loadingBox: {
@@ -838,8 +861,8 @@ const styles = StyleSheet.create({
   emptyButton: { marginTop: spacing.md },
   courseTabsContent: { gap: spacing.sm, paddingRight: spacing.lg },
   courseTab: {
-    minWidth: 78,
-    minHeight: 40,
+    minWidth: 72,
+    minHeight: 32,
     borderRadius: radius.pill,
     borderWidth: 1,
     paddingHorizontal: spacing.md,
@@ -880,16 +903,19 @@ const styles = StyleSheet.create({
   holePickerNo: { fontSize: 17, lineHeight: 21, fontWeight: "900" },
   holePickerMeta: { ...typography.caption, fontWeight: "900" },
   holePager: { overflow: "visible", width: "100%" },
-  flipShell: { minHeight: 360, overflow: "visible" },
+  flipShell: { overflow: "visible" },
   flipFace: { width: "100%", backfaceVisibility: "hidden" },
   flipBackFace: { position: "absolute", left: 0, right: 0, top: 0 },
   heroCard: {
     width: "100%",
-    minHeight: 350,
     padding: spacing.lg,
-    gap: spacing.md,
     borderRadius: radius.xxl,
     overflow: "hidden",
+  },
+  heroCardScrollContent: {
+    flexGrow: 1,
+    gap: spacing.md,
+    paddingBottom: spacing.sm,
   },
   detailHeroHeader: {
     flexDirection: "row",
