@@ -477,7 +477,6 @@ function firLabel(value: PersonalRoundFir) {
 
 function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: SavedRound[]; handicapBasis?: number; myName: string | null; myUserId: string | null }) {
   const [targetScore, setTargetScore] = useState('')
-  const [playerPanel, setPlayerPanel] = useState<'summary' | 'shot' | 'detail'>('summary')
   const [detailModal, setDetailModal] = useState<'target' | 'trend' | 'hole' | 'score' | 'rank' | 'improve' | 'rounds' | 'shot' | null>(null)
   const [personalStatsBySchedule, setPersonalStatsBySchedule] = useState<Record<string, PersonalRoundHoleStat[]>>({})
   const [memberNamesBySchedule, setMemberNamesBySchedule] = useState<Record<string, string>>({})
@@ -727,6 +726,19 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
               : detailModal === 'shot' ? '샷/퍼팅 분석'
                 : '라운드별 상세'
 
+  const reportCardWidth = Math.min(270, Math.max(224, Dimensions.get('window').width * 0.64))
+  const personalReportCards = [
+    { key: 'target', icon: '🎯', title: '목표 설정', subtitle: `${targetScore || '100'}타 목표 관리`, modal: 'target' },
+    { key: 'trend', icon: '📈', title: '스코어 추이', subtitle: `최근5 평균 ${recent5Avg}타`, modal: 'trend' },
+    { key: 'shot', icon: '🏌️', title: '샷·퍼팅', subtitle: `FIR ${firRate === null ? '-' : `${firRate}%`} · 퍼팅 ${avgPutts === '-' ? '-' : `${avgPutts}개`}`, modal: 'shot' },
+    { key: 'hole', icon: '⛳', title: '홀 유형', subtitle: weakness ? `${weakness.label} 보완 필요` : 'Par3/4/5 분석', modal: 'hole' },
+    { key: 'score', icon: '📊', title: '스코어 분포', subtitle: `Par ${scoreTotals.par} · Bogey ${scoreTotals.bogey}`, modal: 'score' },
+    { key: 'rank', icon: '🏆', title: '클럽 순위', subtitle: `${playerStats.length}명 비교`, modal: 'rank' },
+    { key: 'rounds', icon: '📖', title: '라운드 상세', subtitle: `${playerRounds.length}경기 기록`, modal: 'rounds' },
+    { key: 'improve', icon: '🤖', title: '개선 리포트', subtitle: `OB ${obCount}회 · 패널티 ${penaltyTotal}개`, modal: 'improve' },
+  ] as const
+
+
   return (
     <>
       {detailModal && (
@@ -861,89 +873,68 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
         <MetricCard label="최근5" value={`${recent5Avg}타`} />
       </View>
 
-      <View style={s.playerPanelTabs}>
-        {[
-          { key: 'summary', label: '요약' },
-          { key: 'shot', label: '샷분석' },
-          { key: 'detail', label: '상세' },
-        ].map((item) => (
-          <TouchableOpacity
-            key={item.key}
-            style={[s.playerPanelTab, playerPanel === item.key && s.playerPanelTabActive]}
-            activeOpacity={0.85}
-            onPress={() => setPlayerPanel(item.key as typeof playerPanel)}
-          >
-            <Text style={[s.playerPanelTabText, playerPanel === item.key && s.playerPanelTabTextActive]}>{item.label}</Text>
-          </TouchableOpacity>
-        ))}
+      <View style={s.aiCaddieCard}>
+        <View style={s.aiCaddieHeader}>
+          <View style={s.aiCaddieIconWrap}>
+            <Text style={s.aiCaddieIcon}>🤖</Text>
+          </View>
+          <View style={s.aiCaddieTitleBlock}>
+            <Text style={s.aiCaddieEyebrow}>AI Caddie</Text>
+            <Text style={s.aiCaddieTitle}>개인 기록 분석</Text>
+          </View>
+        </View>
+
+        <View style={s.aiCaddieInsightBox}>
+          <Text style={s.aiCaddieLead}>{trendText}</Text>
+          {aiComments.slice(0, 3).map((comment) => (
+            <View key={comment} style={s.aiCaddieBulletRow}>
+              <Text style={s.aiCaddieBulletDot}>•</Text>
+              <Text style={s.aiCaddieBulletText}>{comment}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={s.aiCaddieRecommendRow}>
+          <Text style={s.aiCaddieRecommendLabel}>추천</Text>
+          <Text style={s.aiCaddieRecommendText} numberOfLines={2}>
+            {weakness ? `${weakness.label} 공략을 안정적으로 가져가면 평균 스코어 개선 여지가 큽니다.` : '최근 라운드 패턴을 더 쌓으면 맞춤 개선 포인트를 제안할게요.'}
+          </Text>
+        </View>
       </View>
 
-      {playerPanel === 'summary' && (
-        <>
-          <View style={s.aiCaddieCard}>
-            <View style={s.aiCaddieHeader}>
-              <View style={s.aiCaddieIconWrap}>
-                <Text style={s.aiCaddieIcon}>🤖</Text>
-              </View>
-              <View style={s.aiCaddieTitleBlock}>
-                <Text style={s.aiCaddieEyebrow}>AI Caddie</Text>
-                <Text style={s.aiCaddieTitle}>개인 기록 분석</Text>
-              </View>
-            </View>
-
-            <View style={s.aiCaddieInsightBox}>
-              <Text style={s.aiCaddieLead}>{trendText}</Text>
-              {aiComments.slice(0, 3).map((comment) => (
-                <View key={comment} style={s.aiCaddieBulletRow}>
-                  <Text style={s.aiCaddieBulletDot}>•</Text>
-                  <Text style={s.aiCaddieBulletText}>{comment}</Text>
-                </View>
-              ))}
-            </View>
-
-            <View style={s.aiCaddieRecommendRow}>
-              <Text style={s.aiCaddieRecommendLabel}>추천</Text>
-              <Text style={s.aiCaddieRecommendText} numberOfLines={2}>
-                {weakness ? `${weakness.label} 공략을 안정적으로 가져가면 평균 스코어 개선 여지가 큽니다.` : '최근 라운드 패턴을 더 쌓으면 맞춤 개선 포인트를 제안할게요.'}
-              </Text>
-            </View>
+      <View style={s.personalReportSection}>
+        <View style={s.personalReportHeader}>
+          <View>
+            <Text style={s.personalReportEyebrow}>Personal Report</Text>
+            <Text style={s.personalReportTitle}>개인 리포트</Text>
           </View>
-
-          <View style={s.detailGrid}>
-            <DetailButton label="목표 설정" onPress={() => setDetailModal('target')} />
-            <DetailButton label="추이 분석" onPress={() => setDetailModal('trend')} />
-            <DetailButton label="개선 리포트" onPress={() => setDetailModal('improve')} />
-          </View>
-        </>
-      )}
-
-      {playerPanel === 'shot' && (
-        <>
-          <View style={s.card}>
-            <Text style={s.cardTitle}>샷/퍼팅 분석</Text>
-            <View style={s.compactMetricGrid}>
-              <CompactMetric label="FIR" value={firRate === null ? '-' : `${firRate}%`} />
-              <CompactMetric label="GIR" value={girRate === null ? '-' : `${girRate}%`} />
-              <CompactMetric label="퍼팅" value={avgPutts === '-' ? '-' : `${avgPutts}개`} />
-              <CompactMetric label="OB" value={`${obCount}회`} />
-              <CompactMetric label="패널티" value={`${penaltyTotal}개`} />
-            </View>
-            <CompactActionButton label="샷/퍼팅 상세" onPress={() => setDetailModal('shot')} />
-          </View>
-
-          <View style={s.detailGrid}>
-            <DetailButton label="홀 유형" onPress={() => setDetailModal('hole')} />
-            <DetailButton label="스코어 분포" onPress={() => setDetailModal('score')} />
-          </View>
-        </>
-      )}
-
-      {playerPanel === 'detail' && (
-        <View style={s.detailGrid}>
-          <DetailButton label="클럽 순위" onPress={() => setDetailModal('rank')} />
-          <DetailButton label="라운드 상세" onPress={() => setDetailModal('rounds')} />
+          <Text style={s.personalReportHint}>좌우로 넘겨보기</Text>
         </View>
-      )}
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          snapToInterval={reportCardWidth + 10}
+          contentContainerStyle={s.personalReportCarousel}
+        >
+          {personalReportCards.map((card) => (
+            <TouchableOpacity
+              key={card.key}
+              activeOpacity={0.88}
+              style={[s.personalReportCard, { width: reportCardWidth }]}
+              onPress={() => setDetailModal(card.modal)}
+            >
+              <View style={s.personalReportIconWrap}>
+                <Text style={s.personalReportIcon}>{card.icon}</Text>
+              </View>
+              <Text style={s.personalReportCardTitle}>{card.title}</Text>
+              <Text style={s.personalReportCardSubtitle} numberOfLines={2}>{card.subtitle}</Text>
+              <Text style={s.personalReportCardAction}>자세히 보기 ›</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
     </>
   )
 }
@@ -1806,6 +1797,38 @@ const s = StyleSheet.create({
   playerPanelTabActive: { backgroundColor: C.green },
   playerPanelTabText: { fontSize: 13, fontWeight: '800', color: C.muted },
   playerPanelTabTextActive: { color: '#fff' },
+  personalReportSection: { marginBottom: 14 },
+  personalReportHeader: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 10 },
+  personalReportEyebrow: { fontSize: 10, lineHeight: 13, fontWeight: '900', color: C.green, letterSpacing: 0.4 },
+  personalReportTitle: { fontSize: 17, lineHeight: 22, fontWeight: '900', color: C.text, letterSpacing: -0.5, marginTop: 1 },
+  personalReportHint: { fontSize: 11, lineHeight: 15, fontWeight: '800', color: C.muted },
+  personalReportCarousel: { gap: 10, paddingRight: 2 },
+  personalReportCard: {
+    minHeight: 132,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.card,
+    padding: 15,
+    shadowColor: '#1a6b44',
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+  personalReportIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: C.greenLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 11,
+  },
+  personalReportIcon: { fontSize: 19, lineHeight: 23 },
+  personalReportCardTitle: { fontSize: 16, lineHeight: 21, fontWeight: '900', color: C.text, letterSpacing: -0.5 },
+  personalReportCardSubtitle: { minHeight: 35, fontSize: 12, lineHeight: 17, fontWeight: '800', color: C.muted, marginTop: 5 },
+  personalReportCardAction: { fontSize: 12, lineHeight: 16, fontWeight: '900', color: C.green, marginTop: 'auto' },
   analysisRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: C.border },
   analysisLabel: { fontSize: 13, fontWeight: '700', color: C.muted },
   analysisValue: { fontSize: 14, fontWeight: '900', color: C.text },
