@@ -19,7 +19,7 @@ import { useSkin } from "../../../skins";
 import { TopActionButtons } from "../../../components/TopActionButtons";
 import type { HomeHeroRound } from "../types/home";
 
-const HERO_DISPLAY_HEIGHT_RATIO = 0.6;
+const HERO_DISPLAY_HEIGHT_RATIO = 0.7;
 const HERO_MIN_WIDTH = 280;
 
 type PremiumHomeHeroSectionProps = {

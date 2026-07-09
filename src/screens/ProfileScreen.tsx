@@ -100,19 +100,19 @@ const DEFAULT_DISTANCE_FORM: ClubDistanceForm = CLUB_DISTANCE_FIELDS.reduce(
 );
 
 const DEFAULT_DISTANCE_VALUES: Record<ClubDistanceKey, number> = {
-  driver_m: 200,
-  wood3_m: 180,
-  wood5_m: 170,
-  hybrid4_m: 160,
-  hybrid5_m: 150,
-  iron5_m: 150,
-  iron6_m: 140,
-  iron7_m: 130,
-  iron8_m: 120,
-  iron9_m: 110,
-  pw_m: 100,
-  aw_m: 85,
-  sw_m: 70,
+  driver_m: 0,
+  wood3_m: 0,
+  wood5_m: 0,
+  hybrid4_m: 0,
+  hybrid5_m: 0,
+  iron5_m: 0,
+  iron6_m: 0,
+  iron7_m: 0,
+  iron8_m: 0,
+  iron9_m: 0,
+  pw_m: 0,
+  aw_m: 0,
+  sw_m: 0,
 };
 
 type GeoPoint = { latitude: number; longitude: number };
