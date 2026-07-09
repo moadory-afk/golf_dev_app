@@ -418,6 +418,7 @@ function HoleDetailCard({
           <ScrollView
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
+            style={styles.heroCardScroll}
             contentContainerStyle={styles.heroCardScrollContent}
           >
             <View style={styles.detailHeroHeader}>
@@ -486,6 +487,7 @@ function HoleDetailCard({
           <ScrollView
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
+            style={styles.heroCardScroll}
             contentContainerStyle={styles.heroCardScrollContent}
           >
             <View style={styles.safeHeaderRow}>
@@ -816,10 +818,9 @@ function HoleSwipePager({
     pagerRef.current?.scrollTo({ x: selectedIndex * width, animated: true });
   }, [selectedIndex, width]);
 
-  const handleMomentumEnd = (
-    event: NativeSyntheticEvent<NativeScrollEvent>,
-  ) => {
-    const nextIndex = Math.round(event.nativeEvent.contentOffset.x / width);
+  const syncIndexFromOffset = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const pageWidth = event.nativeEvent.layoutMeasurement.width || width;
+    const nextIndex = Math.round(event.nativeEvent.contentOffset.x / pageWidth);
     onIndexChange(Math.max(0, Math.min(nextIndex, holes.length - 1)));
   };
 
@@ -829,7 +830,9 @@ function HoleSwipePager({
       horizontal
       pagingEnabled
       showsHorizontalScrollIndicator={false}
-      onMomentumScrollEnd={handleMomentumEnd}
+      onMomentumScrollEnd={syncIndexFromOffset}
+      onScrollEndDrag={syncIndexFromOffset}
+      scrollEventThrottle={16}
       style={styles.holePager}
     >
       {holes.map((hole) => (
@@ -864,8 +867,8 @@ export default function CaddieBookScreen() {
   );
   const pagerWidth = Math.max(280, windowWidth - spacing.lg * 2);
   const strategyCardHeight = Math.max(
-    276,
-    Math.min(410, windowHeight - insets.top - insets.bottom - 318),
+    320,
+    Math.min(500, windowHeight - insets.top - insets.bottom - 258),
   );
   const { data, loading, error, refresh } = useCaddieBook({
     ...params,
@@ -1149,7 +1152,7 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     paddingHorizontal: spacing.lg,
-    gap: spacing.xs,
+    gap: 5,
   },
   header: { gap: 3 },
   eyebrow: { ...typography.caption, fontWeight: "900", letterSpacing: 0.4 },
@@ -1172,38 +1175,38 @@ const styles = StyleSheet.create({
   emptyTitle: { ...typography.cardTitle, textAlign: "center" },
   emptyText: { ...typography.body, textAlign: "center" },
   emptyButton: { marginTop: spacing.md },
-  courseTabsContent: { gap: spacing.xs, paddingRight: spacing.lg },
+  courseTabsContent: { gap: 5, paddingRight: spacing.lg },
   courseTab: {
-    minWidth: 64,
-    minHeight: 26,
+    minWidth: 58,
+    minHeight: 22,
     borderRadius: radius.pill,
     borderWidth: 1,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  courseTabText: { ...typography.caption, fontWeight: "900" },
+  courseTabText: { fontSize: 10, lineHeight: 13, fontWeight: "900" },
   courseInfoBar: {
-    minHeight: 42,
+    minHeight: 32,
     borderWidth: 1,
-    borderRadius: radius.xl,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: spacing.md,
+    gap: spacing.sm,
   },
-  courseInfoTitle: { ...typography.bodySm, fontWeight: "900", flex: 1 },
+  courseInfoTitle: { ...typography.caption, fontWeight: "900", flex: 1 },
   courseDistanceRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
+    gap: spacing.sm,
   },
-  courseDistanceItem: { flexDirection: "row", alignItems: "center", gap: 4 },
-  courseDistanceDot: { width: 9, height: 9, borderRadius: 5 },
-  courseDistanceText: { ...typography.caption, fontWeight: "900" },
+  courseDistanceItem: { flexDirection: "row", alignItems: "center", gap: 3 },
+  courseDistanceDot: { width: 7, height: 7, borderRadius: 4 },
+  courseDistanceText: { fontSize: 10, lineHeight: 13, fontWeight: "900" },
   holePickerContent: { gap: spacing.sm, paddingRight: spacing.lg },
   holePickerItem: {
     width: 50,
@@ -1218,13 +1221,16 @@ const styles = StyleSheet.create({
   holePickerMeta: { ...typography.caption, fontWeight: "900" },
   holePager: { overflow: "visible", width: "100%" },
   flipShell: { overflow: "visible" },
-  flipFace: { width: "100%", backfaceVisibility: "hidden" },
+  flipFace: { width: "100%", height: "100%", backfaceVisibility: "hidden" },
   flipBackFace: { position: "absolute", left: 0, right: 0, top: 0 },
   heroCard: {
     width: "100%",
     padding: spacing.lg,
     borderRadius: radius.xxl,
     overflow: "hidden",
+  },
+  heroCardScroll: {
+    flex: 1,
   },
   heroCardScrollContent: {
     flexGrow: 1,
