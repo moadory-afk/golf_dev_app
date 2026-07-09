@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -23,6 +24,12 @@ import { supabase } from "../lib/supabase";
 import type { RootStackParamList } from "../navigation/types";
 import { useCaddieBook, type CaddieBookHole } from "../features/caddie";
 import { radius, spacing, typography } from "../design/tokens";
+import {
+  getPersonalRoundStat,
+  savePersonalRoundStat,
+  type PersonalRoundFir,
+  type PersonalRoundHoleStat,
+} from "../lib/store";
 
 type CaddieBookRoute = RouteProp<RootStackParamList, "CaddieBook">;
 
@@ -32,6 +39,34 @@ type CourseLayoutTab = {
   holes?: number | null;
   pars?: number | null;
 };
+type RoundMeta = {
+  clubId: string | null;
+  roundDate: string | null;
+};
+
+const DEFAULT_TEE_OPTIONS: Array<{ label: string; value: PersonalRoundFir }> = [
+  { label: "좌OB", value: "left_ob" },
+  { label: "우OB", value: "right_ob" },
+  { label: "해저드", value: "hazard" },
+];
+
+function todayDateKey() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function defaultHoleStats(holes: CaddieBookHole[]): PersonalRoundHoleStat[] {
+  return holes.map((hole, index) => ({
+    hole: hole.holeNo || index + 1,
+    par: hole.par || 4,
+    fir: null,
+    putts: 2,
+    penalties: 0,
+  }));
+}
 
 function EmptyCaddieBook({ onRetry }: { onRetry: () => void }) {
   const { palette } = useSkin();
@@ -608,6 +643,131 @@ function HoleDetailCard({
   );
 }
 
+function DailyScoreInputPanel({
+  hole,
+  editable,
+  saving,
+  stat,
+  onChange,
+}: {
+  hole: CaddieBookHole;
+  editable: boolean;
+  saving: boolean;
+  stat?: PersonalRoundHoleStat;
+  onChange: (patch: Partial<PersonalRoundHoleStat>) => void;
+}) {
+  const { palette } = useSkin();
+  if (!editable) return null;
+
+  const currentStat = stat ?? {
+    hole: hole.holeNo,
+    par: hole.par || 4,
+    fir: null,
+    putts: 2,
+    penalties: 0,
+  };
+  const firDisabled = (hole.par ?? currentStat.par) === 3;
+
+  return (
+    <View
+      style={[
+        styles.dailyScorePanel,
+        { backgroundColor: palette.card, borderColor: palette.border },
+      ]}
+    >
+      <View style={styles.dailyScoreHeaderRow}>
+        <View>
+          <Text style={[styles.dailyScoreTitle, { color: palette.text }]}>
+            홀별 스코어 입력
+          </Text>
+          <Text style={[styles.dailyScoreSubtitle, { color: palette.muted }]}>
+            라운드 당일만 입력할 수 있습니다.
+          </Text>
+        </View>
+        {saving ? (
+          <ActivityIndicator size="small" color={palette.green} />
+        ) : null}
+      </View>
+
+      {!firDisabled ? (
+        <View style={styles.dailyScoreRow}>
+          <Text style={[styles.dailyScoreLabel, { color: palette.text }]}>
+            티샷
+          </Text>
+          <View style={styles.dailyScoreOptions}>
+            {DEFAULT_TEE_OPTIONS.map((option) => {
+              const selected = currentStat.fir === option.value;
+              return (
+                <TouchableOpacity
+                  key={option.label}
+                  activeOpacity={0.82}
+                  onPress={() =>
+                    onChange({ fir: selected ? null : option.value })
+                  }
+                  style={[
+                    styles.dailyScoreOption,
+                    {
+                      borderColor: selected ? palette.green : palette.border,
+                      backgroundColor: selected
+                        ? palette.greenLight
+                        : "rgba(0,0,0,0.035)",
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.dailyScoreOptionText,
+                      { color: selected ? palette.green : palette.muted },
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+
+      <View style={styles.dailyScoreRow}>
+        <Text style={[styles.dailyScoreLabel, { color: palette.text }]}>
+          퍼팅수
+        </Text>
+        <View style={styles.dailyScoreOptions}>
+          {[0, 1, 2, 3, 4].map((putts) => {
+            const selected = currentStat.putts === putts;
+            return (
+              <TouchableOpacity
+                key={`putt-${putts}`}
+                activeOpacity={0.82}
+                onPress={() => onChange({ putts })}
+                style={[
+                  styles.dailyScoreOption,
+                  {
+                    borderColor: selected ? palette.green : palette.border,
+                    backgroundColor: selected
+                      ? palette.greenLight
+                      : "rgba(0,0,0,0.035)",
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.dailyScoreOptionText,
+                    { color: selected ? palette.green : palette.muted },
+                  ]}
+                >
+                  {putts}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    </View>
+  );
+}
+
 function HoleSwipePager({
   holes,
   selectedIndex,
@@ -663,6 +823,12 @@ export default function CaddieBookScreen() {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const params = route.params ?? {};
   const [layoutTabs, setLayoutTabs] = useState<CourseLayoutTab[]>([]);
+  const [roundMeta, setRoundMeta] = useState<RoundMeta>({
+    clubId: null,
+    roundDate: null,
+  });
+  const [holeStats, setHoleStats] = useState<PersonalRoundHoleStat[]>([]);
+  const [scoreSaving, setScoreSaving] = useState(false);
   const [activeLayoutId, setActiveLayoutId] = useState(params.layoutId ?? null);
   const [activeLayoutName, setActiveLayoutName] = useState(
     params.layoutName ?? null,
@@ -695,7 +861,7 @@ export default function CaddieBookScreen() {
         const [{ data: scheduleRow }, { data: groupRows }] = await Promise.all([
           supabase
             .from("club_round_schedules")
-            .select("layout_id, layout_name")
+            .select("club_id, round_date, layout_id, layout_name")
             .eq("id", params.scheduleId)
             .maybeSingle(),
           supabase
@@ -707,6 +873,10 @@ export default function CaddieBookScreen() {
             .order("group_no", { ascending: true }),
         ]);
         if (!alive) return;
+        setRoundMeta({
+          clubId: scheduleRow?.club_id ?? null,
+          roundDate: scheduleRow?.round_date ?? null,
+        });
 
         const tabs: CourseLayoutTab[] = [];
         for (const group of groupRows ?? []) {
@@ -730,6 +900,7 @@ export default function CaddieBookScreen() {
       }
 
       if (params.layoutId) {
+        setRoundMeta({ clubId: null, roundDate: null });
         setLayoutTabs([
           {
             id: params.layoutId,
@@ -741,6 +912,7 @@ export default function CaddieBookScreen() {
         return;
       }
       if (!params.courseId) {
+        setRoundMeta({ clubId: null, roundDate: null });
         setLayoutTabs([]);
         return;
       }
@@ -767,6 +939,37 @@ export default function CaddieBookScreen() {
     if (data.primaryHole) setSelectedHoleNo(data.primaryHole.holeNo);
   }, [data.primaryHole?.holeNo]);
 
+  useEffect(() => {
+    let alive = true;
+    async function loadPersonalStats() {
+      if (!params.scheduleId || !userId || data.holes.length === 0) {
+        setHoleStats(defaultHoleStats(data.holes));
+        return;
+      }
+      try {
+        const saved = await getPersonalRoundStat(params.scheduleId, userId);
+        if (!alive) return;
+        const baseStats = defaultHoleStats(data.holes);
+        const savedByHole = new Map(
+          (saved?.holeStats ?? []).map((item) => [item.hole, item]),
+        );
+        setHoleStats(
+          baseStats.map((item) => ({
+            ...item,
+            ...(savedByHole.get(item.hole) ?? {}),
+            par: item.par,
+          })),
+        );
+      } catch {
+        if (alive) setHoleStats(defaultHoleStats(data.holes));
+      }
+    }
+    loadPersonalStats();
+    return () => {
+      alive = false;
+    };
+  }, [data.holes, params.scheduleId, userId]);
+
   const selectedIndex = useMemo(() => {
     const index = data.holes.findIndex(
       (hole) => hole.holeNo === selectedHoleNo,
@@ -784,6 +987,54 @@ export default function CaddieBookScreen() {
     setActiveLayoutId(layout.id);
     setActiveLayoutName(layout.name);
     setSelectedHoleNo(1);
+  };
+
+  const canEditDailyScore = Boolean(
+    params.scheduleId &&
+    userId &&
+    roundMeta.clubId &&
+    roundMeta.roundDate === todayDateKey(),
+  );
+
+  const selectedHoleStat = selectedHole
+    ? holeStats.find((item) => item.hole === selectedHole.holeNo)
+    : undefined;
+
+  const updateSelectedHoleStat = async (
+    patch: Partial<PersonalRoundHoleStat>,
+  ) => {
+    if (!params.scheduleId || !userId || !roundMeta.clubId || !selectedHole)
+      return;
+    const baseStats = holeStats.length
+      ? holeStats
+      : defaultHoleStats(data.holes);
+    const nextStats = baseStats.map((item) =>
+      item.hole === selectedHole.holeNo
+        ? {
+            ...item,
+            ...patch,
+            hole: selectedHole.holeNo,
+            par: selectedHole.par || item.par || 4,
+          }
+        : item,
+    );
+    setHoleStats(nextStats);
+    setScoreSaving(true);
+    try {
+      await savePersonalRoundStat({
+        clubId: roundMeta.clubId,
+        scheduleId: params.scheduleId,
+        userId,
+        holeStats: nextStats,
+      });
+    } catch (error) {
+      Alert.alert(
+        "저장 실패",
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setScoreSaving(false);
+    }
   };
 
   return (
@@ -844,6 +1095,15 @@ export default function CaddieBookScreen() {
               width={pagerWidth}
               height={strategyCardHeight}
             />
+            {selectedHole ? (
+              <DailyScoreInputPanel
+                hole={selectedHole}
+                editable={canEditDailyScore}
+                saving={scoreSaving}
+                stat={selectedHoleStat}
+                onChange={updateSelectedHoleStat}
+              />
+            ) : null}
           </>
         ) : null}
       </ScrollView>
@@ -1165,6 +1425,41 @@ const styles = StyleSheet.create({
   recommendTitle: { ...typography.bodyLg, fontWeight: "900" },
   recommendMessage: { ...typography.bodySm, fontWeight: "700" },
   reasonText: { ...typography.bodySm, fontWeight: "900" },
+  dailyScorePanel: {
+    borderWidth: 1,
+    borderRadius: radius.xxl,
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  dailyScoreHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.md,
+  },
+  dailyScoreTitle: { ...typography.bodySm, fontWeight: "900" },
+  dailyScoreSubtitle: {
+    ...typography.caption,
+    fontWeight: "800",
+    marginTop: 2,
+  },
+  dailyScoreRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  dailyScoreLabel: { ...typography.bodySm, fontWeight: "900", width: 52 },
+  dailyScoreOptions: { flex: 1, flexDirection: "row", gap: spacing.xs },
+  dailyScoreOption: {
+    flex: 1,
+    minHeight: 38,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.xs,
+  },
+  dailyScoreOptionText: { ...typography.bodySm, fontWeight: "900" },
   detailSection: { gap: spacing.xs },
   sectionLabel: { ...typography.caption, fontWeight: "900" },
   sectionText: { ...typography.body, fontWeight: "700" },
