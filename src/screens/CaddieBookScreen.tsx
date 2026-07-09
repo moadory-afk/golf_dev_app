@@ -148,6 +148,40 @@ function MiniMetric({
   );
 }
 
+function compactClubLabel(label?: string | null) {
+  const value = (label || "").trim();
+  const upper = value.toUpperCase();
+  if (!value) return "-";
+  if (upper.includes("DRIVER")) return "D";
+  if (upper.includes("PUTT")) return "Putt";
+  if (upper === "PW") return "P";
+  if (upper === "AW") return "A";
+  if (upper === "SW") return "S";
+  return value.replace(/\s+/g, "");
+}
+
+function buildShotPlanStages(
+  steps: Array<{ type: string; clubLabel: string; carryM: number }>,
+) {
+  const tee = steps.find((step) => step.type === "tee") ?? steps[0];
+  const second =
+    steps.find((step) => step.type === "second") ??
+    steps.find((step) => step.type === "approach");
+  const third = steps.find((step) => step.type === "second")
+    ? steps.find((step) => step.type === "approach")
+    : undefined;
+  return [
+    { key: "tee", title: "Tee", step: tee },
+    { key: "second", title: "Second", step: second },
+    { key: "third", title: "Third", step: third },
+    {
+      key: "putt",
+      title: "Putt",
+      step: { type: "green", clubLabel: "Putt", carryM: 0 },
+    },
+  ];
+}
+
 function CourseLayoutTabs({
   layouts,
   activeLayoutId,
@@ -494,91 +528,89 @@ function HoleDetailCard({
               </View>
             </View>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.planTimelineScrollContent}
-            >
-              <View style={[styles.planTimelineWrap, { width: timelineWidth }]}>
-                <View style={styles.planTimelineRail}>
-                  {planSteps.map((step, index) => {
-                    const isLast = index === planSteps.length - 1;
-                    return (
+            <View style={styles.shotPlanGraphic}>
+              <View style={styles.shotPlanStageHeaderRow}>
+                {buildShotPlanStages(planSteps).map((stage) => (
+                  <Text
+                    key={`${stage.key}-title`}
+                    style={[
+                      styles.shotPlanStageTitle,
+                      { color: palette.muted },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {stage.title}
+                  </Text>
+                ))}
+              </View>
+              <View style={styles.shotPlanClubRow}>
+                {buildShotPlanStages(planSteps).map((stage, index) => {
+                  const active = Boolean(stage.step);
+                  const isPutt = stage.key === "putt";
+                  return (
+                    <View
+                      key={`${stage.key}-club`}
+                      style={styles.shotPlanStageCell}
+                    >
                       <View
-                        key={`${step.type}-${index}`}
-                        style={styles.planTimelineNodeWrap}
+                        style={[
+                          styles.shotPlanClubBadge,
+                          {
+                            backgroundColor: active
+                              ? palette.greenLight
+                              : "rgba(0,0,0,0.04)",
+                            borderColor: active
+                              ? palette.green
+                              : palette.border,
+                          },
+                        ]}
                       >
-                        <View
+                        <Text
                           style={[
-                            isLast
-                              ? styles.planTimelineGreenNode
-                              : styles.planTimelineNode,
-                            {
-                              backgroundColor:
-                                index === 0
-                                  ? palette.gold
-                                  : isLast
-                                    ? palette.card
-                                    : palette.green,
-                              borderColor: palette.green,
-                            },
+                            styles.shotPlanClubText,
+                            { color: active ? palette.text : palette.muted },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {isPutt
+                            ? "Putt"
+                            : compactClubLabel(stage.step?.clubLabel)}
+                        </Text>
+                      </View>
+                      {index < 3 && (
+                        <View
+                          pointerEvents="none"
+                          style={[
+                            styles.shotPlanConnector,
+                            { backgroundColor: palette.border },
                           ]}
                         />
-                        {!isLast && (
-                          <View
-                            style={[
-                              styles.planTimelineLine,
-                              { backgroundColor: palette.border },
-                            ]}
-                          />
-                        )}
-                      </View>
-                    );
-                  })}
-                </View>
-                <View style={styles.planStepLabels}>
-                  {planSteps.map((step, index) => {
-                    const isLast = index === planSteps.length - 1;
-                    return (
-                      <View
-                        key={`${step.clubLabel}-${index}`}
-                        style={styles.planStepLabel}
-                      >
-                        <Text
-                          style={[
-                            styles.planStepTitle,
-                            { color: palette.text },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {step.clubLabel}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.planStepMeta,
-                            { color: palette.muted },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {isLast ? "PUTT" : `${step.carryM || "-"}m`}
-                        </Text>
-                        {!isLast && (
-                          <Text
-                            style={[
-                              styles.planStepRemain,
-                              { color: palette.green },
-                            ]}
-                            numberOfLines={1}
-                          >
-                            남은 {step.remainingAfterM || 0}m
-                          </Text>
-                        )}
-                      </View>
-                    );
-                  })}
-                </View>
+                      )}
+                    </View>
+                  );
+                })}
               </View>
-            </ScrollView>
+              <View style={styles.shotPlanDistanceRow}>
+                {buildShotPlanStages(planSteps).map((stage) => {
+                  const distance =
+                    stage.step?.carryM && stage.key !== "putt"
+                      ? `${stage.step.carryM}m`
+                      : "";
+                  return (
+                    <Text
+                      key={`${stage.key}-distance`}
+                      style={[
+                        styles.shotPlanDistanceText,
+                        { color: palette.green },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {distance}
+                    </Text>
+                  );
+                })}
+              </View>
+            </View>
 
             <View style={styles.planMetricRow}>
               <MiniMetric
@@ -834,7 +866,10 @@ export default function CaddieBookScreen() {
     params.layoutName ?? null,
   );
   const pagerWidth = Math.max(280, windowWidth - spacing.lg * 2);
-  const strategyCardHeight = Math.max(420, windowHeight - insets.top - 292);
+  const strategyCardHeight = Math.max(
+    248,
+    Math.min(350, windowHeight - insets.top - insets.bottom - 356),
+  );
   const { data, loading, error, refresh } = useCaddieBook({
     ...params,
     layoutId: activeLayoutId,
@@ -1040,6 +1075,7 @@ export default function CaddieBookScreen() {
   return (
     <View style={[styles.root, { backgroundColor: palette.bg }]}>
       <ScrollView
+        scrollEnabled={false}
         contentContainerStyle={[
           styles.content,
           {
@@ -1114,8 +1150,9 @@ export default function CaddieBookScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   content: {
+    flexGrow: 1,
     paddingHorizontal: spacing.lg,
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   header: { gap: 3 },
   eyebrow: { ...typography.caption, fontWeight: "900", letterSpacing: 0.4 },
@@ -1279,6 +1316,71 @@ const styles = StyleSheet.create({
   planStepTitle: { ...typography.caption, fontWeight: "900" },
   planStepMeta: { ...typography.caption, fontWeight: "800" },
   planStepRemain: { ...typography.caption, fontWeight: "900" },
+  shotPlanGraphic: {
+    marginTop: spacing.xs,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: "rgba(42,157,98,0.18)",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    backgroundColor: "rgba(42,157,98,0.06)",
+    gap: spacing.sm,
+  },
+  shotPlanStageHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  shotPlanStageTitle: {
+    flex: 1,
+    textAlign: "center",
+    ...typography.caption,
+    fontWeight: "900",
+    textTransform: "uppercase",
+  },
+  shotPlanClubRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  shotPlanStageCell: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  shotPlanClubBadge: {
+    minWidth: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.xs,
+    zIndex: 2,
+  },
+  shotPlanClubText: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: "900",
+    letterSpacing: -0.3,
+  },
+  shotPlanConnector: {
+    position: "absolute",
+    left: "50%",
+    right: "-50%",
+    height: 2,
+    top: 20,
+    zIndex: 1,
+  },
+  shotPlanDistanceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  shotPlanDistanceText: {
+    flex: 1,
+    textAlign: "center",
+    ...typography.caption,
+    fontWeight: "900",
+  },
   planMetricRow: { flexDirection: "row", gap: spacing.sm },
   shotPlanBackCard: { borderWidth: 1 },
   shotStepList: { gap: spacing.sm },
@@ -1428,8 +1530,9 @@ const styles = StyleSheet.create({
   dailyScorePanel: {
     borderWidth: 1,
     borderRadius: radius.xxl,
-    padding: spacing.md,
-    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
   },
   dailyScoreHeaderRow: {
     flexDirection: "row",
@@ -1452,7 +1555,7 @@ const styles = StyleSheet.create({
   dailyScoreOptions: { flex: 1, flexDirection: "row", gap: spacing.xs },
   dailyScoreOption: {
     flex: 1,
-    minHeight: 38,
+    minHeight: 32,
     borderWidth: 1,
     borderRadius: radius.lg,
     alignItems: "center",
