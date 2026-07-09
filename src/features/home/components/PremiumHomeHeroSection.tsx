@@ -18,6 +18,7 @@ import { getCourseHeroImageSource } from "../../../data/courseHeroImages";
 import { useSkin } from "../../../skins";
 import { TopActionButtons } from "../../../components/TopActionButtons";
 import type { HomeHeroRound } from "../types/home";
+import { isCompactWidth } from "../../../lib/responsive";
 
 const HERO_DISPLAY_HEIGHT_RATIO = 0.7;
 const HERO_MIN_WIDTH = 280;
@@ -234,8 +235,9 @@ function HeroRoundCard({
             resizeMode="cover"
           />
           <View style={styles.scrim} />
-          <View style={styles.frontSummaryWrap}>
+          <View style={[styles.frontSummaryWrap, { paddingHorizontal: isCompactWidth(width) ? 10 : 14, paddingBottom: isCompactWidth(width) ? 18 : 22 }]}>
             <HeroBottomSummary
+              width={width}
               courseName={round.courseName}
               temperature={round.temperature}
               windText={round.windText || "--"}
@@ -262,6 +264,7 @@ function HeroRoundCard({
           style={styles.flipTouchable}
         >
           <HeroBackSide
+            width={width}
             round={round}
             isAdmin={isAdmin}
             onCaddieBookPress={onCaddieBookPress}
@@ -277,6 +280,7 @@ function HeroRoundCard({
 }
 
 function HeroBackSide({
+  width,
   round,
   isAdmin,
   onCaddieBookPress,
@@ -285,31 +289,58 @@ function HeroBackSide({
   onAwardPress,
   onEditRoundPress,
 }: any) {
+  const isCompact = isCompactWidth(width);
+  const contentTop = isCompact ? 52 : 62;
+  const horizontalPadding = isCompact ? 18 : 24;
+  const menuWidth = isCompact ? 106 : 120;
+  const menuButtonHeight = isCompact ? 32 : 35;
+  const iconSize = isCompact ? 28 : 32;
   const companionText = formatRoundCompanions(round);
   const courseLine = `${round.teeTime || "--:--"} ${round.courseLine || (round.layoutName ? `${round.layoutName} 코스` : "코스 미정")}`;
 
   return (
-    <View style={styles.backCard}>
+    <View
+      style={[
+        styles.backCard,
+        {
+          paddingHorizontal: horizontalPadding,
+          paddingTop: contentTop,
+          paddingBottom: isCompact ? 18 : 24,
+          gap: isCompact ? 8 : 12,
+        },
+      ]}
+    >
       <View style={styles.backLeftColumn}>
         <Text style={styles.backEyebrow}>Round Detail</Text>
-        <Text style={styles.backCourseName} numberOfLines={1}>
+        <Text
+          style={[
+            styles.backCourseName,
+            {
+              fontSize: isCompact ? 28 : 34,
+              lineHeight: isCompact ? 34 : 40,
+            },
+          ]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.78}
+        >
           {round.courseName}
         </Text>
 
         <View style={styles.backDetailList}>
-          <RoundDetailLine icon="📅" value={round.dateLabel} />
-          <RoundDetailLine icon="⛳" value={courseLine} />
-          <RoundDetailLine icon="👥" value={companionText} multiline />
+          <RoundDetailLine icon="📅" value={round.dateLabel} compact={isCompact} />
+          <RoundDetailLine icon="⛳" value={courseLine} compact={isCompact} />
+          <RoundDetailLine icon="👥" value={companionText} compact={isCompact} multiline />
         </View>
       </View>
 
-      <View style={styles.backMenuColumn}>
-        <BackMenuButton icon="📖" label="캐디북" onPress={() => onCaddieBookPress?.(round)} />
-        <BackMenuButton icon="👥" label="조편성" onPress={() => onGroupsPress?.(round)} />
-        <BackMenuButton icon="🎲" label="LOTTO" onPress={() => onLottoPress?.(round)} />
-        <BackMenuButton icon="🏆" label="시상계획" onPress={() => onAwardPress?.(round)} />
+      <View style={[styles.backMenuColumn, { width: menuWidth }]}>
+        <BackMenuButton icon="📖" label="캐디북" height={menuButtonHeight} iconSize={iconSize} compact={isCompact} onPress={() => onCaddieBookPress?.(round)} />
+        <BackMenuButton icon="👥" label="조편성" height={menuButtonHeight} iconSize={iconSize} compact={isCompact} onPress={() => onGroupsPress?.(round)} />
+        <BackMenuButton icon="🎲" label="LOTTO" height={menuButtonHeight} iconSize={iconSize} compact={isCompact} onPress={() => onLottoPress?.(round)} />
+        <BackMenuButton icon="🏆" label="시상계획" height={menuButtonHeight} iconSize={iconSize} compact={isCompact} onPress={() => onAwardPress?.(round)} />
         {isAdmin ? (
-          <BackMenuButton icon="⚙️" label="설정" onPress={() => onEditRoundPress?.(round)} />
+          <BackMenuButton icon="⚙️" label="설정" height={menuButtonHeight} iconSize={iconSize} compact={isCompact} onPress={() => onEditRoundPress?.(round)} />
         ) : null}
       </View>
     </View>
@@ -346,10 +377,12 @@ function formatRoundCompanions(round: any) {
 function RoundDetailLine({
   icon,
   value,
+  compact = false,
   multiline = false,
 }: {
   icon: string;
   value: string;
+  compact?: boolean;
   multiline?: boolean;
 }) {
   return (
@@ -357,7 +390,13 @@ function RoundDetailLine({
       <Text style={styles.backDetailIcon}>{icon}</Text>
       <View style={styles.backDetailTextWrap}>
         <Text
-          style={styles.backDetailValue}
+          style={[
+            styles.backDetailValue,
+            {
+              fontSize: compact ? 13 : 15,
+              lineHeight: compact ? 19 : 22,
+            },
+          ]}
           numberOfLines={multiline ? 2 : 1}
         >
           {value}
@@ -370,18 +409,24 @@ function RoundDetailLine({
 function BackMenuButton({
   icon,
   label,
+  height,
+  iconSize,
+  compact = false,
   onPress,
 }: {
   icon: string;
   label: string;
+  height: number;
+  iconSize: number;
+  compact?: boolean;
   onPress?: () => void;
 }) {
   return (
-    <TouchableOpacity activeOpacity={0.86} onPress={onPress} style={styles.backMenuButton}>
-      <View style={styles.backMenuIconBubble}>
-        <Text style={styles.backMenuIcon}>{icon}</Text>
+    <TouchableOpacity activeOpacity={0.86} onPress={onPress} style={[styles.backMenuButton, { height }]}>
+      <View style={[styles.backMenuIconBubble, { width: iconSize, height: iconSize, borderRadius: iconSize / 2 }]}>
+        <Text style={[styles.backMenuIcon, { fontSize: compact ? 15 : 17, lineHeight: compact ? 21 : 23 }]}>{icon}</Text>
       </View>
-      <Text style={styles.backMenuLabel} numberOfLines={1}>
+      <Text style={[styles.backMenuLabel, { fontSize: compact ? 12 : 13 }]} numberOfLines={1}>
         {label}
       </Text>
     </TouchableOpacity>
@@ -437,6 +482,7 @@ function HeroEmptyCard({
       ) : null}
       <View style={styles.scrim} />
       <HeroBottomSummary
+        width={width}
         courseName={courseName}
         temperature={temperature}
         windText="--"
@@ -491,6 +537,7 @@ function HeroCreateRoundCard({
 }
 
 function HeroBottomSummary({
+  width,
   courseName,
   temperature,
   windText,
@@ -500,6 +547,7 @@ function HeroBottomSummary({
   groupCount,
   routeTimeText,
 }: {
+  width: number;
   courseName: string;
   temperature: string;
   windText: string;
@@ -509,6 +557,7 @@ function HeroBottomSummary({
   groupCount?: number;
   routeTimeText?: string;
 }) {
+  const isCompact = isCompactWidth(width);
   const scheduleLine = teeTime ? `Tee Off ${teeTime}` : "Tee Off --:--";
   void groupCount;
   const travelTimeText =
@@ -517,47 +566,113 @@ function HeroBottomSummary({
       : "50분 소요";
 
   return (
-    <View style={styles.bottomSummary}>
-      <Text style={styles.summaryCourseName} numberOfLines={1}>
+    <View style={[styles.bottomSummary, { paddingTop: isCompact ? 6 : 8 }]}>
+      <Text
+        style={[
+          styles.summaryCourseName,
+          {
+            fontSize: isCompact ? 18 : 21,
+            lineHeight: isCompact ? 22 : 25,
+            marginBottom: isCompact ? 6 : 8,
+          },
+        ]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.82}
+      >
         {courseName}
       </Text>
       <View style={styles.summaryContentRow}>
-        <View style={styles.weatherSummary}>
-          <Text style={styles.summaryWeatherIcon}>☀️</Text>
+        <View
+          style={[
+            styles.weatherSummary,
+            { gap: isCompact ? 4 : 8, paddingHorizontal: isCompact ? 3 : 8 },
+          ]}
+        >
+          <Text
+            style={[
+              styles.summaryWeatherIcon,
+              { fontSize: isCompact ? 23 : 29, lineHeight: isCompact ? 28 : 34 },
+            ]}
+          >
+            ☀️
+          </Text>
           <View style={styles.weatherTextWrap}>
-            <Text style={styles.summaryTemperature} numberOfLines={1}>
+            <Text
+              style={[
+                styles.summaryTemperature,
+                { fontSize: isCompact ? 19 : 24, lineHeight: isCompact ? 23 : 28 },
+              ]}
+              numberOfLines={1}
+            >
               {temperature}
             </Text>
             <View style={styles.windRow}>
               <Text style={styles.windIcon}>🌬</Text>
-              <Text style={styles.summaryWindText} numberOfLines={1}>
+              <Text
+                style={[
+                  styles.summaryWindText,
+                  { fontSize: isCompact ? 10 : 11, lineHeight: isCompact ? 14 : 16 },
+                ]}
+                numberOfLines={1}
+              >
                 {windText}
               </Text>
             </View>
           </View>
         </View>
 
-        <View style={styles.summaryDivider} />
+        <View style={[styles.summaryDivider, { marginHorizontal: isCompact ? 3 : 6 }]} />
 
-        <View style={styles.scheduleSummary}>
-          <Text style={styles.summaryDday} numberOfLines={1}>
+        <View style={[styles.scheduleSummary, { paddingHorizontal: isCompact ? 4 : 8 }]}>
+          <Text
+            style={[
+              styles.summaryDday,
+              { fontSize: isCompact ? 17 : 21, lineHeight: isCompact ? 21 : 25 },
+            ]}
+            numberOfLines={1}
+          >
             {dday}
           </Text>
-          <Text style={styles.summaryDate} numberOfLines={1}>
+          <Text
+            style={[
+              styles.summaryDate,
+              { fontSize: isCompact ? 10 : 11, lineHeight: isCompact ? 15 : 17 },
+            ]}
+            numberOfLines={1}
+          >
             🗓 {dateLabel}
           </Text>
-          <Text style={styles.summaryTeeTime} numberOfLines={1}>
+          <Text
+            style={[
+              styles.summaryTeeTime,
+              { fontSize: isCompact ? 10 : 11, lineHeight: isCompact ? 15 : 17 },
+            ]}
+            numberOfLines={1}
+          >
             ◷ {scheduleLine}
           </Text>
         </View>
 
-        <View style={styles.summaryDivider} />
+        <View style={[styles.summaryDivider, { marginHorizontal: isCompact ? 3 : 6 }]} />
 
-        <View style={styles.travelSummary}>
-          <Text style={styles.travelLabel} numberOfLines={1}>
+        <View style={[styles.travelSummary, { paddingHorizontal: isCompact ? 3 : 8 }]}>
+          <Text
+            style={[
+              styles.travelLabel,
+              { fontSize: isCompact ? 10 : 12, lineHeight: isCompact ? 13 : 15 },
+            ]}
+            numberOfLines={1}
+          >
             지금 출발시
           </Text>
-          <Text style={styles.travelTime} numberOfLines={1}>
+          <Text
+            style={[
+              styles.travelTime,
+              { fontSize: isCompact ? 10 : 11, lineHeight: isCompact ? 14 : 16 },
+            ]}
+            numberOfLines={1}
+          >
             {travelTimeText}
           </Text>
         </View>
@@ -644,7 +759,7 @@ const styles = StyleSheet.create({
   flipFace: { ...StyleSheet.absoluteFillObject, backfaceVisibility: "hidden" },
   flipBackFace: { backfaceVisibility: "hidden" },
   flipTouchable: { flex: 1, justifyContent: "flex-end" },
-  frontSummaryWrap: { paddingHorizontal: 14, paddingBottom: 22 },
+  frontSummaryWrap: {},
   heroBackgroundImage: {
     ...StyleSheet.absoluteFillObject,
     width: "100%",
@@ -717,10 +832,8 @@ const styles = StyleSheet.create({
   },
   bottomSummary: {
     width: "100%",
-    minWidth: 292,
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.26)",
-    paddingTop: 8,
   },
   summaryCourseName: {
     color: "#fff",
@@ -819,11 +932,7 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 0,
     backgroundColor: "rgba(236,246,238,0.94)",
-    paddingLeft: 24,
-    paddingRight: 176,
-    paddingTop: 62,
-    paddingBottom: 24,
-    position: "relative",
+    flexDirection: "row",
   },
   backLeftColumn: {
     flex: 1,
@@ -884,17 +993,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   backMenuColumn: {
-    position: "absolute",
-    right: 0,
-    top: 62,
-    width: 120,
     justifyContent: "flex-start",
     alignItems: "stretch",
     gap: 0,
   },
   backMenuButton: {
     width: "100%",
-    height: 35,
     borderRadius: 14,
     backgroundColor: "transparent",
     borderWidth: 0,
@@ -905,9 +1009,6 @@ const styles = StyleSheet.create({
     gap: 9,
   },
   backMenuIconBubble: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(25,115,61,0.12)",

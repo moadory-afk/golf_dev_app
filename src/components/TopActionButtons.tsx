@@ -1,4 +1,4 @@
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Modal, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
 import { useCallback, useRef, useState } from 'react'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
@@ -12,6 +12,7 @@ import type { RootStackParamList } from '../navigation/types'
 import { UserAvatarBtn } from './UserAvatar'
 import { useUserProfile } from '../lib/UserProfileContext'
 import { getClubNotices } from '../lib/store'
+import { isCompactWidth } from '../lib/responsive'
 
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
@@ -28,11 +29,13 @@ type TopActionButtonsProps = {
 export function TopActionButtons({ topInset = 0, floating = false }: TopActionButtonsProps) {
   const { palette } = useSkin()
   const nav = useNavigation<Nav>()
+  const { width: windowWidth } = useWindowDimensions()
   const { activeClub: club, myClubs, setActiveClub } = useClub()
   const { userId } = useUserProfile()
   const clubRef = useRef<View>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; w: number } | null>(null)
   const [unreadNoticeCount, setUnreadNoticeCount] = useState(0)
+  const compact = isCompactWidth(windowWidth)
 
   useFocusEffect(
     useCallback(() => {
@@ -67,29 +70,37 @@ export function TopActionButtons({ topInset = 0, floating = false }: TopActionBu
   )
 
   function openClubMenu() {
-    clubRef.current?.measureInWindow((x, y, w, h) => setMenu({ x, y: y + h + 6, w: Math.max(w, 190) }))
+    clubRef.current?.measureInWindow((x, y, w, h) => setMenu({ x, y: y + h + 6, w: Math.max(w, compact ? 168 : 190) }))
   }
 
   return (
-    <View style={[styles.row, floating && styles.floating, floating && { top: topInset + 10 }]} pointerEvents="box-none">
+    <View
+      style={[
+        styles.row,
+        compact && styles.rowCompact,
+        floating && styles.floating,
+        floating && { top: topInset + (compact ? 8 : 10) },
+      ]}
+      pointerEvents="box-none"
+    >
       <View ref={clubRef} collapsable={false} style={{ flexShrink: 1 }}>
-        <TouchableOpacity activeOpacity={0.84} onPress={openClubMenu} style={styles.clubPill}>
-          <Text style={styles.clubIcon}>⛳</Text>
-          <Text style={styles.clubText} numberOfLines={1}>{club?.name || 'GogoPar Club'}</Text>
+        <TouchableOpacity activeOpacity={0.84} onPress={openClubMenu} style={[styles.clubPill, compact && styles.clubPillCompact]}>
+          <Text style={[styles.clubIcon, compact && styles.clubIconCompact]}>⛳</Text>
+          <Text style={[styles.clubText, compact && styles.clubTextCompact]} numberOfLines={1}>{club?.name || 'GogoPar Club'}</Text>
           <Text style={styles.clubArrow}>⌄</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.actions}>
-        <TouchableOpacity activeOpacity={0.84} onPress={() => nav.navigate('NoticePrototype')} style={styles.circleButton}>
-          <BellLineIcon />
+      <View style={[styles.actions, compact && styles.actionsCompact]}>
+        <TouchableOpacity activeOpacity={0.84} onPress={() => nav.navigate('NoticePrototype')} style={[styles.circleButton, compact && styles.circleButtonCompact]}>
+          <BellLineIcon size={compact ? 25 : 28} />
           {unreadNoticeCount > 0 && (
             <View style={[styles.badge, { backgroundColor: palette.danger }]}> 
               <Text style={styles.badgeText}>{unreadNoticeCount > 99 ? '99+' : unreadNoticeCount}</Text>
             </View>
           )}
         </TouchableOpacity>
-        <UserAvatarBtn size={40} borderColor="transparent" backgroundColor="transparent" />
+        <UserAvatarBtn size={compact ? 36 : 40} borderColor="transparent" backgroundColor="transparent" />
       </View>
 
       {menu && (
@@ -141,9 +152,9 @@ export function TopActionButtons({ topInset = 0, floating = false }: TopActionBu
   )
 }
 
-function BellLineIcon() {
+function BellLineIcon({ size = 28 }: { size?: number }) {
   return (
-    <Svg width={28} height={28} viewBox="0 0 20 20">
+    <Svg width={size} height={size} viewBox="0 0 20 20">
       <Path
         d="M18 10.5c0-3.4-2.2-6-6-6s-6 2.6-6 6v3.2l-1.5 2.5h15l-1.5-2.5v-3.2Z"
         fill="none"
@@ -166,6 +177,7 @@ function BellLineIcon() {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 20 },
+  rowCompact: { gap: 8, paddingHorizontal: 12 },
   floating: { position: 'absolute', left: 0, right: 0, zIndex: 20 },
   clubPill: {
     height: 40,
@@ -177,10 +189,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
+  clubPillCompact: { height: 36, maxWidth: 172, paddingHorizontal: 8, gap: 4 },
   clubIcon: { fontSize: 15 },
+  clubIconCompact: { fontSize: 14 },
   clubText: { color: '#fff', fontSize: 13, fontWeight: '800', flexShrink: 1 },
+  clubTextCompact: { fontSize: 12 },
   clubArrow: { color: '#fff', fontSize: 16, fontWeight: '800', marginTop: -3 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  actionsCompact: { gap: 5 },
   circleButton: {
     width: 40,
     height: 40,
@@ -189,6 +205,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  circleButtonCompact: { width: 36, height: 36, borderRadius: 18 },
   badge: { position: 'absolute', top: 6, right: 5, minWidth: 15, height: 15, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   badgeText: { color: '#fff', fontSize: 9, fontWeight: '900' },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.16)' },

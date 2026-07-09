@@ -1,5 +1,5 @@
 import {
-  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Image, Share, Alert, TextInput, ActivityIndicator,
+  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Image, Share, Alert, TextInput, ActivityIndicator, useWindowDimensions,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CommonActions, useNavigation, useRoute } from '@react-navigation/native'
@@ -19,6 +19,7 @@ import { Icon } from '../components/Icon'
 import { EmojiIcon } from '../components/EmojiIcon'
 import { ImageCropModal, type ImageCropRect } from '../components/ImageCropModal'
 import type { MainTabParamList, RootStackParamList } from '../navigation/types'
+import { isCompactWidth } from '../lib/responsive'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
 type ClubRoute = RouteProp<MainTabParamList, 'Club'>
@@ -60,9 +61,11 @@ function getWinner(r: SavedRound, handicaps: Map<string, number>): string | null
 
 export default function ClubScreen() {
   const insets = useSafeAreaInsets()
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions()
   const nav = useNavigation<Nav>()
   const route = useRoute<ClubRoute>()
   const [refreshKey, setRefreshKey] = useState(0)
+  const isCompactScreen = isCompactWidth(windowWidth)
   const { activeClub: club, myClubs, setActiveClub, refreshClubs } = useClub()
   const { data, loading } = useAsync(
     () => (club ? getRounds(club.id) : Promise.resolve([])),
@@ -376,25 +379,46 @@ export default function ClubScreen() {
       {manageMenuOpen && isManagerView && (
         <Modal transparent animationType="fade" onRequestClose={() => setManageMenuOpen(false)}>
           <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setManageMenuOpen(false)}>
-            <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+            <TouchableOpacity
+              style={[
+                s.modalCard,
+                {
+                  width: isCompactScreen ? '94%' : '90%',
+                  maxHeight: Math.round(windowHeight * 0.86),
+                  padding: isCompactScreen ? 16 : 20,
+                },
+              ]}
+              activeOpacity={1}
+              onPress={() => {}}
+            >
               <View style={s.modalHeader}>
                 <Text style={s.modalTitle}>관리 메뉴</Text>
                 <TouchableOpacity style={s.closeBtn} onPress={() => setManageMenuOpen(false)}>
                   <Text style={s.closeBtnText}>닫기</Text>
                 </TouchableOpacity>
               </View>
-              <ScrollView contentContainerStyle={s.managementModalBody}>
+              <ScrollView
+                contentInsetAdjustmentBehavior="automatic"
+                contentContainerStyle={[
+                  s.managementModalBody,
+                  { gap: isCompactScreen ? 8 : 10, paddingBottom: insets.bottom + 8 },
+                ]}
+              >
                 {managementMenus.map((menu) => (
                   <TouchableOpacity
                     key={menu.key}
-                    style={[s.managementModalRow, menu.featured && s.managementCardFeatured]}
+                    style={[
+                      s.managementModalRow,
+                      isCompactScreen && s.managementModalRowCompact,
+                      menu.featured && s.managementCardFeatured,
+                    ]}
                     onPress={() => {
                       setManageMenuOpen(false)
                       menu.onPress()
                     }}
                     activeOpacity={0.86}
                   >
-                    <View style={[s.managementIcon, menu.featured && s.managementIconFeatured]}>
+                    <View style={[s.managementIcon, isCompactScreen && s.managementIconCompact, menu.featured && s.managementIconFeatured]}>
                       <Icon
                         name={menu.icon}
                         size={20}
@@ -403,8 +427,8 @@ export default function ClubScreen() {
                       />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.managementTitle}>{menu.title}</Text>
-                      <Text style={s.managementSubtitle}>{menu.subtitle}</Text>
+                      <Text style={[s.managementTitle, isCompactScreen && s.managementTitleCompact]}>{menu.title}</Text>
+                      <Text style={[s.managementSubtitle, isCompactScreen && s.managementSubtitleCompact]}>{menu.subtitle}</Text>
                     </View>
                     <Icon name="chevronRight" size={16} color={C.muted} />
                   </TouchableOpacity>
@@ -437,24 +461,75 @@ export default function ClubScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} tintColor={C.green} />}
       >
-        <View style={s.content}>
+        <View style={[s.content, { paddingHorizontal: isCompactScreen ? 12 : 16 }]}>
           {club && (
             <>
-                  <View style={s.clubHeroCard}> 
+                  <View
+                    style={[
+                      s.clubHeroCard,
+                      {
+                        marginHorizontal: isCompactScreen ? -12 : -16,
+                        marginTop: -12,
+                        minHeight: isCompactScreen ? 245 : 280,
+                        maxHeight: Math.max(260, Math.round(windowHeight * 0.42)),
+                      },
+                    ]}
+                  > 
                     <Image source={{ uri: club.coverImage || CLUB_HERO_IMAGE }} style={s.clubHeroImage} resizeMode="cover" />
                     <View style={s.clubHeroScrim} />
                     <TopActionButtons topInset={insets.top} floating />
-                    <View style={s.clubHeroBody}>
+                    <View
+                      style={[
+                        s.clubHeroBody,
+                        {
+                          left: isCompactScreen ? 16 : 20,
+                          right: isCompactScreen ? 16 : 20,
+                          bottom: isCompactScreen ? 16 : 20,
+                          gap: isCompactScreen ? 8 : 12,
+                        },
+                      ]}
+                    >
                       <View style={{ flex: 1 }}>
                         <Text style={s.clubHeroLabel}>MY CLUB</Text>
-                        <Text style={s.clubHeroName} numberOfLines={1}>{club.name}</Text>
-                        <Text style={s.clubHeroMeta} numberOfLines={2}>
+                        <Text
+                          style={[
+                            s.clubHeroName,
+                            { fontSize: isCompactScreen ? 22 : 26 },
+                          ]}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          minimumFontScale={0.82}
+                        >
+                          {club.name}
+                        </Text>
+                        <Text
+                          style={[
+                            s.clubHeroMeta,
+                            {
+                              fontSize: isCompactScreen ? 12 : 13,
+                              lineHeight: isCompactScreen ? 17 : 19,
+                            },
+                          ]}
+                          numberOfLines={2}
+                        >
                           {club.subtitle?.trim() ? club.subtitle : '운영 중인 골프 클럽'}
                         </Text>
                       </View>
-                      <TouchableOpacity style={s.clubInfoBtn} onPress={() => setClubInfoOpen(true)} activeOpacity={0.84}>
+                      <TouchableOpacity
+                        style={[
+                          s.clubInfoBtn,
+                          {
+                            paddingHorizontal: isCompactScreen ? 12 : 15,
+                            paddingVertical: isCompactScreen ? 8 : 10,
+                          },
+                        ]}
+                        onPress={() => setClubInfoOpen(true)}
+                        activeOpacity={0.84}
+                      >
                         <Text style={s.clubInfoBtnText}>클럽 정보</Text>
                       </TouchableOpacity>
                     </View>
@@ -1013,7 +1088,7 @@ const s = StyleSheet.create({
   clubPillText: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600' },
   clubPillTextActive: { color: C.greenDark },
 
-  content: { padding: 16, paddingTop: 12 },
+  content: { paddingVertical: 16, paddingTop: 12 },
   pageSectionTitle: {
     fontSize: 15,
     fontWeight: '800',
@@ -1033,8 +1108,6 @@ const s = StyleSheet.create({
   clubHeroCard: {
     width: 'auto',
     aspectRatio: 16 / 10.5,
-    marginHorizontal: -16,
-    marginTop: -12,
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
     borderBottomLeftRadius: 56,
@@ -1089,6 +1162,11 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
   },
+  managementModalRowCompact: {
+    gap: 10,
+    padding: 12,
+    borderRadius: 14,
+  },
   managementCardFeatured: {
     borderColor: '#94bb36',
     backgroundColor: '#f8ffd9',
@@ -1101,11 +1179,18 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  managementIconCompact: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+  },
   managementIconFeatured: {
     backgroundColor: C.accent,
   },
   managementTitle: { fontSize: 18, fontWeight: '900', color: C.text },
   managementSubtitle: { fontSize: 13, color: C.muted, lineHeight: 19, marginTop: 10 },
+  managementTitleCompact: { fontSize: 16 },
+  managementSubtitleCompact: { fontSize: 12, lineHeight: 17, marginTop: 6 },
   emptyCard: { backgroundColor: C.card, borderRadius: 20, padding: 32, alignItems: 'center', marginBottom: 14 },
   goProfileBtn: { marginTop: 16, paddingVertical: 10, paddingHorizontal: 24, backgroundColor: C.green, borderRadius: 20 },
   goProfileBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },

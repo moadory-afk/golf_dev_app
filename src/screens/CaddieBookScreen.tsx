@@ -30,6 +30,7 @@ import {
   type PersonalRoundFir,
   type PersonalRoundHoleStat,
 } from "../lib/store";
+import { clamp, isCompactWidth } from "../lib/responsive";
 
 type CaddieBookRoute = RouteProp<RootStackParamList, "CaddieBook">;
 
@@ -343,12 +344,14 @@ function HoleDetailCard({
   hole,
   width,
   height,
+  compact,
   onCardScrollBegin,
   onCardScrollEnd,
 }: {
   hole: CaddieBookHole;
   width: number;
   height: number;
+  compact: boolean;
   onCardScrollBegin?: () => void;
   onCardScrollEnd?: () => void;
 }) {
@@ -404,6 +407,7 @@ function HoleDetailCard({
   return (
     <View style={[styles.flipShell, { width, height }]}>
       <Animated.View
+        pointerEvents={flipped ? "none" : "auto"}
         style={[
           styles.flipFace,
           { transform: [{ perspective: 900 }, { rotateY: frontRotate }] },
@@ -412,6 +416,7 @@ function HoleDetailCard({
         <GPCard
           style={[
             styles.heroCard,
+            compact && styles.heroCardCompact,
             { height, backgroundColor: palette.headerBg },
           ]}
         >
@@ -432,6 +437,8 @@ function HoleDetailCard({
                 </Text>
                 <Text
                   style={[styles.heroTitle, { color: palette.headerText }]}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.82}
                   numberOfLines={2}
                 >
                   {hole.title}
@@ -477,6 +484,7 @@ function HoleDetailCard({
       </Animated.View>
 
       <Animated.View
+        pointerEvents={flipped ? "auto" : "none"}
         style={[
           styles.flipFace,
           styles.flipBackFace,
@@ -486,6 +494,7 @@ function HoleDetailCard({
         <GPCard
           style={[
             styles.heroCard,
+            compact && styles.heroCardCompact,
             styles.shotPlanBackCard,
             {
               height,
@@ -837,17 +846,26 @@ function HoleSwipePager({
   onIndexChange,
   width,
   height,
+  compact,
 }: {
   holes: CaddieBookHole[];
   selectedIndex: number;
   onIndexChange: (index: number) => void;
   width: number;
   height: number;
+  compact: boolean;
 }) {
   const pagerRef = useRef<ScrollView>(null);
   const lastIndexRef = useRef(selectedIndex);
   const userScrollingRef = useRef(false);
+  const pagerUnlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pagerScrollEnabled, setPagerScrollEnabled] = useState(true);
+
+  useEffect(() => {
+    return () => {
+      if (pagerUnlockTimerRef.current) clearTimeout(pagerUnlockTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     lastIndexRef.current = selectedIndex;
@@ -876,6 +894,20 @@ function HoleSwipePager({
     userScrollingRef.current = false;
   };
 
+  const lockPagerForCardScroll = () => {
+    if (pagerUnlockTimerRef.current) clearTimeout(pagerUnlockTimerRef.current);
+    setPagerScrollEnabled(false);
+    pagerUnlockTimerRef.current = setTimeout(() => {
+      setPagerScrollEnabled(true);
+    }, 900);
+  };
+
+  const unlockPagerAfterCardScroll = () => {
+    if (pagerUnlockTimerRef.current) clearTimeout(pagerUnlockTimerRef.current);
+    pagerUnlockTimerRef.current = null;
+    setPagerScrollEnabled(true);
+  };
+
   return (
     <ScrollView
       ref={pagerRef}
@@ -900,8 +932,9 @@ function HoleSwipePager({
           hole={hole}
           width={width}
           height={height}
-          onCardScrollBegin={() => setPagerScrollEnabled(false)}
-          onCardScrollEnd={() => setPagerScrollEnabled(true)}
+          compact={compact}
+          onCardScrollBegin={lockPagerForCardScroll}
+          onCardScrollEnd={unlockPagerAfterCardScroll}
         />
       ))}
     </ScrollView>
@@ -926,10 +959,14 @@ export default function CaddieBookScreen() {
   const [activeLayoutName, setActiveLayoutName] = useState(
     params.layoutName ?? null,
   );
-  const pagerWidth = Math.max(280, windowWidth - spacing.lg * 2);
-  const strategyCardHeight = Math.max(
-    276,
-    Math.min(410, windowHeight - insets.top - insets.bottom - 318),
+  const isCompactScreen = isCompactWidth(windowWidth);
+  const availableHeight = windowHeight - insets.top - insets.bottom;
+  const horizontalPadding = isCompactScreen ? spacing.md : spacing.lg;
+  const pagerWidth = Math.max(280, windowWidth - horizontalPadding * 2);
+  const strategyCardHeight = clamp(
+    Math.round(Math.min(pagerWidth * 0.78, availableHeight * 0.48)),
+    isCompactScreen ? 280 : 310,
+    availableHeight < 720 ? 360 : 430,
   );
   const { data, loading, error, refresh } = useCaddieBook({
     ...params,
@@ -1136,10 +1173,12 @@ export default function CaddieBookScreen() {
   return (
     <View style={[styles.root, { backgroundColor: palette.bg }]}>
       <ScrollView
-        scrollEnabled={false}
+        scrollEnabled
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[
           styles.content,
           {
+            paddingHorizontal: horizontalPadding,
             paddingTop: insets.top + spacing.lg,
             paddingBottom: insets.bottom + spacing.xxl,
           },
@@ -1191,6 +1230,7 @@ export default function CaddieBookScreen() {
               onIndexChange={handleHoleIndexChange}
               width={pagerWidth}
               height={strategyCardHeight}
+              compact={isCompactScreen}
             />
             {selectedHole ? (
               <DailyScoreInputPanel
@@ -1289,6 +1329,9 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderRadius: radius.xxl,
     overflow: "hidden",
+  },
+  heroCardCompact: {
+    padding: spacing.md,
   },
   heroCardScroller: { flex: 1 },
   heroCardScrollContent: {
