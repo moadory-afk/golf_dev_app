@@ -548,6 +548,18 @@ export default function ClubScreen() {
                       <Text style={s.criteriaCollapsedText}>우승, 스코어, 성장, 참가 기록을 기준으로 선정합니다.</Text>
                     )}
                   </View>
+
+                  <TouchableOpacity
+                    style={s.card}
+                    onPress={() => nav.navigate('FeePrototype', { returnToManageMenu: true })}
+                    activeOpacity={0.86}
+                  >
+                    <View style={s.cardTitleRow}>
+                      <Text style={[s.cardTitle, { marginBottom: 0 }]}>회비관리 현황</Text>
+                      <Text style={s.more}>확인하기</Text>
+                    </View>
+                    <Text style={s.criteriaCollapsedText}>회비 현황과 납부 상태를 확인합니다.</Text>
+                  </TouchableOpacity>
             </>
           )}
 

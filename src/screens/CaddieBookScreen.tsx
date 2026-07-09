@@ -343,10 +343,14 @@ function HoleDetailCard({
   hole,
   width,
   height,
+  onCardScrollBegin,
+  onCardScrollEnd,
 }: {
   hole: CaddieBookHole;
   width: number;
   height: number;
+  onCardScrollBegin?: () => void;
+  onCardScrollEnd?: () => void;
 }) {
   const { palette } = useSkin();
   const [flipped, setFlipped] = useState(false);
@@ -415,6 +419,10 @@ function HoleDetailCard({
             style={styles.heroCardScroller}
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
+            directionalLockEnabled
+            onScrollBeginDrag={onCardScrollBegin}
+            onScrollEndDrag={onCardScrollEnd}
+            onMomentumScrollEnd={onCardScrollEnd}
             contentContainerStyle={styles.heroCardScrollContent}
           >
             <View style={styles.detailHeroHeader}>
@@ -490,6 +498,10 @@ function HoleDetailCard({
             style={styles.heroCardScroller}
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
+            directionalLockEnabled
+            onScrollBeginDrag={onCardScrollBegin}
+            onScrollEndDrag={onCardScrollEnd}
+            onMomentumScrollEnd={onCardScrollEnd}
             contentContainerStyle={styles.heroCardScrollContent}
           >
             <View style={styles.safeHeaderRow}>
@@ -835,6 +847,7 @@ function HoleSwipePager({
   const pagerRef = useRef<ScrollView>(null);
   const lastIndexRef = useRef(selectedIndex);
   const userScrollingRef = useRef(false);
+  const [pagerScrollEnabled, setPagerScrollEnabled] = useState(true);
 
   useEffect(() => {
     lastIndexRef.current = selectedIndex;
@@ -869,6 +882,8 @@ function HoleSwipePager({
       horizontal
       pagingEnabled
       directionalLockEnabled
+      disableScrollViewPanResponder
+      scrollEnabled={pagerScrollEnabled}
       showsHorizontalScrollIndicator={false}
       onScrollBeginDrag={() => {
         userScrollingRef.current = true;
@@ -885,6 +900,8 @@ function HoleSwipePager({
           hole={hole}
           width={width}
           height={height}
+          onCardScrollBegin={() => setPagerScrollEnabled(false)}
+          onCardScrollEnd={() => setPagerScrollEnabled(true)}
         />
       ))}
     </ScrollView>

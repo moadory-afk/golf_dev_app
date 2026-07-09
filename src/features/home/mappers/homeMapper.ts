@@ -157,7 +157,7 @@ function resolveCourseLine(groups: HomeScheduleGroupRow[], fallbackLayoutName?: 
     .filter((name): name is string => !!name)
 
   const extraName = fallbackLayoutName?.trim()
-  if (extraName) names.push(extraName)
+  if (extraName && !names.includes(extraName)) names.push(extraName)
 
   const uniqueNames = Array.from(new Set(names))
   if (uniqueNames.length > 0) return `${uniqueNames.join(' / ')} 코스`

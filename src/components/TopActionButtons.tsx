@@ -122,13 +122,13 @@ export function TopActionButtons({ topInset = 0, floating = false }: TopActionBu
                     style={styles.menuItem}
                     onPress={() => {
                       setMenu(null)
-                      nav.navigate('FeePrototype', { returnToManageMenu: true })
+                      nav.navigate('Main', { screen: 'Club', params: { openManageMenu: true } })
                     }}
                     activeOpacity={0.8}
                   >
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.menuText, { color: palette.text, fontWeight: '800' }]} numberOfLines={1}>회비관리</Text>
-                      <Text style={[styles.menuSub, { color: palette.muted }]} numberOfLines={1}>회비 현황과 납부 관리</Text>
+                      <Text style={[styles.menuText, { color: palette.text, fontWeight: '800' }]} numberOfLines={1}>회비관리 현황</Text>
+                      <Text style={[styles.menuSub, { color: palette.muted }]} numberOfLines={1}>관리 메뉴에서 바로 확인</Text>
                     </View>
                   </TouchableOpacity>
                 </>

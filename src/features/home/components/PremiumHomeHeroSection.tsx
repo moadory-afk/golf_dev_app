@@ -19,7 +19,7 @@ import { useSkin } from "../../../skins";
 import { TopActionButtons } from "../../../components/TopActionButtons";
 import type { HomeHeroRound } from "../types/home";
 
-const HERO_DISPLAY_HEIGHT_RATIO = (10.5 / 16) * 1.5 * 0.85 * 0.9;
+const HERO_DISPLAY_HEIGHT_RATIO = 0.6;
 const HERO_MIN_WIDTH = 280;
 
 type PremiumHomeHeroSectionProps = {
@@ -820,11 +820,10 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     backgroundColor: "rgba(236,246,238,0.94)",
     paddingLeft: 24,
-    paddingRight: 8,
+    paddingRight: 176,
     paddingTop: 62,
     paddingBottom: 24,
-    flexDirection: "row",
-    gap: 8,
+    position: "relative",
   },
   backLeftColumn: {
     flex: 1,
@@ -885,38 +884,40 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   backMenuColumn: {
-    width: 132,
+    position: "absolute",
+    right: 0,
+    top: 62,
+    width: 120,
     justifyContent: "flex-start",
     alignItems: "stretch",
-    gap: 6,
-    marginLeft: 8,
+    gap: 0,
   },
   backMenuButton: {
     width: "100%",
-    minHeight: 34,
-    borderRadius: 12,
+    height: 35,
+    borderRadius: 14,
     backgroundColor: "transparent",
     borderWidth: 0,
     borderColor: "rgba(16,53,31,0.08)",
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 4,
-    gap: 7,
+    paddingHorizontal: 6,
+    gap: 9,
   },
   backMenuIconBubble: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(25,115,61,0.12)",
   },
-  backMenuIcon: { fontSize: 15, lineHeight: 21 },
+  backMenuIcon: { fontSize: 17, lineHeight: 23 },
   backMenuLabel: {
     flex: 1,
     color: "#17251D",
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: "900",
     letterSpacing: -0.45,
   },
