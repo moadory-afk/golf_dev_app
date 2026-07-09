@@ -2,17 +2,19 @@ import type { AIShotPlanHole, AIShotPlanProbability, AIShotPlanStep, AIShotPlanS
 import { CLUB_LABELS, DEFAULT_DISTANCE_PROFILE, recommendClub } from './clubRecommendation'
 
 function distanceFor(profile: UserDistanceProfile, club: ClubKey) {
-  return profile[club] ?? DEFAULT_DISTANCE_PROFILE[club]
+  const d = profile[club]
+  return (d == null || d <= 0) ? 0 : d
 }
 
 function pickTeeClub(mode: RecommendationMode, par: number, distanceM: number, profile: UserDistanceProfile): ClubKey {
   if (par <= 3) return recommendClub(distanceM, profile, 'attack')?.club ?? 'iron7'
   if (mode === 'SAFE') {
     if (par >= 5) return 'driver'
-    const driver = distanceFor(profile, 'driver')
-    const wood3 = distanceFor(profile, 'wood3')
+    const driver = Math.max(0,distanceFor(profile,'driver'))
+    const wood3 = Math.max(0,distanceFor(profile,'wood3'))
     if (driver > 215 && distanceM < 350) return 'wood3'
-    return wood3 >= 170 && distanceM < 330 ? 'wood3' : 'driver'
+    if(driver>0){return wood3>=170&&distanceM<330?'wood3':'driver'}
+      return wood3>0?'wood3':'iron5'
   }
   return 'driver'
 }
@@ -21,7 +23,7 @@ function pickSecondClub(mode: RecommendationMode, remainingM: number, profile: U
   const allowed: ClubKey[] = mode === 'SAFE'
     ? ['wood5', 'hybrid4', 'hybrid5', 'iron5', 'iron6']
     : ['wood3', 'wood5', 'hybrid4', 'hybrid5', 'iron5']
-  return allowed.find((club) => distanceFor(profile, club) <= remainingM - 80) ?? 'wood5'
+  return allowed.filter(c=>distanceFor(profile,c)>0).find((club)=>distanceFor(profile, club)<=remainingM-80) ?? allowed.filter(c=>distanceFor(profile,c)>0).slice(-1)[0] ?? 'pw'
 }
 
 function createStep(type: AIShotPlanStepType, label: string, club: ClubKey, remainingBeforeM: number, profile: UserDistanceProfile): AIShotPlanStep {
