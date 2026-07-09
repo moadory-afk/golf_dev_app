@@ -712,9 +712,6 @@ function DailyScoreInputPanel({
           <Text style={[styles.dailyScoreTitle, { color: palette.text }]}>
             홀별 스코어 입력
           </Text>
-          <Text style={[styles.dailyScoreSubtitle, { color: palette.muted }]}>
-            라운드 당일만 입력할 수 있습니다.
-          </Text>
         </View>
         {saving ? (
           <ActivityIndicator size="small" color={palette.green} />
@@ -867,8 +864,8 @@ export default function CaddieBookScreen() {
   );
   const pagerWidth = Math.max(280, windowWidth - spacing.lg * 2);
   const strategyCardHeight = Math.max(
-    248,
-    Math.min(350, windowHeight - insets.top - insets.bottom - 356),
+    276,
+    Math.min(410, windowHeight - insets.top - insets.bottom - 318),
   );
   const { data, loading, error, refresh } = useCaddieBook({
     ...params,
@@ -1152,7 +1149,7 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   header: { gap: 3 },
   eyebrow: { ...typography.caption, fontWeight: "900", letterSpacing: 0.4 },
@@ -1175,17 +1172,18 @@ const styles = StyleSheet.create({
   emptyTitle: { ...typography.cardTitle, textAlign: "center" },
   emptyText: { ...typography.body, textAlign: "center" },
   emptyButton: { marginTop: spacing.md },
-  courseTabsContent: { gap: spacing.sm, paddingRight: spacing.lg },
+  courseTabsContent: { gap: spacing.xs, paddingRight: spacing.lg },
   courseTab: {
-    minWidth: 72,
-    minHeight: 32,
+    minWidth: 64,
+    minHeight: 26,
     borderRadius: radius.pill,
     borderWidth: 1,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
     alignItems: "center",
     justifyContent: "center",
   },
-  courseTabText: { ...typography.bodySm, fontWeight: "900" },
+  courseTabText: { ...typography.caption, fontWeight: "900" },
   courseInfoBar: {
     minHeight: 42,
     borderWidth: 1,
