@@ -866,13 +866,6 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
         </Modal>
       )}
 
-      <View style={s.metricGridCompact}>
-        <MetricCard label="평균" value={`${avg}타`} />
-        <MetricCard label="핸디" value={diffText(handicap)} />
-        <MetricCard label="베스트" value={`${best}타`} tone={C.gold} />
-        <MetricCard label="최근5" value={`${recent5Avg}타`} />
-      </View>
-
       <View style={s.aiCaddieCard}>
         <View style={s.aiCaddieHeader}>
           <View style={s.aiCaddieIconWrap}>

@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Modal,
   RefreshControl,
   ScrollView,
@@ -42,7 +44,28 @@ import {
   premiumGolfHomeLayout,
 } from "../features/home/layout";
 import { getRoundSchedules, type ScheduledRound } from "../lib/roundSchedule";
-import { computeHandicaps, getRounds, playerTotal, totalPar, type SavedRound } from "../lib/store";
+import {
+  DEFAULT_LOTTO_AWARD_CONFIG,
+  computeHandicaps,
+  getClubAwardConfig,
+  getClubLottoAwardConfig,
+  getClubMembers,
+  getCourseLayouts,
+  getRoundLottoDraw,
+  getRoundLottoEntries,
+  getRoundLottoEntry,
+  getRounds,
+  playerTotal,
+  saveRoundLottoEntry,
+  totalPar,
+  type ClubAwardConfig,
+  type LottoAwardConfig,
+  type RoundLottoDraw,
+  type CourseLayout,
+  type RoundLottoEntry,
+  type SavedRound,
+} from "../lib/store";
+import { AWARD_CATEGORIES, fillToCount } from "../lib/awardConfig";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -101,7 +124,15 @@ function resolveFeedNavigation(
   return nav.navigate("RoundSchedulePrototype", { openCreate: true });
 }
 
-type HomeRecordDetailMode = "handicap" | "average" | "recent" | "best" | "matchup" | "records";
+type HomeRecordDetailMode =
+  "handicap" | "average" | "recent" | "best" | "matchup" | "records";
+type LottoSelection = { par3: number[]; par4: number[]; par5: number[] };
+
+const emptyLottoSelection = (): LottoSelection => ({
+  par3: [],
+  par4: [],
+  par5: [],
+});
 
 function applyStatNavigation(
   stats: PremiumRecentStatItem[],
@@ -125,9 +156,117 @@ function diffText(value: number) {
   return value > 0 ? `+${value}` : `${value}`;
 }
 
+function formatWon(value: number) {
+  return `${Math.max(0, Math.round(value)).toLocaleString("ko-KR")}원`;
+}
+
 function formatShortDate(date?: string) {
   if (!date) return "-";
   return date.length >= 10 ? date.slice(5, 10) : date;
+}
+
+function todayKey() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function groupForScheduledRound(
+  round: ScheduledRound,
+  userId?: string | null,
+  name?: string | null,
+) {
+  return (
+    round.groups.find((item) =>
+      item.members.some(
+        (member) => member.userId === userId || member.name === name,
+      ),
+    ) ??
+    round.groups.find((item) => item.members.length > 0) ??
+    round.groups[0]
+  );
+}
+
+function parsForScheduledRound(
+  round: ScheduledRound | null,
+  layouts: CourseLayout[],
+  userId?: string | null,
+  name?: string | null,
+) {
+  if (!round) return Array.from({ length: 18 }, () => 4);
+  const group = groupForScheduledRound(round, userId, name);
+  const candidates = [
+    { id: group?.frontLayoutId, name: group?.frontLayoutName },
+    { id: group?.backLayoutId, name: group?.backLayoutName },
+    { id: round.layoutId, name: round.layoutName },
+  ].filter(
+    (item, index, list) =>
+      (item.id || (item.name && index < 2)) &&
+      list.findIndex(
+        (target) => target.id === item.id && target.name === item.name,
+      ) === index,
+  );
+
+  const pars = candidates
+    .flatMap((candidate) => {
+      const layout = layouts.find(
+        (item) => item.id === candidate.id || item.name === candidate.name,
+      );
+      const length = Math.max(
+        1,
+        Math.min(layout?.holes ?? layout?.pars?.length ?? 9, 18),
+      );
+      return Array.from({ length }, (_, index) => layout?.pars?.[index] ?? 4);
+    })
+    .slice(0, 18);
+
+  return pars.length === 18
+    ? pars
+    : [...pars, ...Array.from({ length: 18 - pars.length }, () => 4)];
+}
+
+function lottoGroupsFromPars(pars: number[]) {
+  const holes = pars.map((par, index) => ({ hole: index + 1, par }));
+  return [
+    {
+      key: "par3" as const,
+      label: "파 3",
+      limit: 1,
+      holes: holes.filter((item) => item.par === 3).map((item) => item.hole),
+    },
+    {
+      key: "par4" as const,
+      label: "파 4",
+      limit: 3,
+      holes: holes.filter((item) => item.par === 4).map((item) => item.hole),
+    },
+    {
+      key: "par5" as const,
+      label: "파 5",
+      limit: 2,
+      holes: holes.filter((item) => item.par === 5).map((item) => item.hole),
+    },
+  ];
+}
+
+function isSameOrPastDate(date?: string) {
+  if (!date) return false;
+  return date.slice(0, 10) <= todayKey();
+}
+
+function isRoundMember(
+  round: ScheduledRound | null,
+  userId?: string | null,
+  name?: string | null,
+) {
+  if (!round) return false;
+  return round.groups.some((group) =>
+    group.members.some(
+      (member) => member.userId === userId || member.name === name,
+    ),
+  );
 }
 
 function findPlayer(round: SavedRound, userName?: string | null) {
@@ -136,7 +275,9 @@ function findPlayer(round: SavedRound, userName?: string | null) {
   const normalized = target.replace(/\s+/g, "");
   return (
     round.players.find((player) => player.name === target) ??
-    round.players.find((player) => player.name.replace(/\s+/g, "") === normalized) ??
+    round.players.find(
+      (player) => player.name.replace(/\s+/g, "") === normalized,
+    ) ??
     null
   );
 }
@@ -149,8 +290,16 @@ function getPersonalRoundRows(rounds: SavedRound[], userName?: string | null) {
       const total = playerTotal(player.strokes);
       const par = totalPar(round.pars);
       const diff = total - par;
-      const birdies = player.strokes.reduce((count, score, index) => count + (score - (round.pars[index] ?? 0) <= -1 ? 1 : 0), 0);
-      const pars = player.strokes.reduce((count, score, index) => count + (score - (round.pars[index] ?? 0) === 0 ? 1 : 0), 0);
+      const birdies = player.strokes.reduce(
+        (count, score, index) =>
+          count + (score - (round.pars[index] ?? 0) <= -1 ? 1 : 0),
+        0,
+      );
+      const pars = player.strokes.reduce(
+        (count, score, index) =>
+          count + (score - (round.pars[index] ?? 0) === 0 ? 1 : 0),
+        0,
+      );
       return {
         id: round.id,
         date: round.date,
@@ -166,7 +315,12 @@ function getPersonalRoundRows(rounds: SavedRound[], userName?: string | null) {
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 
-function handicapBeforeHome(name: string, rounds: SavedRound[], beforeDate: string, basis = 5): number {
+function handicapBeforeHome(
+  name: string,
+  rounds: SavedRound[],
+  beforeDate: string,
+  basis = 5,
+): number {
   const prior = rounds
     .filter((round) => round.date < beforeDate && !!findPlayer(round, name))
     .sort((a, b) => a.date.localeCompare(b.date))
@@ -225,12 +379,35 @@ export default function HomeExperienceScreen() {
   });
   const [selectedHeroKey, setSelectedHeroKey] = useState<string | null>(null);
   const [roundPopupMode, setRoundPopupMode] = useState<
-    "groups" | "lotto" | null
+    "groups" | "lotto" | "award" | null
   >(null);
   const [popupRound, setPopupRound] = useState<ScheduledRound | null>(null);
   const [popupLoading, setPopupLoading] = useState(false);
-  const [recordDetailMode, setRecordDetailMode] = useState<HomeRecordDetailMode | null>(null);
-  const [recordDetailRounds, setRecordDetailRounds] = useState<SavedRound[]>([]);
+  const [popupMembers, setPopupMembers] = useState<
+    Array<{ userId: string; name: string; role: string }>
+  >([]);
+  const [popupLottoEntries, setPopupLottoEntries] = useState<RoundLottoEntry[]>(
+    [],
+  );
+  const [popupLottoDraw, setPopupLottoDraw] = useState<RoundLottoDraw | null>(
+    null,
+  );
+  const [popupLottoSelection, setPopupLottoSelection] =
+    useState<LottoSelection>(emptyLottoSelection());
+  const [popupLottoPars, setPopupLottoPars] = useState<number[]>(
+    Array.from({ length: 18 }, () => 4),
+  );
+  const [popupLottoSaving, setPopupLottoSaving] = useState(false);
+  const [popupLottoConfig, setPopupLottoConfig] = useState<LottoAwardConfig>(
+    DEFAULT_LOTTO_AWARD_CONFIG,
+  );
+  const [popupAwardConfig, setPopupAwardConfig] =
+    useState<ClubAwardConfig | null>(null);
+  const [recordDetailMode, setRecordDetailMode] =
+    useState<HomeRecordDetailMode | null>(null);
+  const [recordDetailRounds, setRecordDetailRounds] = useState<SavedRound[]>(
+    [],
+  );
   const [recordDetailLoading, setRecordDetailLoading] = useState(false);
 
   useFocusEffect(
@@ -256,22 +433,122 @@ export default function HomeExperienceScreen() {
       );
 
   const openRoundPopup = useCallback(
-    async (round: HomeHeroRound, mode: "groups" | "lotto") => {
+    async (round: HomeHeroRound, mode: "groups" | "lotto" | "award") => {
       setRoundPopupMode(mode);
       setPopupRound(null);
+      setPopupMembers([]);
+      setPopupLottoEntries([]);
+      setPopupLottoDraw(null);
+      setPopupLottoSelection(emptyLottoSelection());
+      setPopupLottoPars(Array.from({ length: 18 }, () => 4));
+      setPopupLottoConfig(DEFAULT_LOTTO_AWARD_CONFIG);
+      setPopupAwardConfig(null);
       if (!club?.id) return;
       setPopupLoading(true);
       try {
-        const schedules = await getRoundSchedules(club.id);
-        setPopupRound(schedules.find((item) => item.id === round.id) ?? null);
+        const [schedules, members] = await Promise.all([
+          getRoundSchedules(club.id),
+          getClubMembers(club.id),
+        ]);
+        const selectedRound =
+          schedules.find((item) => item.id === round.id) ?? null;
+        setPopupRound(selectedRound);
+        setPopupMembers(members);
+
+        if (mode === "lotto") {
+          const layouts = selectedRound?.courseId
+            ? await getCourseLayouts(selectedRound.courseId)
+            : [];
+          const [entry, entries, draw, lottoConfig] = await Promise.all([
+            userId
+              ? getRoundLottoEntry(round.id, userId)
+              : Promise.resolve(null),
+            getRoundLottoEntries(round.id),
+            getRoundLottoDraw(round.id),
+            getClubLottoAwardConfig(club.id),
+          ]);
+          setPopupLottoSelection(entry?.selectedHoles ?? emptyLottoSelection());
+          setPopupLottoPars(
+            parsForScheduledRound(selectedRound, layouts, userId, myName),
+          );
+          setPopupLottoEntries(entries);
+          setPopupLottoDraw(draw);
+          setPopupLottoConfig(lottoConfig);
+        }
+
+        if (mode === "award") {
+          const clubAwardConfig = await getClubAwardConfig(club.id);
+          setPopupAwardConfig(selectedRound?.awardConfig ?? clubAwardConfig);
+        }
       } catch {
         setPopupRound(null);
+        setPopupMembers([]);
+        setPopupLottoEntries([]);
+        setPopupLottoDraw(null);
+        setPopupAwardConfig(null);
       } finally {
         setPopupLoading(false);
       }
     },
-    [club?.id],
+    [club?.id, myName, userId],
   );
+
+  const togglePopupLottoHole = useCallback(
+    (parKey: keyof LottoSelection, hole: number) => {
+      const limits: Record<keyof LottoSelection, number> = {
+        par3: 1,
+        par4: 3,
+        par5: 2,
+      };
+      setPopupLottoSelection((current) => {
+        const selected = current[parKey];
+        if (selected.includes(hole)) {
+          return {
+            ...current,
+            [parKey]: selected.filter((item) => item !== hole),
+          };
+        }
+        if (selected.length >= limits[parKey]) return current;
+        return {
+          ...current,
+          [parKey]: [...selected, hole].sort((a, b) => a - b),
+        };
+      });
+    },
+    [],
+  );
+
+  const savePopupLottoSelection = useCallback(async () => {
+    if (!club?.id || !userId || !popupRound) return;
+    const ready =
+      popupLottoSelection.par3.length === 1 &&
+      popupLottoSelection.par4.length === 3 &&
+      popupLottoSelection.par5.length === 2;
+    if (!ready) return;
+    setPopupLottoSaving(true);
+    try {
+      await saveRoundLottoEntry({
+        clubId: club.id,
+        scheduleId: popupRound.id,
+        userId,
+        selectedHoles: popupLottoSelection,
+      });
+      setPopupLottoEntries((current) => [
+        ...current.filter((entry) => entry.userId !== userId),
+        {
+          clubId: club.id,
+          scheduleId: popupRound.id,
+          userId,
+          selectedHoles: popupLottoSelection,
+        },
+      ]);
+      Alert.alert("구매 완료", "Lotto 6/18 구매가 완료되었습니다.");
+    } catch (e: unknown) {
+      Alert.alert("오류", e instanceof Error ? e.message : String(e));
+    } finally {
+      setPopupLottoSaving(false);
+    }
+  }, [club?.id, popupLottoSelection, popupRound, userId]);
 
   const openRecordDetail = useCallback(
     async (mode: HomeRecordDetailMode) => {
@@ -291,7 +568,7 @@ export default function HomeExperienceScreen() {
         setRecordDetailLoading(false);
       }
     },
-    [club?.id],
+    [club?.id, myName, userId],
   );
 
   const recentStats = useMemo(
@@ -338,8 +615,12 @@ export default function HomeExperienceScreen() {
         onPress: () => openRecordDetail("recent"),
       },
     ];
-  }, [dashboard.stats.items, dashboard.stats.recentRounds.length, nav, openRecordDetail]);
-
+  }, [
+    dashboard.stats.items,
+    dashboard.stats.recentRounds.length,
+    nav,
+    openRecordDetail,
+  ]);
 
   if (clubsLoaded && !club) {
     return (
@@ -412,12 +693,7 @@ export default function HomeExperienceScreen() {
                   }
                   onGroupsPress={(round) => openRoundPopup(round, "groups")}
                   onLottoPress={(round) => openRoundPopup(round, "lotto")}
-                  onAwardPress={() =>
-                    nav.navigate("Main", {
-                      screen: "Club",
-                      params: { openManageMenu: true },
-                    })
-                  }
+                  onAwardPress={(round) => openRoundPopup(round, "award")}
                   onEditRoundPress={(round) =>
                     nav.navigate("RoundSchedulePrototype", {
                       editScheduleId: round.id,
@@ -473,6 +749,19 @@ export default function HomeExperienceScreen() {
         mode={roundPopupMode}
         round={popupRound}
         loading={popupLoading}
+        members={popupMembers}
+        lottoEntries={popupLottoEntries}
+        lottoDraw={popupLottoDraw}
+        lottoSelection={popupLottoSelection}
+        lottoPars={popupLottoPars}
+        lottoSaving={popupLottoSaving}
+        lottoConfig={popupLottoConfig}
+        awardConfig={popupAwardConfig}
+        userId={userId}
+        userName={myName}
+        isAdmin={club?.role === "admin"}
+        onToggleLottoHole={togglePopupLottoHole}
+        onSaveLotto={savePopupLottoSelection}
         onClose={() => setRoundPopupMode(null)}
         onManage={() => {
           const editScheduleId = popupRound?.id;
@@ -514,56 +803,162 @@ function HomeRecordDetailModal({
   const { palette } = useSkin();
   const personalRows = getPersonalRoundRows(rounds, userName);
   const latestRows = personalRows.slice(0, 5);
-  const basisRows = [...personalRows].sort((a, b) => a.date.localeCompare(b.date)).slice(-5);
+  const basisRows = [...personalRows]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-5);
   const average = personalRows.length
-    ? Math.round(personalRows.reduce((sum, row) => sum + row.total, 0) / personalRows.length)
+    ? Math.round(
+        personalRows.reduce((sum, row) => sum + row.total, 0) /
+          personalRows.length,
+      )
     : null;
-  const best = personalRows.length ? [...personalRows].sort((a, b) => a.total - b.total)[0] : null;
+  const best = personalRows.length
+    ? [...personalRows].sort((a, b) => a.total - b.total)[0]
+    : null;
   const handicaps = computeHandicaps(rounds, 5);
-  const myHandicap = userName ? handicaps.get(userName) ?? 0 : 0;
+  const myHandicap = userName ? (handicaps.get(userName) ?? 0) : 0;
 
   const renderRows = (rows: typeof personalRows, diffFromAverage = false) => (
     <View style={styles.detailTable}>
       <View style={styles.detailTableHeader}>
-        <Text style={[styles.detailTh, { flex: 0.9, color: palette.muted }]}>날짜</Text>
-        <Text style={[styles.detailTh, { flex: 2.3, color: palette.muted }]}>코스</Text>
-        <Text style={[styles.detailTh, { flex: 0.9, color: palette.muted, textAlign: "right" }]}>스코어</Text>
-        <Text style={[styles.detailTh, { flex: 0.9, color: palette.muted, textAlign: "right" }]}>파대비</Text>
+        <Text style={[styles.detailTh, { flex: 0.9, color: palette.muted }]}>
+          날짜
+        </Text>
+        <Text style={[styles.detailTh, { flex: 2.3, color: palette.muted }]}>
+          코스
+        </Text>
+        <Text
+          style={[
+            styles.detailTh,
+            { flex: 0.9, color: palette.muted, textAlign: "right" },
+          ]}
+        >
+          스코어
+        </Text>
+        <Text
+          style={[
+            styles.detailTh,
+            { flex: 0.9, color: palette.muted, textAlign: "right" },
+          ]}
+        >
+          파대비
+        </Text>
       </View>
-      {rows.length ? rows.map((row) => {
-        const diff = diffFromAverage && average !== null ? row.total - average : row.diff;
-        return (
-          <View key={`${row.id}-${mode}`} style={[styles.detailTableRow, { borderColor: palette.border }]}>
-            <Text style={[styles.detailTd, { flex: 0.9, color: palette.text }]}>{formatShortDate(row.date)}</Text>
-            <Text style={[styles.detailTd, { flex: 2.3, color: palette.text }]} numberOfLines={1}>{row.courseName}</Text>
-            <Text style={[styles.detailTdStrong, { flex: 0.9, color: palette.text, textAlign: "right" }]}>{row.total}</Text>
-            <Text style={[styles.detailTdStrong, { flex: 0.9, color: diff <= 0 ? palette.green : "#E68A2E", textAlign: "right" }]}>{diffText(diff)}</Text>
-          </View>
-        );
-      }) : (
-        <Text style={[styles.detailEmpty, { color: palette.muted }]}>표시할 기록이 없습니다.</Text>
+      {rows.length ? (
+        rows.map((row) => {
+          const diff =
+            diffFromAverage && average !== null
+              ? row.total - average
+              : row.diff;
+          return (
+            <View
+              key={`${row.id}-${mode}`}
+              style={[styles.detailTableRow, { borderColor: palette.border }]}
+            >
+              <Text
+                style={[styles.detailTd, { flex: 0.9, color: palette.text }]}
+              >
+                {formatShortDate(row.date)}
+              </Text>
+              <Text
+                style={[styles.detailTd, { flex: 2.3, color: palette.text }]}
+                numberOfLines={1}
+              >
+                {row.courseName}
+              </Text>
+              <Text
+                style={[
+                  styles.detailTdStrong,
+                  { flex: 0.9, color: palette.text, textAlign: "right" },
+                ]}
+              >
+                {row.total}
+              </Text>
+              <Text
+                style={[
+                  styles.detailTdStrong,
+                  {
+                    flex: 0.9,
+                    color: diff <= 0 ? palette.green : "#E68A2E",
+                    textAlign: "right",
+                  },
+                ]}
+              >
+                {diffText(diff)}
+              </Text>
+            </View>
+          );
+        })
+      ) : (
+        <Text style={[styles.detailEmpty, { color: palette.muted }]}>
+          표시할 기록이 없습니다.
+        </Text>
       )}
     </View>
   );
 
   const renderHandicap = () => (
     <>
-      <Text style={[styles.detailSectionTitle, { color: palette.text }]}>↗ 핸디캡 추이 (5경기 슬라이딩)</Text>
-      <View style={[styles.handicapTrendBox, { backgroundColor: "rgba(31,160,92,0.10)", borderColor: palette.border }]}> 
-        {basisRows.length ? basisRows.map((row, index) => (
-          <View key={row.id} style={styles.handicapTrendItem}>
-            <Text style={[styles.handicapTrendValue, { color: palette.muted }]}>{diffText(row.diff)}</Text>
-            <View style={[styles.handicapTrendLine, { backgroundColor: index === basisRows.length - 1 ? palette.green : "rgba(25,156,89,0.18)" }]} />
-          </View>
-        )) : <Text style={[styles.detailEmpty, { color: palette.muted }]}>핸디캡 추이 데이터가 없습니다.</Text>}
-        {!!basisRows.length && <Text style={[styles.handicapTrendCaption, { color: palette.muted }]}>← 과거   최근 →</Text>}
+      <Text style={[styles.detailSectionTitle, { color: palette.text }]}>
+        ↗ 핸디캡 추이 (5경기 슬라이딩)
+      </Text>
+      <View
+        style={[
+          styles.handicapTrendBox,
+          {
+            backgroundColor: "rgba(31,160,92,0.10)",
+            borderColor: palette.border,
+          },
+        ]}
+      >
+        {basisRows.length ? (
+          basisRows.map((row, index) => (
+            <View key={row.id} style={styles.handicapTrendItem}>
+              <Text
+                style={[styles.handicapTrendValue, { color: palette.muted }]}
+              >
+                {diffText(row.diff)}
+              </Text>
+              <View
+                style={[
+                  styles.handicapTrendLine,
+                  {
+                    backgroundColor:
+                      index === basisRows.length - 1
+                        ? palette.green
+                        : "rgba(25,156,89,0.18)",
+                  },
+                ]}
+              />
+            </View>
+          ))
+        ) : (
+          <Text style={[styles.detailEmpty, { color: palette.muted }]}>
+            핸디캡 추이 데이터가 없습니다.
+          </Text>
+        )}
+        {!!basisRows.length && (
+          <Text style={[styles.handicapTrendCaption, { color: palette.muted }]}>
+            ← 과거 최근 →
+          </Text>
+        )}
       </View>
       {renderRows([...basisRows].reverse())}
     </>
   );
 
   const renderMatchup = () => {
-    const records = new Map<string, { played: number; wins: number; draws: number; losses: number; handicap: number; diff: number }>();
+    const records = new Map<
+      string,
+      {
+        played: number;
+        wins: number;
+        draws: number;
+        losses: number;
+        handicap: number;
+        diff: number;
+      }
+    >();
     const name = userName ?? "";
     for (const round of rounds) {
       const me = findPlayer(round, name);
@@ -574,7 +969,14 @@ function HomeRecordDetailModal({
         if (opponent.name === me.name) continue;
         const oppH = handicapBeforeHome(opponent.name, rounds, round.date, 5);
         const oppNet = playerTotal(opponent.strokes) - oppH;
-        const current = records.get(opponent.name) ?? { played: 0, wins: 0, draws: 0, losses: 0, handicap: handicaps.get(opponent.name) ?? 0, diff: myHandicap - (handicaps.get(opponent.name) ?? 0) };
+        const current = records.get(opponent.name) ?? {
+          played: 0,
+          wins: 0,
+          draws: 0,
+          losses: 0,
+          handicap: handicaps.get(opponent.name) ?? 0,
+          diff: myHandicap - (handicaps.get(opponent.name) ?? 0),
+        };
         current.played += 1;
         if (myNet < oppNet) current.wins += 1;
         else if (myNet > oppNet) current.losses += 1;
@@ -582,50 +984,123 @@ function HomeRecordDetailModal({
         records.set(opponent.name, current);
       }
     }
-    const rows = [...records.entries()].sort((a, b) => b[1].played - a[1].played);
+    const rows = [...records.entries()].sort(
+      (a, b) => b[1].played - a[1].played,
+    );
 
     return (
       <View style={styles.h2hTable}>
         <View style={styles.h2hHeader}>
-          {['상대', '경기', '승', '무', '패', '승률', '핸디', '핸디차'].map((label) => (
-            <Text key={label} style={[styles.h2hTh, { color: palette.muted }]}>{label}</Text>
-          ))}
+          {["상대", "경기", "승", "무", "패", "승률", "핸디", "핸디차"].map(
+            (label) => (
+              <Text
+                key={label}
+                style={[styles.h2hTh, { color: palette.muted }]}
+              >
+                {label}
+              </Text>
+            ),
+          )}
         </View>
-        {rows.length ? rows.map(([opponent, record]) => {
-          const rate = record.played ? Math.round((record.wins / record.played) * 100) : 0;
-          return (
-            <View key={opponent} style={[styles.h2hRow, { borderColor: palette.border }]}>
-              <Text style={[styles.h2hTdName, { color: palette.text }]} numberOfLines={1}>{opponent}</Text>
-              <Text style={[styles.h2hTd, { color: palette.text }]}>{record.played}</Text>
-              <Text style={[styles.h2hTd, { color: "#2F80ED" }]}>{record.wins}</Text>
-              <Text style={[styles.h2hTd, { color: palette.text }]}>{record.draws}</Text>
-              <Text style={[styles.h2hTd, { color: "#E8594F" }]}>{record.losses}</Text>
-              <Text style={[styles.h2hTdStrong, { color: palette.text }]}>{rate}%</Text>
-              <Text style={[styles.h2hTd, { color: palette.text }]}>{diffText(record.handicap)}</Text>
-              <Text style={[styles.h2hTdStrong, { color: record.diff > 0 ? "#E8594F" : palette.green }]}>{diffText(record.diff)}</Text>
-            </View>
-          );
-        }) : <Text style={[styles.detailEmpty, { color: palette.muted }]}>상대 전적 데이터가 없습니다.</Text>}
+        {rows.length ? (
+          rows.map(([opponent, record]) => {
+            const rate = record.played
+              ? Math.round((record.wins / record.played) * 100)
+              : 0;
+            return (
+              <View
+                key={opponent}
+                style={[styles.h2hRow, { borderColor: palette.border }]}
+              >
+                <Text
+                  style={[styles.h2hTdName, { color: palette.text }]}
+                  numberOfLines={1}
+                >
+                  {opponent}
+                </Text>
+                <Text style={[styles.h2hTd, { color: palette.text }]}>
+                  {record.played}
+                </Text>
+                <Text style={[styles.h2hTd, { color: "#2F80ED" }]}>
+                  {record.wins}
+                </Text>
+                <Text style={[styles.h2hTd, { color: palette.text }]}>
+                  {record.draws}
+                </Text>
+                <Text style={[styles.h2hTd, { color: "#E8594F" }]}>
+                  {record.losses}
+                </Text>
+                <Text style={[styles.h2hTdStrong, { color: palette.text }]}>
+                  {rate}%
+                </Text>
+                <Text style={[styles.h2hTd, { color: palette.text }]}>
+                  {diffText(record.handicap)}
+                </Text>
+                <Text
+                  style={[
+                    styles.h2hTdStrong,
+                    { color: record.diff > 0 ? "#E8594F" : palette.green },
+                  ]}
+                >
+                  {diffText(record.diff)}
+                </Text>
+              </View>
+            );
+          })
+        ) : (
+          <Text style={[styles.detailEmpty, { color: palette.muted }]}>
+            상대 전적 데이터가 없습니다.
+          </Text>
+        )}
       </View>
     );
   };
 
   const renderRecords = () => {
-    const totalBirdies = personalRows.reduce((sum, row) => sum + row.birdies, 0);
+    const totalBirdies = personalRows.reduce(
+      (sum, row) => sum + row.birdies,
+      0,
+    );
     const totalPars = personalRows.reduce((sum, row) => sum + row.pars, 0);
     const cards = [
-      { label: "라운드", value: `${personalRows.length}회`, sub: "기록 라운드" },
-      { label: "베스트", value: best ? `${best.total}타` : "-", sub: best?.courseName ?? "기록 없음" },
+      {
+        label: "라운드",
+        value: `${personalRows.length}회`,
+        sub: "기록 라운드",
+      },
+      {
+        label: "베스트",
+        value: best ? `${best.total}타` : "-",
+        sub: best?.courseName ?? "기록 없음",
+      },
       { label: "버디", value: `${totalBirdies}개`, sub: "누적" },
       { label: "파", value: `${totalPars}개`, sub: "누적" },
     ];
     return (
       <View style={styles.recordsGrid}>
         {cards.map((card) => (
-          <View key={card.label} style={[styles.recordBadgeCard, { backgroundColor: "rgba(31,160,92,0.10)", borderColor: palette.border }]}> 
-            <Text style={[styles.recordBadgeLabel, { color: palette.muted }]}>{card.label}</Text>
-            <Text style={[styles.recordBadgeValue, { color: palette.text }]}>{card.value}</Text>
-            <Text style={[styles.recordBadgeSub, { color: palette.muted }]} numberOfLines={1}>{card.sub}</Text>
+          <View
+            key={card.label}
+            style={[
+              styles.recordBadgeCard,
+              {
+                backgroundColor: "rgba(31,160,92,0.10)",
+                borderColor: palette.border,
+              },
+            ]}
+          >
+            <Text style={[styles.recordBadgeLabel, { color: palette.muted }]}>
+              {card.label}
+            </Text>
+            <Text style={[styles.recordBadgeValue, { color: palette.text }]}>
+              {card.value}
+            </Text>
+            <Text
+              style={[styles.recordBadgeSub, { color: palette.muted }]}
+              numberOfLines={1}
+            >
+              {card.sub}
+            </Text>
           </View>
         ))}
       </View>
@@ -634,7 +1109,10 @@ function HomeRecordDetailModal({
 
   const titleByMode: Record<HomeRecordDetailMode, string> = {
     handicap: "핸디캡 근거 (최근 5경기)",
-    average: average === null ? "전체 라운드 기록" : `전체 라운드 기록 (평균 ${average}타)`,
+    average:
+      average === null
+        ? "전체 라운드 기록"
+        : `전체 라운드 기록 (평균 ${average}타)`,
     recent: "최근 라운드 기록",
     best: "베스트 스코어 순위",
     matchup: `역대 전적 (핸디 ${diffText(myHandicap)})`,
@@ -642,23 +1120,45 @@ function HomeRecordDetailModal({
   };
 
   const content = () => {
-    if (loading) return <Text style={[styles.detailEmpty, { color: palette.muted }]}>불러오는 중입니다.</Text>;
+    if (loading)
+      return (
+        <Text style={[styles.detailEmpty, { color: palette.muted }]}>
+          불러오는 중입니다.
+        </Text>
+      );
     if (!mode) return null;
     if (mode === "handicap") return renderHandicap();
     if (mode === "matchup") return renderMatchup();
     if (mode === "records") return renderRecords();
     if (mode === "average") return renderRows(personalRows, true);
-    if (mode === "best") return renderRows([...personalRows].sort((a, b) => a.total - b.total));
+    if (mode === "best")
+      return renderRows([...personalRows].sort((a, b) => a.total - b.total));
     return renderRows(latestRows);
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <View style={styles.detailModalBackdrop}>
-        <View style={[styles.detailModalCard, { backgroundColor: palette.card }]}> 
+        <View
+          style={[styles.detailModalCard, { backgroundColor: palette.card }]}
+        >
           <View style={styles.detailModalHeader}>
-            <Text style={[styles.detailModalTitle, { color: palette.text }]}>{mode ? titleByMode[mode] : "기록 상세"}</Text>
-            <TouchableOpacity activeOpacity={0.86} onPress={onClose} style={[styles.detailCloseButton, { backgroundColor: palette.green }]}> 
+            <Text style={[styles.detailModalTitle, { color: palette.text }]}>
+              {mode ? titleByMode[mode] : "기록 상세"}
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.86}
+              onPress={onClose}
+              style={[
+                styles.detailCloseButton,
+                { backgroundColor: palette.green },
+              ]}
+            >
               <Text style={styles.detailCloseText}>닫기</Text>
             </TouchableOpacity>
           </View>
@@ -676,19 +1176,97 @@ function RoundInfoModal({
   mode,
   round,
   loading,
+  members,
+  lottoEntries,
+  lottoDraw,
+  lottoSelection,
+  lottoPars,
+  lottoSaving,
+  lottoConfig,
+  awardConfig,
+  userId,
+  userName,
+  isAdmin,
+  onToggleLottoHole,
+  onSaveLotto,
   onClose,
   onManage,
 }: {
   visible: boolean;
-  mode: "groups" | "lotto" | null;
+  mode: "groups" | "lotto" | "award" | null;
   round: ScheduledRound | null;
   loading: boolean;
+  members: Array<{ userId: string; name: string; role: string }>;
+  lottoEntries: RoundLottoEntry[];
+  lottoDraw: RoundLottoDraw | null;
+  lottoSelection: LottoSelection;
+  lottoPars: number[];
+  lottoSaving: boolean;
+  lottoConfig: LottoAwardConfig;
+  awardConfig: ClubAwardConfig | null;
+  userId?: string | null;
+  userName?: string | null;
+  isAdmin?: boolean;
+  onToggleLottoHole: (parKey: keyof LottoSelection, hole: number) => void;
+  onSaveLotto: () => void;
   onClose: () => void;
   onManage: () => void;
 }) {
   const { palette } = useSkin();
   const groups = groupLines(round);
   const isGroups = mode === "groups";
+  const isLotto = mode === "lotto";
+  const isAward = mode === "award";
+  const canPurchaseLotto =
+    isSameOrPastDate(round?.date) && isRoundMember(round, userId, userName);
+  const myLottoEntry = userId
+    ? lottoEntries.find((entry) => entry.userId === userId)
+    : undefined;
+  const isLottoPurchased = !!myLottoEntry;
+  const lottoReady =
+    lottoSelection.par3.length === 1 &&
+    lottoSelection.par4.length === 3 &&
+    lottoSelection.par5.length === 2;
+  const lottoHoleGroups = lottoGroupsFromPars(lottoPars);
+  const memberNameById = useMemo(
+    () => new Map(members.map((member) => [member.userId, member.name])),
+    [members],
+  );
+  const lottoJackpot =
+    lottoConfig.prizes["6"] +
+    (lottoConfig.rollover ? lottoConfig.carryoverAmount : 0);
+  const lottoPurchaseRows = lottoEntries.map((entry) => {
+    const holes = [
+      ...entry.selectedHoles.par3,
+      ...entry.selectedHoles.par4,
+      ...entry.selectedHoles.par5,
+    ].sort((a, b) => a - b);
+    const drawnScores = lottoDraw?.drawnScores;
+    const hits =
+      lottoDraw?.drawStatus === "COMPLETED" && drawnScores
+        ? holes.filter((hole) => !!drawnScores[String(hole)]).length
+        : 0;
+
+    return {
+      id: entry.userId,
+      name: memberNameById.get(entry.userId) ?? "회원",
+      holes,
+      hits,
+    };
+  });
+  const awardItems = useMemo(() => {
+    if (!awardConfig) return [];
+    const defs = AWARD_CATEGORIES.flatMap((category) => category.items);
+    return fillToCount(awardConfig.items, awardConfig.count)
+      .map((id) => defs.find((item) => item.id === id))
+      .filter((item): item is NonNullable<typeof item> => !!item);
+  }, [awardConfig]);
+
+  const modalTitle = isGroups
+    ? "조편성 결과"
+    : isAward
+      ? "시상계획"
+      : "Lotto 6/18";
 
   return (
     <Modal
@@ -701,7 +1279,7 @@ function RoundInfoModal({
         <View style={[styles.modalCard, { backgroundColor: palette.card }]}>
           <View style={styles.modalHeader}>
             <Text style={[styles.modalTitle, { color: palette.text }]}>
-              {isGroups ? "조편성 결과" : "Lotto 구매 및 결과"}
+              {modalTitle}
             </Text>
             <TouchableOpacity
               onPress={onClose}
@@ -752,29 +1330,306 @@ function RoundInfoModal({
                 아직 실제 조편성 결과가 없습니다.
               </Text>
             )
-          ) : (
-            <View style={[styles.groupRow, { borderColor: palette.border }]}>
-              <Text style={[styles.groupTitle, { color: palette.text }]}>
-                Lotto 6/18
-              </Text>
-              <Text style={[styles.groupCourse, { color: palette.muted }]}>
-                선택된 라운드 기준으로 구매와 결과 확인을 진행합니다.
-              </Text>
-              <Text style={[styles.groupMembers, { color: palette.text }]}>
-                구매/결과 상세 관리는 아래 버튼에서 이어서 확인하세요.
-              </Text>
-            </View>
-          )}
+          ) : isLotto ? (
+            <ScrollView
+              style={styles.modalScroll}
+              showsVerticalScrollIndicator={false}
+            >
+              <View
+                style={[styles.popupSection, { borderColor: palette.border }]}
+              >
+                <Text
+                  style={[styles.popupSectionTitle, { color: palette.text }]}
+                >
+                  Lotto 6/18 시상 기준
+                </Text>
+                <Text
+                  style={[styles.lottoPrizeAmount, { color: palette.green }]}
+                >
+                  현재 누적 당첨금 {formatWon(lottoJackpot)}
+                </Text>
+                <View style={styles.lottoPrizeGrid}>
+                  <Text
+                    style={[styles.lottoPrizeItem, { color: palette.text }]}
+                  >
+                    3개 {formatWon(lottoConfig.prizes["3"])}
+                  </Text>
+                  <Text
+                    style={[styles.lottoPrizeItem, { color: palette.text }]}
+                  >
+                    4개 {formatWon(lottoConfig.prizes["4"])}
+                  </Text>
+                  <Text
+                    style={[styles.lottoPrizeItem, { color: palette.text }]}
+                  >
+                    5개 {formatWon(lottoConfig.prizes["5"])}
+                  </Text>
+                  <Text
+                    style={[styles.lottoPrizeItem, { color: palette.text }]}
+                  >
+                    6개 {formatWon(lottoJackpot)}
+                  </Text>
+                </View>
+              </View>
 
-          <TouchableOpacity
-            activeOpacity={0.86}
-            onPress={onManage}
-            style={[styles.modalAction, { backgroundColor: palette.green }]}
-          >
-            <Text style={styles.modalActionText}>
-              {isGroups ? "조편성 관리로 이동" : "Lotto 구매/결과 확인"}
-            </Text>
-          </TouchableOpacity>
+              {isLottoPurchased ? (
+                <View
+                  style={[styles.popupSection, { borderColor: palette.border }]}
+                >
+                  <Text
+                    style={[styles.popupSectionTitle, { color: palette.text }]}
+                  >
+                    구매 현황
+                  </Text>
+                  <View style={styles.lottoSelectedRow}>
+                    {[
+                      ...myLottoEntry.selectedHoles.par3,
+                      ...myLottoEntry.selectedHoles.par4,
+                      ...myLottoEntry.selectedHoles.par5,
+                    ]
+                      .sort((a, b) => a - b)
+                      .map((hole) => (
+                        <View
+                          key={hole}
+                          style={[
+                            styles.lottoSelectedHole,
+                            { borderColor: palette.border },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.lottoSelectedHoleText,
+                              { color: palette.text },
+                            ]}
+                          >
+                            {hole}H
+                          </Text>
+                        </View>
+                      ))}
+                  </View>
+                  <Text
+                    style={[styles.modalEmptySmall, { color: palette.muted }]}
+                  >
+                    이미 구매 완료되었습니다. 결과는 추첨 후 확인할 수 있습니다.
+                  </Text>
+                </View>
+              ) : canPurchaseLotto ? (
+                <View
+                  style={[styles.popupSection, { borderColor: palette.border }]}
+                >
+                  <View style={styles.lottoCounterRow}>
+                    <Text
+                      style={[
+                        styles.lottoCounter,
+                        lottoSelection.par3.length === 1 && {
+                          color: palette.green,
+                        },
+                      ]}
+                    >
+                      파3 {lottoSelection.par3.length}/1
+                    </Text>
+                    <Text
+                      style={[
+                        styles.lottoCounter,
+                        lottoSelection.par4.length === 3 && {
+                          color: palette.green,
+                        },
+                      ]}
+                    >
+                      파4 {lottoSelection.par4.length}/3
+                    </Text>
+                    <Text
+                      style={[
+                        styles.lottoCounter,
+                        lottoSelection.par5.length === 2 && {
+                          color: palette.green,
+                        },
+                      ]}
+                    >
+                      파5 {lottoSelection.par5.length}/2
+                    </Text>
+                  </View>
+                  {lottoHoleGroups.map((group) => (
+                    <View key={group.key} style={styles.lottoGroupBlock}>
+                      <View style={styles.lottoGroupHeader}>
+                        <Text
+                          style={[
+                            styles.lottoGroupTitle,
+                            { color: palette.text },
+                          ]}
+                        >
+                          {group.label}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.lottoGroupLimit,
+                            { color: palette.muted },
+                          ]}
+                        >
+                          {lottoSelection[group.key].length}/{group.limit}
+                        </Text>
+                      </View>
+                      <View style={styles.lottoHoleGrid}>
+                        {group.holes.map((hole) => {
+                          const selected =
+                            lottoSelection[group.key].includes(hole);
+                          return (
+                            <TouchableOpacity
+                              key={hole}
+                              activeOpacity={0.82}
+                              onPress={() => onToggleLottoHole(group.key, hole)}
+                              style={[
+                                styles.lottoHoleButton,
+                                {
+                                  borderColor: palette.border,
+                                  backgroundColor: "rgba(0,0,0,0.035)",
+                                },
+                                selected && {
+                                  backgroundColor: palette.green,
+                                  borderColor: palette.green,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.lottoHoleButtonText,
+                                  { color: selected ? "#fff" : palette.muted },
+                                ]}
+                              >
+                                {hole}H
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ))}
+                  <TouchableOpacity
+                    activeOpacity={0.86}
+                    onPress={onSaveLotto}
+                    disabled={!lottoReady || lottoSaving}
+                    style={[
+                      styles.modalAction,
+                      {
+                        backgroundColor: lottoReady
+                          ? palette.green
+                          : "rgba(0,0,0,0.16)",
+                      },
+                    ]}
+                  >
+                    {lottoSaving ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <Text style={styles.modalActionText}>구매 완료</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View
+                  style={[styles.popupSection, { borderColor: palette.border }]}
+                >
+                  <Text
+                    style={[styles.modalEmptySmall, { color: palette.muted }]}
+                  >
+                    로또 구매는 라운드 당일, 같은 조 편성 회원에게 활성화됩니다.
+                  </Text>
+                </View>
+              )}
+
+              <View
+                style={[styles.popupSection, { borderColor: palette.border }]}
+              >
+                <Text
+                  style={[styles.popupSectionTitle, { color: palette.text }]}
+                >
+                  결과 확인
+                </Text>
+                {lottoDraw?.drawStatus === "COMPLETED" &&
+                lottoDraw.drawnScores ? (
+                  lottoPurchaseRows.length > 0 ? (
+                    lottoPurchaseRows.map((row) => (
+                      <View
+                        key={`result-${row.id}`}
+                        style={styles.lottoResultRow}
+                      >
+                        <Text
+                          style={[styles.lottoName, { color: palette.text }]}
+                        >
+                          {row.name}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.lottoResultText,
+                            { color: palette.green },
+                          ]}
+                        >
+                          {row.hits}/{row.holes.length}개 적중
+                        </Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text
+                      style={[styles.modalEmptySmall, { color: palette.muted }]}
+                    >
+                      결과를 확인할 구매 내역이 없습니다.
+                    </Text>
+                  )
+                ) : (
+                  <Text
+                    style={[styles.modalEmptySmall, { color: palette.muted }]}
+                  >
+                    결과는 추첨 완료 후 표시됩니다.
+                  </Text>
+                )}
+              </View>
+            </ScrollView>
+          ) : isAward ? (
+            <ScrollView
+              style={styles.modalScroll}
+              showsVerticalScrollIndicator={false}
+            >
+              {awardItems.length > 0 ? (
+                awardItems.map((item) => (
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.awardPlanRow,
+                      { borderColor: palette.border },
+                    ]}
+                  >
+                    <Text style={styles.awardPlanIcon}>{item.icon}</Text>
+                    <View style={styles.awardPlanTextWrap}>
+                      <Text
+                        style={[styles.awardPlanTitle, { color: palette.text }]}
+                      >
+                        {item.label}
+                      </Text>
+                      <Text
+                        style={[styles.awardPlanDesc, { color: palette.muted }]}
+                        numberOfLines={2}
+                      >
+                        {item.desc}
+                      </Text>
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <Text style={[styles.modalEmpty, { color: palette.muted }]}>
+                  이 라운드에 등록된 시상계획이 없습니다.
+                </Text>
+              )}
+            </ScrollView>
+          ) : null}
+
+          {isGroups ? (
+            <TouchableOpacity
+              activeOpacity={0.86}
+              onPress={onManage}
+              style={[styles.modalAction, { backgroundColor: palette.green }]}
+            >
+              <Text style={styles.modalActionText}>조편성 관리로 이동</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
     </Modal>
@@ -917,6 +1772,194 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontWeight: "900",
+  },
+  modalScroll: {
+    maxHeight: 360,
+    marginTop: 8,
+  },
+  popupSection: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    marginTop: 12,
+  },
+  popupSectionTitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "900",
+    marginBottom: 10,
+  },
+  modalEmptySmall: {
+    paddingVertical: 12,
+    textAlign: "center",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "800",
+  },
+  lottoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minHeight: 32,
+  },
+  lottoName: {
+    width: 72,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+  lottoHoles: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "800",
+  },
+  lottoPrizeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  lottoPrizeText: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "900",
+  },
+  lottoPrizeAmount: {
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: "900",
+  },
+  lottoResultRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: 32,
+  },
+  lottoResultText: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "900",
+  },
+  lottoPrizeGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 10,
+  },
+  lottoPrizeItem: {
+    flexGrow: 1,
+    minWidth: "46%",
+    borderRadius: 12,
+    backgroundColor: "rgba(0,0,0,0.035)",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "900",
+  },
+  lottoCounterRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+  lottoCounter: {
+    flex: 1,
+    borderRadius: 14,
+    backgroundColor: "rgba(0,0,0,0.045)",
+    paddingVertical: 9,
+    textAlign: "center",
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "900",
+    color: "#7A8C82",
+  },
+  lottoGroupBlock: {
+    borderTopWidth: 1,
+    borderTopColor: "rgba(31,160,92,0.14)",
+    paddingTop: 12,
+    marginTop: 12,
+  },
+  lottoGroupHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  lottoGroupTitle: {
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: "900",
+  },
+  lottoGroupLimit: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "900",
+  },
+  lottoHoleGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  lottoHoleButton: {
+    minWidth: 54,
+    minHeight: 48,
+    borderWidth: 1,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lottoHoleButtonText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+  lottoSelectedRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  lottoSelectedHole: {
+    minWidth: 46,
+    minHeight: 42,
+    borderWidth: 1,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(31,160,92,0.08)",
+  },
+  lottoSelectedHoleText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+  awardPlanRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 12,
+    marginTop: 10,
+  },
+  awardPlanIcon: {
+    fontSize: 22,
+    lineHeight: 26,
+  },
+  awardPlanTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  awardPlanTitle: {
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: "900",
+  },
+  awardPlanDesc: {
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "800",
+    marginTop: 1,
   },
   modalAction: {
     minHeight: 46,
