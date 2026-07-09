@@ -7,6 +7,7 @@ export type HomeUpcomingRound = {
   id: string
   courseName: string
   layoutName?: string
+  courseLine?: string
   date: string
   dateLabel: string
   teeTime: string

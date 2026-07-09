@@ -286,7 +286,7 @@ function HeroBackSide({
   onEditRoundPress,
 }: any) {
   const companionText = formatRoundCompanions(round);
-  const courseLine = `${round.teeTime || "--:--"} ${round.layoutName || "OUT"} 코스`;
+  const courseLine = `${round.teeTime || "--:--"} ${round.courseLine || (round.layoutName ? `${round.layoutName} 코스` : "코스 미정")}`;
 
   return (
     <View style={styles.backCard}>
@@ -819,11 +819,12 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 0,
     backgroundColor: "rgba(236,246,238,0.94)",
-    paddingHorizontal: 24,
+    paddingLeft: 24,
+    paddingRight: 8,
     paddingTop: 62,
     paddingBottom: 24,
     flexDirection: "row",
-    gap: 16,
+    gap: 8,
   },
   backLeftColumn: {
     flex: 1,
@@ -840,10 +841,10 @@ const styles = StyleSheet.create({
   },
   backCourseName: {
     color: "#10351F",
-    fontSize: 42,
-    lineHeight: 48,
+    fontSize: 34,
+    lineHeight: 40,
     fontWeight: "900",
-    letterSpacing: -1.8,
+    letterSpacing: -1.2,
     marginBottom: 10,
   },
   backDetailList: {
@@ -884,12 +885,14 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   backMenuColumn: {
-    width: 116,
+    width: 132,
     justifyContent: "flex-start",
-    alignItems: "flex-end",
+    alignItems: "stretch",
     gap: 6,
+    marginLeft: 8,
   },
   backMenuButton: {
+    width: "100%",
     minHeight: 34,
     borderRadius: 12,
     backgroundColor: "transparent",

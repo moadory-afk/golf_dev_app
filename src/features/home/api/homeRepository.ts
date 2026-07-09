@@ -23,6 +23,8 @@ export type HomeScheduleGroupRow = {
   group_no: number
   group_name?: string | null
   tee_time?: string | null
+  front_layout_name?: string | null
+  back_layout_name?: string | null
 }
 
 export type HomeScheduleGroupMemberRow = {
@@ -163,7 +165,7 @@ export async function getHomeDashboardRawData(clubId: string): Promise<HomeDashb
     scheduleIds.length
       ? supabase
           .from('club_round_groups')
-          .select('id, schedule_id, group_no, group_name, tee_time')
+          .select('id, schedule_id, group_no, group_name, tee_time, front_layout_name, back_layout_name')
           .in('schedule_id', scheduleIds)
           .order('group_no', { ascending: true })
       : Promise.resolve({ data: [], error: null }),

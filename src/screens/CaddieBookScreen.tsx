@@ -398,11 +398,7 @@ function HoleDetailCard({
   const timelineWidth = Math.max(width - 64, planSteps.length * 72);
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.96}
-      onPress={() => setFlipped((next) => !next)}
-      style={[styles.flipShell, { width, height }]}
-    >
+    <View style={[styles.flipShell, { width, height }]}>
       <Animated.View
         style={[
           styles.flipFace,
@@ -459,9 +455,15 @@ function HoleDetailCard({
                 주의 · {hole.caution}
               </Text>
             )}
-            <Text style={[styles.flipHint, { color: palette.headerText }]}>
-              탭하면 AI Shot Plan
-            </Text>
+            <TouchableOpacity
+              activeOpacity={0.82}
+              onPress={() => setFlipped(true)}
+              style={styles.flipAction}
+            >
+              <Text style={[styles.flipHint, { color: palette.headerText }]}>
+                AI Shot Plan 보기
+              </Text>
+            </TouchableOpacity>
           </ScrollView>
         </GPCard>
       </Animated.View>
@@ -670,10 +672,19 @@ function HoleDetailCard({
                 {shotPlan.mission}
               </Text>
             )}
+            <TouchableOpacity
+              activeOpacity={0.82}
+              onPress={() => setFlipped(false)}
+              style={styles.flipAction}
+            >
+              <Text style={[styles.flipHint, { color: palette.text }]}>
+                홀 공략으로 돌아가기
+              </Text>
+            </TouchableOpacity>
           </ScrollView>
         </GPCard>
       </Animated.View>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -720,45 +731,54 @@ function DailyScoreInputPanel({
         ) : null}
       </View>
 
-      {!firDisabled ? (
-        <View style={styles.dailyScoreRow}>
-          <Text style={[styles.dailyScoreLabel, { color: palette.text }]}>
-            티샷
-          </Text>
-          <View style={styles.dailyScoreOptions}>
-            {DEFAULT_TEE_OPTIONS.map((option) => {
-              const selected = currentStat.fir === option.value;
-              return (
-                <TouchableOpacity
-                  key={option.label}
-                  activeOpacity={0.82}
-                  onPress={() =>
-                    onChange({ fir: selected ? null : option.value })
-                  }
+      <View style={styles.dailyScoreRow}>
+        <Text
+          style={[
+            styles.dailyScoreLabel,
+            { color: firDisabled ? palette.muted : palette.text },
+          ]}
+        >
+          티샷
+        </Text>
+        <View style={styles.dailyScoreOptions}>
+          {DEFAULT_TEE_OPTIONS.map((option) => {
+            const selected = currentStat.fir === option.value;
+            return (
+              <TouchableOpacity
+                key={option.label}
+                activeOpacity={0.82}
+                disabled={firDisabled}
+                onPress={() => onChange({ fir: selected ? null : option.value })}
+                style={[
+                  styles.dailyScoreOption,
+                  firDisabled && styles.dailyScoreOptionDisabled,
+                  {
+                    borderColor: selected ? palette.green : palette.border,
+                    backgroundColor: selected
+                      ? palette.greenLight
+                      : "rgba(0,0,0,0.035)",
+                  },
+                ]}
+              >
+                <Text
                   style={[
-                    styles.dailyScoreOption,
+                    styles.dailyScoreOptionText,
                     {
-                      borderColor: selected ? palette.green : palette.border,
-                      backgroundColor: selected
-                        ? palette.greenLight
-                        : "rgba(0,0,0,0.035)",
+                      color: firDisabled
+                        ? palette.muted
+                        : selected
+                          ? palette.green
+                          : palette.muted,
                     },
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.dailyScoreOptionText,
-                      { color: selected ? palette.green : palette.muted },
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
-      ) : null}
+      </View>
 
       <View style={styles.dailyScoreRow}>
         <Text style={[styles.dailyScoreLabel, { color: palette.text }]}>
@@ -848,6 +868,7 @@ function HoleSwipePager({
       ref={pagerRef}
       horizontal
       pagingEnabled
+      directionalLockEnabled
       showsHorizontalScrollIndicator={false}
       onScrollBeginDrag={() => {
         userScrollingRef.current = true;
@@ -1292,6 +1313,12 @@ const styles = StyleSheet.create({
     textAlign: "right",
     marginTop: "auto",
   },
+  flipAction: {
+    alignSelf: "flex-end",
+    marginTop: "auto",
+    paddingVertical: spacing.xs,
+    paddingLeft: spacing.md,
+  },
   parPill: {
     borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
@@ -1587,6 +1614,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: spacing.xs,
   },
+  dailyScoreOptionDisabled: { opacity: 0.45 },
   dailyScoreOptionText: { ...typography.bodySm, fontWeight: "900" },
   detailSection: { gap: spacing.xs },
   sectionLabel: { ...typography.caption, fontWeight: "900" },

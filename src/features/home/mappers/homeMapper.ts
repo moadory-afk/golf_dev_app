@@ -150,6 +150,20 @@ function resolveLayoutName(schedule: HomeScheduleRow, layout?: HomeLayoutRow) {
   return layout?.name || schedule.layout_name?.trim() || undefined
 }
 
+function resolveCourseLine(groups: HomeScheduleGroupRow[], fallbackLayoutName?: string) {
+  const names = groups
+    .flatMap((group) => [group.front_layout_name, group.back_layout_name])
+    .map((name) => name?.trim())
+    .filter((name): name is string => !!name)
+
+  const extraName = fallbackLayoutName?.trim()
+  if (extraName) names.push(extraName)
+
+  const uniqueNames = Array.from(new Set(names))
+  if (uniqueNames.length > 0) return `${uniqueNames.join(' / ')} 코스`
+  return fallbackLayoutName ? `${fallbackLayoutName} 코스` : '코스 미정'
+}
+
 function countMembers(groups: HomeScheduleGroupRow[], members: HomeScheduleGroupMemberRow[]) {
   if (members.length > 0) return members.length
   return groups.length > 0 ? groups.length * 4 : 0
@@ -178,6 +192,7 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow, 
   const layout = raw.layouts.find((item) => item.id === schedule.layout_id)
   const courseName = resolveCourseName(schedule, course)
   const layoutName = resolveLayoutName(schedule, layout)
+  const courseLine = resolveCourseLine(groups, layoutName)
   const teeTime = firstTeeTime(schedule, groups)
   const locationParts = [course?.region, layoutName ? `${layoutName} 코스` : undefined].filter(Boolean)
 
@@ -187,6 +202,7 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow, 
     id: schedule.id,
     courseName,
     layoutName,
+    courseLine,
     date: schedule.round_date,
     dateLabel: formatRoundDate(schedule.round_date),
     teeTime,

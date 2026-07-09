@@ -98,23 +98,41 @@ export function TopActionButtons({ topInset = 0, floating = false }: TopActionBu
             <View style={[styles.menu, { left: menu.x, top: menu.y, minWidth: menu.w, backgroundColor: palette.card, borderColor: palette.border }]}> 
               {myClubs.length === 0 ? (
                 <Text style={[styles.menuEmpty, { color: palette.muted }]}>참여 중인 클럽이 없습니다</Text>
-              ) : myClubs.map((item) => {
-                const selected = item.id === club?.id
-                return (
+              ) : (
+                <>
+                  {myClubs.map((item) => {
+                    const selected = item.id === club?.id
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        style={[styles.menuItem, selected && { backgroundColor: palette.greenLight }]}
+                        onPress={() => { setActiveClub(item); setMenu(null) }}
+                        activeOpacity={0.8}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.menuText, { color: selected ? palette.green : palette.text, fontWeight: selected ? '800' : '600' }]} numberOfLines={1}>⛳ {item.name}</Text>
+                          <Text style={[styles.menuSub, { color: palette.muted }]} numberOfLines={1}>{item.role === 'admin' ? '관리자' : '회원'}</Text>
+                        </View>
+                        {selected && <Text style={[styles.check, { color: palette.green }]}>✓</Text>}
+                      </TouchableOpacity>
+                    )
+                  })}
+                  <View style={[styles.menuDivider, { backgroundColor: palette.border }]} />
                   <TouchableOpacity
-                    key={item.id}
-                    style={[styles.menuItem, selected && { backgroundColor: palette.greenLight }]}
-                    onPress={() => { setActiveClub(item); setMenu(null) }}
+                    style={styles.menuItem}
+                    onPress={() => {
+                      setMenu(null)
+                      nav.navigate('FeePrototype', { returnToManageMenu: true })
+                    }}
                     activeOpacity={0.8}
                   >
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.menuText, { color: selected ? palette.green : palette.text, fontWeight: selected ? '800' : '600' }]} numberOfLines={1}>⛳ {item.name}</Text>
-                      <Text style={[styles.menuSub, { color: palette.muted }]} numberOfLines={1}>{item.role === 'admin' ? '관리자' : '회원'}</Text>
+                      <Text style={[styles.menuText, { color: palette.text, fontWeight: '800' }]} numberOfLines={1}>회비관리</Text>
+                      <Text style={[styles.menuSub, { color: palette.muted }]} numberOfLines={1}>회비 현황과 납부 관리</Text>
                     </View>
-                    {selected && <Text style={[styles.check, { color: palette.green }]}>✓</Text>}
                   </TouchableOpacity>
-                )
-              })}
+                </>
+              )}
             </View>
           </TouchableOpacity>
         </Modal>
@@ -176,6 +194,7 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.16)' },
   menu: { position: 'absolute', borderRadius: 16, paddingVertical: 6, maxWidth: 280, borderWidth: 1, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
   menuItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingHorizontal: 14, paddingVertical: 11 },
+  menuDivider: { height: 1, marginHorizontal: 14, marginVertical: 4 },
   menuText: { fontSize: 14 },
   menuSub: { fontSize: 11, marginTop: 2 },
   menuEmpty: { paddingHorizontal: 14, paddingVertical: 12, fontSize: 13 },
