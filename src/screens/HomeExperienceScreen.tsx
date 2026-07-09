@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Modal,
+  PanResponder,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -50,13 +51,17 @@ import {
   getClubAwardConfig,
   getClubLottoAwardConfig,
   getClubMembers,
+  getCourseLayouts,
   getRoundLottoDraw,
   getRoundLottoEntries,
+  getRoundLottoEntry,
   getRounds,
+  saveRoundLottoEntry,
   saveRoundLottoDrawResult,
   playerTotal,
   totalPar,
   type ClubAwardConfig,
+  type CourseLayout,
   type LottoAwardConfig,
   type RoundLottoDraw,
   type RoundLottoDrawScore,
@@ -66,6 +71,8 @@ import {
 import { AWARD_CATEGORIES, fillToCount } from "../lib/awardConfig";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+type LottoSelection = { par3: number[]; par4: number[]; par5: number[] };
+type PersonalCourseSegment = { label: string; layoutId?: string; start: number; end: number };
 
 function caddieBookParams(round: HomeUpcomingRound | null) {
   if (!round) return undefined;
@@ -102,6 +109,76 @@ function groupLines(round?: ScheduledRound | null) {
         .filter(Boolean)
         .join(" / "),
     }));
+}
+
+function emptyLottoSelection(): LottoSelection {
+  return { par3: [], par4: [], par5: [] };
+}
+
+function groupForScheduledRound(round: ScheduledRound, userId?: string | null, name?: string | null) {
+  return round.groups.find((item) =>
+    item.members.some((member) => member.userId === userId || member.name === name)
+  ) ?? round.groups.find((item) => item.members.length > 0) ?? round.groups[0];
+}
+
+function courseSegmentsForScheduledRound(
+  round: ScheduledRound,
+  layouts: CourseLayout[],
+  userId?: string | null,
+  name?: string | null,
+): PersonalCourseSegment[] {
+  const group = groupForScheduledRound(round, userId, name);
+  const candidates = [
+    { id: group?.frontLayoutId, name: group?.frontLayoutName ?? "전반" },
+    { id: group?.backLayoutId, name: group?.backLayoutName ?? "후반" },
+    { id: round.layoutId, name: round.layoutName ?? "추가" },
+  ].filter((item, index) => item.id || (item.name && index < 2))
+    .filter((item, index, list) => list.findIndex((target) => target.id === item.id && target.name === item.name) === index);
+
+  if (candidates.length === 0) {
+    return [
+      { label: "전반", start: 0, end: 8 },
+      { label: "후반", start: 9, end: 17 },
+    ];
+  }
+
+  let cursor = 0;
+  const segments: PersonalCourseSegment[] = [];
+  for (const candidate of candidates) {
+    if (cursor >= 18) break;
+    const layout = layouts.find((item) => item.id === candidate.id);
+    const length = Math.max(1, Math.min(layout?.holes ?? layout?.pars.length ?? 9, 18 - cursor));
+    segments.push({
+      label: layout?.name ?? candidate.name,
+      layoutId: candidate.id,
+      start: cursor,
+      end: cursor + length - 1,
+    });
+    cursor += length;
+  }
+  return segments;
+}
+
+function parsForScheduledRound(
+  round: ScheduledRound,
+  layouts: CourseLayout[],
+  userId?: string | null,
+  name?: string | null,
+) {
+  const segments = courseSegmentsForScheduledRound(round, layouts, userId, name);
+  const pars = segments.flatMap((segment) => {
+    const layout = layouts.find((item) => item.id === segment.layoutId);
+    const length = segment.end - segment.start + 1;
+    return Array.from({ length }, (_, index) => layout?.pars[index] ?? 4);
+  }).slice(0, 18);
+  return pars.length === 18 ? pars : [...pars, ...Array.from({ length: 18 - pars.length }, () => 4)];
+}
+
+function isAssignedToRound(round: ScheduledRound | null, userId?: string | null, name?: string | null) {
+  if (!round || !userId) return false;
+  return round.groups.some((group) =>
+    group.members.some((member) => member.userId === userId || member.name === name)
+  );
 }
 
 function resolveFeedNavigation(
@@ -299,9 +376,13 @@ export default function HomeExperienceScreen() {
   const [popupRound, setPopupRound] = useState<ScheduledRound | null>(null);
   const [popupLoading, setPopupLoading] = useState(false);
   const [popupMembers, setPopupMembers] = useState<Array<{ userId: string; name: string; role: string }>>([]);
+  const [popupLottoPars, setPopupLottoPars] = useState<number[]>([]);
+  const [popupLottoSelection, setPopupLottoSelection] = useState<LottoSelection>(emptyLottoSelection);
   const [popupLottoEntries, setPopupLottoEntries] = useState<RoundLottoEntry[]>([]);
   const [popupLottoDraw, setPopupLottoDraw] = useState<RoundLottoDraw | null>(null);
   const [popupLottoConfig, setPopupLottoConfig] = useState<LottoAwardConfig>(DEFAULT_LOTTO_AWARD_CONFIG);
+  const [popupMyLottoStrokes, setPopupMyLottoStrokes] = useState<number[] | null>(null);
+  const [popupLottoSaving, setPopupLottoSaving] = useState(false);
   const [popupDrawSaving, setPopupDrawSaving] = useState(false);
   const [popupAwardConfig, setPopupAwardConfig] = useState<ClubAwardConfig | null>(null);
   const [recordDetailMode, setRecordDetailMode] = useState<HomeRecordDetailMode | null>(null);
@@ -335,9 +416,13 @@ export default function HomeExperienceScreen() {
       setRoundPopupMode(mode);
       setPopupRound(null);
       setPopupMembers([]);
+      setPopupLottoPars([]);
+      setPopupLottoSelection(emptyLottoSelection());
       setPopupLottoEntries([]);
       setPopupLottoDraw(null);
       setPopupLottoConfig(DEFAULT_LOTTO_AWARD_CONFIG);
+      setPopupMyLottoStrokes(null);
+      setPopupLottoSaving(false);
       setPopupAwardConfig(null);
       setPopupDrawSaving(false);
       if (!club?.id) return;
@@ -352,14 +437,22 @@ export default function HomeExperienceScreen() {
         setPopupMembers(members);
 
         if (mode === "lotto") {
-          const [entries, draw, lottoConfig] = await Promise.all([
+          const layouts = selectedRound?.courseId ? await getCourseLayouts(selectedRound.courseId) : [];
+          setPopupLottoPars(selectedRound ? parsForScheduledRound(selectedRound, layouts, userId, myName) : Array.from({ length: 18 }, () => 4));
+          const [saved, entries, draw, lottoConfig, savedRounds] = await Promise.all([
+            userId ? getRoundLottoEntry(round.id, userId) : Promise.resolve(null),
             getRoundLottoEntries(round.id),
             getRoundLottoDraw(round.id),
             getClubLottoAwardConfig(club.id),
+            getRounds(club.id),
           ]);
+          const roundRecord = savedRounds.find((item) => item.scheduleId === round.id);
+          const myPlayer = roundRecord ? findPlayer(roundRecord, myName) : null;
+          setPopupLottoSelection(saved?.selectedHoles ?? emptyLottoSelection());
           setPopupLottoEntries(entries);
           setPopupLottoDraw(draw);
           setPopupLottoConfig(lottoConfig);
+          setPopupMyLottoStrokes(myPlayer?.strokes ?? null);
         }
 
         if (mode === "award") {
@@ -369,15 +462,59 @@ export default function HomeExperienceScreen() {
       } catch {
         setPopupRound(null);
         setPopupMembers([]);
+        setPopupLottoPars([]);
+        setPopupLottoSelection(emptyLottoSelection());
         setPopupLottoEntries([]);
         setPopupLottoDraw(null);
+        setPopupMyLottoStrokes(null);
         setPopupAwardConfig(null);
       } finally {
         setPopupLoading(false);
       }
     },
-    [club?.id],
+    [club?.id, myName, userId],
   );
+
+  const togglePopupLottoHole = useCallback((parKey: keyof LottoSelection, hole: number) => {
+    const limits: Record<keyof LottoSelection, number> = { par3: 1, par4: 3, par5: 2 };
+    setPopupLottoSelection((current) => {
+      const selected = current[parKey];
+      if (selected.includes(hole)) {
+        return { ...current, [parKey]: selected.filter((item) => item !== hole) };
+      }
+      if (selected.length >= limits[parKey]) return current;
+      return { ...current, [parKey]: [...selected, hole].sort((a, b) => a - b) };
+    });
+  }, []);
+
+  const popupLottoReady =
+    popupLottoSelection.par3.length === 1 &&
+    popupLottoSelection.par4.length === 3 &&
+    popupLottoSelection.par5.length === 2;
+
+  const savePopupLottoEntry = useCallback(async () => {
+    if (!club?.id || !userId || !popupRound || !popupLottoReady) return;
+    if (!isAssignedToRound(popupRound, userId, myName)) return;
+
+    setPopupLottoSaving(true);
+    try {
+      await saveRoundLottoEntry({
+        clubId: club.id,
+        scheduleId: popupRound.id,
+        userId,
+        selectedHoles: popupLottoSelection,
+      });
+      setPopupLottoEntries((current) => [
+        ...current.filter((entry) => entry.userId !== userId),
+        { clubId: club.id, scheduleId: popupRound.id, userId, selectedHoles: popupLottoSelection },
+      ]);
+      Alert.alert("구매 완료", "Lotto 6/18 구매가 완료되었습니다.");
+    } catch (error) {
+      Alert.alert("오류", error instanceof Error ? error.message : String(error));
+    } finally {
+      setPopupLottoSaving(false);
+    }
+  }, [club?.id, myName, popupLottoReady, popupLottoSelection, popupRound, userId]);
 
 
   const runPopupLottoDraw = useCallback(async () => {
@@ -602,11 +739,19 @@ export default function HomeExperienceScreen() {
         loading={popupLoading}
         members={popupMembers}
         lottoEntries={popupLottoEntries}
+        lottoPars={popupLottoPars}
+        lottoSelection={popupLottoSelection}
         lottoDraw={popupLottoDraw}
         lottoConfig={popupLottoConfig}
+        myLottoStrokes={popupMyLottoStrokes}
         awardConfig={popupAwardConfig}
         myUserId={userId}
+        canPurchaseLotto={isAssignedToRound(popupRound, userId, myName)}
+        lottoReady={popupLottoReady}
+        lottoSaving={popupLottoSaving}
         drawSaving={popupDrawSaving}
+        onToggleLottoHole={togglePopupLottoHole}
+        onSaveLottoEntry={savePopupLottoEntry}
         onDraw={runPopupLottoDraw}
         onClose={() => setRoundPopupMode(null)}
         onManage={() => {
@@ -813,11 +958,19 @@ function RoundInfoModal({
   loading,
   members,
   lottoEntries,
+  lottoPars,
+  lottoSelection,
   lottoDraw,
   lottoConfig,
+  myLottoStrokes,
   awardConfig,
   myUserId,
+  canPurchaseLotto,
+  lottoReady,
+  lottoSaving,
   drawSaving,
+  onToggleLottoHole,
+  onSaveLottoEntry,
   onDraw,
   onClose,
   onManage,
@@ -828,11 +981,19 @@ function RoundInfoModal({
   loading: boolean;
   members: Array<{ userId: string; name: string; role: string }>;
   lottoEntries: RoundLottoEntry[];
+  lottoPars: number[];
+  lottoSelection: LottoSelection;
   lottoDraw: RoundLottoDraw | null;
   lottoConfig: LottoAwardConfig;
+  myLottoStrokes: number[] | null;
   awardConfig: ClubAwardConfig | null;
   myUserId?: string | null;
+  canPurchaseLotto: boolean;
+  lottoReady: boolean;
+  lottoSaving: boolean;
   drawSaving: boolean;
+  onToggleLottoHole: (parKey: keyof LottoSelection, hole: number) => void;
+  onSaveLottoEntry: () => void;
   onDraw: () => void;
   onClose: () => void;
   onManage: () => void;
@@ -849,6 +1010,19 @@ function RoundInfoModal({
   const lottoJackpot =
     lottoConfig.prizes["6"] +
     (lottoConfig.rollover ? lottoConfig.carryoverAmount : 0);
+  const myLottoEntry = myUserId ? lottoEntries.find((entry) => entry.userId === myUserId) : null;
+  const myPurchasedHoles = myLottoEntry
+    ? [
+        ...myLottoEntry.selectedHoles.par3,
+        ...myLottoEntry.selectedHoles.par4,
+        ...myLottoEntry.selectedHoles.par5,
+      ].sort((a, b) => a - b)
+    : [];
+  const lottoHoleGroups: Array<{ key: keyof LottoSelection; label: string; limit: number; holes: number[] }> = [
+    { key: "par3", label: "파 3", limit: 1, holes: lottoPars.map((par, index) => par === 3 ? index + 1 : null).filter((hole): hole is number => !!hole) },
+    { key: "par4", label: "파 4", limit: 3, holes: lottoPars.map((par, index) => par === 4 ? index + 1 : null).filter((hole): hole is number => !!hole) },
+    { key: "par5", label: "파 5", limit: 2, holes: lottoPars.map((par, index) => par === 5 ? index + 1 : null).filter((hole): hole is number => !!hole) },
+  ];
   const lottoPurchaseRows = lottoEntries.map((entry) => {
     const holes = [
       ...entry.selectedHoles.par3,
@@ -882,9 +1056,11 @@ function RoundInfoModal({
     lottoDraw?.drafterUserId === myUserId &&
     lottoDraw.drawStatus !== "COMPLETED" &&
     isRoundDateAvailable(round?.date);
-  const lottoDrawResultRows = lottoDraw?.drawnScores
-    ? Object.values(lottoDraw.drawnScores).sort((a, b) => a.hole - b.hole)
-    : [];
+  const myLottoResultRows = myPurchasedHoles.map((hole) => ({
+    hole,
+    myScore: myLottoStrokes?.[hole - 1],
+    drawScore: lottoDraw?.drawnScores?.[String(hole)] ?? null,
+  }));
 
   const modalTitle = isGroups
     ? "조편성 결과"
@@ -958,6 +1134,72 @@ function RoundInfoModal({
             <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
               <View style={[styles.popupSection, { borderColor: palette.border }]}>
                 <Text style={[styles.popupSectionTitle, { color: palette.text }]}>
+                  내 Lotto 구매
+                </Text>
+                {myLottoEntry && myPurchasedHoles.length === 6 ? (
+                  <View style={styles.myLottoPurchasedBox}>
+                    <Text style={[styles.myLottoPurchasedText, { color: palette.green }]}>
+                      구매 완료
+                    </Text>
+                    <Text style={[styles.lottoHoles, { color: palette.text }]} numberOfLines={1}>
+                      {myPurchasedHoles.join(", ")}
+                    </Text>
+                  </View>
+                ) : canPurchaseLotto ? (
+                  <>
+                    <View style={styles.lottoCounterRow}>
+                      <Text style={[styles.lottoCounter, lottoSelection.par3.length === 1 && { color: palette.green, backgroundColor: "rgba(31,160,92,0.10)" }]}>파3 {lottoSelection.par3.length}/1</Text>
+                      <Text style={[styles.lottoCounter, lottoSelection.par4.length === 3 && { color: palette.green, backgroundColor: "rgba(31,160,92,0.10)" }]}>파4 {lottoSelection.par4.length}/3</Text>
+                      <Text style={[styles.lottoCounter, lottoSelection.par5.length === 2 && { color: palette.green, backgroundColor: "rgba(31,160,92,0.10)" }]}>파5 {lottoSelection.par5.length}/2</Text>
+                    </View>
+                    {lottoHoleGroups.map((group) => (
+                      <View key={group.key} style={styles.lottoHoleGroup}>
+                        <View style={styles.lottoHoleGroupHeader}>
+                          <Text style={[styles.lottoHoleGroupTitle, { color: palette.text }]}>{group.label}</Text>
+                          <Text style={[styles.lottoHoleGroupLimit, { color: palette.muted }]}>{lottoSelection[group.key].length}/{group.limit}</Text>
+                        </View>
+                        <View style={styles.lottoHoleGrid}>
+                          {group.holes.map((hole) => {
+                            const selected = lottoSelection[group.key].includes(hole);
+                            return (
+                              <TouchableOpacity
+                                key={hole}
+                                activeOpacity={0.82}
+                                onPress={() => onToggleLottoHole(group.key, hole)}
+                                style={[
+                                  styles.lottoHoleButton,
+                                  { borderColor: selected ? palette.green : palette.border, backgroundColor: selected ? "rgba(31,160,92,0.10)" : "rgba(0,0,0,0.03)" },
+                                ]}
+                              >
+                                <Text style={[styles.lottoHoleButtonText, { color: selected ? palette.green : palette.muted }]}>{hole}H</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    ))}
+                    <TouchableOpacity
+                      activeOpacity={0.86}
+                      onPress={onSaveLottoEntry}
+                      disabled={!lottoReady || lottoSaving}
+                      style={[styles.lottoSaveButton, { backgroundColor: palette.green }, (!lottoReady || lottoSaving) && { opacity: 0.45 }]}
+                    >
+                      {lottoSaving ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <Text style={styles.lottoSaveButtonText}>구매 완료</Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <Text style={[styles.modalEmptySmall, { color: palette.muted }]}>
+                    조편성에 포함된 회원만 구매할 수 있습니다.
+                  </Text>
+                )}
+              </View>
+
+              <View style={[styles.popupSection, { borderColor: palette.border }]}>
+                <Text style={[styles.popupSectionTitle, { color: palette.text }]}>
                   구매 현황
                 </Text>
                 {lottoPurchaseRows.length > 0 ? (
@@ -1009,29 +1251,25 @@ function RoundInfoModal({
                         {formatWon(lottoJackpot)}
                       </Text>
                     </View>
-                    <View style={styles.lottoDrawResultGrid}>
-                      {lottoDrawResultRows.map((item) => (
-                        <View key={item.hole} style={[styles.lottoDrawResultCell, { borderColor: palette.border }]}>
-                          <Text style={[styles.lottoDrawResultHole, { color: palette.text }]}>{item.hole}H</Text>
-                          <Text style={[styles.lottoDrawResultScore, { color: palette.green }]}>{item.label}</Text>
-                          <Text style={[styles.lottoDrawResultPar, { color: palette.muted }]}>{item.score}타</Text>
+                    {myLottoEntry && myLottoResultRows.length === 6 ? (
+                      <>
+                        <View style={styles.myLottoScratchGrid}>
+                          {myLottoResultRows.map((item) => (
+                            <ScratchLottoResultCard
+                              key={`${item.hole}-${item.drawScore?.score ?? "pending"}`}
+                              hole={item.hole}
+                              myScore={item.myScore}
+                              drawScore={item.drawScore}
+                            />
+                          ))}
                         </View>
-                      ))}
-                    </View>
-                    {lottoPurchaseRows.length > 0 ? (
-                      lottoPurchaseRows.map((row) => (
-                        <View key={`result-${row.id}`} style={styles.lottoResultRow}>
-                          <Text style={[styles.lottoName, { color: palette.text }]}>
-                            {row.name}
-                          </Text>
-                          <Text style={[styles.lottoResultText, { color: palette.green }]}>
-                            {row.hits}/{row.holes.length}개 적중
-                          </Text>
-                        </View>
-                      ))
+                        <Text style={[styles.lottoScratchHint, { color: palette.muted }]}>
+                          회색 영역을 손으로 문지르면 추첨결과가 표시됩니다.
+                        </Text>
+                      </>
                     ) : (
                       <Text style={[styles.modalEmptySmall, { color: palette.muted }]}>
-                        결과를 확인할 구매 내역이 없습니다.
+                        내 구매 내역이 있어야 결과를 확인할 수 있습니다.
                       </Text>
                     )}
                   </>
@@ -1082,6 +1320,69 @@ function RoundInfoModal({
         </View>
       </View>
     </Modal>
+  );
+}
+
+function ScratchLottoResultCard({
+  hole,
+  myScore,
+  drawScore,
+}: {
+  hole: number;
+  myScore?: number;
+  drawScore: RoundLottoDrawScore | null;
+}) {
+  const { palette } = useSkin();
+  const [revealed, setRevealed] = useState(false);
+  const scratchCount = useRef(0);
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        scratchCount.current += 1;
+        if (scratchCount.current >= 2) setRevealed(true);
+      },
+      onPanResponderMove: () => {
+        scratchCount.current += 1;
+        if (scratchCount.current >= 5) setRevealed(true);
+      },
+    }),
+  ).current;
+  const isHit = typeof myScore === "number" && !!drawScore && myScore === drawScore.score;
+
+  return (
+    <View style={[styles.scratchCard, { borderColor: isHit ? palette.green : palette.border }]}>
+      <View style={styles.scratchCardHeader}>
+        <Text style={[styles.scratchHole, { color: palette.text }]}>{hole}H</Text>
+        <Text style={[styles.scratchHitBadge, { color: isHit ? palette.green : palette.muted }]}>
+          {revealed && drawScore ? (isHit ? "적중" : "미적중") : "확인"}
+        </Text>
+      </View>
+      <View style={styles.scratchScoreRow}>
+        <Text style={[styles.scratchScoreLabel, { color: palette.muted }]}>내 스코어</Text>
+        <Text style={[styles.scratchMyScore, { color: palette.text }]}>
+          {typeof myScore === "number" ? `${myScore}타` : "미입력"}
+        </Text>
+      </View>
+      <View style={styles.scratchResultBox}>
+        <Text style={[styles.scratchScoreLabel, { color: palette.muted }]}>추첨번호</Text>
+        <Text style={[styles.scratchDrawScore, { color: palette.green }]}>
+          {drawScore ? `${drawScore.score}타` : "-"}
+        </Text>
+        <Text style={[styles.scratchDrawLabel, { color: palette.muted }]}>
+          {drawScore?.label ?? "대기"}
+        </Text>
+        {!revealed ? (
+          <View
+            {...panResponder.panHandlers}
+            style={styles.scratchCover}
+          >
+            <Text style={styles.scratchCoverText}>문질러 확인</Text>
+          </View>
+        ) : null}
+      </View>
+    </View>
   );
 }
 
@@ -1252,6 +1553,87 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     fontWeight: "800",
   },
+  myLottoPurchasedBox: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  myLottoPurchasedText: {
+    width: 72,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+  lottoCounterRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+    marginBottom: 10,
+  },
+  lottoCounter: {
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    backgroundColor: "rgba(0,0,0,0.05)",
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "900",
+  },
+  lottoHoleGroup: {
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.08)",
+    paddingTop: 10,
+    marginTop: 10,
+  },
+  lottoHoleGroupHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  lottoHoleGroupTitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+  lottoHoleGroupLimit: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "900",
+  },
+  lottoHoleGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+  },
+  lottoHoleButton: {
+    minWidth: 48,
+    minHeight: 34,
+    borderWidth: 1,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 9,
+  },
+  lottoHoleButtonText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "900",
+  },
+  lottoSaveButton: {
+    minHeight: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 12,
+  },
+  lottoSaveButtonText: {
+    color: "#fff",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
   lottoRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1299,6 +1681,95 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     fontWeight: "900",
+  },
+  myLottoScratchGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  scratchCard: {
+    width: "31.7%",
+    minHeight: 142,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 9,
+    backgroundColor: "rgba(0,0,0,0.025)",
+  },
+  scratchCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 4,
+    marginBottom: 8,
+  },
+  scratchHole: {
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: "900",
+  },
+  scratchHitBadge: {
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: "900",
+  },
+  scratchScoreRow: {
+    minHeight: 38,
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  scratchScoreLabel: {
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: "900",
+  },
+  scratchMyScore: {
+    marginTop: 2,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "900",
+  },
+  scratchResultBox: {
+    position: "relative",
+    minHeight: 58,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    backgroundColor: "#fff",
+  },
+  scratchDrawScore: {
+    marginTop: 1,
+    fontSize: 17,
+    lineHeight: 21,
+    fontWeight: "900",
+  },
+  scratchDrawLabel: {
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: "800",
+  },
+  scratchCover: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#AAB0AA",
+  },
+  scratchCoverText: {
+    color: "#fff",
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: "900",
+  },
+  lottoScratchHint: {
+    marginTop: 9,
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "800",
+    textAlign: "center",
   },
   lottoDrawResultGrid: {
     flexDirection: "row",
