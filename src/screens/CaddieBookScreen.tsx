@@ -358,6 +358,8 @@ function HoleDetailCard({
   const { palette } = useSkin();
   const [flipped, setFlipped] = useState(false);
   const flip = useRef(new Animated.Value(0)).current;
+  const frontTouchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const frontTouchMovedRef = useRef(false);
   const shotPlan = hole.shotPlan;
   const planSteps = shotPlan?.steps?.length
     ? shotPlan.steps
@@ -403,6 +405,24 @@ function HoleDetailCard({
     outputRange: ["180deg", "360deg"],
   });
   const timelineWidth = Math.max(width - 64, planSteps.length * 72);
+  const handleFrontTouchStart = (event: any) => {
+    frontTouchMovedRef.current = false;
+    frontTouchStartRef.current = {
+      x: event.nativeEvent.pageX,
+      y: event.nativeEvent.pageY,
+    };
+  };
+  const handleFrontTouchMove = (event: any) => {
+    const start = frontTouchStartRef.current;
+    if (!start) return;
+    const dx = Math.abs(event.nativeEvent.pageX - start.x);
+    const dy = Math.abs(event.nativeEvent.pageY - start.y);
+    if (dx > 8 || dy > 8) frontTouchMovedRef.current = true;
+  };
+  const handleFrontTouchEnd = () => {
+    if (!frontTouchMovedRef.current) setFlipped(true);
+    frontTouchStartRef.current = null;
+  };
 
   return (
     <View style={[styles.flipShell, { width, height }]}>
@@ -425,6 +445,9 @@ function HoleDetailCard({
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
             directionalLockEnabled
+            onTouchStart={handleFrontTouchStart}
+            onTouchMove={handleFrontTouchMove}
+            onTouchEnd={handleFrontTouchEnd}
             onScrollBeginDrag={onCardScrollBegin}
             onScrollEndDrag={onCardScrollEnd}
             onMomentumScrollEnd={onCardScrollEnd}
