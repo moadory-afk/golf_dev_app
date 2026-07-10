@@ -8,7 +8,7 @@ import type { RouteProp } from '@react-navigation/native'
 import { useState, useCallback, useEffect } from 'react'
 import * as ImageManipulator from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
-import { DEFAULT_LOTTO_AWARD_CONFIG, getClubLottoAwardConfig, getClubMembers, getClubNotices, getRounds, playerTotal, totalPar, computeHandicaps, saveClubLottoAwardConfig, shortName, updateClubSettings, type ClubInfo, type ClubNotice, type LottoAwardConfig, type SavedRound } from '../lib/store'
+import { DEFAULT_LOTTO_AWARD_CONFIG, createClub, getClubLottoAwardConfig, getClubMembers, getClubNotices, getRounds, playerTotal, totalPar, computeHandicaps, saveClubLottoAwardConfig, shortName, updateClubSettings, type ClubInfo, type ClubNotice, type LottoAwardConfig, type SavedRound } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
 import { useUserProfile } from '../lib/UserProfileContext'
 import { useAsync } from '../lib/useAsync'
@@ -94,6 +94,7 @@ export default function ClubScreen() {
   const [showLottoAwardGuide, setShowLottoAwardGuide] = useState(false)
   const [showHallCriteria, setShowHallCriteria] = useState(false)
   const [manageMenuOpen, setManageMenuOpen] = useState(false)
+  const [createClubOpen, setCreateClubOpen] = useState(false)
   const [lottoAwardOpen, setLottoAwardOpen] = useState(false)
   const { name: myName } = useUserProfile()
 
@@ -120,6 +121,13 @@ export default function ClubScreen() {
     if (!club) return
     await updateClubSettings(club.id, name, subtitle, coverImage)
     await refreshClubs()
+    setRefreshKey((k) => k + 1)
+  }
+
+  async function handleCreateClub(name: string, subtitle: string) {
+    const nextClub = await createClub(name, subtitle)
+    await refreshClubs()
+    setActiveClub(nextClub)
     setRefreshKey((k) => k + 1)
   }
 
@@ -300,6 +308,12 @@ export default function ClubScreen() {
     nav.dispatch(CommonActions.setParams({ openManageMenu: false }))
   }, [route.params?.openManageMenu, isManagerView, nav])
 
+  useEffect(() => {
+    if (!route.params?.openCreateClub) return
+    setCreateClubOpen(true)
+    nav.dispatch(CommonActions.setParams({ openCreateClub: false }))
+  }, [route.params?.openCreateClub, nav])
+
   const managementMenus = club ? [
     {
       key: 'fee',
@@ -329,6 +343,13 @@ export default function ClubScreen() {
       subtitle: '공지 등록과 게시 상태를 관리합니다',
       icon: 'mail' as const,
       onPress: () => nav.navigate('NoticePrototype', { returnToManageMenu: true }),
+    },
+    {
+      key: 'createClub',
+      title: '새 동호회 만들기',
+      subtitle: '별도 클럽을 만들고 운영을 시작합니다',
+      icon: 'flag' as const,
+      onPress: () => setCreateClubOpen(true),
     },
     {
       key: 'heroLab',
@@ -363,6 +384,17 @@ export default function ClubScreen() {
             nav.navigate('Members', { clubId: club.id })
           }}
           onInvite={handleInviteMember}
+        />
+      )}
+      {createClubOpen && (
+        <CreateClubModal
+          compact={isCompactScreen}
+          windowHeight={windowHeight}
+          onClose={() => setCreateClubOpen(false)}
+          onCreate={async (name, subtitle) => {
+            await handleCreateClub(name, subtitle)
+            setCreateClubOpen(false)
+          }}
         />
       )}
       {lottoAwardOpen && club && (
@@ -644,10 +676,13 @@ export default function ClubScreen() {
               <Icon name="flag" size={38} color={C.green} strokeWidth={1.6} />
               <Text style={{ fontSize: 16, fontWeight: '700', color: C.text, marginBottom: 6, marginTop: 12 }}>소속 클럽이 없어요</Text>
               <Text style={{ fontSize: 13, color: C.muted, textAlign: 'center', lineHeight: 20 }}>
-                프로필에서 클럽을 만들거나{'\n'}초대 링크로 참여해보세요
+                동호회를 만들거나{'\n'}초대 링크로 참여해보세요
               </Text>
-              <TouchableOpacity style={s.goProfileBtn} onPress={() => nav.navigate('Profile')}>
-                <Text style={s.goProfileBtnText}>프로필 바로가기 →</Text>
+              <TouchableOpacity style={s.goProfileBtn} onPress={() => setCreateClubOpen(true)}>
+                <Text style={s.goProfileBtnText}>동호회 만들기</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.emptySecondaryBtn} onPress={() => nav.navigate('Profile')}>
+                <Text style={s.emptySecondaryText}>프로필 바로가기</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -663,6 +698,99 @@ export default function ClubScreen() {
         </View>
       </ScrollView>
     </View>
+  )
+}
+
+function CreateClubModal({
+  compact,
+  windowHeight,
+  onClose,
+  onCreate,
+}: {
+  compact: boolean
+  windowHeight: number
+  onClose: () => void
+  onCreate: (name: string, subtitle: string) => Promise<void>
+}) {
+  const [name, setName] = useState('')
+  const [subtitle, setSubtitle] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function handleSubmit() {
+    const trimmedName = name.trim()
+    if (!trimmedName) {
+      Alert.alert('입력 확인', '동호회 이름을 입력하세요.')
+      return
+    }
+
+    setSaving(true)
+    try {
+      await onCreate(trimmedName, subtitle.trim())
+      Alert.alert('생성 완료', '새 동호회를 만들었습니다.')
+    } catch (error) {
+      Alert.alert('오류', error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity
+          style={[
+            s.modalCard,
+            {
+              width: compact ? '94%' : '90%',
+              maxHeight: Math.round(windowHeight * 0.82),
+              padding: compact ? 16 : 20,
+            },
+          ]}
+          activeOpacity={1}
+          onPress={() => {}}
+        >
+          <View style={s.modalHeader}>
+            <Text style={s.modalTitle}>새 동호회 만들기</Text>
+            <TouchableOpacity style={s.closeBtn} onPress={onClose}>
+              <Text style={s.closeBtnText}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={s.createClubLabel}>동호회 이름</Text>
+          <TextInput
+            style={s.clubInfoInput}
+            value={name}
+            onChangeText={setName}
+            placeholder="예: 힐스카이 골프회"
+            maxLength={24}
+            placeholderTextColor={C.muted}
+          />
+
+          <Text style={s.createClubLabel}>소개 문구</Text>
+          <TextInput
+            style={s.clubInfoInput}
+            value={subtitle}
+            onChangeText={setSubtitle}
+            placeholder="예: 골프의 모든 경험을 하나로."
+            maxLength={40}
+            placeholderTextColor={C.muted}
+          />
+
+          <TouchableOpacity
+            style={[s.createClubSubmitBtn, saving && { opacity: 0.55 }]}
+            onPress={handleSubmit}
+            disabled={saving}
+            activeOpacity={0.86}
+          >
+            {saving ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={s.createClubSubmitText}>동호회 만들기</Text>
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
   )
 }
 
@@ -1194,6 +1322,8 @@ const s = StyleSheet.create({
   emptyCard: { backgroundColor: C.card, borderRadius: 20, padding: 32, alignItems: 'center', marginBottom: 14 },
   goProfileBtn: { marginTop: 16, paddingVertical: 10, paddingHorizontal: 24, backgroundColor: C.green, borderRadius: 20 },
   goProfileBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  emptySecondaryBtn: { marginTop: 9, paddingVertical: 8, paddingHorizontal: 18, borderRadius: 16, backgroundColor: C.greenLight },
+  emptySecondaryText: { color: C.green, fontWeight: '800', fontSize: 12 },
 
   card: {
     backgroundColor: C.card, borderRadius: 20, padding: 18, marginBottom: 14,
@@ -1283,6 +1413,9 @@ const s = StyleSheet.create({
   modalCard: { backgroundColor: C.card, borderRadius: 20, padding: 20, width: '90%', maxHeight: '78%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   modalTitle: { fontSize: 15, fontWeight: '700', color: C.text, flex: 1, marginRight: 8 },
+  createClubLabel: { fontSize: 12, fontWeight: '900', color: C.muted, marginBottom: 6 },
+  createClubSubmitBtn: { minHeight: 46, borderRadius: 16, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center', marginTop: 10 },
+  createClubSubmitText: { color: '#fff', fontSize: 14, fontWeight: '900' },
   clubInfoTitle: { fontSize: 22, fontWeight: '900', color: C.text },
   clubInfoSubtitle: { fontSize: 13, color: C.muted, marginTop: 5, lineHeight: 18 },
   clubInfoInput: {

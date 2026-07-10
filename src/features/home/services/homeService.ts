@@ -2,14 +2,14 @@ import { createEmptyHomeDashboard, mapHomeDashboard } from '../mappers/homeMappe
 import type { HomeDashboard } from '../types/home'
 import { getHomeAICaddiePreview } from '../../caddie/services/caddieService'
 import { getHomeDashboardRawData } from '../api/homeRepository'
-import { formatTravelMinutes, getDrivingTravelTimeMinutes } from '../../../lib/travelTime'
+import { formatRecommendedDepartureTime, formatTravelMinutes, getDrivingTravelTimeMinutes } from '../../../lib/travelTime'
 
 type HomeCoordinate = {
   latitude?: number | null
   longitude?: number | null
 }
 
-async function applyDrivingTravelTimes(dashboard: HomeDashboard, raw: Awaited<ReturnType<typeof getHomeDashboardRawData>>, home?: HomeCoordinate | null) {
+async function applyDrivingTravelTimes(dashboard: HomeDashboard, raw: Awaited<ReturnType<typeof getHomeDashboardRawData>>, home?: HomeCoordinate | null, departureBufferMinutes = 40) {
   if (typeof home?.latitude !== 'number' || typeof home.longitude !== 'number') return dashboard
 
   const scheduleById = new Map(raw.schedules.map((schedule) => [schedule.id, schedule]))
@@ -23,7 +23,11 @@ async function applyDrivingTravelTimes(dashboard: HomeDashboard, raw: Awaited<Re
         longitude: course?.longitude,
       }).catch(() => null)
       if (!minutes) return round
-      return { ...round, routeTimeText: formatTravelMinutes(minutes) }
+      return {
+        ...round,
+        routeTimeText: formatTravelMinutes(minutes),
+        departureTimeText: formatRecommendedDepartureTime(schedule?.round_date, round.teeTime, minutes, departureBufferMinutes),
+      }
     }),
   )
 
@@ -47,12 +51,13 @@ export async function getHomeDashboard(
   userName?: string | null,
   userId?: string | null,
   home?: HomeCoordinate | null,
+  departureBufferMinutes = 40,
 ): Promise<HomeDashboard> {
   if (!clubId) return createEmptyHomeDashboard()
 
   const raw = await getHomeDashboardRawData(clubId)
   const mappedDashboard = mapHomeDashboard(raw, userName, userId)
-  const dashboard = await applyDrivingTravelTimes(mappedDashboard, raw, home)
+  const dashboard = await applyDrivingTravelTimes(mappedDashboard, raw, home, departureBufferMinutes)
   const upcomingRound = dashboard.upcomingRound
 
   const aiPreview = await getHomeAICaddiePreview({

@@ -9,6 +9,7 @@ type UseHomeDashboardParams = {
   userId?: string | null
   homeLatitude?: number | null
   homeLongitude?: number | null
+  departureBufferMinutes?: number
 }
 
 function errorMessage(error: unknown) {
@@ -17,7 +18,7 @@ function errorMessage(error: unknown) {
   return '홈 데이터를 불러오지 못했습니다.'
 }
 
-export function useHomeDashboard({ clubId, userName, userId, homeLatitude, homeLongitude }: UseHomeDashboardParams): HomeDashboardState {
+export function useHomeDashboard({ clubId, userName, userId, homeLatitude, homeLongitude, departureBufferMinutes }: UseHomeDashboardParams): HomeDashboardState {
   const [dashboard, setDashboard] = useState<HomeDashboard>(() => createEmptyHomeDashboard())
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -28,7 +29,7 @@ export function useHomeDashboard({ clubId, userName, userId, homeLatitude, homeL
     setLoading(true)
     setError(null)
 
-    getHomeDashboard(clubId, userName, userId, { latitude: homeLatitude, longitude: homeLongitude })
+    getHomeDashboard(clubId, userName, userId, { latitude: homeLatitude, longitude: homeLongitude }, departureBufferMinutes)
       .then((nextDashboard) => {
         if (mounted) setDashboard(nextDashboard)
       })
@@ -44,7 +45,7 @@ export function useHomeDashboard({ clubId, userName, userId, homeLatitude, homeL
     return () => {
       mounted = false
     }
-  }, [clubId, userName, userId, homeLatitude, homeLongitude, refreshKey])
+  }, [clubId, userName, userId, homeLatitude, homeLongitude, departureBufferMinutes, refreshKey])
 
   const refresh = useCallback(() => {
     setRefreshKey((value) => value + 1)

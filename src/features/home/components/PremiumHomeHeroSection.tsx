@@ -246,6 +246,7 @@ function HeroRoundCard({
               teeTime={round.teeTime}
               groupCount={round.groupCount}
               routeTimeText={round.routeTimeText}
+              departureTimeText={round.departureTimeText}
             />
           </View>
         </TouchableOpacity>
@@ -546,6 +547,7 @@ function HeroBottomSummary({
   teeTime,
   groupCount,
   routeTimeText,
+  departureTimeText,
 }: {
   width: number;
   courseName: string;
@@ -556,6 +558,7 @@ function HeroBottomSummary({
   teeTime?: string;
   groupCount?: number;
   routeTimeText?: string;
+  departureTimeText?: string;
 }) {
   const isCompact = isCompactWidth(width);
   const scheduleLine = teeTime ? `Tee Off ${teeTime}` : "Tee Off --:--";
@@ -564,6 +567,10 @@ function HeroBottomSummary({
     routeTimeText
       ? routeTimeText
       : "이동시간 준비중";
+  const departureText =
+    departureTimeText && !departureTimeText.includes("준비중")
+      ? departureTimeText
+      : "";
 
   return (
     <View style={[styles.bottomSummary, { paddingTop: isCompact ? 6 : 8 }]}>
@@ -675,6 +682,17 @@ function HeroBottomSummary({
           >
             {travelTimeText}
           </Text>
+          {departureText ? (
+            <Text
+              style={[
+                styles.departureTime,
+                { fontSize: isCompact ? 9 : 10, lineHeight: isCompact ? 12 : 14 },
+              ]}
+              numberOfLines={1}
+            >
+              {departureText}
+            </Text>
+          ) : null}
         </View>
       </View>
     </View>
@@ -912,6 +930,15 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: -0.3,
     marginTop: 1,
+  },
+  departureTime: {
+    color: "rgba(255,255,255,0.88)",
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: "900",
+    letterSpacing: -0.2,
+    marginTop: 1,
+    textAlign: "center",
   },
   summaryDate: {
     color: "#fff",

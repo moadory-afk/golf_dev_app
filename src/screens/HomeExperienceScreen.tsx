@@ -362,7 +362,7 @@ export default function HomeExperienceScreen() {
   const insets = useSafeAreaInsets();
   const nav = useNavigation<Nav>();
   const { activeClub: club, clubsLoaded } = useClub();
-  const { name: myName, nickname, userId, homeLatitude, homeLongitude } = useUserProfile();
+  const { name: myName, nickname, userId, homeLatitude, homeLongitude, departureBufferMinutes } = useUserProfile();
   const displayName = nickname || myName || "골퍼";
   const { dashboard, loading, error, refresh } = useHomeDashboard({
     clubId: club?.id,
@@ -370,6 +370,7 @@ export default function HomeExperienceScreen() {
     userId,
     homeLatitude,
     homeLongitude,
+    departureBufferMinutes,
   });
   const [selectedHeroKey, setSelectedHeroKey] = useState<string | null>(null);
   const [roundPopupMode, setRoundPopupMode] = useState<

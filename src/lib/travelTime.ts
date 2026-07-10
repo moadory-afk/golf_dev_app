@@ -23,6 +23,22 @@ export function formatTravelMinutes(minutes: number) {
   return rest > 0 ? `${hours}시간 ${rest}분 소요` : `${hours}시간 소요`
 }
 
+export function formatRecommendedDepartureTime(date?: string | null, time?: string | null, travelMinutes?: number | null, bufferMinutes = 40) {
+  if (!date || !time || !Number.isFinite(travelMinutes ?? NaN)) return '출발 추천 준비중'
+  const normalizedDate = date.includes('T') ? date.slice(0, 10) : date
+  const match = time.match(/(\d{1,2}):(\d{2})/)
+  if (!match) return '출발 추천 준비중'
+
+  const departure = new Date(normalizedDate)
+  if (Number.isNaN(departure.getTime())) return '출발 추천 준비중'
+  departure.setHours(Number(match[1]), Number(match[2]), 0, 0)
+  departure.setMinutes(departure.getMinutes() - Math.max(0, Math.round(travelMinutes ?? 0)) - Math.max(0, Math.round(bufferMinutes)))
+
+  const hours = String(departure.getHours()).padStart(2, '0')
+  const minutes = String(departure.getMinutes()).padStart(2, '0')
+  return `출발 추천 ${hours}:${minutes}`
+}
+
 export async function getDrivingTravelTimeMinutes(origin: Coordinate, destination: Coordinate): Promise<number | null> {
   const apiKey = kakaoRestApiKey()
   if (!apiKey || !hasCoordinate(origin) || !hasCoordinate(destination)) return null
