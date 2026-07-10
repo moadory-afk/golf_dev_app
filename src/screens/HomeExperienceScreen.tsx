@@ -710,6 +710,14 @@ export default function HomeExperienceScreen() {
                   averageScore={dashboard.aiCaddie.averageScore}
                   hasUpcomingRound={dashboard.aiCaddie.hasUpcomingRound}
                   feed={dashboard.feed}
+                  feeds={dashboard.feedEvents}
+                  onFeedAction={(feed) =>
+                    resolveFeedNavigation(
+                      nav,
+                      feed.actionType,
+                      dashboard.upcomingRound,
+                    )
+                  }
                   onPress={() =>
                     resolveFeedNavigation(
                       nav,
