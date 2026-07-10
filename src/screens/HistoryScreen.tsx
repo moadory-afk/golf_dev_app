@@ -1,17 +1,23 @@
 import {
-  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Dimensions, TextInput, ImageBackground, Animated,
+  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Dimensions, TextInput, ImageBackground, Animated, Alert, ActivityIndicator,
 } from 'react-native'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import * as ImageManipulator from 'expo-image-manipulator'
+import * as ImagePicker from 'expo-image-picker'
 import Svg, { Polyline, Circle, Line, Text as SvgText, G, Polygon } from 'react-native-svg'
-import { getRounds, getRound, getPersonalRoundStat, playerTotal, totalPar, getHandicapsForRound, computeHandicaps, shortName, type PersonalRoundFir, type PersonalRoundHoleStat, type SavedRound } from '../lib/store'
+import { DEFAULT_LOTTO_AWARD_CONFIG, getClubAwardConfig, getClubAwardSnapshots, getClubLottoAwardConfig, getClubMembers, getRoundLottoDraw, getRoundLottoEntries, getRounds, getRound, getPersonalRoundStat, playerTotal, totalPar, getHandicapsForRound, computeHandicaps, shortName, updateRound, type ClubAwardSnapshot, type LottoAwardConfig, type PersonalRoundFir, type PersonalRoundHoleStat, type RoundLottoDraw, type RoundLottoEntry, type SavedRound } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../lib/ClubContext'
 import { useUserProfile } from '../lib/UserProfileContext'
 import { useAsync } from '../lib/useAsync'
 import { loadHandicapBasis, type HandicapBasis } from '../lib/handicapBasis'
+import { fillToCount } from '../lib/awardConfig'
+import { computeClubAwardResults } from '../lib/awardResults'
+import { getRoundSchedules, type ScheduledRound } from '../lib/roundSchedule'
+import { calcSettlement, fmtKRW } from '../features/settlement'
 import { C } from '../theme'
 import { EmojiIcon } from '../components/EmojiIcon'
 import { Icon } from '../components/Icon'
@@ -23,6 +29,16 @@ type Nav = NativeStackNavigationProp<RootStackParamList>
 type Tab = 'byRound' | 'byPlayer' | 'club' | 'hall'
 type RankingType = 'wins' | 'streak' | 'lowestHandicap' | 'birdie' | 'singleBirdie' | 'frontBack' | 'avgImprove' | 'handicapImprove' | 'singlePar' | 'roundsPlayed' | 'lowestScore' | 'highestScore'
 type RoundDetailTab = 'regular' | 'peoria' | 'score' | 'award'
+
+function formatWon(value: number) {
+  return `${Math.max(0, Math.round(value)).toLocaleString('ko-KR')}원`
+}
+
+function lottoPrizeForHits(hits: number, config: LottoAwardConfig, jackpot: number) {
+  if (hits === 6) return jackpot
+  if (hits === 3 || hits === 4 || hits === 5) return config.prizes[String(hits) as '3' | '4' | '5']
+  return 0
+}
 
 function diffText(d: number) { return d > 0 ? `+${d}` : `${d}` }
 
@@ -304,11 +320,22 @@ function RoundFlipCard({
   height: number
 }) {
   const nav = useNavigation<Nav>()
+  const { activeClub } = useClub()
   const [flipped, setFlipped] = useState(false)
   const [detailTab, setDetailTab] = useState<RoundDetailTab>('regular')
   const [detailRound, setDetailRound] = useState<SavedRound | null>(null)
+  const [awardSnapshots, setAwardSnapshots] = useState<ClubAwardSnapshot[]>([])
+  const [lottoEntries, setLottoEntries] = useState<RoundLottoEntry[]>([])
+  const [lottoDraw, setLottoDraw] = useState<RoundLottoDraw | null>(null)
+  const [lottoAwardConfig, setLottoAwardConfig] = useState<LottoAwardConfig>(DEFAULT_LOTTO_AWARD_CONFIG)
+  const [clubMembers, setClubMembers] = useState<Array<{ userId: string; name: string; role: string }>>([])
+  const [roundSchedules, setRoundSchedules] = useState<ScheduledRound[]>([])
+  const [clubAwardConfig, setClubAwardConfig] = useState<{ count: number; items: string[] } | null>(null)
+  const [photoData, setPhotoData] = useState<string[]>(round.photoData ?? [])
+  const [photoSaving, setPhotoSaving] = useState(false)
   const flip = useRef(new Animated.Value(0)).current
   const effectiveRound = detailRound ?? round
+  const coverPhoto = photoData[0]
   const par = totalPar(round.pars)
   const totals = round.players.map((p) => playerTotal(p.strokes))
   const best = Math.min(...totals)
@@ -350,8 +377,24 @@ function RoundFlipCard({
   const toggleFlip = async () => {
     const next = !flipped
     if (next && !detailRound) {
-      const full = await getRound(round.id)
+      const [full, snapshots, entries, draw, members, lottoConfig, schedules, awardConfig] = await Promise.all([
+        getRound(round.id),
+        getClubAwardSnapshots(round.id).catch(() => []),
+        round.scheduleId ? getRoundLottoEntries(round.scheduleId).catch(() => []) : Promise.resolve([]),
+        round.scheduleId ? getRoundLottoDraw(round.scheduleId).catch(() => null) : Promise.resolve(null),
+        activeClub?.id ? getClubMembers(activeClub.id).catch(() => []) : Promise.resolve([]),
+        activeClub?.id ? getClubLottoAwardConfig(activeClub.id).catch(() => DEFAULT_LOTTO_AWARD_CONFIG) : Promise.resolve(DEFAULT_LOTTO_AWARD_CONFIG),
+        activeClub?.id ? getRoundSchedules(activeClub.id).catch(() => []) : Promise.resolve([]),
+        activeClub?.id ? getClubAwardConfig(activeClub.id).catch(() => null) : Promise.resolve(null),
+      ])
       if (full) setDetailRound(full)
+      setAwardSnapshots(snapshots)
+      setLottoEntries(entries)
+      setLottoDraw(draw)
+      setClubMembers(members)
+      setLottoAwardConfig(lottoConfig)
+      setRoundSchedules(schedules)
+      setClubAwardConfig(awardConfig)
     }
     Animated.spring(flip, { toValue: next ? 1 : 0, friction: 8, tension: 72, useNativeDriver: true }).start()
     setFlipped(next)
@@ -361,6 +404,52 @@ function RoundFlipCard({
   const frontOpacity = flip.interpolate({ inputRange: [0, 0.49, 0.5, 1], outputRange: [1, 1, 0, 0] })
   const backOpacity = flip.interpolate({ inputRange: [0, 0.49, 0.5, 1], outputRange: [0, 0, 1, 1] })
 
+  useEffect(() => {
+    setPhotoData(round.photoData ?? [])
+  }, [round.id, round.photoData])
+
+  const handlePickRoundPhoto = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!permission.granted) {
+      Alert.alert('권한 필요', '사진 접근 권한이 필요합니다.')
+      return
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: false,
+      quality: 0.85,
+    })
+    if (result.canceled || !result.assets[0]) return
+
+    setPhotoSaving(true)
+    try {
+      const compressed = await ImageManipulator.manipulateAsync(
+        result.assets[0].uri,
+        [{ resize: { width: 1200 } }],
+        { compress: 0.55, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+      )
+      if (!compressed.base64) throw new Error('사진 처리에 실패했습니다.')
+
+      const nextPhotoData = [`data:image/jpeg;base64,${compressed.base64}`, ...photoData].slice(0, 8)
+      const updated = await updateRound(round.id, {
+        courseName: round.courseName,
+        date: round.date,
+        pars: round.pars,
+        players: round.players,
+        photoData: nextPhotoData,
+        settlement: round.settlement,
+        golfCourseId: round.golfCourseId,
+        holeLabels: round.holeLabels,
+      })
+      setPhotoData(updated.photoData ?? nextPhotoData)
+      setDetailRound((current) => current ? { ...current, photoData: updated.photoData ?? nextPhotoData } : current)
+    } catch (error) {
+      Alert.alert('오류', error instanceof Error ? error.message : String(error))
+    } finally {
+      setPhotoSaving(false)
+    }
+  }
 
   const openRound = async () => {
     if (!round.isComplete) {
@@ -414,17 +503,71 @@ function RoundFlipCard({
     })
     .sort((a, b) => a.total - b.total)
 
-  const actualBest = actualRegularRank[0]
-  const actualRegularWinner = actualRegularRank[0]
-  const actualRegularRunnerUp = actualRegularRank[1]
-  const actualShinWinner = shinRank[0]
-  const actualBirdieTop = [...scoreRows].sort((a, b) => b.stats.birdie - a.stats.birdie || a.total - b.total)[0]
-  const actualParTop = [...scoreRows].sort((a, b) => b.stats.par - a.stats.par || a.total - b.total)[0]
+  const scheduleAwardConfig = effectiveRound.scheduleId
+    ? roundSchedules.find((item) => item.id === effectiveRound.scheduleId)?.awardConfig
+    : null
+  const effectiveAwardConfig = scheduleAwardConfig ?? clubAwardConfig
+  const fallbackAwardRows = effectiveAwardConfig
+    ? computeClubAwardResults(
+        fillToCount(effectiveAwardConfig.items, effectiveAwardConfig.count),
+        effectiveRound,
+        getHandicapsForRound(effectiveRound, rounds, handicapBasis),
+        detailPar,
+      ).map((award) => ({
+        icon: award.icon,
+        label: award.label,
+        winner: shortName(award.winner),
+        detail: award.detail,
+      }))
+    : []
+  const awardRows = awardSnapshots.length > 0
+    ? awardSnapshots.map((award) => ({
+        icon: award.icon,
+        label: award.label,
+        winner: shortName(award.winner),
+        detail: award.detail,
+      }))
+    : fallbackAwardRows
+  const lottoJackpot = lottoAwardConfig.prizes['6'] + (lottoAwardConfig.rollover ? lottoAwardConfig.carryoverAmount : 0)
+  const lottoAwardRows = lottoEntries.map((entry) => {
+    const member = clubMembers.find((item) => item.userId === entry.userId)
+    const name = member?.name ?? '회원'
+    const player = effectiveRound.players.find((item) => item.name === name)
+    const selectedHoles = [
+      ...entry.selectedHoles.par3,
+      ...entry.selectedHoles.par4,
+      ...entry.selectedHoles.par5,
+    ].sort((a, b) => a - b)
+    const hasScore = Boolean(player && lottoDraw?.drawStatus === 'COMPLETED' && lottoDraw.drawnScores)
+    const hits = hasScore
+      ? selectedHoles.filter((hole) => player!.strokes[hole - 1] === lottoDraw!.drawnScores?.[String(hole)]?.score).length
+      : 0
+    const prize = hasScore ? lottoPrizeForHits(hits, lottoAwardConfig, lottoJackpot) : 0
+    return { name, hits, prize, hasScore }
+  })
+  const lottoAwardGroups = [3, 4, 5, 6]
+    .map((hits) => ({
+      hits,
+      prize: hits === 6 ? lottoJackpot : lottoAwardConfig.prizes[String(hits) as '3' | '4' | '5'],
+      names: lottoAwardRows
+        .filter((row) => row.hasScore && row.hits === hits && row.prize > 0)
+        .map((row) => shortName(row.name))
+        .join(', '),
+    }))
+    .filter((group) => group.names)
+  const moneyGame = effectiveRound.settlement ? calcSettlement(effectiveRound.settlement, effectiveRound.pars, effectiveRound.players) : null
+  const moneyPairs = moneyGame
+    ? moneyGame.participants.flatMap((from, i) => moneyGame.participants.slice(i + 1).map((to) => {
+        const net = moneyGame.totals[from][to]
+        if (net > 0) return { from, to, amount: net }
+        if (net < 0) return { from: to, to: from, amount: -net }
+        return { from, to, amount: 0 }
+      }))
+    : []
 
   const detailTabs: { key: RoundDetailTab; label: string }[] = [
     { key: 'regular', label: '정규' },
     { key: 'peoria', label: '신페리오' },
-    { key: 'score', label: '스코어' },
     { key: 'award', label: '시상' },
   ]
 
@@ -432,39 +575,53 @@ function RoundFlipCard({
     <View style={[s.flipCardScene, { width, height }]}>
       <Animated.View pointerEvents={flipped ? 'none' : 'auto'} style={[s.flipFace, { opacity: frontOpacity, transform: [{ perspective: 1200 }, { rotateY: frontRotate }] }]}>
         <TouchableOpacity activeOpacity={0.96} style={s.flipTouch} onPress={toggleFlip}>
-          <ImageBackground source={getCourseHeroImageSource(round.courseName)} style={s.roundHero} imageStyle={s.roundHeroImage}>
-            <View style={s.roundHeroShade} />
-            <View style={s.roundHeroTopRow}>
-              <View style={s.roundCounter}><Text style={s.roundCounterText}>{index + 1} / {totalCount}</Text></View>
-              <View style={{ alignItems: 'flex-end', gap: 3 }}>
-                <View style={round.isComplete ? s.heroCompleteBadge : s.heroProgressBadge}><Text style={s.heroStatusText}>{round.isComplete ? '라운드 완료' : '라운드 중'}</Text></View>
+          <View style={s.roundHero}>
+            <ImageBackground source={coverPhoto ? { uri: coverPhoto } : getCourseHeroImageSource(round.courseName)} style={s.roundPhotoHeader} imageStyle={s.roundHeroImage}>
+              <View style={s.roundHeroShade} />
+              <View style={s.roundHeroTopRow}>
+                <View style={s.roundCounter}><Text style={s.roundCounterText}>{index + 1} / {totalCount}</Text></View>
+                <View style={{ alignItems: 'flex-end', gap: 7 }}>
+                  <View style={round.isComplete ? s.heroCompleteBadge : s.heroProgressBadge}><Text style={s.heroStatusText}>{round.isComplete ? '라운드 완료' : '라운드 중'}</Text></View>
+                  <TouchableOpacity
+                    activeOpacity={0.84}
+                    disabled={photoSaving}
+                    onPress={(event) => {
+                      event.stopPropagation()
+                      handlePickRoundPhoto()
+                    }}
+                    style={s.roundPhotoButton}
+                  >
+                    {photoSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.roundPhotoButtonText}>{coverPhoto ? '사진 변경' : '사진 등록'}</Text>}
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <View style={s.heroCourseBlock}>
                 <Text style={s.heroDate}>{round.date.replace(/-/g, '.')}</Text>
+                <Text style={s.heroCourseName} numberOfLines={2}>{round.courseName}</Text>
               </View>
-            </View>
-            <View style={s.heroCourseBlock}>
-              <Text style={s.heroCourseName} numberOfLines={2}>{round.courseName}</Text>
-              <Text style={s.heroCourseSub}>ROUND SUMMARY</Text>
-            </View>
-            <View style={s.heroSummaryPanel}>
-              <SummaryCell icon="🏆" label={shortName(bestPlayer?.name ?? '메달')} value={String(best)} />
-              <SummaryCell icon="🥇" label={shortName(winner?.name ?? '우승')} value={winner ? diffText(winner.net - par) : '-'} accent />
-              <SummaryCell icon="🥈" label={shortName(runnerUp?.name ?? '준우승')} value={runnerUp ? diffText(runnerUp.net - par) : '-'} />
-              <SummaryCell label="평균" value={String(avg)} />
-            </View>
-            <View style={s.heroInfoPanel}>
-              <Text style={s.heroSectionTitle}>👑 기네스 북 갱신 현황</Text>
-              <View style={s.recordGrid}>
-                {records.slice(0, 3).map((r, i) => <View key={`${r.label}-${i}`} style={s.recordMiniCard}><Text style={s.recordMiniIcon}>{r.icon}</Text><Text style={s.recordMiniLabel}>{r.label}</Text><Text style={s.recordMiniValue} numberOfLines={1}>{r.value}</Text></View>)}
+            </ImageBackground>
+            <View style={s.roundSummaryBody}>
+              <View style={s.heroSummaryPanel}>
+                <SummaryCell icon="🏆" label={shortName(bestPlayer?.name ?? '메달')} value={String(best)} />
+                <SummaryCell icon="🥇" label={shortName(winner?.name ?? '우승')} value={winner ? diffText(winner.net - par) : '-'} accent />
+                <SummaryCell icon="🥈" label={shortName(runnerUp?.name ?? '준우승')} value={runnerUp ? diffText(runnerUp.net - par) : '-'} />
+                <SummaryCell label="평균" value={String(avg)} />
               </View>
-              <Text style={[s.heroSectionTitle, { marginTop: 7 }]}>⭐ 주요 하이라이트</Text>
-              <View style={s.highlightRow}>
-                <Highlight icon="🏆" label="최다 버디" value={`${shortName(birdieTop?.name ?? '-')} ${birdieTop?.birdie ?? 0}개`} />
-                <Highlight icon="🎯" label="베스트 홀" value={bestHole ? `${bestHole.hole}번 ${bestHole.score}타` : '-'} />
-                <Highlight icon="⛳" label="파 세이브" value={`${shortName(parTop?.name ?? '-')} ${parTop?.par ?? 0}개`} />
+              <View style={s.heroInfoPanel}>
+                <Text style={s.heroSectionTitle}>👑 기네스 북 갱신 현황</Text>
+                <View style={s.recordGrid}>
+                  {records.slice(0, 3).map((r, i) => <View key={`${r.label}-${i}`} style={s.recordMiniCard}><Text style={s.recordMiniIcon}>{r.icon}</Text><Text style={s.recordMiniLabel}>{r.label}</Text><Text style={s.recordMiniValue} numberOfLines={1}>{r.value}</Text></View>)}
+                </View>
+                <Text style={[s.heroSectionTitle, { marginTop: 7 }]}>⭐ 주요 하이라이트</Text>
+                <View style={s.highlightRow}>
+                  <Highlight icon="🏆" label="최다 버디" value={`${shortName(birdieTop?.name ?? '-')} ${birdieTop?.birdie ?? 0}개`} />
+                  <Highlight icon="🎯" label="베스트 홀" value={bestHole ? `${bestHole.hole}번 ${bestHole.score}타` : '-'} />
+                  <Highlight icon="⛳" label="파 세이브" value={`${shortName(parTop?.name ?? '-')} ${parTop?.par ?? 0}개`} />
+                </View>
               </View>
+              <Text style={s.flipHint}>탭하면 라운드 상세 보기 ↻</Text>
             </View>
-            <Text style={s.flipHint}>탭하면 라운드 상세 보기 ↻</Text>
-          </ImageBackground>
+          </View>
         </TouchableOpacity>
       </Animated.View>
 
@@ -491,7 +648,54 @@ function RoundFlipCard({
               {shinRank.slice(0,7).map((row,i)=><View key={row.name} style={[s.detailTableRow,i<3&&s.detailPodiumRow]}><Text style={[s.detailRank,{width:34}]}>{i+1}</Text><Text style={s.detailPlayerName} numberOfLines={1}>{shortName(row.name)}</Text><Text style={s.detailSmallScore}>{row.total}</Text><Text style={s.detailSmallScore}>{row.handicap.toFixed(1)}</Text><Text style={s.detailNetText}>{row.net.toFixed(1)}</Text></View>)}
             </View>}
             {detailTab === 'score' && <View style={s.detailPanel}><View style={s.scoreSummaryGrid}>{scoreRows.slice(0,6).map((row)=><View key={row.name} style={s.scoreSummaryCard}><View style={{flex:1,minWidth:0}}><Text style={s.scoreSummaryName} numberOfLines={1}>{shortName(row.name)}</Text><Text style={s.scoreSummarySub}>버디 {row.stats.birdie} · 파 {row.stats.par} · 보기 {row.stats.bogey}</Text></View><View style={{alignItems:'flex-end'}}><Text style={s.scoreSummaryTotal}>{row.total}</Text><Text style={s.scoreSummaryDiff}>{diffText(row.diff)}</Text></View></View>)}</View></View>}
-            {detailTab === 'award' && <View style={s.detailPanel}><AwardRow icon="🏆" label="메달리스트" winner={shortName(actualBest?.name ?? '-')} detail={actualBest ? `${actualBest.total}타` : '-'} /><AwardRow icon="🥇" label="정규 우승" winner={shortName(actualRegularWinner?.name ?? '-')} detail={actualRegularWinner ? `${actualRegularWinner.total}타` : '-'} /><AwardRow icon="🎲" label="신페리오 우승" winner={shortName(actualShinWinner?.name ?? '-')} detail={actualShinWinner ? `NET ${actualShinWinner.net.toFixed(1)}` : '-'} /><AwardRow icon="🐦" label="최다 버디" winner={shortName(actualBirdieTop?.name ?? '-')} detail={`${actualBirdieTop?.stats.birdie ?? 0}개`} /><AwardRow icon="⛳" label="파 세이브" winner={shortName(actualParTop?.name ?? '-')} detail={`${actualParTop?.stats.par ?? 0}개`} /></View>}
+            {detailTab === 'award' && <ScrollView style={s.backAwardScroll} contentContainerStyle={s.backAwardStack} showsVerticalScrollIndicator={false}>
+              <AwardCard title="클럽 시상" icon="🏆">
+                {awardRows.length === 0 ? (
+                  <Text style={s.backAwardMuted}>설정된 시상 항목이 없습니다.</Text>
+                ) : awardRows.map((award, i) => (
+                  <AwardRow key={`${award.label}-${i}`} icon={award.icon} label={award.label} winner={award.winner} detail={award.detail} first={i === 0} />
+                ))}
+              </AwardCard>
+              <AwardCard title="Lotto 6/18" icon="◎">
+                {!effectiveRound.scheduleId ? (
+                  <Text style={s.backAwardMuted}>라운드 일정 연결이 없습니다.</Text>
+                ) : lottoEntries.length === 0 ? (
+                  <Text style={s.backAwardMuted}>구매 내역이 없습니다.</Text>
+                ) : lottoDraw?.drawStatus !== 'COMPLETED' ? (
+                  <Text style={s.backAwardMuted}>추첨 완료 후 구매자별 적중 현황이 표시됩니다.</Text>
+                ) : lottoAwardGroups.length === 0 ? (
+                  <Text style={s.backAwardMuted}>시상 대상자가 없습니다.</Text>
+                ) : lottoAwardGroups.map((group, i) => (
+                  <View key={group.hits} style={[s.lottoAwardGroupRow, i === 0 && { borderTopWidth: 0 }]}>
+                    <Text style={s.lottoAwardGroupText}>{group.hits}개 적중 시상금 {formatWon(group.prize)}</Text>
+                    <Text style={s.lottoAwardGroupNames} numberOfLines={2}>{group.names}</Text>
+                  </View>
+                ))}
+              </AwardCard>
+              {effectiveRound.settlement ? (
+                <>
+                  <View style={s.backMoneySummary}>
+                    <Text style={s.backAwardMuted}>타당 {effectiveRound.settlement.strokeFee.toLocaleString('ko-KR')}원 · 버디 {effectiveRound.settlement.birdieBonus.toLocaleString('ko-KR')}원 · 참가 {moneyGame?.participants.length ?? 0}명</Text>
+                  </View>
+                  <AwardCard title="머니게임">
+                    {moneyPairs.length === 0 ? (
+                      <Text style={s.backAwardMuted}>참가자 이름이 선수와 맞지 않습니다.</Text>
+                    ) : moneyPairs.map((pair, i) => (
+                      <View key={`${pair.from}-${pair.to}-${i}`} style={[s.moneyPairRow, i === 0 && { borderTopWidth: 0 }]}>
+                        <Text style={s.moneyPairName}>{shortName(pair.from)}</Text>
+                        <Text style={s.moneyPairArrow}>→</Text>
+                        <Text style={s.moneyPairName}>{shortName(pair.to)}</Text>
+                        <Text style={[s.moneyPairAmount, { color: pair.amount === 0 ? C.muted : C.text }]}>{pair.amount === 0 ? '동점' : fmtKRW(pair.amount)}</Text>
+                      </View>
+                    ))}
+                  </AwardCard>
+                </>
+              ) : (
+                <AwardCard title="머니게임">
+                  <Text style={s.backAwardMuted}>이 라운드에는 정산 설정이 없습니다.</Text>
+                </AwardCard>
+              )}
+            </ScrollView>}
           </View>
           <TouchableOpacity style={s.flipBackHint} onPress={toggleFlip}><Text style={s.flipBackHintText}>↻ 앞면 요약으로 돌아가기</Text></TouchableOpacity>
         </View>
@@ -510,8 +714,11 @@ function Highlight({ icon, label, value }: { icon: string; label: string; value:
 function RankingPanel({ title, rows }: { title: string; rows: { name: string; main: string; sub: string }[] }) {
   return <View style={s.detailPanel}><Text style={s.detailPanelTitle}>{title}</Text>{rows.map((row, i) => <View key={`${row.name}-${i}`} style={s.rankRow}><View style={[s.rankNo, i === 0 && s.rankNoFirst]}><Text style={[s.rankNoText, i === 0 && { color: '#fff' }]}>{i + 1}</Text></View><View style={{ flex: 1 }}><Text style={s.rankName}>{row.name}</Text><Text style={s.rankSub}>{row.sub}</Text></View><Text style={s.rankMain}>{row.main}</Text></View>)}</View>
 }
-function AwardRow({ icon, label, winner, detail }: { icon: string; label: string; winner: string; detail: string }) {
-  return <View style={s.awardRow}><Text style={s.awardIcon}>{icon}</Text><View style={{ flex: 1 }}><Text style={s.awardLabel}>{label}</Text><Text style={s.awardWinner}>{winner}</Text></View><Text style={s.awardDetail}>{detail}</Text></View>
+function AwardCard({ title, icon, children }: { title: string; icon?: string; children: ReactNode }) {
+  return <View style={s.backAwardCard}><View style={s.backAwardHeader}>{icon ? <Text style={s.backAwardHeaderIcon}>{icon}</Text> : null}<Text style={s.backAwardTitle}>{title}</Text></View>{children}</View>
+}
+function AwardRow({ icon, label, winner, detail, first = false }: { icon: string; label: string; winner: string; detail: string; first?: boolean }) {
+  return <View style={[s.awardRow, first && { borderTopWidth: 0 }]}><View style={s.awardIconWrap}><Text style={s.awardIcon}>{icon}</Text></View><Text style={s.awardLabel}>{label}</Text><Text style={s.awardWinner} numberOfLines={1}>{winner}</Text><View style={s.awardDetailWrap}><Text style={s.awardDetail} numberOfLines={1}>{detail}</Text></View></View>
 }
 
 // ─── 개인별 ──────────────────────────────────────────────────────────────────
@@ -1709,8 +1916,8 @@ const s = StyleSheet.create({
   headerTitle: { color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
   profileBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' },
   profileInitial: { color: '#fff', fontSize: 16, fontWeight: '900' },
-  tabs: { flexDirection: 'row', backgroundColor: C.greenLight, marginHorizontal: 12, marginVertical: 10, borderRadius: 50, padding: 4 },
-  tab: { flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: 50 },
+  tabs: { flexDirection: 'row', backgroundColor: C.greenLight, marginHorizontal: 12, marginTop: 8, marginBottom: 0, borderRadius: 50, padding: 3 },
+  tab: { flex: 1, paddingVertical: 6, alignItems: 'center', borderRadius: 50 },
   tabActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5, elevation: 2 },
   tabText: { fontSize: 13, color: C.muted, fontWeight: '500' },
   tabTextActive: { color: C.green, fontWeight: '700' },
@@ -1779,36 +1986,39 @@ const s = StyleSheet.create({
   flipFace: { position: 'absolute', width: '100%', height: '100%', backfaceVisibility: 'hidden' },
   flipBackFace: { backfaceVisibility: 'hidden' },
   flipTouch: { flex: 1 },
-  roundHero: { flex: 1, borderRadius: 26, overflow: 'hidden', padding: 14, justifyContent: 'space-between' },
-  roundHeroImage: { borderRadius: 28 },
+  roundHero: { flex: 1, borderRadius: 26, overflow: 'hidden', backgroundColor: C.card, borderWidth: 1, borderColor: C.border },
+  roundPhotoHeader: { height: 218, padding: 14, justifyContent: 'space-between', alignItems: 'stretch' },
+  roundHeroImage: { borderTopLeftRadius: 26, borderTopRightRadius: 26 },
   roundHeroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(3,30,18,0.34)' },
   roundHeroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   roundCounter: { backgroundColor: 'rgba(7,22,18,0.58)', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 6 },
   roundCounterText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  roundPhotoButton: { minWidth: 78, minHeight: 31, borderRadius: 16, backgroundColor: 'rgba(7,22,18,0.58)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.34)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 11 },
+  roundPhotoButtonText: { color: '#fff', fontSize: 11, fontWeight: '900' },
+  roundSummaryBody: { flex: 1, padding: 14, gap: 10, justifyContent: 'space-between' },
   heroCompleteBadge: { backgroundColor: 'rgba(237,248,242,0.9)', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 6 },
   heroProgressBadge: { backgroundColor: 'rgba(27,158,94,0.92)', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 6 },
   heroStatusText: { color: '#173c2b', fontSize: 12, fontWeight: '800' },
-  heroDate: { color: '#fff', fontSize: 12, fontWeight: '700', textShadowColor: 'rgba(0,0,0,0.35)', textShadowRadius: 4 },
-  heroCourseBlock: { alignItems: 'center', marginTop: 8 },
-  heroCourseName: { color: '#fff', fontSize: 28, lineHeight: 33, fontWeight: '900', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.35)', textShadowRadius: 8 },
-  heroCourseSub: { color: 'rgba(255,255,255,0.9)', fontSize: 11, fontWeight: '800', letterSpacing: 1.5, marginTop: 4 },
-  heroSummaryPanel: { flexDirection: 'row', backgroundColor: 'rgba(8,42,23,0.48)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.38)', borderRadius: 17, paddingVertical: 9 },
-  summaryCell: { flex: 1, alignItems: 'center', borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.18)' },
-  summaryLabel: { color: '#fff', fontSize: 10, fontWeight: '800' },
-  summaryValue: { color: '#fff', fontSize: 20, lineHeight: 24, fontWeight: '900', marginTop: 5 },
-  heroInfoPanel: { backgroundColor: 'rgba(255,255,255,0.70)', borderRadius: 17, padding: 9 },
+  heroDate: { color: 'rgba(255,255,255,0.92)', fontSize: 12, fontWeight: '800', textAlign: 'left', textShadowColor: 'rgba(0,0,0,0.36)', textShadowRadius: 5 },
+  heroCourseBlock: { alignItems: 'flex-start' },
+  heroCourseName: { color: '#fff', fontSize: 25, lineHeight: 30, fontWeight: '900', textAlign: 'left', textShadowColor: 'rgba(0,0,0,0.38)', textShadowRadius: 7 },
+  heroSummaryPanel: { flexDirection: 'row', backgroundColor: C.greenLight, borderWidth: 1, borderColor: C.border, borderRadius: 17, paddingVertical: 9 },
+  summaryCell: { flex: 1, alignItems: 'center', borderRightWidth: 1, borderRightColor: C.border },
+  summaryLabel: { color: C.muted, fontSize: 10, fontWeight: '800' },
+  summaryValue: { color: C.text, fontSize: 20, lineHeight: 24, fontWeight: '900', marginTop: 5 },
+  heroInfoPanel: { backgroundColor: '#f8faf8', borderWidth: 1, borderColor: C.border, borderRadius: 17, padding: 9 },
   heroSectionTitle: { color: C.text, fontSize: 14, fontWeight: '900' },
   recordGrid: { flexDirection: 'row', gap: 6, marginTop: 8 },
-  recordMiniCard: { flex: 1, minHeight: 58, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.58)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.42)', padding: 7, alignItems: 'center', justifyContent: 'center' },
+  recordMiniCard: { flex: 1, minHeight: 58, borderRadius: 13, backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, padding: 7, alignItems: 'center', justifyContent: 'center' },
   recordMiniIcon: { fontSize: 16 },
   recordMiniLabel: { fontSize: 9, color: C.muted, fontWeight: '800', textAlign: 'center', marginTop: 3 },
   recordMiniValue: { fontSize: 10, color: C.text, fontWeight: '900', textAlign: 'center', marginTop: 3 },
   highlightRow: { flexDirection: 'row', gap: 7, marginTop: 8 },
-  highlightCard: { flex: 1, minHeight: 54, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.52)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.38)', alignItems: 'center', justifyContent: 'center', padding: 7 },
+  highlightCard: { flex: 1, minHeight: 54, borderRadius: 13, backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center', padding: 7 },
   highlightIcon: { fontSize: 15 },
   highlightLabel: { color: C.muted, fontSize: 9, fontWeight: '800', marginTop: 3 },
   highlightValue: { color: C.text, fontSize: 11, fontWeight: '900', textAlign: 'center', marginTop: 3 },
-  flipHint: { color: '#fff', textAlign: 'center', fontSize: 10, fontWeight: '800' },
+  flipHint: { color: C.muted, textAlign: 'center', fontSize: 10, fontWeight: '800' },
   backCard: { flex: 1, backgroundColor: '#fff', borderRadius: 26, padding: 13, shadowColor: '#163d2b', shadowOpacity: 0.14, shadowRadius: 16, shadowOffset: { width: 0, height: 7 }, elevation: 7 },
   backHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
   backIconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
@@ -1840,11 +2050,28 @@ const s = StyleSheet.create({
   scoreHoleCell: { width: '10.3%', minHeight: 38, borderRadius: 8, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
   scoreHoleNo: { fontSize: 9, fontWeight: '900', color: C.text },
   scoreHolePar: { fontSize: 8, color: C.muted, marginTop: 2 },
-  awardRow: { flexDirection: 'row', alignItems: 'center', gap: 9, minHeight: 52, borderTopWidth: 1, borderTopColor: '#eef1ef' },
-  awardIcon: { fontSize: 24 },
-  awardLabel: { fontSize: 10, color: C.muted, fontWeight: '800' },
-  awardWinner: { fontSize: 14, color: C.text, fontWeight: '900', marginTop: 2 },
+  backAwardScroll: { flex: 1 },
+  backAwardStack: { gap: 10, paddingBottom: 8 },
+  backAwardCard: { backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 10 },
+  backAwardHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 8 },
+  backAwardHeaderIcon: { fontSize: 16 },
+  backAwardTitle: { fontSize: 15, fontWeight: '900', color: C.text },
+  backAwardMuted: { fontSize: 12, lineHeight: 18, fontWeight: '700', color: C.muted },
+  backMoneySummary: { backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10 },
+  awardRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 48, borderTopWidth: 1, borderTopColor: '#eef1ef' },
+  awardIconWrap: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#fffbe8', borderWidth: 1, borderColor: '#f0e0a0', alignItems: 'center', justifyContent: 'center' },
+  awardIcon: { fontSize: 19 },
+  awardLabel: { width: 64, fontSize: 12, color: C.muted, fontWeight: '800' },
+  awardWinner: { flex: 1, fontSize: 14, color: C.text, fontWeight: '900' },
+  awardDetailWrap: { borderRadius: 12, backgroundColor: C.greenLight, paddingHorizontal: 9, paddingVertical: 5, maxWidth: 82 },
   awardDetail: { fontSize: 12, color: C.green, fontWeight: '900' },
+  lottoAwardGroupRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 42, borderTopWidth: 1, borderTopColor: '#eef1ef' },
+  lottoAwardGroupText: { flex: 1.35, fontSize: 12, lineHeight: 17, fontWeight: '900', color: C.text },
+  lottoAwardGroupNames: { flex: 1, fontSize: 12, lineHeight: 17, fontWeight: '800', color: C.green, textAlign: 'right' },
+  moneyPairRow: { flexDirection: 'row', alignItems: 'center', minHeight: 38, borderTopWidth: 1, borderTopColor: '#eef1ef' },
+  moneyPairName: { width: 48, fontSize: 13, fontWeight: '900', color: C.text },
+  moneyPairArrow: { width: 22, fontSize: 13, color: C.muted, textAlign: 'center' },
+  moneyPairAmount: { marginLeft: 'auto', fontSize: 13, fontWeight: '900' },
   flipBackHint: { minHeight: 38, alignItems: 'center', justifyContent: 'center', marginTop: 10 },
   flipBackHintText: { fontSize: 11, fontWeight: '800', color: C.muted },
   roundDetailPreview: { flex: 1, gap: 10 },

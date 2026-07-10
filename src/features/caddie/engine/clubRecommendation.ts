@@ -16,7 +16,7 @@ export const CLUB_LABELS: Record<ClubKey, string> = {
   sw: 'SW',
 }
 
-const CLUB_ORDER: ClubKey[] = [
+export const CLUB_ORDER: ClubKey[] = [
   'driver',
   'wood3',
   'wood5',
@@ -32,26 +32,10 @@ const CLUB_ORDER: ClubKey[] = [
   'sw',
 ]
 
-export const DEFAULT_DISTANCE_PROFILE: Required<Pick<UserDistanceProfile, ClubKey>> = {
-  driver: 200,
-  wood3: 180,
-  wood5: 170,
-  hybrid4: 160,
-  hybrid5: 150,
-  iron5: 150,
-  iron6: 140,
-  iron7: 130,
-  iron8: 120,
-  iron9: 110,
-  pw: 100,
-  aw: 85,
-  sw: 70,
-}
-
 function normalizeProfile(profile: UserDistanceProfile) {
   return CLUB_ORDER.map((club) => ({
     club,
-    distance: profile[club] ?? DEFAULT_DISTANCE_PROFILE[club],
+    distance: profile[club],
   })).filter((item) => Number.isFinite(item.distance) && item.distance > 0)
 }
 

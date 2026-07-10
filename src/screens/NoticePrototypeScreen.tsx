@@ -31,6 +31,7 @@ export default function NoticePrototypeScreen() {
   const [body, setBody] = useState('')
   const [isPublished, setIsPublished] = useState(true)
   const [isImportant, setIsImportant] = useState(false)
+  const [deletingNoticeId, setDeletingNoticeId] = useState<string | null>(null)
 
   useLayoutEffect(() => {
     nav.setOptions({ title: `${activeClub?.name ?? '클럽'} 공지사항` })
@@ -92,21 +93,19 @@ export default function NoticePrototypeScreen() {
   }
 
   async function removeNotice(notice: ClubNotice) {
-    Alert.alert('공지 삭제', '이 공지를 삭제할까요?', [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '삭제',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteClubNotice(notice.id)
-            await load()
-          } catch (error) {
-            Alert.alert('삭제 실패', error instanceof Error ? error.message : String(error))
-          }
-        },
-      },
-    ])
+    if (deletingNoticeId) return
+    setDeletingNoticeId(notice.id)
+    try {
+      await deleteClubNotice(notice.id)
+      setSelectedNotice((current) => current?.id === notice.id ? null : current)
+      setReadIds((current) => current.filter((id) => id !== notice.id))
+      setNotices((current) => current.filter((item) => item.id !== notice.id))
+      await load()
+    } catch (error) {
+      Alert.alert('삭제 실패', error instanceof Error ? error.message : String(error))
+    } finally {
+      setDeletingNoticeId(null)
+    }
   }
 
   return (
@@ -133,26 +132,36 @@ export default function NoticePrototypeScreen() {
         ) : notices.map((notice) => {
           const unread = notice.isPublished && !readIds.includes(notice.id)
           return (
-            <TouchableOpacity key={notice.id} style={[s.noticeRow, unread && s.noticeUnread]} onPress={() => openNoticeDetail(notice)} activeOpacity={0.82}>
-              <View style={s.noticeIcon}>
-                <Icon name="mail" size={16} color={unread ? C.green : C.muted} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={s.noticeTitleRow}>
-                  {notice.isImportant && <Text style={s.importantBadge}>중요</Text>}
-                  {!notice.isPublished && <Text style={s.draftBadgeText}>비게시</Text>}
-                  <Text style={[s.noticeTitle, unread && s.noticeTitleUnread]} numberOfLines={1}>{notice.title}</Text>
+            <View key={notice.id} style={[s.noticeRow, unread && s.noticeUnread]}>
+              <TouchableOpacity style={s.noticeMain} onPress={() => openNoticeDetail(notice)} activeOpacity={0.82}>
+                <View style={s.noticeIcon}>
+                  <Icon name="mail" size={16} color={unread ? C.green : C.muted} />
                 </View>
-                <Text style={s.noticeBody} numberOfLines={2}>{notice.body || '내용 없음'}</Text>
-                <Text style={s.noticeMeta}>{shortDate(notice.createdAt)}</Text>
-              </View>
+                <View style={{ flex: 1 }}>
+                  <View style={s.noticeTitleRow}>
+                    {notice.isImportant && <Text style={s.importantBadge}>중요</Text>}
+                    {!notice.isPublished && <Text style={s.draftBadgeText}>비게시</Text>}
+                    <Text style={[s.noticeTitle, unread && s.noticeTitleUnread]} numberOfLines={1}>{notice.title}</Text>
+                  </View>
+                  <Text style={s.noticeBody} numberOfLines={2}>{notice.body || '내용 없음'}</Text>
+                  <Text style={s.noticeMeta}>{shortDate(notice.createdAt)}</Text>
+                </View>
+              </TouchableOpacity>
               {isAdmin && (
                 <View style={s.noticeActions}>
-                  <TouchableOpacity onPress={(event) => { event.stopPropagation(); openEditor(notice) }}><Text style={s.actionText}>수정</Text></TouchableOpacity>
-                  <TouchableOpacity onPress={(event) => { event.stopPropagation(); removeNotice(notice) }}><Text style={[s.actionText, { color: C.danger }]}>삭제</Text></TouchableOpacity>
+                  <TouchableOpacity hitSlop={8} onPress={() => openEditor(notice)}><Text style={s.actionText}>수정</Text></TouchableOpacity>
+                  <TouchableOpacity
+                    hitSlop={8}
+                    disabled={deletingNoticeId === notice.id}
+                    onPress={() => removeNotice(notice)}
+                  >
+                    <Text style={[s.actionText, { color: C.danger }, deletingNoticeId === notice.id && { opacity: 0.45 }]}>
+                      {deletingNoticeId === notice.id ? '삭제중' : '삭제'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               )}
-            </TouchableOpacity>
+            </View>
           )
         })}
       </View>
@@ -218,6 +227,7 @@ const s = StyleSheet.create({
   sectionAction: { fontSize: 12, fontWeight: '900', color: C.green },
   body: { fontSize: 13, color: C.muted, lineHeight: 20, marginTop: 8 },
   noticeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.border },
+  noticeMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
   noticeUnread: { backgroundColor: '#f8fff8', marginHorizontal: -8, paddingHorizontal: 8, borderRadius: 12 },
   noticeIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
   noticeTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },

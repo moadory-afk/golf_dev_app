@@ -320,6 +320,19 @@ export default function RoundDetailScreen() {
       return { name, hits, total: selectedHoles.length, prize, hasScore }
     })
     .sort((a, b) => b.hits - a.hits || b.prize - a.prize || a.name.localeCompare(b.name, 'ko'))
+  const lottoAwardGroups = [3, 4, 5, 6]
+    .map((hits) => {
+      const winners = lottoAwardRows.filter((row) => row.hasScore && row.hits === hits && row.prize > 0)
+      const prize = hits === 6
+        ? lottoJackpot
+        : effectiveLottoAwardConfig.prizes[String(hits) as '3' | '4' | '5']
+      return {
+        hits,
+        prize,
+        names: winners.map((row) => shortName(row.name)).join(', '),
+      }
+    })
+    .filter((group) => group.names)
 
   const regularRank = round.players
     .map((p) => {
@@ -718,15 +731,16 @@ export default function RoundDetailScreen() {
               <Text style={s.muted}>구매 내역이 없습니다.</Text>
             ) : lottoDraw?.drawStatus !== 'COMPLETED' ? (
               <Text style={s.muted}>추첨 완료 후 구매자별 적중 현황이 표시됩니다.</Text>
-            ) : lottoAwardRows.map((row, i) => (
-              <View key={row.name + i} style={[s.awardRow, i === 0 && { borderTopWidth: 0 }]}>
-                <Text style={s.awardTitle}>{shortName(row.name)}</Text>
-                <Text style={s.awardWinner}>{row.hasScore ? `${row.hits}/${row.total}개 적중` : '스코어 전'}</Text>
-                <View style={[s.awardDetailWrap, row.prize <= 0 && s.lottoMissWrap]}>
-                  <Text style={[s.awardDetail, row.prize <= 0 && s.lottoMissText]}>
-                    {row.prize > 0 ? `시상금 ${formatWon(row.prize)}` : '낙첨'}
-                  </Text>
-                </View>
+            ) : lottoAwardGroups.length === 0 ? (
+              <Text style={s.muted}>시상 대상자가 없습니다.</Text>
+            ) : lottoAwardGroups.map((group, i) => (
+              <View key={group.hits} style={[s.lottoAwardGroupRow, i === 0 && { borderTopWidth: 0 }]}>
+                <Text style={s.lottoAwardGroupText}>
+                  {group.hits}개 적중 시상금 {formatWon(group.prize)}
+                </Text>
+                <Text style={s.lottoAwardGroupNames} numberOfLines={2}>
+                  {group.names}
+                </Text>
               </View>
             ))}
           </View>
@@ -835,17 +849,16 @@ export default function RoundDetailScreen() {
         )
       })()}
 
-      {/* 수정/삭제 */}
-      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-        <TouchableOpacity style={[s.btn, { flex: 1 }]} onPress={handleEdit}>
-          <Text style={s.btnText}>수정</Text>
-        </TouchableOpacity>
-        {isAdmin && (
+      {isAdmin && (
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+          <TouchableOpacity style={[s.btn, { flex: 1 }]} onPress={handleEdit}>
+            <Text style={s.btnText}>수정</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={[s.btn, { flex: 1, backgroundColor: C.danger }]} onPress={handleDelete}>
             <Text style={s.btnText}>삭제</Text>
           </TouchableOpacity>
-        )}
-      </View>
+        </View>
+      )}
     </ScrollView>
     <AppTabBar />
     </View>
@@ -934,6 +947,16 @@ const s = StyleSheet.create({
   awardDetail: { fontSize: 13, fontWeight: '800', color: C.green },
   lottoMissWrap: { backgroundColor: '#f5f5f5' },
   lottoMissText: { color: C.muted },
+  lottoAwardGroupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+  lottoAwardGroupText: { flex: 1.35, fontSize: 14, fontWeight: '900', color: C.text },
+  lottoAwardGroupNames: { flex: 1, fontSize: 14, fontWeight: '800', color: C.green, textAlign: 'right' },
   // 신페리오 기준 드롭다운
   basisBtn: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, borderWidth: 1, borderColor: C.green, backgroundColor: C.green },
   basisBtnText: { fontSize: 11, color: '#fff', fontWeight: '600' },

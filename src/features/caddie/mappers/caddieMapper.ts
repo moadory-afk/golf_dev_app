@@ -1,5 +1,4 @@
 import { createAICaddieAdvice } from '../engine'
-import { DEFAULT_DISTANCE_PROFILE } from '../engine/clubRecommendation'
 import type { AICaddieInput, RiskLevel, UserDistanceProfile } from '../types/caddie'
 import type {
   CaddieBindingInput,
@@ -16,22 +15,22 @@ function numberOrUndefined(value: number | null | undefined) {
 }
 
 export function mapDistanceProfile(row?: CaddieDistanceProfileRow | null): UserDistanceProfile {
-  if (!row) return DEFAULT_DISTANCE_PROFILE
+  if (!row) return {}
   return {
     userId: row.user_id,
-    driver: numberOrUndefined(row.driver_m) ?? DEFAULT_DISTANCE_PROFILE.driver,
-    wood3: numberOrUndefined(row.wood3_m) ?? DEFAULT_DISTANCE_PROFILE.wood3,
-    wood5: numberOrUndefined(row.wood5_m) ?? DEFAULT_DISTANCE_PROFILE.wood5,
-    hybrid4: numberOrUndefined(row.hybrid4_m) ?? DEFAULT_DISTANCE_PROFILE.hybrid4,
-    hybrid5: numberOrUndefined(row.hybrid5_m) ?? DEFAULT_DISTANCE_PROFILE.hybrid5,
-    iron5: numberOrUndefined(row.iron5_m) ?? DEFAULT_DISTANCE_PROFILE.iron5,
-    iron6: numberOrUndefined(row.iron6_m) ?? DEFAULT_DISTANCE_PROFILE.iron6,
-    iron7: numberOrUndefined(row.iron7_m) ?? DEFAULT_DISTANCE_PROFILE.iron7,
-    iron8: numberOrUndefined(row.iron8_m) ?? DEFAULT_DISTANCE_PROFILE.iron8,
-    iron9: numberOrUndefined(row.iron9_m) ?? DEFAULT_DISTANCE_PROFILE.iron9,
-    pw: numberOrUndefined(row.pw_m) ?? DEFAULT_DISTANCE_PROFILE.pw,
-    aw: numberOrUndefined(row.aw_m) ?? DEFAULT_DISTANCE_PROFILE.aw,
-    sw: numberOrUndefined(row.sw_m) ?? DEFAULT_DISTANCE_PROFILE.sw,
+    driver: numberOrUndefined(row.driver_m),
+    wood3: numberOrUndefined(row.wood3_m),
+    wood5: numberOrUndefined(row.wood5_m),
+    hybrid4: numberOrUndefined(row.hybrid4_m),
+    hybrid5: numberOrUndefined(row.hybrid5_m),
+    iron5: numberOrUndefined(row.iron5_m),
+    iron6: numberOrUndefined(row.iron6_m),
+    iron7: numberOrUndefined(row.iron7_m),
+    iron8: numberOrUndefined(row.iron8_m),
+    iron9: numberOrUndefined(row.iron9_m),
+    pw: numberOrUndefined(row.pw_m),
+    aw: numberOrUndefined(row.aw_m),
+    sw: numberOrUndefined(row.sw_m),
     putterNote: row.putter_note ?? undefined,
   }
 }

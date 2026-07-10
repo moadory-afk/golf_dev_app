@@ -175,11 +175,7 @@ function buildShotPlanStages(
     { key: "tee", title: "Tee", step: tee },
     { key: "second", title: "Second", step: second },
     { key: "third", title: "Third", step: third },
-    {
-      key: "putt",
-      title: "Putt",
-      step: { type: "green", clubLabel: "Putt", carryM: 0 },
-    },
+    { key: "putt", title: "Putt", step: steps.find((step) => step.type === "green") },
   ];
 }
 
@@ -361,31 +357,8 @@ function HoleDetailCard({
   const frontTouchStartRef = useRef<{ x: number; y: number } | null>(null);
   const frontTouchMovedRef = useRef(false);
   const shotPlan = hole.shotPlan;
-  const planSteps = shotPlan?.steps?.length
-    ? shotPlan.steps
-    : [
-        {
-          type: "tee" as const,
-          label: "Tee Shot",
-          clubLabel: hole.recommendedClub || "Driver",
-          carryM: hole.teeDistanceM || 0,
-          remainingAfterM: Math.max(0, (hole.teeDistanceM || 0) - 155),
-        },
-        {
-          type: "second" as const,
-          label: "Second",
-          clubLabel: "4H",
-          carryM: 155,
-          remainingAfterM: 0,
-        },
-        {
-          type: "green" as const,
-          label: "Green",
-          clubLabel: "Putt",
-          carryM: 0,
-          remainingAfterM: 0,
-        },
-      ];
+  const planSteps = shotPlan?.steps ?? [];
+  const hasShotPlan = planSteps.length > 0;
 
   useEffect(() => {
     Animated.spring(flip, {
@@ -404,7 +377,7 @@ function HoleDetailCard({
     inputRange: [0, 1],
     outputRange: ["180deg", "360deg"],
   });
-  const timelineWidth = Math.max(width - 64, planSteps.length * 72);
+  const timelineWidth = Math.max(width - 64, Math.max(planSteps.length, 1) * 72);
   const handleFrontTouchStart = (event: any) => {
     frontTouchMovedRef.current = false;
     frontTouchStartRef.current = {
@@ -547,10 +520,9 @@ function HoleDetailCard({
                     style={[styles.safeTitle, { color: palette.text }]}
                     numberOfLines={1}
                   >
-                    {shotPlan?.modeLabel || "SAFE"} ·{" "}
-                    {shotPlan?.compact ||
-                      hole.planHeadline ||
-                      `${hole.holeNo}번 홀 공략`}
+                    {hasShotPlan
+                      ? `${shotPlan?.modeLabel || "SAFE"} · ${shotPlan?.compact || hole.planHeadline || `${hole.holeNo}번 홀 공략`}`
+                      : "프로필 클럽 거리 등록 필요"}
                   </Text>
                 </View>
               </View>
@@ -566,7 +538,7 @@ function HoleDetailCard({
                 <Text
                   style={[styles.confidenceValue, { color: palette.green }]}
                 >
-                  {shotPlan?.confidence ?? 89}%
+                  {hasShotPlan ? `${shotPlan?.confidence ?? 0}%` : "-"}
                 </Text>
                 <Text
                   style={[styles.confidenceLabel, { color: palette.muted }]}
@@ -576,145 +548,78 @@ function HoleDetailCard({
               </View>
             </View>
 
-            <View style={styles.shotPlanGraphic}>
-              <View style={styles.shotPlanStageHeaderRow}>
-                {buildShotPlanStages(planSteps).map((stage) => (
-                  <Text
-                    key={`${stage.key}-title`}
-                    style={[
-                      styles.shotPlanStageTitle,
-                      { color: palette.muted },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {stage.title}
-                  </Text>
-                ))}
-              </View>
-              <View style={styles.shotPlanClubRow}>
-                {buildShotPlanStages(planSteps).map((stage, index) => {
-                  const active = Boolean(stage.step);
-                  const isPutt = stage.key === "putt";
-                  return (
-                    <View
-                      key={`${stage.key}-club`}
-                      style={styles.shotPlanStageCell}
-                    >
-                      <View
-                        style={[
-                          styles.shotPlanClubBadge,
-                          {
-                            backgroundColor: active
-                              ? palette.greenLight
-                              : "rgba(0,0,0,0.04)",
-                            borderColor: active
-                              ? palette.green
-                              : palette.border,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.shotPlanClubText,
-                            { color: active ? palette.text : palette.muted },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {isPutt
-                            ? "Putt"
-                            : compactClubLabel(stage.step?.clubLabel)}
+            {hasShotPlan ? (
+              <>
+                <View style={styles.shotPlanGraphic}>
+                  <View style={styles.shotPlanStageHeaderRow}>
+                    {buildShotPlanStages(planSteps).map((stage) => (
+                      <Text key={`${stage.key}-title`} style={[styles.shotPlanStageTitle, { color: palette.muted }]} numberOfLines={1}>
+                        {stage.title}
+                      </Text>
+                    ))}
+                  </View>
+                  <View style={styles.shotPlanClubRow}>
+                    {buildShotPlanStages(planSteps).map((stage, index) => {
+                      const active = Boolean(stage.step);
+                      const isPutt = stage.key === "putt";
+                      return (
+                        <View key={`${stage.key}-club`} style={styles.shotPlanStageCell}>
+                          <View
+                            style={[
+                              styles.shotPlanClubBadge,
+                              {
+                                backgroundColor: active ? palette.greenLight : "rgba(0,0,0,0.04)",
+                                borderColor: active ? palette.green : palette.border,
+                              },
+                            ]}
+                          >
+                            <Text style={[styles.shotPlanClubText, { color: active ? palette.text : palette.muted }]} numberOfLines={1}>
+                              {active ? (isPutt ? "Putt" : compactClubLabel(stage.step?.clubLabel)) : "-"}
+                            </Text>
+                          </View>
+                          {index < 3 && <View pointerEvents="none" style={[styles.shotPlanConnector, { backgroundColor: palette.border }]} />}
+                        </View>
+                      );
+                    })}
+                  </View>
+                  <View style={styles.shotPlanDistanceRow}>
+                    {buildShotPlanStages(planSteps).map((stage) => {
+                      const distance = stage.step?.carryM && stage.key !== "putt" ? `${stage.step.carryM}m` : "";
+                      return (
+                        <Text key={`${stage.key}-distance`} style={[styles.shotPlanDistanceText, { color: palette.green }]} numberOfLines={1}>
+                          {distance}
                         </Text>
-                      </View>
-                      {index < 3 && (
-                        <View
-                          pointerEvents="none"
-                          style={[
-                            styles.shotPlanConnector,
-                            { backgroundColor: palette.border },
-                          ]}
-                        />
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
-              <View style={styles.shotPlanDistanceRow}>
-                {buildShotPlanStages(planSteps).map((stage) => {
-                  const distance =
-                    stage.step?.carryM && stage.key !== "putt"
-                      ? `${stage.step.carryM}m`
-                      : "";
-                  return (
-                    <Text
-                      key={`${stage.key}-distance`}
-                      style={[
-                        styles.shotPlanDistanceText,
-                        { color: palette.green },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {distance}
-                    </Text>
-                  );
-                })}
-              </View>
-            </View>
+                      );
+                    })}
+                  </View>
+                </View>
 
-            <View style={styles.planMetricRow}>
-              <MiniMetric
-                label="예상타수"
-                value={shotPlan?.expectedStrokes?.toFixed(1) || "4.4"}
-                tone="gold"
-              />
-              <MiniMetric
-                label="구간"
-                value={shotPlan?.expectedScoreLabel || "Par ~ Bogey"}
-              />
-              <MiniMetric
-                label="난이도"
-                value={shotPlan?.difficultyLabel || "NORMAL"}
-                tone="gold"
-              />
-            </View>
+                <View style={styles.planMetricRow}>
+                  <MiniMetric label="예상타수" value={shotPlan?.expectedStrokes?.toFixed(1) || "-"} tone="gold" />
+                  <MiniMetric label="구간" value={shotPlan?.expectedScoreLabel || "-"} />
+                  <MiniMetric label="난이도" value={shotPlan?.difficultyLabel || "-"} tone="gold" />
+                </View>
 
-            <View
-              style={[
-                styles.probabilityBox,
-                {
-                  backgroundColor: palette.greenLight,
-                  borderColor: palette.border,
-                },
-              ]}
-            >
-              <Text style={[styles.probabilityTitle, { color: palette.text }]}>
-                스코어 확률
-              </Text>
-              <View style={styles.probabilityRow}>
-                <Text
-                  style={[styles.probabilityItem, { color: palette.green }]}
-                >
-                  Par {shotPlan?.probability.par ?? 62}%
-                </Text>
-                <Text style={[styles.probabilityItem, { color: palette.gold }]}>
-                  Bogey {shotPlan?.probability.bogey ?? 26}%
-                </Text>
-                <Text
-                  style={[styles.probabilityItem, { color: palette.danger }]}
-                >
-                  Double {shotPlan?.probability.double ?? 12}%
+                <View style={[styles.probabilityBox, { backgroundColor: palette.greenLight, borderColor: palette.border }]}>
+                  <Text style={[styles.probabilityTitle, { color: palette.text }]}>스코어 확률</Text>
+                  <View style={styles.probabilityRow}>
+                    <Text style={[styles.probabilityItem, { color: palette.green }]}>Par {shotPlan?.probability.par ?? 0}%</Text>
+                    <Text style={[styles.probabilityItem, { color: palette.gold }]}>Bogey {shotPlan?.probability.bogey ?? 0}%</Text>
+                    <Text style={[styles.probabilityItem, { color: palette.danger }]}>Double {shotPlan?.probability.double ?? 0}%</Text>
+                  </View>
+                </View>
+
+                <Text style={[styles.shotPlanReason, { color: palette.text }]}>{shotPlan?.reason}</Text>
+                {!!shotPlan?.mission && (
+                  <Text style={[styles.shotPlanMission, { color: palette.muted }]}>{shotPlan.mission}</Text>
+                )}
+              </>
+            ) : (
+              <View style={[styles.probabilityBox, { backgroundColor: palette.greenLight, borderColor: palette.border }]}>
+                <Text style={[styles.shotPlanReason, { color: palette.text }]}>
+                  프로필의 클럽별 평균거리를 등록하면 등록된 클럽만 사용해 Shot Plan을 작성합니다.
                 </Text>
               </View>
-            </View>
-
-            <Text style={[styles.shotPlanReason, { color: palette.text }]}>
-              {shotPlan?.reason ||
-                hole.planMessage ||
-                "안전한 구간으로 공략하면 그린 앞까지 안정적으로 연결됩니다."}
-            </Text>
-            {!!shotPlan?.mission && (
-              <Text style={[styles.shotPlanMission, { color: palette.muted }]}>
-                {shotPlan.mission}
-              </Text>
             )}
             <TouchableOpacity
               activeOpacity={0.82}

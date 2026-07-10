@@ -1339,11 +1339,13 @@ export async function updateClubNotice(
 }
 
 export async function deleteClubNotice(noticeId: string): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('club_notices')
     .delete()
     .eq('id', noticeId)
+    .select('id')
   if (error) throw error
+  if (!data || data.length === 0) throw new Error('삭제 권한이 없거나 공지를 찾을 수 없습니다.')
 }
 
 export async function getClubByInviteCode(code: string): Promise<{ name: string; subtitle: string } | null> {

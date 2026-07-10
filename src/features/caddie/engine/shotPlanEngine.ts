@@ -1,29 +1,34 @@
 import type { AIShotPlanHole, AIShotPlanProbability, AIShotPlanStep, AIShotPlanStepType, AIShotPlanSummary, ClubKey, RecommendationMode, UserDistanceProfile } from '../types/caddie'
-import { CLUB_LABELS, DEFAULT_DISTANCE_PROFILE, recommendClub } from './clubRecommendation'
+import { CLUB_LABELS, CLUB_ORDER, recommendClub } from './clubRecommendation'
 
 function distanceFor(profile: UserDistanceProfile, club: ClubKey) {
   const d = profile[club]
   return (d == null || d <= 0) ? 0 : d
 }
 
-function pickTeeClub(mode: RecommendationMode, par: number, distanceM: number, profile: UserDistanceProfile): ClubKey {
-  if (par <= 3) return recommendClub(distanceM, profile, 'attack')?.club ?? 'iron7'
-  if (mode === 'SAFE') {
-    if (par >= 5) return 'driver'
-    const driver = Math.max(0,distanceFor(profile,'driver'))
-    const wood3 = Math.max(0,distanceFor(profile,'wood3'))
-    if (driver > 215 && distanceM < 350) return 'wood3'
-    if(driver>0){return wood3>=170&&distanceM<330?'wood3':'driver'}
-      return wood3>0?'wood3':'iron5'
-  }
-  return 'driver'
+function firstAvailableClub(profile: UserDistanceProfile, preferred: ClubKey[] = CLUB_ORDER): ClubKey | null {
+  return preferred.find((club) => distanceFor(profile, club) > 0) ?? null
 }
 
-function pickSecondClub(mode: RecommendationMode, remainingM: number, profile: UserDistanceProfile) {
+function pickTeeClub(mode: RecommendationMode, par: number, distanceM: number, profile: UserDistanceProfile): ClubKey | null {
+  if (par <= 3) return recommendClub(distanceM, profile, 'attack')?.club ?? firstAvailableClub(profile, ['iron7', 'iron8', 'iron6', 'hybrid5', 'pw', 'iron9', 'driver'])
+  if (mode === 'SAFE') {
+    if (par >= 5 && distanceFor(profile, 'driver') > 0) return 'driver'
+    const driver = Math.max(0, distanceFor(profile, 'driver'))
+    const wood3 = Math.max(0, distanceFor(profile, 'wood3'))
+    if (driver > 215 && distanceM < 350 && wood3 > 0) return 'wood3'
+    if (driver > 0) return wood3 >= 170 && distanceM < 330 ? 'wood3' : 'driver'
+    return wood3 > 0 ? 'wood3' : firstAvailableClub(profile, ['iron5', 'hybrid5', 'iron6', 'iron7', 'wood5'])
+  }
+  return distanceFor(profile, 'driver') > 0 ? 'driver' : firstAvailableClub(profile)
+}
+
+function pickSecondClub(mode: RecommendationMode, remainingM: number, profile: UserDistanceProfile): ClubKey | null {
   const allowed: ClubKey[] = mode === 'SAFE'
     ? ['wood5', 'hybrid4', 'hybrid5', 'iron5', 'iron6']
     : ['wood3', 'wood5', 'hybrid4', 'hybrid5', 'iron5']
-  return allowed.filter(c=>distanceFor(profile,c)>0).find((club)=>distanceFor(profile, club)<=remainingM-80) ?? allowed.filter(c=>distanceFor(profile,c)>0).slice(-1)[0] ?? 'pw'
+  const registered = allowed.filter((club) => distanceFor(profile, club) > 0)
+  return registered.find((club) => distanceFor(profile, club) <= remainingM - 80) ?? registered.slice(-1)[0] ?? null
 }
 
 function createStep(type: AIShotPlanStepType, label: string, club: ClubKey, remainingBeforeM: number, profile: UserDistanceProfile): AIShotPlanStep {
@@ -96,30 +101,38 @@ export function createAIShotPlanHole(params: {
   let remaining = distanceM
 
   if (par <= 3) {
-    const club = recommendClub(remaining, params.distanceProfile, mode === 'SAFE' ? 'safe' : 'attack')?.club ?? 'iron7'
+    const club = recommendClub(remaining, params.distanceProfile, mode === 'SAFE' ? 'safe' : 'attack')?.club ?? firstAvailableClub(params.distanceProfile, ['iron7', 'iron8', 'iron6', 'hybrid5', 'pw', 'iron9', 'driver'])
+    if (!club) return null
     const step = createStep('tee', 'Tee Shot', club, remaining, params.distanceProfile)
     steps.push(step)
     remaining = step.remainingAfterM
   } else {
     const teeClub = pickTeeClub(mode, par, distanceM, params.distanceProfile)
+    if (!teeClub) return null
     const teeStep = createStep('tee', 'Tee Shot', teeClub, remaining, params.distanceProfile)
     steps.push(teeStep)
     remaining = teeStep.remainingAfterM
 
     if (par >= 5 && remaining > 190) {
       const secondClub = pickSecondClub(mode, remaining, params.distanceProfile)
-      const secondStep = createStep('second', 'Second Shot', secondClub, remaining, params.distanceProfile)
-      steps.push(secondStep)
-      remaining = secondStep.remainingAfterM
+      if (secondClub) {
+        const secondStep = createStep('second', 'Second Shot', secondClub, remaining, params.distanceProfile)
+        steps.push(secondStep)
+        remaining = secondStep.remainingAfterM
+      }
     }
 
     if (remaining > 25) {
-      const approachClub = recommendClub(remaining, params.distanceProfile, mode === 'ATTACK' ? 'attack' : 'safe')?.club ?? 'pw'
-      const approachStep = createStep('approach', 'Approach', approachClub, remaining, params.distanceProfile)
-      steps.push(approachStep)
-      remaining = approachStep.remainingAfterM
+      const approachClub = recommendClub(remaining, params.distanceProfile, mode === 'ATTACK' ? 'attack' : 'safe')?.club ?? firstAvailableClub(params.distanceProfile, ['pw', 'aw', 'sw', 'iron9', 'iron8', 'iron7'])
+      if (approachClub) {
+        const approachStep = createStep('approach', 'Approach', approachClub, remaining, params.distanceProfile)
+        steps.push(approachStep)
+        remaining = approachStep.remainingAfterM
+      }
     }
   }
+
+  if (steps.length === 0) return null
 
   const expectedStrokes = expectedStrokesFor({ par, mode, remainingAfterPlanM: remaining, distanceM, stepCount: steps.length })
   const probability = probabilityFor(expectedStrokes, par)
