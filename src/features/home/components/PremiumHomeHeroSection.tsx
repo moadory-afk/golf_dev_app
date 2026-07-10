@@ -561,9 +561,9 @@ function HeroBottomSummary({
   const scheduleLine = teeTime ? `Tee Off ${teeTime}` : "Tee Off --:--";
   void groupCount;
   const travelTimeText =
-    routeTimeText && !routeTimeText.includes("준비중")
+    routeTimeText
       ? routeTimeText
-      : "50분 소요";
+      : "이동시간 준비중";
 
   return (
     <View style={[styles.bottomSummary, { paddingTop: isCompact ? 6 : 8 }]}>
