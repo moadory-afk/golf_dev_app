@@ -1,5 +1,5 @@
 import {
-  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Dimensions, TextInput,
+  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Dimensions, TextInput, ImageBackground,
 } from 'react-native'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
@@ -16,6 +16,7 @@ import { C } from '../theme'
 import { EmojiIcon } from '../components/EmojiIcon'
 import { Icon } from '../components/Icon'
 import { TopActionButtons } from '../components/TopActionButtons'
+import { getCourseHeroImageSource } from '../data/courseHeroImages'
 import type { RootStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
@@ -252,7 +253,6 @@ function monthLabel(key: string) {
 }
 
 function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicapBasis?: number }) {
-  const nav = useNavigation<Nav>()
   if (rounds.length === 0) return <Text style={s.muted}>아직 라운드 기록이 없습니다.</Text>
 
   const filtered = [...rounds].sort((a, b) => {
@@ -260,200 +260,148 @@ function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicap
     if (a.isComplete && !b.isComplete) return 1
     return b.date.localeCompare(a.date)
   })
+  const cardWidth = Math.min(Dimensions.get('window').width - 32, 430)
 
   return (
-    <>
-      {filtered.map((r) => {
-          const par = totalPar(r.pars)
-          const totals = r.players.map((p) => playerTotal(p.strokes))
-          const best = Math.min(...totals)
-          const avg = Math.ceil(totals.reduce((a, b) => a + b, 0) / totals.length)
-          const bestPlayer = r.players.find((p) => playerTotal(p.strokes) === best)
-          const roundHandicaps = getHandicapsForRound(r, rounds, handicapBasis)
-          const ranked = r.players
-            .map((p) => {
-              const handicap = roundHandicaps.get(p.name) ?? 0
-              const net = playerTotal(p.strokes) - handicap
-              return { name: p.name, net, netVsPar: net - par }
-            })
-            .sort((a, b) => a.netVsPar - b.netVsPar)
-          const medalIsBestNet = bestPlayer?.name === ranked[0]?.name
-          const winner = medalIsBestNet ? ranked[1] : ranked[0]
-          const runnerUp = medalIsBestNet ? ranked[2] : ranked[1]
-
-          const birdieTop = r.players
-            .map((p) => { let b = 0; p.strokes.forEach((s, i) => { if (s - r.pars[i] <= -1) b++ }); return { name: p.name, count: b } })
-            .sort((a, b) => b.count - a.count)[0]
-          const parTop = r.players
-            .map((p) => { let cnt = 0; p.strokes.forEach((s, i) => { if (s - r.pars[i] === 0) cnt++ }); return { name: p.name, count: cnt } })
-            .sort((a, b) => b.count - a.count)[0]
-
-          // 신기록 체크
-          const priorRounds = rounds.filter((pr) => pr.date < r.date)
-          const newRecords: { icon: string; text: string }[] = []
-          if (priorRounds.length > 0) {
-            // 최저타 갱신
-            const priorBest = Math.min(...priorRounds.flatMap((pr) => pr.players.map((p) => playerTotal(p.strokes))))
-            if (best < priorBest)
-              newRecords.push({ icon: '🏆', text: `최저타 갱신 ${bestPlayer ? shortName(bestPlayer.name) : ''} ${best}타` })
-
-            // 버디왕 갱신
-            const priorMaxBirdie = Math.max(0, ...priorRounds.flatMap((pr) =>
-              pr.players.map((p) => { let b = 0; p.strokes.forEach((s, i) => { if (s - pr.pars[i] <= -1) b++ }); return b })
-            ))
-            if (birdieTop && birdieTop.count > priorMaxBirdie)
-              newRecords.push({ icon: '🐦', text: `버디왕 갱신 ${shortName(birdieTop.name)} ${birdieTop.count}개` })
-
-            // 파왕 갱신
-            const priorMaxPar = Math.max(0, ...priorRounds.flatMap((pr) =>
-              pr.players.map((p) => { let cnt = 0; p.strokes.forEach((s, i) => { if (s - pr.pars[i] === 0) cnt++ }); return cnt })
-            ))
-            if (parTop && parTop.count > priorMaxPar)
-              newRecords.push({ icon: '⛳', text: `파왕 갱신 ${shortName(parTop.name)} ${parTop.count}개` })
-
-            // 최다우승 갱신
-            const winsMap = new Map<string, number>()
-            for (const pr of priorRounds) {
-              const w = getWinnerLocal(pr, getHandicapsForRound(pr, rounds, handicapBasis))
-              if (w) winsMap.set(w, (winsMap.get(w) ?? 0) + 1)
-            }
-            const priorMaxWins = Math.max(0, ...[...winsMap.values()])
-            const thisWinner = getWinnerLocal(r, roundHandicaps)
-            if (thisWinner) {
-              const newWins = (winsMap.get(thisWinner) ?? 0) + 1
-              if (newWins > priorMaxWins)
-                newRecords.push({ icon: '🥇', text: `최다우승 갱신 ${shortName(thisWinner)} ${newWins}회` })
-            }
-
-            // 최저핸디 갱신: 클럽 역대 최저 핸디 갱신
-            const priorHandiVals = priorRounds.flatMap((pr) =>
-              pr.players.map((p) => {
-                const rel = priorRounds
-                  .filter((x) => x.date <= pr.date && x.players.some((pl) => pl.name === p.name))
-                  .sort((a, b) => a.date.localeCompare(b.date)).slice(-handicapBasis)
-                if (!rel.length) return Infinity
-                return Math.ceil(rel.reduce((s, x) => {
-                  const pl = x.players.find((y) => y.name === p.name)!
-                  return s + (playerTotal(pl.strokes) - totalPar(x.pars))
-                }, 0) / rel.length)
-              })
-            ).filter((h) => isFinite(h))
-            const prevMinH = priorHandiVals.length ? Math.min(...priorHandiVals) : Infinity
-
-            const afterHandis = r.players.map((p) => {
-              const rel = rounds
-                .filter((x) => x.date <= r.date && x.players.some((pl) => pl.name === p.name))
-                .sort((a, b) => a.date.localeCompare(b.date)).slice(-handicapBasis)
-              if (!rel.length) return { name: p.name, h: Infinity }
-              return { name: p.name, h: Math.ceil(rel.reduce((s, x) => {
-                const pl = x.players.find((y) => y.name === p.name)!
-                return s + (playerTotal(pl.strokes) - totalPar(x.pars))
-              }, 0) / rel.length) }
-            })
-            const finiteHandis = afterHandis.filter((x) => isFinite(x.h))
-            if (finiteHandis.length > 0 && isFinite(prevMinH)) {
-              const curMinH = Math.min(...finiteHandis.map((x) => x.h))
-              if (curMinH < prevMinH) {
-                const top = finiteHandis.find((x) => x.h === curMinH)!
-                newRecords.push({ icon: '📉', text: `최저핸디 갱신 ${shortName(top.name)} ${top.h > 0 ? '+' : ''}${top.h}` })
-              }
-            }
-          }
-
-          return (
-            <TouchableOpacity
-              key={r.id}
-              style={s.card}
-              onPress={async () => {
-                if (!r.isComplete) {
-                  const full = await getRound(r.id)
-                  if (full) {
-                    nav.navigate('ScoreEntry', {
-                      date: full.date,
-                      courseName: full.courseName,
-                      pars: full.pars,
-                      golfCourseId: full.golfCourseId,
-                      players: full.players,
-                      editId: full.id,
-                      settlement: full.settlement,
-                    })
-                  }
-                } else {
-                  nav.navigate('RoundDetail', { id: r.id })
-                }
-              }}
-            >
-              {/* 1행: 코스명 + 날짜 + 경기중 배지 */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <Text style={s.cardBold}>{r.courseName}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  {r.isComplete ? (
-                    <View style={s.completeBadge}>
-                      <Text style={s.completeText}>라운드 완료</Text>
-                    </View>
-                  ) : (
-                    <View style={s.inProgressBadge}>
-                      <Text style={s.inProgressText}>라운드 중</Text>
-                    </View>
-                  )}
-                  <Text style={[s.muted, { fontSize: 12 }]}>{r.date.replace(/-/g, '.')}</Text>
-                </View>
-              </View>
-              {/* 2행: 메달/우승/준우승 칩 */}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                {bestPlayer && (
-                  <View style={[s.statChip, { backgroundColor: '#fffbe8' }]}>
-                    <EmojiIcon char="🏆" size={12} color={C.gold} />
-                    <Text style={s.statChipText}>{shortName(bestPlayer.name)} <Text style={{ color: C.gold }}>{best}</Text></Text>
-                  </View>
-                )}
-                {winner && (
-                  <View style={[s.statChip, { backgroundColor: C.greenLight }]}>
-                    <EmojiIcon char="🥇" size={12} />
-                    <Text style={s.statChipText}>{shortName(winner.name)} <Text style={{ color: C.green }}>{diffText(winner.netVsPar)}</Text></Text>
-                  </View>
-                )}
-                {runnerUp && (
-                  <View style={[s.statChip, { backgroundColor: '#f4f6f8' }]}>
-                    <EmojiIcon char="🥈" size={12} />
-                    <Text style={s.statChipText}>{shortName(runnerUp.name)} <Text style={{ color: C.muted }}>{diffText(runnerUp.netVsPar)}</Text></Text>
-                  </View>
-                )}
-              </View>
-              {/* 3행: 평균 + 신기록 또는 버디/파 */}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6, alignItems: 'center' }}>
-                <View style={[s.statChip, { backgroundColor: '#f0f5f2' }]}>
-                  <Text style={s.statChipText}>평균 <Text style={{ fontWeight: '700', color: C.text }}>{avg}</Text></Text>
-                </View>
-                {newRecords.length > 0 ? (
-                  newRecords.map((rec, i) => (
-                    <View key={i} style={s.recordTag}>
-                      <EmojiIcon char={rec.icon} size={12} color="#8a6000" />
-                      <Text style={s.recordTagText}>{rec.text}</Text>
-                    </View>
-                  ))
-                ) : (
-                  <>
-                    {birdieTop && birdieTop.count > 0 && (
-                      <View style={[s.statChip, { backgroundColor: '#eff6ff' }]}>
-                        <EmojiIcon char="🐦" size={12} color={C.info} />
-                        <Text style={s.statChipText}>{shortName(birdieTop.name)} <Text style={{ color: C.info }}>{birdieTop.count}개</Text></Text>
-                      </View>
-                    )}
-                    {parTop && parTop.count > 0 && (
-                      <View style={[s.statChip, { backgroundColor: '#f0f5f2' }]}>
-                        <EmojiIcon char="⛳" size={12} color={C.green} />
-                        <Text style={s.statChipText}>{shortName(parTop.name)} <Text style={{ color: C.green }}>{parTop.count}개</Text></Text>
-                      </View>
-                    )}
-                  </>
-                )}
-              </View>
-            </TouchableOpacity>
-          )
-        })}
-    </>
+    <View style={s.roundCarouselWrap}>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        decelerationRate="fast"
+        snapToInterval={cardWidth + 12}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={s.roundCarouselContent}
+      >
+        {filtered.map((round, index) => (
+          <RoundFlipCard
+            key={round.id}
+            round={round}
+            rounds={rounds}
+            handicapBasis={handicapBasis}
+            index={index}
+            totalCount={filtered.length}
+            width={cardWidth}
+          />
+        ))}
+      </ScrollView>
+      <Text style={s.roundSwipeHint}>좌우로 스와이프해 다른 라운드를 확인하세요</Text>
+    </View>
   )
+}
+
+function RoundFlipCard({
+  round, rounds, handicapBasis, index, totalCount, width,
+}: {
+  round: SavedRound
+  rounds: SavedRound[]
+  handicapBasis: number
+  index: number
+  totalCount: number
+  width: number
+}) {
+  const nav = useNavigation<Nav>()
+  const par = totalPar(round.pars)
+  const totals = round.players.map((p) => playerTotal(p.strokes))
+  const best = Math.min(...totals)
+  const avg = Math.ceil(totals.reduce((a, b) => a + b, 0) / Math.max(totals.length, 1))
+  const bestPlayer = round.players.find((p) => playerTotal(p.strokes) === best)
+  const roundHandicaps = getHandicapsForRound(round, rounds, handicapBasis)
+  const regularRank = round.players
+    .map((p) => {
+      const total = playerTotal(p.strokes)
+      const handicap = roundHandicaps.get(p.name) ?? 0
+      return { name: p.name, total, handicap, net: total - handicap }
+    })
+    .sort((a, b) => a.net - b.net)
+  const winner = regularRank.find((row) => row.name !== bestPlayer?.name) ?? regularRank[0]
+  const runnerUp = regularRank.find((row) => row.name !== bestPlayer?.name && row.name !== winner?.name)
+
+  const playerHighlights = round.players.map((p) => {
+    const stats = holeStats(p.strokes, round.pars)
+    return { name: p.name, ...stats }
+  })
+  const birdieTop = [...playerHighlights].sort((a, b) => b.birdie - a.birdie)[0]
+  const parTop = [...playerHighlights].sort((a, b) => b.par - a.par)[0]
+  const bestHole = round.players.flatMap((p) => p.strokes.map((score, i) => ({ name: p.name, hole: i + 1, par: round.pars[i], score, diff: score - round.pars[i] })))
+    .sort((a, b) => a.diff - b.diff)[0]
+
+  const priorRounds = rounds.filter((r) => r.date < round.date)
+  const records: { icon: string; label: string; value: string }[] = []
+  const priorBest = priorRounds.length
+    ? Math.min(...priorRounds.flatMap((r) => r.players.map((p) => playerTotal(p.strokes))))
+    : Infinity
+  if (best < priorBest) records.push({ icon: '🏆', label: '최저타 갱신', value: `${shortName(bestPlayer?.name ?? '')} ${best}타` })
+  const priorBirdie = priorRounds.length ? Math.max(0, ...priorRounds.flatMap((r) => r.players.map((p) => holeStats(p.strokes, r.pars).birdie))) : 0
+  if (birdieTop?.birdie > priorBirdie) records.push({ icon: '🟡', label: '버디왕 갱신', value: `${shortName(birdieTop.name)} ${birdieTop.birdie}개` })
+  const priorPar = priorRounds.length ? Math.max(0, ...priorRounds.flatMap((r) => r.players.map((p) => holeStats(p.strokes, r.pars).par))) : 0
+  if (parTop?.par > priorPar) records.push({ icon: '⛳', label: '파왕 갱신', value: `${shortName(parTop.name)} ${parTop.par}개` })
+  if (records.length === 0) records.push({ icon: '✨', label: '라운드 기록', value: '새 기록 도전 완료' })
+
+
+  const openRound = async () => {
+    if (!round.isComplete) {
+      const full = await getRound(round.id)
+      if (full) nav.navigate('ScoreEntry', { date: full.date, courseName: full.courseName, pars: full.pars, golfCourseId: full.golfCourseId, players: full.players, editId: full.id, settlement: full.settlement })
+      return
+    }
+    nav.navigate('RoundDetail', { id: round.id })
+  }
+
+  return (
+    <View style={[s.flipCardScene, { width }]}> 
+      <View style={s.flipFace}>
+        <TouchableOpacity activeOpacity={0.96} style={s.flipTouch} onPress={openRound}>
+          <ImageBackground source={getCourseHeroImageSource(round.courseName)} style={s.roundHero} imageStyle={s.roundHeroImage}>
+            <View style={s.roundHeroShade} />
+            <View style={s.roundHeroTopRow}>
+              <View style={s.roundCounter}><Text style={s.roundCounterText}>{index + 1} / {totalCount}</Text></View>
+              <View style={{ alignItems: 'flex-end', gap: 5 }}>
+                <View style={round.isComplete ? s.heroCompleteBadge : s.heroProgressBadge}><Text style={s.heroStatusText}>{round.isComplete ? '라운드 완료' : '라운드 중'}</Text></View>
+                <Text style={s.heroDate}>{round.date.replace(/-/g, '.')}</Text>
+              </View>
+            </View>
+            <View style={s.heroCourseBlock}>
+              <Text style={s.heroCourseName}>{round.courseName}</Text>
+              <Text style={s.heroCourseSub}>ROUND SUMMARY</Text>
+            </View>
+            <View style={s.heroSummaryPanel}>
+              <SummaryCell icon="🏆" label={shortName(bestPlayer?.name ?? '메달')} value={String(best)} />
+              <SummaryCell icon="🥇" label={shortName(winner?.name ?? '우승')} value={winner ? diffText(winner.net - par) : '-'} accent />
+              <SummaryCell icon="🥈" label={shortName(runnerUp?.name ?? '준우승')} value={runnerUp ? diffText(runnerUp.net - par) : '-'} />
+              <SummaryCell label="평균 스코어" value={String(avg)} />
+            </View>
+            <View style={s.heroInfoPanel}>
+              <Text style={s.heroSectionTitle}>👑 기네스 북 갱신 현황</Text>
+              <View style={s.recordGrid}>
+                {records.slice(0, 4).map((r, i) => <View key={`${r.label}-${i}`} style={s.recordMiniCard}><Text style={s.recordMiniIcon}>{r.icon}</Text><Text style={s.recordMiniLabel}>{r.label}</Text><Text style={s.recordMiniValue}>{r.value}</Text></View>)}
+              </View>
+              <Text style={[s.heroSectionTitle, { marginTop: 10 }]}>⭐ 주요 하이라이트</Text>
+              <View style={s.highlightRow}>
+                <Highlight icon="🏆" label="최다 버디" value={`${shortName(birdieTop?.name ?? '-')} ${birdieTop?.birdie ?? 0}개`} />
+                <Highlight icon="🎯" label="베스트 홀" value={bestHole ? `${bestHole.hole}번 홀 ${bestHole.score}타` : '-'} />
+                <Highlight icon="⛳" label="파 세이브" value={`${shortName(parTop?.name ?? '-')} ${parTop?.par ?? 0}개`} />
+              </View>
+            </View>
+            <Text style={s.flipHint}>카드를 탭하면 기존 라운드 상세 화면이 열립니다</Text>
+          </ImageBackground>
+        </TouchableOpacity>
+      </View>
+
+    </View>
+  )
+}
+
+function SummaryCell({ icon, label, value, accent = false }: { icon?: string; label: string; value: string; accent?: boolean }) {
+  return <View style={s.summaryCell}><Text style={s.summaryLabel}>{icon ? `${icon} ` : ''}{label}</Text><Text style={[s.summaryValue, accent && { color: '#52e39a' }]}>{value}</Text></View>
+}
+function Highlight({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return <View style={s.highlightCard}><Text style={s.highlightIcon}>{icon}</Text><Text style={s.highlightLabel}>{label}</Text><Text style={s.highlightValue}>{value}</Text></View>
+}
+function RankingPanel({ title, rows }: { title: string; rows: { name: string; main: string; sub: string }[] }) {
+  return <View style={s.detailPanel}><Text style={s.detailPanelTitle}>{title}</Text>{rows.map((row, i) => <View key={`${row.name}-${i}`} style={s.rankRow}><View style={[s.rankNo, i === 0 && s.rankNoFirst]}><Text style={[s.rankNoText, i === 0 && { color: '#fff' }]}>{i + 1}</Text></View><View style={{ flex: 1 }}><Text style={s.rankName}>{row.name}</Text><Text style={s.rankSub}>{row.sub}</Text></View><Text style={s.rankMain}>{row.main}</Text></View>)}</View>
+}
+function AwardRow({ icon, label, winner, detail }: { icon: string; label: string; winner: string; detail: string }) {
+  return <View style={s.awardRow}><Text style={s.awardIcon}>{icon}</Text><View style={{ flex: 1 }}><Text style={s.awardLabel}>{label}</Text><Text style={s.awardWinner}>{winner}</Text></View><Text style={s.awardDetail}>{detail}</Text></View>
 }
 
 // ─── 개인별 ──────────────────────────────────────────────────────────────────
@@ -1714,6 +1662,102 @@ const s = StyleSheet.create({
     color: C.green,
   },
   aiCaddieRecommendText: { flex: 1, fontSize: 12, lineHeight: 18, fontWeight: '800', color: C.text },
+  roundCarouselWrap: { marginHorizontal: -16 },
+  roundCarouselContent: { paddingHorizontal: 16, gap: 12 },
+  roundSwipeHint: { textAlign: 'center', marginTop: 10, fontSize: 11, fontWeight: '700', color: C.muted },
+  flipCardScene: { height: 720, position: 'relative' },
+  flipFace: { position: 'absolute', width: '100%', height: '100%', backfaceVisibility: 'hidden' },
+  flipBackFace: { backfaceVisibility: 'hidden' },
+  flipTouch: { flex: 1 },
+  roundHero: { flex: 1, borderRadius: 28, overflow: 'hidden', padding: 18, justifyContent: 'space-between' },
+  roundHeroImage: { borderRadius: 28 },
+  roundHeroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(3,30,18,0.34)' },
+  roundHeroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  roundCounter: { backgroundColor: 'rgba(7,22,18,0.58)', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 6 },
+  roundCounterText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  heroCompleteBadge: { backgroundColor: 'rgba(237,248,242,0.9)', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 6 },
+  heroProgressBadge: { backgroundColor: 'rgba(27,158,94,0.92)', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 6 },
+  heroStatusText: { color: '#173c2b', fontSize: 12, fontWeight: '800' },
+  heroDate: { color: '#fff', fontSize: 12, fontWeight: '700', textShadowColor: 'rgba(0,0,0,0.35)', textShadowRadius: 4 },
+  heroCourseBlock: { alignItems: 'center', marginTop: 8 },
+  heroCourseName: { color: '#fff', fontSize: 34, lineHeight: 40, fontWeight: '900', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.35)', textShadowRadius: 8 },
+  heroCourseSub: { color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: '800', letterSpacing: 1.5, marginTop: 4 },
+  heroSummaryPanel: { flexDirection: 'row', backgroundColor: 'rgba(8,42,23,0.48)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.38)', borderRadius: 19, paddingVertical: 13 },
+  summaryCell: { flex: 1, alignItems: 'center', borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.18)' },
+  summaryLabel: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  summaryValue: { color: '#fff', fontSize: 25, lineHeight: 30, fontWeight: '900', marginTop: 5 },
+  heroInfoPanel: { backgroundColor: 'rgba(255,255,255,0.70)', borderRadius: 20, padding: 12 },
+  heroSectionTitle: { color: C.text, fontSize: 14, fontWeight: '900' },
+  recordGrid: { flexDirection: 'row', gap: 6, marginTop: 8 },
+  recordMiniCard: { flex: 1, minHeight: 78, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.58)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.42)', padding: 7, alignItems: 'center', justifyContent: 'center' },
+  recordMiniIcon: { fontSize: 16 },
+  recordMiniLabel: { fontSize: 9, color: C.muted, fontWeight: '800', textAlign: 'center', marginTop: 3 },
+  recordMiniValue: { fontSize: 10, color: C.text, fontWeight: '900', textAlign: 'center', marginTop: 3 },
+  highlightRow: { flexDirection: 'row', gap: 7, marginTop: 8 },
+  highlightCard: { flex: 1, minHeight: 72, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.52)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.38)', alignItems: 'center', justifyContent: 'center', padding: 7 },
+  highlightIcon: { fontSize: 18 },
+  highlightLabel: { color: C.muted, fontSize: 9, fontWeight: '800', marginTop: 3 },
+  highlightValue: { color: C.text, fontSize: 11, fontWeight: '900', textAlign: 'center', marginTop: 3 },
+  flipHint: { color: '#fff', textAlign: 'center', fontSize: 11, fontWeight: '800' },
+  backCard: { flex: 1, backgroundColor: '#fff', borderRadius: 28, padding: 16, shadowColor: '#163d2b', shadowOpacity: 0.14, shadowRadius: 16, shadowOffset: { width: 0, height: 7 }, elevation: 7 },
+  backHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  backIconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
+  backIconText: { fontSize: 23, color: C.text, fontWeight: '600' },
+  backCourseName: { fontSize: 20, fontWeight: '900', color: C.text },
+  backDate: { fontSize: 11, color: C.muted, fontWeight: '700', marginTop: 2 },
+  detailOpenBtn: { borderRadius: 14, backgroundColor: C.greenLight, paddingHorizontal: 10, paddingVertical: 7 },
+  detailOpenText: { fontSize: 11, fontWeight: '900', color: C.green },
+  backTabs: { flexDirection: 'row', backgroundColor: '#f3f5f4', borderRadius: 16, padding: 4, marginBottom: 12 },
+  backTab: { flex: 1, minHeight: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  backTabActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 5, elevation: 2 },
+  backTabText: { color: C.muted, fontSize: 12, fontWeight: '800' },
+  backTabTextActive: { color: C.green, fontWeight: '900' },
+  backBody: { flex: 1 },
+  detailPanel: { backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, borderRadius: 18, padding: 14 },
+  detailPanelTitle: { fontSize: 15, fontWeight: '900', color: C.text, marginBottom: 10 },
+  rankRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 58, borderTopWidth: 1, borderTopColor: '#eef1ef' },
+  rankNo: { width: 29, height: 29, borderRadius: 15, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
+  rankNoFirst: { backgroundColor: C.green },
+  rankNoText: { fontSize: 12, fontWeight: '900', color: C.green },
+  rankName: { fontSize: 13, fontWeight: '900', color: C.text },
+  rankSub: { fontSize: 10, color: C.muted, marginTop: 2 },
+  rankMain: { fontSize: 16, fontWeight: '900', color: C.green },
+  scorePlayerRow: { flexDirection: 'row', alignItems: 'center', minHeight: 45, borderTopWidth: 1, borderTopColor: '#eef1ef' },
+  scorePlayerName: { flex: 1, fontSize: 13, fontWeight: '900', color: C.text },
+  scorePlayerTotal: { fontSize: 15, fontWeight: '900', color: C.text },
+  scorePlayerDiff: { width: 48, textAlign: 'right', fontSize: 12, fontWeight: '900', color: C.green },
+  scoreMiniGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 12 },
+  scoreHoleCell: { width: '10.3%', minHeight: 38, borderRadius: 8, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
+  scoreHoleNo: { fontSize: 9, fontWeight: '900', color: C.text },
+  scoreHolePar: { fontSize: 8, color: C.muted, marginTop: 2 },
+  awardRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 64, borderTopWidth: 1, borderTopColor: '#eef1ef' },
+  awardIcon: { fontSize: 24 },
+  awardLabel: { fontSize: 10, color: C.muted, fontWeight: '800' },
+  awardWinner: { fontSize: 14, color: C.text, fontWeight: '900', marginTop: 2 },
+  awardDetail: { fontSize: 12, color: C.green, fontWeight: '900' },
+  flipBackHint: { minHeight: 38, alignItems: 'center', justifyContent: 'center', marginTop: 10 },
+  flipBackHintText: { fontSize: 11, fontWeight: '800', color: C.muted },
+  roundDetailPreview: { flex: 1, gap: 10 },
+  previewSection: { backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, borderRadius: 18, padding: 12 },
+  previewSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  previewSectionTitle: { fontSize: 14, fontWeight: '900', color: C.text, marginBottom: 8 },
+  previewSectionMeta: { fontSize: 11, fontWeight: '800', color: C.green },
+  previewMetricRow: { flexDirection: 'row', gap: 8 },
+  previewMetricCard: { flex: 1, minHeight: 74, borderRadius: 13, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center', padding: 8 },
+  previewMetricLabel: { fontSize: 9, color: C.muted, fontWeight: '800' },
+  previewMetricValue: { fontSize: 14, color: C.text, fontWeight: '900', marginTop: 4 },
+  previewMetricSub: { fontSize: 10, color: C.green, fontWeight: '900', marginTop: 2 },
+  previewPlayerRow: { minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: 1, borderTopColor: '#edf1ee' },
+  previewRankBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
+  previewRankBadgeFirst: { backgroundColor: C.green },
+  previewRankText: { fontSize: 11, color: C.green, fontWeight: '900' },
+  previewPlayerName: { fontSize: 13, color: C.text, fontWeight: '900' },
+  previewPlayerSub: { fontSize: 9, color: C.muted, marginTop: 2 },
+  previewPlayerTotal: { fontSize: 14, color: C.text, fontWeight: '900' },
+  previewPlayerDiff: { fontSize: 10, color: C.green, fontWeight: '900', marginTop: 2 },
+  previewScoreRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#edf1ee' },
+  previewScoreLabel: { minHeight: 28, paddingHorizontal: 4, textAlignVertical: 'center', fontSize: 9, color: C.muted, fontWeight: '900' },
+  previewScoreCell: { width: 28, minHeight: 28, textAlign: 'center', textAlignVertical: 'center', fontSize: 9, color: C.text },
   cardBold: { fontSize: 15, fontWeight: '700', color: C.text },
   bold: { fontWeight: '700', color: C.text },
   muted: { fontSize: 13, color: C.muted },
