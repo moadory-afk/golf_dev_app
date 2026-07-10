@@ -128,12 +128,8 @@ type KakaoAddressResult = {
   longitude: number;
 };
 
-function envValue(key: string): string {
-  return String(process.env[key] || "").trim();
-}
-
 function kakaoRestApiKey(): string {
-  return envValue("EXPO_PUBLIC_KAKAO_REST_API_KEY");
+  return String(process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY || "").trim();
 }
 
 function isValidPoint(

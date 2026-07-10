@@ -1,9 +1,9 @@
 import {
-  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Dimensions, TextInput, ImageBackground,
+  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Dimensions, TextInput, ImageBackground, Animated,
 } from 'react-native'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Polyline, Circle, Line, Text as SvgText, G, Polygon } from 'react-native-svg'
 import { getRounds, getRound, getPersonalRoundStat, playerTotal, totalPar, getHandicapsForRound, computeHandicaps, shortName, type PersonalRoundFir, type PersonalRoundHoleStat, type SavedRound } from '../lib/store'
@@ -22,6 +22,7 @@ import type { RootStackParamList } from '../navigation/types'
 type Nav = NativeStackNavigationProp<RootStackParamList>
 type Tab = 'byRound' | 'byPlayer' | 'club' | 'hall'
 type RankingType = 'wins' | 'streak' | 'lowestHandicap' | 'birdie' | 'singleBirdie' | 'frontBack' | 'avgImprove' | 'handicapImprove' | 'singlePar' | 'roundsPlayed' | 'lowestScore' | 'highestScore'
+type RoundDetailTab = 'regular' | 'peoria' | 'score' | 'award'
 
 function diffText(d: number) { return d > 0 ? `+${d}` : `${d}` }
 
@@ -261,6 +262,7 @@ function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicap
     return b.date.localeCompare(a.date)
   })
   const cardWidth = Math.min(Dimensions.get('window').width - 32, 430)
+  const cardHeight = Math.max(500, Math.min(590, Dimensions.get('window').height - 220))
 
   return (
     <View style={s.roundCarouselWrap}>
@@ -281,6 +283,7 @@ function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicap
             index={index}
             totalCount={filtered.length}
             width={cardWidth}
+            height={cardHeight}
           />
         ))}
       </ScrollView>
@@ -290,7 +293,7 @@ function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicap
 }
 
 function RoundFlipCard({
-  round, rounds, handicapBasis, index, totalCount, width,
+  round, rounds, handicapBasis, index, totalCount, width, height,
 }: {
   round: SavedRound
   rounds: SavedRound[]
@@ -298,8 +301,14 @@ function RoundFlipCard({
   index: number
   totalCount: number
   width: number
+  height: number
 }) {
   const nav = useNavigation<Nav>()
+  const [flipped, setFlipped] = useState(false)
+  const [detailTab, setDetailTab] = useState<RoundDetailTab>('regular')
+  const [detailRound, setDetailRound] = useState<SavedRound | null>(null)
+  const flip = useRef(new Animated.Value(0)).current
+  const effectiveRound = detailRound ?? round
   const par = totalPar(round.pars)
   const totals = round.players.map((p) => playerTotal(p.strokes))
   const best = Math.min(...totals)
@@ -338,6 +347,21 @@ function RoundFlipCard({
   if (records.length === 0) records.push({ icon: '✨', label: '라운드 기록', value: '새 기록 도전 완료' })
 
 
+  const toggleFlip = async () => {
+    const next = !flipped
+    if (next && !detailRound) {
+      const full = await getRound(round.id)
+      if (full) setDetailRound(full)
+    }
+    Animated.spring(flip, { toValue: next ? 1 : 0, friction: 8, tension: 72, useNativeDriver: true }).start()
+    setFlipped(next)
+  }
+  const frontRotate = flip.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] })
+  const backRotate = flip.interpolate({ inputRange: [0, 1], outputRange: ['180deg', '360deg'] })
+  const frontOpacity = flip.interpolate({ inputRange: [0, 0.49, 0.5, 1], outputRange: [1, 1, 0, 0] })
+  const backOpacity = flip.interpolate({ inputRange: [0, 0.49, 0.5, 1], outputRange: [0, 0, 1, 1] })
+
+
   const openRound = async () => {
     if (!round.isComplete) {
       const full = await getRound(round.id)
@@ -347,48 +371,134 @@ function RoundFlipCard({
     nav.navigate('RoundDetail', { id: round.id })
   }
 
+  const detailPar = totalPar(effectiveRound.pars)
+  const actualRegularRank = effectiveRound.players
+    .map((p) => {
+      const total = playerTotal(p.strokes)
+      return { name: p.name, total, diff: total - detailPar }
+    })
+    .sort((a, b) => a.total - b.total)
+
+  const hiddenHoles = effectiveRound.shinperioHoles.length
+    ? effectiveRound.shinperioHoles
+    : effectiveRound.pars.map((_, i) => i + 1)
+
+  const shinRank = effectiveRound.players
+    .map((p) => {
+      const hiddenScore = hiddenHoles.reduce(
+        (sum, hole) => sum + (p.strokes[hole - 1] ?? effectiveRound.pars[hole - 1] ?? 0),
+        0,
+      )
+      const hiddenPar = hiddenHoles.reduce(
+        (sum, hole) => sum + (effectiveRound.pars[hole - 1] ?? 0),
+        0,
+      )
+      const scaledScore = hiddenHoles.length > 0
+        ? hiddenScore * (effectiveRound.pars.length / hiddenHoles.length)
+        : hiddenScore
+      const scaledPar = hiddenHoles.length > 0
+        ? hiddenPar * (effectiveRound.pars.length / hiddenHoles.length)
+        : hiddenPar
+      const handicap = Math.max(0, Math.round((scaledScore - scaledPar) * 0.8 * 10) / 10)
+      const total = playerTotal(p.strokes)
+      const net = Math.round((total - handicap) * 10) / 10
+      return { name: p.name, total, handicap, net }
+    })
+    .sort((a, b) => a.net - b.net || a.total - b.total)
+
+  const scoreRows = effectiveRound.players
+    .map((p) => {
+      const total = playerTotal(p.strokes)
+      const stats = holeStats(p.strokes, effectiveRound.pars)
+      return { name: p.name, total, diff: total - detailPar, stats }
+    })
+    .sort((a, b) => a.total - b.total)
+
+  const actualBest = actualRegularRank[0]
+  const actualRegularWinner = actualRegularRank[0]
+  const actualRegularRunnerUp = actualRegularRank[1]
+  const actualShinWinner = shinRank[0]
+  const actualBirdieTop = [...scoreRows].sort((a, b) => b.stats.birdie - a.stats.birdie || a.total - b.total)[0]
+  const actualParTop = [...scoreRows].sort((a, b) => b.stats.par - a.stats.par || a.total - b.total)[0]
+
+  const detailTabs: { key: RoundDetailTab; label: string }[] = [
+    { key: 'regular', label: '정규' },
+    { key: 'peoria', label: '신페리오' },
+    { key: 'score', label: '스코어' },
+    { key: 'award', label: '시상' },
+  ]
+
   return (
-    <View style={[s.flipCardScene, { width }]}> 
-      <View style={s.flipFace}>
-        <TouchableOpacity activeOpacity={0.96} style={s.flipTouch} onPress={openRound}>
+    <View style={[s.flipCardScene, { width, height }]}>
+      <Animated.View pointerEvents={flipped ? 'none' : 'auto'} style={[s.flipFace, { opacity: frontOpacity, transform: [{ perspective: 1200 }, { rotateY: frontRotate }] }]}>
+        <TouchableOpacity activeOpacity={0.96} style={s.flipTouch} onPress={toggleFlip}>
           <ImageBackground source={getCourseHeroImageSource(round.courseName)} style={s.roundHero} imageStyle={s.roundHeroImage}>
             <View style={s.roundHeroShade} />
             <View style={s.roundHeroTopRow}>
               <View style={s.roundCounter}><Text style={s.roundCounterText}>{index + 1} / {totalCount}</Text></View>
-              <View style={{ alignItems: 'flex-end', gap: 5 }}>
+              <View style={{ alignItems: 'flex-end', gap: 3 }}>
                 <View style={round.isComplete ? s.heroCompleteBadge : s.heroProgressBadge}><Text style={s.heroStatusText}>{round.isComplete ? '라운드 완료' : '라운드 중'}</Text></View>
                 <Text style={s.heroDate}>{round.date.replace(/-/g, '.')}</Text>
               </View>
             </View>
             <View style={s.heroCourseBlock}>
-              <Text style={s.heroCourseName}>{round.courseName}</Text>
+              <Text style={s.heroCourseName} numberOfLines={2}>{round.courseName}</Text>
               <Text style={s.heroCourseSub}>ROUND SUMMARY</Text>
             </View>
             <View style={s.heroSummaryPanel}>
               <SummaryCell icon="🏆" label={shortName(bestPlayer?.name ?? '메달')} value={String(best)} />
               <SummaryCell icon="🥇" label={shortName(winner?.name ?? '우승')} value={winner ? diffText(winner.net - par) : '-'} accent />
               <SummaryCell icon="🥈" label={shortName(runnerUp?.name ?? '준우승')} value={runnerUp ? diffText(runnerUp.net - par) : '-'} />
-              <SummaryCell label="평균 스코어" value={String(avg)} />
+              <SummaryCell label="평균" value={String(avg)} />
             </View>
             <View style={s.heroInfoPanel}>
               <Text style={s.heroSectionTitle}>👑 기네스 북 갱신 현황</Text>
               <View style={s.recordGrid}>
-                {records.slice(0, 4).map((r, i) => <View key={`${r.label}-${i}`} style={s.recordMiniCard}><Text style={s.recordMiniIcon}>{r.icon}</Text><Text style={s.recordMiniLabel}>{r.label}</Text><Text style={s.recordMiniValue}>{r.value}</Text></View>)}
+                {records.slice(0, 3).map((r, i) => <View key={`${r.label}-${i}`} style={s.recordMiniCard}><Text style={s.recordMiniIcon}>{r.icon}</Text><Text style={s.recordMiniLabel}>{r.label}</Text><Text style={s.recordMiniValue} numberOfLines={1}>{r.value}</Text></View>)}
               </View>
-              <Text style={[s.heroSectionTitle, { marginTop: 10 }]}>⭐ 주요 하이라이트</Text>
+              <Text style={[s.heroSectionTitle, { marginTop: 7 }]}>⭐ 주요 하이라이트</Text>
               <View style={s.highlightRow}>
                 <Highlight icon="🏆" label="최다 버디" value={`${shortName(birdieTop?.name ?? '-')} ${birdieTop?.birdie ?? 0}개`} />
-                <Highlight icon="🎯" label="베스트 홀" value={bestHole ? `${bestHole.hole}번 홀 ${bestHole.score}타` : '-'} />
+                <Highlight icon="🎯" label="베스트 홀" value={bestHole ? `${bestHole.hole}번 ${bestHole.score}타` : '-'} />
                 <Highlight icon="⛳" label="파 세이브" value={`${shortName(parTop?.name ?? '-')} ${parTop?.par ?? 0}개`} />
               </View>
             </View>
-            <Text style={s.flipHint}>카드를 탭하면 기존 라운드 상세 화면이 열립니다</Text>
+            <Text style={s.flipHint}>탭하면 라운드 상세 보기 ↻</Text>
           </ImageBackground>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
+      <Animated.View pointerEvents={flipped ? 'auto' : 'none'} style={[s.flipFace, s.flipBackFace, { opacity: backOpacity, transform: [{ perspective: 1200 }, { rotateY: backRotate }] }]}>
+        <View style={s.backCard}>
+          <View style={s.backHeader}>
+            <TouchableOpacity onPress={toggleFlip} style={s.backIconBtn}><Text style={s.backIconText}>↻</Text></TouchableOpacity>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={s.backCourseName} numberOfLines={1}>{round.courseName}</Text>
+              <Text style={s.backDate}>{round.date.replace(/-/g, '.')} · PAR {par} · 참가 {round.players.length}명</Text>
+            </View>
+            <TouchableOpacity onPress={openRound} style={s.detailOpenBtn}><Text style={s.detailOpenText}>전체 상세</Text></TouchableOpacity>
+          </View>
+          <View style={s.backTabs}>
+            {detailTabs.map((item) => <TouchableOpacity key={item.key} style={[s.backTab, detailTab === item.key && s.backTabActive]} onPress={() => setDetailTab(item.key)}><Text style={[s.backTabText, detailTab === item.key && s.backTabTextActive]}>{item.label}</Text></TouchableOpacity>)}
+          </View>
+          <View style={s.backBody}>{!detailRound && <Text style={s.detailLoadingText}>라운드 상세 데이터를 불러오는 중입니다.</Text>}
+            {detailTab === 'regular' && <View style={s.detailPanel}>
+              <View style={s.detailTableHeader}><Text style={[s.detailTh,{width:34}]}>순위</Text><Text style={[s.detailTh,{flex:1}]}>이름</Text><Text style={[s.detailTh,{width:52,textAlign:'right'}]}>스코어</Text><Text style={[s.detailTh,{width:52,textAlign:'right'}]}>파대비</Text></View>
+              {actualRegularRank.slice(0,7).map((row,i)=><View key={row.name} style={[s.detailTableRow,i<3&&s.detailPodiumRow]}><Text style={[s.detailRank,{width:34}]}>{i+1}</Text><Text style={s.detailPlayerName} numberOfLines={1}>{shortName(row.name)}</Text><Text style={s.detailScoreText}>{row.total}</Text><Text style={s.detailNetText}>{diffText(row.diff)}</Text></View>)}
+            </View>}
+            {detailTab === 'peoria' && <View style={s.detailPanel}><Text style={s.shinperioHoleText}>숨김홀 {hiddenHoles.join(', ')}</Text>
+              <View style={s.detailTableHeader}><Text style={[s.detailTh,{width:34}]}>순위</Text><Text style={[s.detailTh,{flex:1}]}>이름</Text><Text style={[s.detailTh,{width:48,textAlign:'right'}]}>총타</Text><Text style={[s.detailTh,{width:48,textAlign:'right'}]}>핸디</Text><Text style={[s.detailTh,{width:48,textAlign:'right'}]}>NET</Text></View>
+              {shinRank.slice(0,7).map((row,i)=><View key={row.name} style={[s.detailTableRow,i<3&&s.detailPodiumRow]}><Text style={[s.detailRank,{width:34}]}>{i+1}</Text><Text style={s.detailPlayerName} numberOfLines={1}>{shortName(row.name)}</Text><Text style={s.detailSmallScore}>{row.total}</Text><Text style={s.detailSmallScore}>{row.handicap.toFixed(1)}</Text><Text style={s.detailNetText}>{row.net.toFixed(1)}</Text></View>)}
+            </View>}
+            {detailTab === 'score' && <View style={s.detailPanel}><View style={s.scoreSummaryGrid}>{scoreRows.slice(0,6).map((row)=><View key={row.name} style={s.scoreSummaryCard}><View style={{flex:1,minWidth:0}}><Text style={s.scoreSummaryName} numberOfLines={1}>{shortName(row.name)}</Text><Text style={s.scoreSummarySub}>버디 {row.stats.birdie} · 파 {row.stats.par} · 보기 {row.stats.bogey}</Text></View><View style={{alignItems:'flex-end'}}><Text style={s.scoreSummaryTotal}>{row.total}</Text><Text style={s.scoreSummaryDiff}>{diffText(row.diff)}</Text></View></View>)}</View></View>}
+            {detailTab === 'award' && <View style={s.detailPanel}><AwardRow icon="🏆" label="메달리스트" winner={shortName(actualBest?.name ?? '-')} detail={actualBest ? `${actualBest.total}타` : '-'} /><AwardRow icon="🥇" label="정규 우승" winner={shortName(actualRegularWinner?.name ?? '-')} detail={actualRegularWinner ? `${actualRegularWinner.total}타` : '-'} /><AwardRow icon="🎲" label="신페리오 우승" winner={shortName(actualShinWinner?.name ?? '-')} detail={actualShinWinner ? `NET ${actualShinWinner.net.toFixed(1)}` : '-'} /><AwardRow icon="🐦" label="최다 버디" winner={shortName(actualBirdieTop?.name ?? '-')} detail={`${actualBirdieTop?.stats.birdie ?? 0}개`} /><AwardRow icon="⛳" label="파 세이브" winner={shortName(actualParTop?.name ?? '-')} detail={`${actualParTop?.stats.par ?? 0}개`} /></View>}
+          </View>
+          <TouchableOpacity style={s.flipBackHint} onPress={toggleFlip}><Text style={s.flipBackHintText}>↻ 앞면 요약으로 돌아가기</Text></TouchableOpacity>
+        </View>
+      </Animated.View>
     </View>
   )
+
 }
 
 function SummaryCell({ icon, label, value, accent = false }: { icon?: string; label: string; value: string; accent?: boolean }) {
@@ -1665,11 +1775,11 @@ const s = StyleSheet.create({
   roundCarouselWrap: { marginHorizontal: -16 },
   roundCarouselContent: { paddingHorizontal: 16, gap: 12 },
   roundSwipeHint: { textAlign: 'center', marginTop: 10, fontSize: 11, fontWeight: '700', color: C.muted },
-  flipCardScene: { height: 720, position: 'relative' },
+  flipCardScene: { position: 'relative' },
   flipFace: { position: 'absolute', width: '100%', height: '100%', backfaceVisibility: 'hidden' },
   flipBackFace: { backfaceVisibility: 'hidden' },
   flipTouch: { flex: 1 },
-  roundHero: { flex: 1, borderRadius: 28, overflow: 'hidden', padding: 18, justifyContent: 'space-between' },
+  roundHero: { flex: 1, borderRadius: 26, overflow: 'hidden', padding: 14, justifyContent: 'space-between' },
   roundHeroImage: { borderRadius: 28 },
   roundHeroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(3,30,18,0.34)' },
   roundHeroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
@@ -1680,26 +1790,26 @@ const s = StyleSheet.create({
   heroStatusText: { color: '#173c2b', fontSize: 12, fontWeight: '800' },
   heroDate: { color: '#fff', fontSize: 12, fontWeight: '700', textShadowColor: 'rgba(0,0,0,0.35)', textShadowRadius: 4 },
   heroCourseBlock: { alignItems: 'center', marginTop: 8 },
-  heroCourseName: { color: '#fff', fontSize: 34, lineHeight: 40, fontWeight: '900', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.35)', textShadowRadius: 8 },
-  heroCourseSub: { color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: '800', letterSpacing: 1.5, marginTop: 4 },
-  heroSummaryPanel: { flexDirection: 'row', backgroundColor: 'rgba(8,42,23,0.48)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.38)', borderRadius: 19, paddingVertical: 13 },
+  heroCourseName: { color: '#fff', fontSize: 28, lineHeight: 33, fontWeight: '900', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.35)', textShadowRadius: 8 },
+  heroCourseSub: { color: 'rgba(255,255,255,0.9)', fontSize: 11, fontWeight: '800', letterSpacing: 1.5, marginTop: 4 },
+  heroSummaryPanel: { flexDirection: 'row', backgroundColor: 'rgba(8,42,23,0.48)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.38)', borderRadius: 17, paddingVertical: 9 },
   summaryCell: { flex: 1, alignItems: 'center', borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.18)' },
   summaryLabel: { color: '#fff', fontSize: 10, fontWeight: '800' },
-  summaryValue: { color: '#fff', fontSize: 25, lineHeight: 30, fontWeight: '900', marginTop: 5 },
-  heroInfoPanel: { backgroundColor: 'rgba(255,255,255,0.70)', borderRadius: 20, padding: 12 },
+  summaryValue: { color: '#fff', fontSize: 20, lineHeight: 24, fontWeight: '900', marginTop: 5 },
+  heroInfoPanel: { backgroundColor: 'rgba(255,255,255,0.70)', borderRadius: 17, padding: 9 },
   heroSectionTitle: { color: C.text, fontSize: 14, fontWeight: '900' },
   recordGrid: { flexDirection: 'row', gap: 6, marginTop: 8 },
-  recordMiniCard: { flex: 1, minHeight: 78, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.58)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.42)', padding: 7, alignItems: 'center', justifyContent: 'center' },
+  recordMiniCard: { flex: 1, minHeight: 58, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.58)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.42)', padding: 7, alignItems: 'center', justifyContent: 'center' },
   recordMiniIcon: { fontSize: 16 },
   recordMiniLabel: { fontSize: 9, color: C.muted, fontWeight: '800', textAlign: 'center', marginTop: 3 },
   recordMiniValue: { fontSize: 10, color: C.text, fontWeight: '900', textAlign: 'center', marginTop: 3 },
   highlightRow: { flexDirection: 'row', gap: 7, marginTop: 8 },
-  highlightCard: { flex: 1, minHeight: 72, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.52)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.38)', alignItems: 'center', justifyContent: 'center', padding: 7 },
-  highlightIcon: { fontSize: 18 },
+  highlightCard: { flex: 1, minHeight: 54, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.52)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.38)', alignItems: 'center', justifyContent: 'center', padding: 7 },
+  highlightIcon: { fontSize: 15 },
   highlightLabel: { color: C.muted, fontSize: 9, fontWeight: '800', marginTop: 3 },
   highlightValue: { color: C.text, fontSize: 11, fontWeight: '900', textAlign: 'center', marginTop: 3 },
-  flipHint: { color: '#fff', textAlign: 'center', fontSize: 11, fontWeight: '800' },
-  backCard: { flex: 1, backgroundColor: '#fff', borderRadius: 28, padding: 16, shadowColor: '#163d2b', shadowOpacity: 0.14, shadowRadius: 16, shadowOffset: { width: 0, height: 7 }, elevation: 7 },
+  flipHint: { color: '#fff', textAlign: 'center', fontSize: 10, fontWeight: '800' },
+  backCard: { flex: 1, backgroundColor: '#fff', borderRadius: 26, padding: 13, shadowColor: '#163d2b', shadowOpacity: 0.14, shadowRadius: 16, shadowOffset: { width: 0, height: 7 }, elevation: 7 },
   backHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
   backIconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
   backIconText: { fontSize: 23, color: C.text, fontWeight: '600' },
@@ -1713,7 +1823,7 @@ const s = StyleSheet.create({
   backTabText: { color: C.muted, fontSize: 12, fontWeight: '800' },
   backTabTextActive: { color: C.green, fontWeight: '900' },
   backBody: { flex: 1 },
-  detailPanel: { backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, borderRadius: 18, padding: 14 },
+  detailPanel: { backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 10 },
   detailPanelTitle: { fontSize: 15, fontWeight: '900', color: C.text, marginBottom: 10 },
   rankRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 58, borderTopWidth: 1, borderTopColor: '#eef1ef' },
   rankNo: { width: 29, height: 29, borderRadius: 15, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
@@ -1730,7 +1840,7 @@ const s = StyleSheet.create({
   scoreHoleCell: { width: '10.3%', minHeight: 38, borderRadius: 8, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
   scoreHoleNo: { fontSize: 9, fontWeight: '900', color: C.text },
   scoreHolePar: { fontSize: 8, color: C.muted, marginTop: 2 },
-  awardRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 64, borderTopWidth: 1, borderTopColor: '#eef1ef' },
+  awardRow: { flexDirection: 'row', alignItems: 'center', gap: 9, minHeight: 52, borderTopWidth: 1, borderTopColor: '#eef1ef' },
   awardIcon: { fontSize: 24 },
   awardLabel: { fontSize: 10, color: C.muted, fontWeight: '800' },
   awardWinner: { fontSize: 14, color: C.text, fontWeight: '900', marginTop: 2 },
@@ -1758,6 +1868,23 @@ const s = StyleSheet.create({
   previewScoreRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#edf1ee' },
   previewScoreLabel: { minHeight: 28, paddingHorizontal: 4, textAlignVertical: 'center', fontSize: 9, color: C.muted, fontWeight: '900' },
   previewScoreCell: { width: 28, minHeight: 28, textAlign: 'center', textAlignVertical: 'center', fontSize: 9, color: C.text },
+  detailLoadingText: { fontSize: 11, color: C.muted, textAlign: 'center', marginBottom: 6 },
+  shinperioHoleText: { fontSize: 10, color: C.muted, fontWeight: '700', marginBottom: 7 },
+  detailTableHeader: { flexDirection: 'row', alignItems: 'center', paddingBottom: 7, borderBottomWidth: 1, borderBottomColor: C.border },
+  detailTableRow: { minHeight: 46, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#edf1ee', paddingHorizontal: 4 },
+  detailPodiumRow: { backgroundColor: 'rgba(32,160,91,0.06)', borderRadius: 10 },
+  detailTh: { fontSize: 10, fontWeight: '800', color: C.muted },
+  detailRank: { fontSize: 12, fontWeight: '900', color: C.muted, textAlign: 'center' },
+  detailPlayerName: { flex: 1, fontSize: 13, fontWeight: '900', color: C.text },
+  detailScoreText: { width: 52, textAlign: 'right', fontSize: 14, fontWeight: '900', color: C.text },
+  detailSmallScore: { width: 48, textAlign: 'right', fontSize: 12, fontWeight: '800', color: C.text },
+  detailNetText: { width: 52, textAlign: 'right', fontSize: 14, fontWeight: '900', color: C.green },
+  scoreSummaryGrid: { gap: 6 },
+  scoreSummaryCard: { minHeight: 52, borderRadius: 12, backgroundColor: C.greenLight, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center' },
+  scoreSummaryName: { fontSize: 13, fontWeight: '900', color: C.text },
+  scoreSummarySub: { fontSize: 9, color: C.muted, marginTop: 2 },
+  scoreSummaryTotal: { fontSize: 17, fontWeight: '900', color: C.text },
+  scoreSummaryDiff: { fontSize: 10, fontWeight: '900', color: C.green, marginTop: 1 },
   cardBold: { fontSize: 15, fontWeight: '700', color: C.text },
   bold: { fontWeight: '700', color: C.text },
   muted: { fontSize: 13, color: C.muted },
