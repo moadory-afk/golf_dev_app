@@ -56,8 +56,9 @@ export function useHomeDashboard({ clubId, userName, userId, homeLatitude, homeL
   useEffect(() => {
     if (!clubId) return
 
+    const channelName = `home-dashboard:${clubId}:${Date.now()}:${Math.random().toString(36).slice(2)}`
     const channel = supabase
-      .channel(`home-dashboard:${clubId}`)
+      .channel(channelName)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
@@ -87,7 +88,8 @@ export function useHomeDashboard({ clubId, userName, userId, homeLatitude, homeL
       .subscribe()
 
     return () => {
-      supabase.removeChannel(channel)
+      void channel.unsubscribe()
+      void supabase.removeChannel(channel)
     }
   }, [clubId, refresh])
 
