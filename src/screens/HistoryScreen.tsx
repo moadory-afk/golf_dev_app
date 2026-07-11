@@ -2022,7 +2022,11 @@ const s = StyleSheet.create({
   },
   aiCaddieRecommendText: { flex: 1, fontSize: 12, lineHeight: 18, fontWeight: '800', color: C.text },
   roundCarouselWrap: { marginHorizontal: -16 },
-  roundCarouselContent: { paddingHorizontal: 16, gap: 12 },
+roundCarouselContent: {
+  paddingLeft: 24,
+  paddingRight: 16,
+  gap: 12,
+},
   roundSwipeHint: { textAlign: 'center', marginTop: 10, fontSize: 11, fontWeight: '700', color: C.muted },
   flipCardScene: { position: 'relative' },
   flipFace: { position: 'absolute', width: '100%', height: '100%', backfaceVisibility: 'hidden' },
