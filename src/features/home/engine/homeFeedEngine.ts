@@ -4,6 +4,7 @@ import type { PremiumRecentStatItem } from '../components'
 export type HomeFeedEventType =
   | 'round_preparation'
   | 'attendance'
+  | 'attendance_request'
   | 'lotto'
   | 'round_result'
   | 'memory'
@@ -64,21 +65,34 @@ export function buildHomeFeedEvents({ upcomingRound, recentRounds, stats }: Buil
       icon: isToday ? '🏌️' : '📍',
       label: isToday ? '오늘의 라운드' : '라운드 준비',
       title: isToday ? '오늘 라운드가 준비됐어요' : `${upcomingRound.dday} 라운드가 다가와요`,
-      message: `${upcomingRound.courseName} · ${upcomingRound.teeTime || 'Tee Off'} 캐디맵을 미리 확인해보세요.`,
+      message: `${upcomingRound.dday} 캐디북을 미리 확인해 보세요.`,
       ctaLabel: isToday ? '캐디맵 열기' : '사전 공략 보기',
       actionType: 'open_caddie_map',
       tone: 'green',
     })
 
+    events.push({
+      id: `attendance-request-${upcomingRound.id}`,
+      type: 'attendance_request',
+      priority: isToday ? 98 : 86,
+      icon: '📍',
+      label: '참석 확인',
+      title: '라운드 참석을 확인해 주세요',
+      message: '참석 여부를 알려주세요.',
+      ctaLabel: '참석 확인',
+      actionType: 'open_groups',
+      tone: 'green',
+    })
+
     if (upcomingRound.memberCount > 0) {
       events.push({
-        id: `attendance-${upcomingRound.id}`,
+        id: `groups-${upcomingRound.id}`,
         type: 'attendance',
         priority: isToday ? 95 : 82,
         icon: '👥',
-        label: '참석 현황',
+        label: '조편성',
         title: `${upcomingRound.memberCount}명이 함께해요`,
-        message: '동반자와 조편성을 확인하고 라운드를 준비하세요.',
+        message: '조편성이 완료되었어요.',
         ctaLabel: '조편성 보기',
         actionType: 'open_groups',
         tone: 'blue',

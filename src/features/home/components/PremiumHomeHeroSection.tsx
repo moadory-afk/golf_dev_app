@@ -931,7 +931,7 @@ const styles = StyleSheet.create({
     textAlign: "left",
   },
   departureTime: {
-    color: "#B6FF8F",
+    color: "#FFD166",
     fontSize: 21,
     lineHeight: 25,
     fontWeight: "900",

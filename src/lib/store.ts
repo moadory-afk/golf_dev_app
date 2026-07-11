@@ -185,7 +185,7 @@ async function getUser() {
 export async function getRounds(clubId: string): Promise<SavedRound[]> {
   const { data, error } = await supabase
     .from('rounds')
-    .select('id, date, course_name, pars, shinperio_holes, players, handicaps, settlement, golf_course_id, schedule_id, hole_labels, is_complete')
+    .select('id, date, course_name, pars, shinperio_holes, players, handicaps, photo_data, settlement, golf_course_id, schedule_id, hole_labels, is_complete')
     .eq('club_id', clubId)
     .order('date', { ascending: false })
   if (error) throw error
@@ -242,7 +242,7 @@ async function computeHandicapSnapshot(
 ): Promise<Record<string, number>> {
   const { data, error } = await supabase
     .from('rounds')
-    .select('id, date, course_name, pars, shinperio_holes, players, handicaps, schedule_id, hole_labels, is_complete')
+    .select('id, date, course_name, pars, shinperio_holes, players, handicaps, photo_data, schedule_id, hole_labels, is_complete')
     .eq('club_id', clubId)
     .lt('date', date)
     .order('date', { ascending: true })

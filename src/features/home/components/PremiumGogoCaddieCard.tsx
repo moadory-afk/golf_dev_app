@@ -122,7 +122,10 @@ export function PremiumGogoCaddieCard({
               <View key={item.id} style={[styles.slide, slideWidth > 0 ? { width: slideWidth } : null]}>
                 <TouchableOpacity activeOpacity={0.9} onPress={() => runFeedAction(item)} style={styles.content}>
                   <Text style={[styles.title, { color: palette.text }]} numberOfLines={2}>{item.title}</Text>
-                  <Text style={[styles.message, { color: palette.muted }]} numberOfLines={3}>{item.message}</Text>
+                  <View style={styles.messageRow}>
+                    <Text style={styles.messageIcon}>{item.icon}</Text>
+                    <Text style={[styles.message, { color: palette.muted }]} numberOfLines={3}>{item.message}</Text>
+                  </View>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -153,16 +156,6 @@ export function PremiumGogoCaddieCard({
             </View>
           )}
 
-          {actions.length > 0 && (
-            <View style={styles.actionRow}>
-              {actions.slice(0, 3).map((action) => (
-                <TouchableOpacity key={action.key} activeOpacity={0.86} onPress={action.onPress} style={styles.actionButton}>
-                  <Text style={styles.actionIcon}>{action.icon}</Text>
-                  <Text style={[styles.actionTitle, { color: palette.text }]} numberOfLines={1}>{action.title}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
         </View>
       </View>
     </View>
@@ -208,7 +201,9 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   title: { fontSize: 17, lineHeight: 21, fontWeight: '900', letterSpacing: -0.6 },
-  message: { marginTop: 4, fontSize: 12, lineHeight: 17, fontWeight: '800' },
+  messageRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginTop: 4 },
+  messageIcon: { fontSize: 13, lineHeight: 17 },
+  message: { flex: 1, minWidth: 0, fontSize: 12, lineHeight: 17, fontWeight: '800' },
   primaryAction: {
     minHeight: 38,
     borderRadius: radius.lg,
@@ -224,23 +219,4 @@ const styles = StyleSheet.create({
   paginationDot: { width: 5, height: 5, borderRadius: 3 },
   paginationDotActive: { width: 16 },
   pageText: { fontSize: 9, lineHeight: 12, fontWeight: '800', marginLeft: 3 },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginTop: spacing.sm,
-  },
-  actionButton: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 44,
-    borderRadius: radius.lg,
-    backgroundColor: 'rgba(0,0,0,0.045)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 4,
-    paddingHorizontal: 5,
-  },
-  actionIcon: { fontSize: 14, lineHeight: 17 },
-  actionTitle: { flexShrink: 1, fontSize: 10, lineHeight: 13, fontWeight: '900', letterSpacing: -0.4, textAlign: 'center' },
 })

@@ -840,29 +840,6 @@ export default function HomeExperienceScreen() {
                   feeds={dashboard.feedEvents}
                   onFeedAction={(feed) => handleCaddieFeedAction(feed.actionType)}
                   onPress={() => handleCaddieFeedAction(dashboard.feed.actionType)}
-                  actions={dashboard.upcomingRound ? [
-                    {
-                      key: "caddie-map",
-                      icon: "📍",
-                      title: "사전공략",
-                      subtitle: "캐디북",
-                      onPress: () => handleCaddieFeedAction("open_caddie_map"),
-                    },
-                    {
-                      key: "groups",
-                      icon: "👥",
-                      title: "조편성",
-                      subtitle: "동반자",
-                      onPress: () => handleCaddieFeedAction("open_groups"),
-                    },
-                    {
-                      key: "lotto",
-                      icon: "🎱",
-                      title: "로또구매",
-                      subtitle: "Lotto",
-                      onPress: () => handleCaddieFeedAction("open_lotto"),
-                    },
-                  ] : undefined}
                 />
               </PremiumHomeMotion>
             ),
