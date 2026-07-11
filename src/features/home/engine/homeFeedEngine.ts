@@ -93,7 +93,7 @@ export function buildHomeFeedEvents({ upcomingRound, recentRounds, stats }: Buil
       label: 'Lotto 6/18',
       title: '오늘의 행운을 준비해볼까요?',
       message: 'Lotto 6/18 구매와 결과를 홈에서 빠르게 확인할 수 있어요.',
-      ctaLabel: 'Lotto 확인',
+      ctaLabel: '로또 구매',
       actionType: 'open_lotto',
       tone: 'gold',
     })

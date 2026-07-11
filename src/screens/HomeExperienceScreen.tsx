@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -49,6 +49,7 @@ import {
   DEFAULT_LOTTO_AWARD_CONFIG,
   computeHandicaps,
   getClubAwardConfig,
+  getClubAwardSnapshots,
   getClubLottoAwardConfig,
   getClubMembers,
   getCourseLayouts,
@@ -61,6 +62,7 @@ import {
   playerTotal,
   totalPar,
   type ClubAwardConfig,
+  type ClubAwardSnapshot,
   type CourseLayout,
   type LottoAwardConfig,
   type RoundLottoDraw,
@@ -73,6 +75,7 @@ import { AWARD_CATEGORIES, fillToCount } from "../lib/awardConfig";
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type LottoSelection = { par3: number[]; par4: number[]; par5: number[] };
 type PersonalCourseSegment = { label: string; layoutId?: string; start: number; end: number };
+type AwardDetailRow = ClubAwardSnapshot & { roundDate: string; courseName: string };
 
 function caddieBookParams(round: HomeUpcomingRound | null) {
   if (!round) return undefined;
@@ -199,7 +202,7 @@ function resolveFeedNavigation(
   return nav.navigate("RoundSchedulePrototype", { openCreate: true });
 }
 
-type HomeRecordDetailMode = "handicap" | "average" | "recent" | "best" | "matchup" | "records";
+type HomeRecordDetailMode = "handicap" | "average" | "recent" | "best" | "matchup" | "records" | "awards";
 
 function applyStatNavigation(
   stats: PremiumRecentStatItem[],
@@ -221,6 +224,10 @@ function applyStatNavigation(
 function diffText(value: number) {
   if (!Number.isFinite(value)) return "-";
   return value > 0 ? `+${value}` : `${value}`;
+}
+
+function normalizePersonName(value?: string | null) {
+  return (value ?? "").trim().replace(/\s+/g, "");
 }
 
 function formatWon(value: number) {
@@ -312,6 +319,65 @@ function getPersonalRoundRows(rounds: SavedRound[], userName?: string | null) {
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 
+function handicapDiffSumByOpponent(rounds: SavedRound[], userName?: string | null) {
+  const name = userName ?? "";
+  if (!name) return null;
+  const handicaps = computeHandicaps(rounds, 5);
+  const myHandicap = handicaps.get(name) ?? 0;
+  const opponents = new Set<string>();
+
+  rounds.forEach((round) => {
+    const me = findPlayer(round, name);
+    if (!me) return;
+    round.players.forEach((player) => {
+      if (player.name !== me.name) opponents.add(player.name);
+    });
+  });
+
+  if (opponents.size === 0) return null;
+  return [...opponents].reduce((sum, opponent) => sum + (myHandicap - (handicaps.get(opponent) ?? 0)), 0);
+}
+
+function guinnessRecordsForUser(rounds: SavedRound[], userName?: string | null) {
+  const target = normalizePersonName(userName);
+  if (!target) return [];
+  const entries = rounds.flatMap((round) => round.players.map((player) => {
+    const total = playerTotal(player.strokes);
+    const front = playerTotal(player.strokes.slice(0, 9));
+    const back = playerTotal(player.strokes.slice(9, 18));
+    const birdies = player.strokes.reduce((count, score, index) => count + (score - (round.pars[index] ?? 0) <= -1 ? 1 : 0), 0);
+    const pars = player.strokes.reduce((count, score, index) => count + (score - (round.pars[index] ?? 0) === 0 ? 1 : 0), 0);
+    return { round, player, total, front, back, birdies, pars };
+  }));
+
+  const pickMin = (label: string, value: (entry: typeof entries[number]) => number, unit = "타") => {
+    const best = entries.reduce<typeof entries[number] | null>((current, entry) => !current || value(entry) < value(current) ? entry : current, null);
+    return best && normalizePersonName(best.player.name) === target
+      ? { label, value: `${value(best)}${unit}`, courseName: best.round.courseName, date: best.round.date }
+      : null;
+  };
+  const pickMax = (label: string, value: (entry: typeof entries[number]) => number, unit = "개") => {
+    const best = entries.reduce<typeof entries[number] | null>((current, entry) => !current || value(entry) > value(current) ? entry : current, null);
+    return best && normalizePersonName(best.player.name) === target
+      ? { label, value: `${value(best)}${unit}`, courseName: best.round.courseName, date: best.round.date }
+      : null;
+  };
+
+  return [
+    pickMin("최저타", (entry) => entry.total),
+    pickMin("전반 베스트", (entry) => entry.front),
+    pickMin("후반 베스트", (entry) => entry.back),
+    pickMax("최다 버디", (entry) => entry.birdies),
+    pickMax("최다 파", (entry) => entry.pars),
+  ].filter((item): item is NonNullable<typeof item> => !!item);
+}
+
+function awardRowsForUser(awards: AwardDetailRow[], userName?: string | null) {
+  const target = normalizePersonName(userName);
+  if (!target) return [];
+  return awards.filter((award) => normalizePersonName(award.winner) === target);
+}
+
 function handicapBeforeHome(name: string, rounds: SavedRound[], beforeDate: string, basis = 5): number {
   const prior = rounds
     .filter((round) => round.date < beforeDate && !!findPlayer(round, name))
@@ -390,6 +456,7 @@ export default function HomeExperienceScreen() {
   const [popupAwardConfig, setPopupAwardConfig] = useState<ClubAwardConfig | null>(null);
   const [recordDetailMode, setRecordDetailMode] = useState<HomeRecordDetailMode | null>(null);
   const [recordDetailRounds, setRecordDetailRounds] = useState<SavedRound[]>([]);
+  const [recordAwardRows, setRecordAwardRows] = useState<AwardDetailRow[]>([]);
   const [recordDetailLoading, setRecordDetailLoading] = useState(false);
 
   useFocusEffect(
@@ -415,7 +482,7 @@ export default function HomeExperienceScreen() {
       );
 
   const openRoundPopup = useCallback(
-    async (round: HomeHeroRound, mode: "groups" | "lotto" | "award") => {
+    async (round: HomeUpcomingRound, mode: "groups" | "lotto" | "award") => {
       setRoundPopupMode(mode);
       setPopupRound(null);
       setPopupMembers([]);
@@ -476,6 +543,22 @@ export default function HomeExperienceScreen() {
       }
     },
     [club?.id, myName, userId],
+  );
+
+  const handleCaddieFeedAction = useCallback(
+    (actionType: string) => {
+      const round = dashboard.upcomingRound;
+      if (actionType === "open_groups" && round) {
+        openRoundPopup(round, "groups");
+        return;
+      }
+      if (actionType === "open_lotto" && round) {
+        openRoundPopup(round, "lotto");
+        return;
+      }
+      resolveFeedNavigation(nav, actionType, round);
+    },
+    [dashboard.upcomingRound, nav, openRoundPopup],
   );
 
   const togglePopupLottoHole = useCallback((parKey: keyof LottoSelection, hole: number) => {
@@ -557,8 +640,22 @@ export default function HomeExperienceScreen() {
       try {
         const rounds = await getRounds(club.id);
         setRecordDetailRounds(rounds);
+        if (mode === "awards") {
+          const awardRows = await Promise.all(
+            rounds.map(async (round) => {
+              const awards = await getClubAwardSnapshots(round.id).catch(() => []);
+              return awards.map((award) => ({
+                ...award,
+                roundDate: round.date,
+                courseName: round.courseName,
+              }));
+            }),
+          );
+          setRecordAwardRows(awardRows.flat());
+        }
       } catch {
         setRecordDetailRounds([]);
+        if (mode === "awards") setRecordAwardRows([]);
       } finally {
         setRecordDetailLoading(false);
       }
@@ -566,51 +663,81 @@ export default function HomeExperienceScreen() {
     [club?.id],
   );
 
+  useEffect(() => {
+    let mounted = true;
+    if (!club?.id) {
+      setRecordDetailRounds([]);
+      setRecordAwardRows([]);
+      return;
+    }
+
+    getRounds(club.id)
+      .then(async (rounds) => {
+        if (!mounted) return;
+        setRecordDetailRounds(rounds);
+        const awardRows = await Promise.all(
+          rounds.map(async (round) => {
+            const awards = await getClubAwardSnapshots(round.id).catch(() => []);
+            return awards.map((award) => ({
+              ...award,
+              roundDate: round.date,
+              courseName: round.courseName,
+            }));
+          }),
+        );
+        if (mounted) setRecordAwardRows(awardRows.flat());
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setRecordDetailRounds([]);
+        setRecordAwardRows([]);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [club?.id]);
+
   const recentStats = useMemo(
     () => applyStatNavigation(dashboard.stats.items, openRecordDetail),
     [dashboard.stats.items, openRecordDetail],
   );
 
   const recordExtraCards = useMemo(() => {
-    const statValue = (key: string) =>
-      dashboard.stats.items.find((item) => item.key === key)?.value || "-";
-
-    const best = statValue("best");
-    const average = statValue("average");
-    const recent = statValue("recent");
-    const roundCount = dashboard.stats.recentRounds.length;
+    const matchupDiffSum = handicapDiffSumByOpponent(recordDetailRounds, myName);
+    const guinnessRecords = guinnessRecordsForUser(recordDetailRounds, myName);
+    const awardCount = awardRowsForUser(recordAwardRows, myName).length;
 
     return [
       {
         key: "matchup",
         title: "상대 전적",
-        subtitle: `${roundCount}경기 기준`,
+        subtitle: matchupDiffSum === null ? "기록 없음" : `핸디차 합 ${diffText(matchupDiffSum)}`,
         icon: "⚔️",
         onPress: () => openRecordDetail("matchup"),
       },
       {
         key: "records",
         title: "보유 기록",
-        subtitle: best === "-" ? "기록 없음" : `베스트 ${best}`,
+        subtitle: `${guinnessRecords.length}개`,
         icon: "🏆",
         onPress: () => openRecordDetail("records"),
       },
       {
-        key: "average",
-        title: "평균 기록",
-        subtitle: average === "-" ? "기록 없음" : `${average}`,
+        key: "awards",
+        title: "수상현황",
+        subtitle: `${awardCount}회`,
         icon: "📊",
-        onPress: () => openRecordDetail("average"),
+        onPress: () => openRecordDetail("awards"),
       },
       {
-        key: "recent",
-        title: "최근 기록",
-        subtitle: recent === "-" ? "기록 없음" : `${recent}`,
-        icon: "📝",
-        onPress: () => openRecordDetail("recent"),
+        key: "empty",
+        title: "",
+        subtitle: "",
+        icon: "",
       },
     ];
-  }, [dashboard.stats.items, dashboard.stats.recentRounds.length, nav, openRecordDetail]);
+  }, [myName, openRecordDetail, recordAwardRows, recordDetailRounds]);
 
 
   if (clubsLoaded && !club) {
@@ -711,20 +838,31 @@ export default function HomeExperienceScreen() {
                   hasUpcomingRound={dashboard.aiCaddie.hasUpcomingRound}
                   feed={dashboard.feed}
                   feeds={dashboard.feedEvents}
-                  onFeedAction={(feed) =>
-                    resolveFeedNavigation(
-                      nav,
-                      feed.actionType,
-                      dashboard.upcomingRound,
-                    )
-                  }
-                  onPress={() =>
-                    resolveFeedNavigation(
-                      nav,
-                      dashboard.feed.actionType,
-                      dashboard.upcomingRound,
-                    )
-                  }
+                  onFeedAction={(feed) => handleCaddieFeedAction(feed.actionType)}
+                  onPress={() => handleCaddieFeedAction(dashboard.feed.actionType)}
+                  actions={dashboard.upcomingRound ? [
+                    {
+                      key: "caddie-map",
+                      icon: "📍",
+                      title: "사전공략",
+                      subtitle: "캐디북",
+                      onPress: () => handleCaddieFeedAction("open_caddie_map"),
+                    },
+                    {
+                      key: "groups",
+                      icon: "👥",
+                      title: "조편성",
+                      subtitle: "동반자",
+                      onPress: () => handleCaddieFeedAction("open_groups"),
+                    },
+                    {
+                      key: "lotto",
+                      icon: "🎱",
+                      title: "로또구매",
+                      subtitle: "Lotto",
+                      onPress: () => handleCaddieFeedAction("open_lotto"),
+                    },
+                  ] : undefined}
                 />
               </PremiumHomeMotion>
             ),
@@ -779,6 +917,7 @@ export default function HomeExperienceScreen() {
         visible={recordDetailMode !== null}
         mode={recordDetailMode}
         rounds={recordDetailRounds}
+        awards={recordAwardRows}
         userName={myName}
         loading={recordDetailLoading}
         onClose={() => setRecordDetailMode(null)}
@@ -791,6 +930,7 @@ function HomeRecordDetailModal({
   visible,
   mode,
   rounds,
+  awards,
   userName,
   loading,
   onClose,
@@ -798,6 +938,7 @@ function HomeRecordDetailModal({
   visible: boolean;
   mode: HomeRecordDetailMode | null;
   rounds: SavedRound[];
+  awards: AwardDetailRow[];
   userName?: string | null;
   loading: boolean;
   onClose: () => void;
@@ -809,9 +950,10 @@ function HomeRecordDetailModal({
   const average = personalRows.length
     ? Math.round(personalRows.reduce((sum, row) => sum + row.total, 0) / personalRows.length)
     : null;
-  const best = personalRows.length ? [...personalRows].sort((a, b) => a.total - b.total)[0] : null;
   const handicaps = computeHandicaps(rounds, 5);
   const myHandicap = userName ? handicaps.get(userName) ?? 0 : 0;
+  const guinnessRows = guinnessRecordsForUser(rounds, userName);
+  const myAwardRows = awardRowsForUser(awards, userName).sort((a, b) => b.roundDate.localeCompare(a.roundDate));
 
   const renderRows = (rows: typeof personalRows, diffFromAverage = false) => (
     <View style={styles.detailTable}>
@@ -902,30 +1044,37 @@ function HomeRecordDetailModal({
   };
 
   const renderRecords = () => {
-    const totalBirdies = personalRows.reduce((sum, row) => sum + row.birdies, 0);
-    const totalPars = personalRows.reduce((sum, row) => sum + row.pars, 0);
-    const cards = [
-      { label: "라운드", value: `${personalRows.length}회`, sub: "기록 라운드" },
-      { label: "베스트", value: best ? `${best.total}타` : "-", sub: best?.courseName ?? "기록 없음" },
-      { label: "버디", value: `${totalBirdies}개`, sub: "누적" },
-      { label: "파", value: `${totalPars}개`, sub: "누적" },
-    ];
     return (
       <View style={styles.recordsGrid}>
-        {cards.map((card) => (
-          <View key={card.label} style={[styles.recordBadgeCard, { backgroundColor: "rgba(31,160,92,0.10)", borderColor: palette.border }]}> 
-            <Text style={[styles.recordBadgeLabel, { color: palette.muted }]}>{card.label}</Text>
-            <Text style={[styles.recordBadgeValue, { color: palette.text }]}>{card.value}</Text>
-            <Text style={[styles.recordBadgeSub, { color: palette.muted }]} numberOfLines={1}>{card.sub}</Text>
+        {guinnessRows.length ? guinnessRows.map((record) => (
+          <View key={`${record.label}-${record.date}`} style={[styles.recordBadgeCard, { backgroundColor: "rgba(31,160,92,0.10)", borderColor: palette.border }]}> 
+            <Text style={[styles.recordBadgeLabel, { color: palette.muted }]}>{record.label}</Text>
+            <Text style={[styles.recordBadgeValue, { color: palette.text }]}>{record.value}</Text>
+            <Text style={[styles.recordBadgeSub, { color: palette.muted }]} numberOfLines={1}>{formatShortDate(record.date)} · {record.courseName}</Text>
           </View>
-        ))}
+        )) : <Text style={[styles.detailEmpty, { color: palette.muted }]}>보유 중인 기네스북 기록이 없습니다.</Text>}
       </View>
     );
   };
 
+  const renderAwards = () => (
+    <View style={styles.detailTable}>
+      {myAwardRows.length ? myAwardRows.map((award) => (
+        <View key={`${award.id}-${award.roundDate}`} style={[styles.detailTableRow, { borderColor: palette.border }]}>
+          <Text style={[styles.detailTd, { flex: 0.8, color: palette.text }]}>{formatShortDate(award.roundDate)}</Text>
+          <Text style={[styles.detailTd, { flex: 1.4, color: palette.text }]} numberOfLines={1}>{award.label}</Text>
+          <Text style={[styles.detailTdStrong, { flex: 1.1, color: palette.green, textAlign: "right" }]} numberOfLines={1}>{award.detail}</Text>
+        </View>
+      )) : (
+        <Text style={[styles.detailEmpty, { color: palette.muted }]}>아직 수상 기록이 없습니다.</Text>
+      )}
+    </View>
+  );
+
   const titleByMode: Record<HomeRecordDetailMode, string> = {
     handicap: "핸디캡 근거 (최근 5경기)",
     average: average === null ? "전체 라운드 기록" : `전체 라운드 기록 (평균 ${average}타)`,
+    awards: `수상현황 (${myAwardRows.length}회)`,
     recent: "최근 라운드 기록",
     best: "베스트 스코어 순위",
     matchup: `역대 전적 (핸디 ${diffText(myHandicap)})`,
@@ -938,6 +1087,7 @@ function HomeRecordDetailModal({
     if (mode === "handicap") return renderHandicap();
     if (mode === "matchup") return renderMatchup();
     if (mode === "records") return renderRecords();
+    if (mode === "awards") return renderAwards();
     if (mode === "average") return renderRows(personalRows, true);
     if (mode === "best") return renderRows([...personalRows].sort((a, b) => a.total - b.total));
     return renderRows(latestRows);

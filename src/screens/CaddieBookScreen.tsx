@@ -356,6 +356,8 @@ function HoleDetailCard({
   const flip = useRef(new Animated.Value(0)).current;
   const frontTouchStartRef = useRef<{ x: number; y: number } | null>(null);
   const frontTouchMovedRef = useRef(false);
+  const backTouchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const backTouchMovedRef = useRef(false);
   const shotPlan = hole.shotPlan;
   const planSteps = shotPlan?.steps ?? [];
   const hasShotPlan = planSteps.length > 0;
@@ -395,6 +397,24 @@ function HoleDetailCard({
   const handleFrontTouchEnd = () => {
     if (!frontTouchMovedRef.current) setFlipped(true);
     frontTouchStartRef.current = null;
+  };
+  const handleBackTouchStart = (event: any) => {
+    backTouchMovedRef.current = false;
+    backTouchStartRef.current = {
+      x: event.nativeEvent.pageX,
+      y: event.nativeEvent.pageY,
+    };
+  };
+  const handleBackTouchMove = (event: any) => {
+    const start = backTouchStartRef.current;
+    if (!start) return;
+    const dx = Math.abs(event.nativeEvent.pageX - start.x);
+    const dy = Math.abs(event.nativeEvent.pageY - start.y);
+    if (dx > 8 || dy > 8) backTouchMovedRef.current = true;
+  };
+  const handleBackTouchEnd = () => {
+    if (!backTouchMovedRef.current) setFlipped(false);
+    backTouchStartRef.current = null;
   };
 
   return (
@@ -504,6 +524,9 @@ function HoleDetailCard({
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
             directionalLockEnabled
+            onTouchStart={handleBackTouchStart}
+            onTouchMove={handleBackTouchMove}
+            onTouchEnd={handleBackTouchEnd}
             onScrollBeginDrag={onCardScrollBegin}
             onScrollEndDrag={onCardScrollEnd}
             onMomentumScrollEnd={onCardScrollEnd}
@@ -623,7 +646,10 @@ function HoleDetailCard({
             )}
             <TouchableOpacity
               activeOpacity={0.82}
-              onPress={() => setFlipped(false)}
+              onPress={(event) => {
+                event.stopPropagation();
+                setFlipped(false);
+              }}
               style={styles.flipAction}
             >
               <Text style={[styles.flipHint, { color: palette.text }]}>

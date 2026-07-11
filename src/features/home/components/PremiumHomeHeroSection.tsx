@@ -565,11 +565,11 @@ function HeroBottomSummary({
   void groupCount;
   const travelTimeText =
     routeTimeText
-      ? routeTimeText
+      ? routeTimeText.replace(/\s*소요$/, "")
       : "이동시간 준비중";
   const departureText =
     departureTimeText && !departureTimeText.includes("준비중")
-      ? departureTimeText
+      ? departureTimeText.replace(/^출발 추천\s*/, "")
       : "";
 
   return (
@@ -663,36 +663,34 @@ function HeroBottomSummary({
 
         <View style={[styles.summaryDivider, { marginHorizontal: isCompact ? 3 : 6 }]} />
 
-        <View style={[styles.travelSummary, { paddingHorizontal: isCompact ? 3 : 8 }]}>
+        <View style={[styles.travelSummary, { paddingHorizontal: isCompact ? 4 : 8 }]}>
           <Text
             style={[
-              styles.travelLabel,
-              { fontSize: isCompact ? 10 : 12, lineHeight: isCompact ? 13 : 15 },
+              styles.departureTime,
+              { fontSize: isCompact ? 17 : 21, lineHeight: isCompact ? 21 : 25 },
             ]}
             numberOfLines={1}
           >
-            지금 출발시
+            {departureText || "--:--"}
           </Text>
           <Text
             style={[
               styles.travelTime,
-              { fontSize: isCompact ? 10 : 11, lineHeight: isCompact ? 14 : 16 },
+              { fontSize: isCompact ? 10 : 11, lineHeight: isCompact ? 15 : 17 },
             ]}
             numberOfLines={1}
           >
-            {travelTimeText}
+            {travelTimeText.includes("준비중") ? travelTimeText : `${travelTimeText} 소요`}
           </Text>
-          {departureText ? (
-            <Text
-              style={[
-                styles.departureTime,
-                { fontSize: isCompact ? 9 : 10, lineHeight: isCompact ? 12 : 14 },
-              ]}
-              numberOfLines={1}
-            >
-              {departureText}
-            </Text>
-          ) : null}
+          <Text
+            style={[
+              styles.travelBuffer,
+              { fontSize: isCompact ? 9 : 10, lineHeight: isCompact ? 13 : 14 },
+            ]}
+            numberOfLines={1}
+          >
+            40분 여유 가정
+          </Text>
         </View>
       </View>
     </View>
@@ -912,7 +910,7 @@ const styles = StyleSheet.create({
   travelSummary: {
     flex: 1,
     minWidth: 0,
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "center",
     paddingHorizontal: 8,
   },
@@ -929,16 +927,25 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     fontWeight: "900",
     letterSpacing: -0.3,
-    marginTop: 1,
+    marginTop: 2,
+    textAlign: "left",
   },
   departureTime: {
-    color: "rgba(255,255,255,0.88)",
+    color: "#B6FF8F",
+    fontSize: 21,
+    lineHeight: 25,
+    fontWeight: "900",
+    letterSpacing: -0.5,
+    textAlign: "left",
+  },
+  travelBuffer: {
+    color: "rgba(255,255,255,0.72)",
     fontSize: 10,
     lineHeight: 14,
     fontWeight: "900",
     letterSpacing: -0.2,
     marginTop: 1,
-    textAlign: "center",
+    textAlign: "left",
   },
   summaryDate: {
     color: "#fff",

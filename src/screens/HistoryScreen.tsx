@@ -22,6 +22,7 @@ import { C } from '../theme'
 import { EmojiIcon } from '../components/EmojiIcon'
 import { Icon } from '../components/Icon'
 import { TopActionButtons } from '../components/TopActionButtons'
+import { ImageCropModal, type ImageCropRect } from '../components/ImageCropModal'
 import { getCourseHeroImageSource } from '../data/courseHeroImages'
 import type { RootStackParamList } from '../navigation/types'
 
@@ -333,6 +334,7 @@ function RoundFlipCard({
   const [clubAwardConfig, setClubAwardConfig] = useState<{ count: number; items: string[] } | null>(null)
   const [photoData, setPhotoData] = useState<string[]>(round.photoData ?? [])
   const [photoSaving, setPhotoSaving] = useState(false)
+  const [photoCropSource, setPhotoCropSource] = useState<{ uri: string; width: number; height: number } | null>(null)
   const flip = useRef(new Animated.Value(0)).current
   const effectiveRound = detailRound ?? round
   const coverPhoto = photoData[0]
@@ -422,11 +424,21 @@ function RoundFlipCard({
     })
     if (result.canceled || !result.assets[0]) return
 
+    const asset = result.assets[0]
+    setPhotoCropSource({
+      uri: asset.uri,
+      width: asset.width || 1200,
+      height: asset.height || 900,
+    })
+  }
+
+  const saveRoundPhoto = async (crop: ImageCropRect) => {
+    if (!photoCropSource) return
     setPhotoSaving(true)
     try {
       const compressed = await ImageManipulator.manipulateAsync(
-        result.assets[0].uri,
-        [{ resize: { width: 1200 } }],
+        photoCropSource.uri,
+        [{ crop }, { resize: { width: 1200 } }],
         { compress: 0.55, format: ImageManipulator.SaveFormat.JPEG, base64: true },
       )
       if (!compressed.base64) throw new Error('사진 처리에 실패했습니다.')
@@ -444,6 +456,7 @@ function RoundFlipCard({
       })
       setPhotoData(updated.photoData ?? nextPhotoData)
       setDetailRound((current) => current ? { ...current, photoData: updated.photoData ?? nextPhotoData } : current)
+      setPhotoCropSource(null)
     } catch (error) {
       Alert.alert('오류', error instanceof Error ? error.message : String(error))
     } finally {
@@ -572,6 +585,7 @@ function RoundFlipCard({
   ]
 
   return (
+    <>
     <View style={[s.flipCardScene, { width, height }]}>
       <Animated.View pointerEvents={flipped ? 'none' : 'auto'} style={[s.flipFace, { opacity: frontOpacity, transform: [{ perspective: 1200 }, { rotateY: frontRotate }] }]}>
         <TouchableOpacity activeOpacity={0.96} style={s.flipTouch} onPress={toggleFlip}>
@@ -701,6 +715,18 @@ function RoundFlipCard({
         </View>
       </Animated.View>
     </View>
+    {photoCropSource ? (
+      <ImageCropModal
+        uri={photoCropSource.uri}
+        width={photoCropSource.width}
+        height={photoCropSource.height}
+        aspect={[16, 10]}
+        title="라운드 사진 맞추기"
+        onCancel={() => setPhotoCropSource(null)}
+        onConfirm={saveRoundPhoto}
+      />
+    ) : null}
+    </>
   )
 
 }

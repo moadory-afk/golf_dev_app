@@ -384,7 +384,7 @@ export async function updateRound(
   if (input.date) payload.date = input.date
   const clubId = await getRoundClubId(id)
   if (clubId) payload.handicaps = await computeHandicapSnapshot(clubId, date, input.players, 5, id)
-  if (input.photoData && input.photoData.length > 0) payload.photo_data = input.photoData
+  if (input.photoData !== undefined) payload.photo_data = input.photoData
   if (input.settlement !== undefined) payload.settlement = input.settlement
   if (input.golfCourseId) payload.golf_course_id = input.golfCourseId
   if (input.holeLabels) payload.hole_labels = input.holeLabels
