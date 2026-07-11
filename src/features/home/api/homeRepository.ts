@@ -149,7 +149,7 @@ export async function getHomeDashboardRawData(clubId: string): Promise<HomeDashb
     .select('id, round_date, course_id, course_name, layout_id, layout_name, tee_time, note, status, created_at, updated_at')
     .eq('club_id', clubId)
     .gte('round_date', today)
-    .in('status', ['planned', 'recruiting'])
+    .in('status', ['planned', 'recruiting', 'closed', 'finished'])
     .order('round_date', { ascending: true })
     .order('tee_time', { ascending: true })
     .limit(5)

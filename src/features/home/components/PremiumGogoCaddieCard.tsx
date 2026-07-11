@@ -93,6 +93,11 @@ export function PremiumGogoCaddieCard({
     if (onFeedAction) onFeedAction(item)
     else onPress()
   }
+  const syncPageFromOffset = (offsetX: number) => {
+    if (!slideWidth) return
+    const nextPage = Math.max(0, Math.min(feedItems.length - 1, Math.round(offsetX / slideWidth)))
+    setPage(nextPage)
+  }
 
   return (
     <View
@@ -113,10 +118,8 @@ export function PremiumGogoCaddieCard({
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             scrollEnabled={feedItems.length > 1}
-            onMomentumScrollEnd={(event) => {
-              if (!slideWidth) return
-              setPage(Math.round(event.nativeEvent.contentOffset.x / slideWidth))
-            }}
+            onScrollEndDrag={(event) => syncPageFromOffset(event.nativeEvent.contentOffset.x)}
+            onMomentumScrollEnd={(event) => syncPageFromOffset(event.nativeEvent.contentOffset.x)}
           >
             {feedItems.map((item) => (
               <View key={item.id} style={[styles.slide, slideWidth > 0 ? { width: slideWidth } : null]}>
@@ -124,7 +127,7 @@ export function PremiumGogoCaddieCard({
                   <Text style={[styles.title, { color: palette.text }]} numberOfLines={2}>{item.title}</Text>
                   <View style={styles.messageRow}>
                     <Text style={styles.messageIcon}>{item.icon}</Text>
-                    <Text style={[styles.message, { color: palette.muted }]} numberOfLines={3}>{item.message}</Text>
+                    <Text style={[styles.message, { color: palette.muted }]} numberOfLines={5}>{item.message}</Text>
                   </View>
                 </TouchableOpacity>
 
