@@ -457,6 +457,7 @@ export default function HomeExperienceScreen() {
   const [recordDetailMode, setRecordDetailMode] = useState<HomeRecordDetailMode | null>(null);
   const [recordDetailRounds, setRecordDetailRounds] = useState<SavedRound[]>([]);
   const [recordAwardRows, setRecordAwardRows] = useState<AwardDetailRow[]>([]);
+  const [recordCardsReady, setRecordCardsReady] = useState(false);
   const [recordDetailLoading, setRecordDetailLoading] = useState(false);
 
   useFocusEffect(
@@ -665,9 +666,11 @@ export default function HomeExperienceScreen() {
 
   useEffect(() => {
     let mounted = true;
+    setRecordCardsReady(false);
     if (!club?.id) {
       setRecordDetailRounds([]);
       setRecordAwardRows([]);
+      setRecordCardsReady(true);
       return;
     }
 
@@ -685,12 +688,16 @@ export default function HomeExperienceScreen() {
             }));
           }),
         );
-        if (mounted) setRecordAwardRows(awardRows.flat());
+        if (mounted) {
+          setRecordAwardRows(awardRows.flat());
+          setRecordCardsReady(true);
+        }
       })
       .catch(() => {
         if (!mounted) return;
         setRecordDetailRounds([]);
         setRecordAwardRows([]);
+        setRecordCardsReady(true);
       });
 
     return () => {
@@ -844,16 +851,17 @@ export default function HomeExperienceScreen() {
               </PremiumHomeMotion>
             ),
             stats:
-              recentStats.length > 0 ? (
+              recentStats.length > 0 && recordCardsReady ? (
                 <PremiumHomeMotion index={3}>
                   <PremiumRecentStatsSection stats={recentStats} />
                 </PremiumHomeMotion>
               ) : null,
-            recordExtras: (
-              <PremiumHomeMotion index={4}>
-                <PremiumRecordExtrasSection cards={recordExtraCards} />
-              </PremiumHomeMotion>
-            ),
+            recordExtras:
+              recentStats.length > 0 && recordCardsReady ? (
+                <PremiumHomeMotion index={3}>
+                  <PremiumRecordExtrasSection cards={recordExtraCards} />
+                </PremiumHomeMotion>
+              ) : null,
           }}
         />
       </ScrollView>

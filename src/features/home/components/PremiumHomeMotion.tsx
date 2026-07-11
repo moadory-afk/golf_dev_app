@@ -8,25 +8,21 @@ type PremiumHomeMotionProps = PropsWithChildren<{
   style?: ViewStyle
 }>
 
-export function PremiumHomeMotion({ children, index, style }: PremiumHomeMotionProps) {
+export function PremiumHomeMotion({ children, index: _index, style }: PremiumHomeMotionProps) {
   const opacity = useRef(new Animated.Value(0)).current
   const translateY = useRef(new Animated.Value(spacing.lg)).current
 
   useEffect(() => {
-    const delay = index * motion.stagger
-
     const animation = Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
         duration: motion.slow,
-        delay,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(translateY, {
         toValue: 0,
         duration: motion.slow,
-        delay,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
@@ -35,7 +31,7 @@ export function PremiumHomeMotion({ children, index, style }: PremiumHomeMotionP
     animation.start()
 
     return () => animation.stop()
-  }, [index, opacity, translateY])
+  }, [opacity, translateY])
 
   return (
     <Animated.View
