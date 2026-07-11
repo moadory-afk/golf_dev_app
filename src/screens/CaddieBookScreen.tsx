@@ -183,10 +183,12 @@ function CourseLayoutTabs({
   layouts,
   activeLayoutId,
   onSelect,
+  compact = false,
 }: {
   layouts: CourseLayoutTab[];
   activeLayoutId?: string | null;
   onSelect: (layout: CourseLayoutTab) => void;
+  compact?: boolean;
 }) {
   const { palette } = useSkin();
   if (layouts.length <= 1) return null;
@@ -195,7 +197,10 @@ function CourseLayoutTabs({
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.courseTabsContent}
+      contentContainerStyle={[
+        styles.courseTabsContent,
+        compact && styles.courseTabsContentCompact,
+      ]}
     >
       {layouts.map((layout) => {
         const selected = layout.id === activeLayoutId;
@@ -206,6 +211,7 @@ function CourseLayoutTabs({
             onPress={() => onSelect(layout)}
             style={[
               styles.courseTab,
+              compact && styles.courseTabCompact,
               {
                 backgroundColor: selected ? palette.headerBg : palette.card,
                 borderColor: selected ? palette.gold : palette.border,
@@ -225,6 +231,65 @@ function CourseLayoutTabs({
         );
       })}
     </ScrollView>
+  );
+}
+
+function CaddieBookFixedHeader({
+  courseName,
+  layouts,
+  activeLayoutId,
+  onSelectLayout,
+  hole,
+}: {
+  courseName: string;
+  layouts: CourseLayoutTab[];
+  activeLayoutId?: string | null;
+  onSelectLayout: (layout: CourseLayoutTab) => void;
+  hole?: CaddieBookHole;
+}) {
+  const { palette } = useSkin();
+  const whiteDistance =
+    typeof hole?.whiteTeeM === "number" && Number.isFinite(hole.whiteTeeM)
+      ? `${hole.whiteTeeM}`
+      : "-";
+
+  return (
+    <View style={styles.fixedHeaderBlock}>
+      <View style={styles.fixedCourseRow}>
+        <Text
+          style={[styles.fixedCourseName, { color: palette.text }]}
+          numberOfLines={1}
+        >
+          {courseName}
+        </Text>
+      </View>
+      <View style={styles.fixedHoleRow}>
+        <View style={styles.fixedTabsWrap}>
+          <CourseLayoutTabs
+            layouts={layouts}
+            activeLayoutId={activeLayoutId}
+            onSelect={onSelectLayout}
+            compact
+          />
+        </View>
+        <View
+          style={[
+            styles.fixedHoleInfo,
+            { backgroundColor: palette.card, borderColor: palette.border },
+          ]}
+        >
+          <Text style={[styles.fixedHoleText, { color: palette.text }]}>
+            {hole ? `${hole.holeNo}번` : "-"}
+          </Text>
+          <Text style={[styles.fixedHoleText, { color: palette.muted }]}>
+            Par {hole?.par ?? "-"}
+          </Text>
+          <Text style={[styles.fixedDistanceText, { color: palette.green }]}>
+            {whiteDistance}
+          </Text>
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -446,31 +511,6 @@ function HoleDetailCard({
             onMomentumScrollEnd={onCardScrollEnd}
             contentContainerStyle={styles.heroCardScrollContent}
           >
-            <View style={styles.detailHeroHeader}>
-              <View style={styles.detailTitleWrap}>
-                <Text style={[styles.heroEyebrow, { color: palette.gold }]}>
-                  Hole {hole.holeNo}
-                </Text>
-                <Text
-                  style={[styles.heroTitle, { color: palette.headerText }]}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.82}
-                  numberOfLines={2}
-                >
-                  {hole.title}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.parPill,
-                  { backgroundColor: palette.greenLight },
-                ]}
-              >
-                <Text style={[styles.parText, { color: palette.green }]}>
-                  PAR {hole.par ?? "-"}
-                </Text>
-              </View>
-            </View>
             <Text style={[styles.heroMessage, { color: palette.headerText }]}>
               {hole.summary}
             </Text>
@@ -917,11 +957,6 @@ export default function CaddieBookScreen() {
   const availableHeight = windowHeight - insets.top - insets.bottom;
   const horizontalPadding = isCompactScreen ? spacing.md : spacing.lg;
   const pagerWidth = Math.max(280, windowWidth - horizontalPadding * 2);
-  const strategyCardHeight = clamp(
-    Math.round(Math.min(pagerWidth * 0.78, availableHeight * 0.48)),
-    isCompactScreen ? 280 : 310,
-    availableHeight < 720 ? 360 : 430,
-  );
   const { data, loading, error, refresh } = useCaddieBook({
     ...params,
     layoutId: activeLayoutId,
@@ -1082,6 +1117,15 @@ export default function CaddieBookScreen() {
     roundMeta.clubId &&
     roundMeta.roundDate === todayDateKey(),
   );
+  const strategyCardHeight = clamp(
+    Math.round(
+      availableHeight -
+        (isCompactScreen ? 180 : 200) -
+        (canEditDailyScore ? 150 : 0),
+    ),
+    isCompactScreen ? 360 : 420,
+    canEditDailyScore ? 520 : 660,
+  );
 
   const selectedHoleStat = selectedHole
     ? holeStats.find((item) => item.hole === selectedHole.holeNo)
@@ -1146,24 +1190,13 @@ export default function CaddieBookScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: palette.text }]}>
-            {data.courseName}
-          </Text>
-        </View>
-
-        <CourseLayoutTabs
+        <CaddieBookFixedHeader
+          courseName={data.courseName}
           layouts={layoutTabs}
           activeLayoutId={activeLayoutId}
-          onSelect={handleLayoutSelect}
+          onSelectLayout={handleLayoutSelect}
+          hole={selectedHole}
         />
-
-        {selectedHole ? (
-          <CourseHoleInfoBar
-            hole={selectedHole}
-            layoutName={activeLayoutName || data.layoutName}
-          />
-        ) : null}
 
         {loading && data.holes.length === 0 ? (
           <View style={styles.loadingBox}>
@@ -1231,6 +1264,7 @@ const styles = StyleSheet.create({
   emptyText: { ...typography.body, textAlign: "center" },
   emptyButton: { marginTop: spacing.md },
   courseTabsContent: { gap: spacing.xs, paddingRight: spacing.lg },
+  courseTabsContentCompact: { gap: 5, paddingRight: 0 },
   courseTab: {
     minWidth: 64,
     minHeight: 26,
@@ -1241,7 +1275,46 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  courseTabCompact: {
+    minWidth: 48,
+    minHeight: 28,
+    paddingHorizontal: spacing.sm,
+  },
   courseTabText: { ...typography.caption, fontWeight: "900" },
+  fixedHeaderBlock: {
+    height: 74,
+    gap: 6,
+  },
+  fixedCourseRow: {
+    height: 30,
+    justifyContent: "center",
+  },
+  fixedCourseName: {
+    fontSize: 20,
+    lineHeight: 25,
+    fontWeight: "900",
+    letterSpacing: -0.6,
+  },
+  fixedHoleRow: {
+    height: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  fixedTabsWrap: { flex: 1, minWidth: 0 },
+  fixedHoleInfo: {
+    height: 34,
+    minWidth: 132,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 8,
+  },
+  fixedHoleText: { ...typography.bodySm, fontWeight: "900" },
+  fixedDistanceText: { ...typography.bodySm, fontWeight: "900" },
   courseInfoBar: {
     minHeight: 42,
     borderWidth: 1,
