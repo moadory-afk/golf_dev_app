@@ -7,6 +7,7 @@ import {
   Modal,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -449,6 +450,8 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [savingPw, setSavingPw] = useState(false);
+  const [signupGuideOpen, setSignupGuideOpen] = useState(false);
+  const [signupGuidePhone, setSignupGuidePhone] = useState("");
   const [homeAddress, setHomeAddress] = useState("");
   const [selectedHomePoint, setSelectedHomePoint] = useState<GeoPoint | null>(
     null,
@@ -851,6 +854,11 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
   }
 
   async function handleSendSignupGuideSms() {
+    const phone = signupGuidePhone.replace(/[^0-9+]/g, "");
+    if (!phone) {
+      Alert.alert("수신자 확인", "문자를 받을 휴대폰 번호를 입력해주세요.");
+      return;
+    }
     const message = [
       "GogoPar 골프 동호회 앱 설치 및 회원가입 안내",
       "",
@@ -858,7 +866,7 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
       APP_URL,
     ].join("\n");
     const separator = Platform.OS === "ios" ? "&" : "?";
-    const url = `sms:${separator}body=${encodeURIComponent(message)}`;
+    const url = `sms:${phone}${separator}body=${encodeURIComponent(message)}`;
 
     try {
       const supported = await Linking.canOpenURL(url);
@@ -866,9 +874,25 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
         Alert.alert("문자 앱을 열 수 없습니다", message);
         return;
       }
+      setSignupGuideOpen(false);
       await Linking.openURL(url);
     } catch {
       Alert.alert("문자 앱을 열 수 없습니다", message);
+    }
+  }
+
+  async function handleShareSignupGuide() {
+    const message = [
+      "GogoPar 골프 동호회 앱 설치 및 회원가입 안내",
+      "",
+      "아래 링크를 눌러 앱에 접속한 뒤 회원가입을 진행해주세요.",
+      APP_URL,
+    ].join("\n");
+    try {
+      await Share.share({ title: "GogoPar 회원가입 안내", message });
+      setSignupGuideOpen(false);
+    } catch {
+      Alert.alert("공유 실패", message);
     }
   }
 
@@ -1025,6 +1049,49 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
                 ) : (
                   <Text style={p.modalBtnText}>변경하기</Text>
                 )}
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+      )}
+
+      {signupGuideOpen && (
+        <Modal
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSignupGuideOpen(false)}
+        >
+          <TouchableOpacity
+            style={p.overlay}
+            activeOpacity={1}
+            onPress={() => setSignupGuideOpen(false)}
+          >
+            <TouchableOpacity
+              style={p.modalCard}
+              activeOpacity={1}
+              onPress={() => {}}
+            >
+              <View style={p.modalHeader}>
+                <Text style={p.modalTitle}>회원가입 안내 보내기</Text>
+                <TouchableOpacity onPress={() => setSignupGuideOpen(false)}>
+                  <Text style={p.modalClose}>닫기</Text>
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={p.modalInput}
+                value={signupGuidePhone}
+                onChangeText={(value) =>
+                  setSignupGuidePhone(value.replace(/[^0-9-+]/g, ""))
+                }
+                placeholder="SMS 수신자 휴대폰 번호"
+                placeholderTextColor={C.muted}
+                keyboardType="phone-pad"
+              />
+              <TouchableOpacity style={p.modalBtn} onPress={handleSendSignupGuideSms}>
+                <Text style={p.modalBtnText}>SMS로 보내기</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={p.shareBtn} onPress={handleShareSignupGuide}>
+                <Text style={p.shareBtnText}>카톡/공유로 보내기</Text>
               </TouchableOpacity>
             </TouchableOpacity>
           </TouchableOpacity>
@@ -1243,7 +1310,7 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
             <Text style={p.menuArrow}>›</Text>
           </TouchableOpacity>
           <View style={p.menuDivider} />
-          <TouchableOpacity style={p.menuRow} onPress={handleSendSignupGuideSms}>
+          <TouchableOpacity style={p.menuRow} onPress={() => setSignupGuideOpen(true)}>
             <Text style={p.menuIcon}>📝</Text>
             <Text style={p.menuText}>어플 회원가입 안내</Text>
             <Text style={p.menuArrow}>›</Text>
@@ -1430,6 +1497,8 @@ const p = StyleSheet.create({
   bufferTextArea: { flex: 1, minWidth: 0 },
   bufferInputWrap: {
     width: 76,
+    minWidth: 76,
+    maxWidth: 76,
     borderWidth: 1.5,
     borderColor: C.border,
     borderRadius: 14,
@@ -1437,14 +1506,16 @@ const p = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 10,
+    overflow: "hidden",
   },
   bufferInput: {
-    flex: 1,
+    width: 34,
     color: C.green,
     fontSize: 15,
     fontWeight: "900",
     textAlign: "right",
     paddingVertical: 8,
+    paddingHorizontal: 0,
   },
   bufferUnit: { color: C.muted, fontSize: 13, fontWeight: "800", marginLeft: 4 },
   homeSaveButton: {
@@ -1597,6 +1668,14 @@ const p = StyleSheet.create({
     marginTop: 4,
   },
   modalBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  shareBtn: {
+    backgroundColor: C.greenLight,
+    borderRadius: 50,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  shareBtnText: { color: C.green, fontWeight: "800", fontSize: 15 },
   addressModalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
