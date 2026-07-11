@@ -198,7 +198,7 @@ function TabIcon({
           { backgroundColor: focused ? palette.green : 'transparent' },
         ]}
       >
-        <Icon name={icon} size={focused ? 19 : 18} color={focused ? '#fff' : palette.muted} strokeWidth={focused ? 2.5 : 1.9} />
+        <Icon name={icon} size={focused ? 16 : 15} color={focused ? '#fff' : palette.muted} strokeWidth={focused ? 2.5 : 1.9} />
       </View>
       <Text
         style={[
@@ -233,15 +233,15 @@ function MainTabs() {
               left: spacing.md,
               right: spacing.md,
               bottom: spacing.sm,
-              height: 78,
+              height: 44,
               borderTopWidth: 0,
               borderRadius: radius.xxl,
               borderWidth: 1,
               borderColor: colorLayers.cardHairline,
               backgroundColor: palette.tabBg,
               paddingHorizontal: spacing.sm,
-              paddingTop: 7,
-              paddingBottom: 7,
+              paddingTop: 2,
+              paddingBottom: 2,
               shadowColor: palette.greenDark,
               shadowOpacity: palette.shadowOpacity * 2,
               shadowRadius: 18,
@@ -251,20 +251,20 @@ function MainTabs() {
           : {
               borderTopColor: palette.border,
               backgroundColor: palette.tabBg,
-              height: 58,
-              paddingBottom: spacing.sm,
+              height: 52,
+              paddingBottom: 4,
             },
         tabBarShowLabel: !isModern,
         tabBarIconStyle: isModern
           ? {
               width: '100%',
-              height: 58,
+              height: 36,
               marginTop: 0,
             }
           : undefined,
         tabBarItemStyle: isModern
           ? {
-              height: 64,
+              height: 40,
               borderRadius: radius.xl,
               paddingVertical: 0,
             }
@@ -411,24 +411,24 @@ const navStyles = StyleSheet.create({
   },
   tabButtonContent: {
     width: '94%',
-    height: 58,
+    height: 36,
     borderRadius: radius.xl,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 4,
   },
   tabIconBubble: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
   tabButtonText: {
-    fontSize: 13,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 13,
     fontWeight: '900',
     textAlign: 'center',
   },

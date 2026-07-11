@@ -85,7 +85,7 @@ export default function ClubScreen() {
   )
   const rounds = data ?? []
   const members = clubMembers ?? []
-  const recentNotices = (clubNotices ?? []).filter((notice) => notice.isPublished).slice(0, 3)
+  const recentNotices = (clubNotices ?? []).filter((notice) => notice.isPublished).slice(0, 1)
   const adminMembers = members.filter((member) => member.role === 'admin')
   const onRefresh = useCallback(() => setRefreshKey((k) => k + 1), [])
   const [rankingType, setRankingType] = useState<RankingType | null>(null)
@@ -491,6 +491,43 @@ export default function ClubScreen() {
         </Modal>
       )}
 
+      {showHallCriteria && (
+        <Modal transparent animationType="fade" onRequestClose={() => setShowHallCriteria(false)}>
+          <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setShowHallCriteria(false)}>
+            <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+              <View style={s.modalHeader}>
+                <Text style={s.modalTitle}>기네스북 기록 기준</Text>
+                <TouchableOpacity style={s.closeBtn} onPress={() => setShowHallCriteria(false)}>
+                  <Text style={s.closeBtnText}>닫기</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView>
+                <View style={s.ruleRow}>
+                  <Text style={s.ruleLabel}>우승 기록</Text>
+                  <Text style={s.ruleValue}>최다 우승 · 최다 연속 우승</Text>
+                </View>
+                <View style={s.ruleRow}>
+                  <Text style={s.ruleLabel}>스코어 기록</Text>
+                  <Text style={s.ruleValue}>최저타 · 최고타 · 버디왕 · 파왕</Text>
+                </View>
+                <View style={s.ruleRow}>
+                  <Text style={s.ruleLabel}>성장 기록</Text>
+                  <Text style={s.ruleValue}>최저 핸디 · 전후반/평균타/핸디 개선</Text>
+                </View>
+                <View style={s.ruleRow}>
+                  <Text style={s.ruleLabel}>참가 기록</Text>
+                  <Text style={s.ruleValue}>최다 라운드 참가</Text>
+                </View>
+                <View style={s.ruleRow}>
+                  <Text style={s.ruleLabel}>핸디 기준</Text>
+                  <Text style={s.ruleValue}>최근 {handicapBasis}경기</Text>
+                </View>
+              </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+      )}
+
       <ScrollView
         style={{ flex: 1 }}
         contentInsetAdjustmentBehavior="automatic"
@@ -577,14 +614,8 @@ export default function ClubScreen() {
                       <Text style={s.noticeEmpty}>등록된 공지사항이 없습니다.</Text>
                     ) : recentNotices.map((notice) => (
                       <TouchableOpacity key={notice.id} style={s.noticeRow} onPress={() => setSelectedNotice(notice)} activeOpacity={0.82}>
-                        <View style={s.noticeIcon}>
-                          <Icon name="mail" size={15} color={C.green} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={s.noticeTitle} numberOfLines={1}>{notice.title}</Text>
-                          <Text style={s.noticeMeta}>{formatNoticeDate(notice.createdAt)}</Text>
-                        </View>
-                        <Icon name="chevronRight" size={16} color={C.muted} />
+                        <Text style={s.noticeTitle} numberOfLines={1}>{notice.title}</Text>
+                        <Text style={s.noticeMeta}>{formatNoticeDate(notice.createdAt)}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -620,40 +651,17 @@ export default function ClubScreen() {
                     ) : null}
                   </View>
 
-                  <View style={s.card}>
+                  <TouchableOpacity
+                    style={s.card}
+                    onPress={() => setShowHallCriteria(true)}
+                    activeOpacity={0.82}
+                  >
                     <View style={s.cardTitleRow}>
-                      <Text style={[s.cardTitle, { marginBottom: 0 }]}>명예의 전당 선정 기준</Text>
-                      <TouchableOpacity style={s.recordToggleBtn} onPress={() => setShowHallCriteria((value) => !value)} activeOpacity={0.82}>
-                        <Text style={s.recordToggleText}>{showHallCriteria ? '접기' : '펼치기'}</Text>
-                      </TouchableOpacity>
+                      <Text style={[s.cardTitle, { marginBottom: 0 }]}>기네스북 기록 기준</Text>
+                      <Text style={s.more}>결과 확인</Text>
                     </View>
-                    {showHallCriteria ? (
-                      <>
-                        <View style={s.ruleRow}>
-                          <Text style={s.ruleLabel}>우승 기록</Text>
-                          <Text style={s.ruleValue}>최다 우승 · 최다 연속 우승</Text>
-                        </View>
-                        <View style={s.ruleRow}>
-                          <Text style={s.ruleLabel}>스코어 기록</Text>
-                          <Text style={s.ruleValue}>최저타 · 최고타 · 버디왕 · 파왕</Text>
-                        </View>
-                        <View style={s.ruleRow}>
-                          <Text style={s.ruleLabel}>성장 기록</Text>
-                          <Text style={s.ruleValue}>최저 핸디 · 전후반/평균타/핸디 개선</Text>
-                        </View>
-                        <View style={s.ruleRow}>
-                          <Text style={s.ruleLabel}>참가 기록</Text>
-                          <Text style={s.ruleValue}>최다 라운드 참가</Text>
-                        </View>
-                        <View style={s.ruleRow}>
-                          <Text style={s.ruleLabel}>핸디 기준</Text>
-                          <Text style={s.ruleValue}>최근 {handicapBasis}경기</Text>
-                        </View>
-                      </>
-                    ) : (
-                      <Text style={s.criteriaCollapsedText}>우승, 스코어, 성장, 참가 기록을 기준으로 선정합니다.</Text>
-                    )}
-                  </View>
+                    <Text style={s.criteriaCollapsedText}>기네스북에 반영되는 기록 기준을 확인합니다.</Text>
+                  </TouchableOpacity>
 
                   <TouchableOpacity
                     style={s.card}
@@ -1239,7 +1247,7 @@ const s = StyleSheet.create({
     borderBottomLeftRadius: 56,
     borderBottomRightRadius: 56,
     overflow: 'hidden',
-    marginBottom: 14,
+    marginBottom: 7,
     backgroundColor: '#10291d',
     shadowColor: '#10291d',
     shadowOpacity: 0.16,
@@ -1324,16 +1332,16 @@ const s = StyleSheet.create({
   emptySecondaryText: { color: C.green, fontWeight: '800', fontSize: 12 },
 
   card: {
-    backgroundColor: C.card, borderRadius: 20, padding: 18, marginBottom: 14,
+    backgroundColor: C.card, borderRadius: 20, padding: 18, marginBottom: 7,
     shadowColor: '#1a6b44', shadowOpacity: 0.07, shadowRadius: 10, elevation: 2,
   },
   cardTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   cardTitle: { fontSize: 15, fontWeight: '700', color: C.text, marginBottom: 14 },
   more: { fontSize: 13, color: C.green, fontWeight: '600' },
-  noticeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border },
+  noticeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border },
   noticeIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
-  noticeTitle: { fontSize: 13, fontWeight: '700', color: C.text },
-  noticeMeta: { fontSize: 11, color: C.muted, marginTop: 2 },
+  noticeTitle: { flex: 1, fontSize: 13, fontWeight: '700', color: C.text, textAlign: 'left' },
+  noticeMeta: { fontSize: 11, color: C.muted, textAlign: 'right' },
   noticeEmpty: { paddingTop: 12, fontSize: 13, color: C.muted },
   noticeDetailDate: { marginTop: 5, fontSize: 12, fontWeight: '700', color: C.muted },
   noticeDetailBody: { fontSize: 14, lineHeight: 22, color: C.text },
