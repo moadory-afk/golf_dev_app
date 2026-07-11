@@ -278,13 +278,13 @@ function CaddieBookFixedHeader({
             { backgroundColor: palette.card, borderColor: palette.border },
           ]}
         >
-          <Text style={[styles.fixedHoleText, { color: palette.text }]}>
+          <Text style={[styles.fixedHoleText, { color: palette.text }]} numberOfLines={1}>
             {hole ? `${hole.holeNo}번` : "-"}
           </Text>
-          <Text style={[styles.fixedHoleText, { color: palette.muted }]}>
+          <Text style={[styles.fixedHoleText, { color: palette.muted }]} numberOfLines={1}>
             Par {hole?.par ?? "-"}
           </Text>
-          <Text style={[styles.fixedDistanceText, { color: palette.green }]}>
+          <Text style={[styles.fixedDistanceText, { color: palette.green }]} numberOfLines={1}>
             {whiteDistance}
           </Text>
         </View>
@@ -953,10 +953,12 @@ export default function CaddieBookScreen() {
   const [activeLayoutName, setActiveLayoutName] = useState(
     params.layoutName ?? null,
   );
-  const isCompactScreen = isCompactWidth(windowWidth);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const contentWidth = containerWidth > 0 ? containerWidth : windowWidth;
+  const isCompactScreen = isCompactWidth(contentWidth);
   const availableHeight = windowHeight - insets.top - insets.bottom;
   const horizontalPadding = isCompactScreen ? spacing.md : spacing.lg;
-  const pagerWidth = Math.max(280, windowWidth - horizontalPadding * 2);
+  const pagerWidth = Math.max(280, contentWidth - horizontalPadding * 2);
   const { data, loading, error, refresh } = useCaddieBook({
     ...params,
     layoutId: activeLayoutId,
@@ -1169,7 +1171,15 @@ export default function CaddieBookScreen() {
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: palette.bg }]}>
+    <View
+      style={[styles.root, { backgroundColor: palette.bg }]}
+      onLayout={(event) => {
+        const nextWidth = Math.round(event.nativeEvent.layout.width);
+        if (nextWidth > 0 && nextWidth !== containerWidth) {
+          setContainerWidth(nextWidth);
+        }
+      }}
+    >
       <ScrollView
         scrollEnabled
         contentInsetAdjustmentBehavior="automatic"
@@ -1304,14 +1314,14 @@ const styles = StyleSheet.create({
   fixedTabsWrap: { flex: 1, minWidth: 0 },
   fixedHoleInfo: {
     height: 34,
-    minWidth: 132,
+    minWidth: 112,
     borderRadius: radius.pill,
     borderWidth: 1,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
-    gap: 8,
+    gap: 6,
   },
   fixedHoleText: { ...typography.bodySm, fontWeight: "900" },
   fixedDistanceText: { ...typography.bodySm, fontWeight: "900" },

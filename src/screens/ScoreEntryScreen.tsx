@@ -256,7 +256,13 @@ export default function ScoreEntryScreen() {
   const holeResult = settlementResult?.holes[hole] ?? null
 
   // 인원수에 따라 열 수 및 카드 크기 결정
-  const COLS = players.length <= 4 ? 2 : players.length <= 6 ? 3 : 4
+  const [contentWidth, setContentWidth] = useState(0)
+  const baseCols = players.length <= 4 ? 2 : players.length <= 6 ? 3 : 4
+  const COLS = contentWidth > 0 && contentWidth < 360
+    ? Math.min(baseCols, 2)
+    : contentWidth > 0 && contentWidth < 410
+    ? Math.min(baseCols, 3)
+    : baseCols
   const CARD = COLS === 2
     ? { name: 15, num: 28, btn: 34, gap: 8, pad: 12, labelSize: 10 }
     : COLS === 3
@@ -266,7 +272,10 @@ export default function ScoreEntryScreen() {
   for (let i = 0; i < players.length; i += COLS) playerRows.push(players.slice(i, i + COLS))
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
+    <View
+      style={{ flex: 1, backgroundColor: C.bg }}
+      onLayout={(event) => setContentWidth(event.nativeEvent.layout.width)}
+    >
 
       {/* 사진 업로드 모달 */}
       <Modal visible={showPhotoModal} animationType="slide" transparent onRequestClose={() => setShowPhotoModal(false)}>
@@ -348,7 +357,7 @@ export default function ScoreEntryScreen() {
               const { text, color } = scoreLabel(strokes, par)
               return (
                 <View key={p.name} style={[s.playerCard, { paddingVertical: CARD.pad, paddingHorizontal: CARD.pad / 2 }]}>
-                  <Text style={[s.playerName, { fontSize: CARD.name }]}>{shortName(p.name)}</Text>
+                  <Text style={[s.playerName, { fontSize: CARD.name }]} numberOfLines={1}>{shortName(p.name)}</Text>
                   <View style={[s.shuttle, { gap: CARD.gap / 2 }]}>
                     <TouchableOpacity
                       style={[s.shuttleBtn, { width: CARD.btn, height: CARD.btn, borderRadius: CARD.btn / 2 }]}

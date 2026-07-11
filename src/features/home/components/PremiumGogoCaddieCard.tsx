@@ -73,6 +73,8 @@ export function PremiumGogoCaddieCard({
   const { palette } = useSkin()
   const [page, setPage] = useState(0)
   const [slideWidth, setSlideWidth] = useState(0)
+  const [cardWidth, setCardWidth] = useState(0)
+  const compact = cardWidth > 0 && cardWidth < 350
 
   const fallback = useMemo(() => fallbackFeed({
     userName,
@@ -101,15 +103,17 @@ export function PremiumGogoCaddieCard({
 
   return (
     <View
+      onLayout={(event) => setCardWidth(event.nativeEvent.layout.width)}
       style={[
         styles.card,
+        compact && styles.cardCompact,
         createShadow(palette, 1),
         { backgroundColor: palette.card, borderColor: palette.border, borderRadius: palette.cardRadius + 10 },
       ]}
     >
-      <View style={styles.cardBody}>
-        <TouchableOpacity activeOpacity={0.9} onPress={() => runFeedAction(feedItems[page] ?? fallback)} style={styles.characterStage}>
-          <Image source={caddieCharacter} style={styles.characterImage} resizeMode="contain" />
+      <View style={[styles.cardBody, compact && styles.cardBodyCompact]}>
+        <TouchableOpacity activeOpacity={0.9} onPress={() => runFeedAction(feedItems[page] ?? fallback)} style={[styles.characterStage, compact && styles.characterStageCompact]}>
+          <Image source={caddieCharacter} style={[styles.characterImage, compact && styles.characterImageCompact]} resizeMode="contain" />
         </TouchableOpacity>
 
         <View style={styles.rightColumn} onLayout={(event) => setSlideWidth(event.nativeEvent.layout.width)}>
@@ -135,7 +139,7 @@ export function PremiumGogoCaddieCard({
                 <TouchableOpacity
                   activeOpacity={0.86}
                   onPress={() => runFeedAction(item)}
-                  style={[styles.primaryAction, { backgroundColor: palette.green }]}
+                  style={[styles.primaryAction, compact && styles.primaryActionCompact, { backgroundColor: palette.green }]}
                 >
                   <Text style={styles.primaryActionText}>{item.ctaLabel}</Text>
                   <Text style={styles.primaryActionArrow}>›</Text>
@@ -174,10 +178,16 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     overflow: 'hidden',
   },
+  cardCompact: {
+    paddingHorizontal: spacing.sm,
+  },
   cardBody: {
     flexDirection: 'row',
     alignItems: 'stretch',
     gap: spacing.md,
+  },
+  cardBodyCompact: {
+    gap: spacing.sm,
   },
   characterStage: {
     width: 112,
@@ -187,10 +197,18 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     overflow: 'hidden',
   },
+  characterStageCompact: {
+    width: 96,
+  },
   characterImage: {
     width: 132,
     height: 160,
     marginBottom: -14,
+  },
+  characterImageCompact: {
+    width: 116,
+    height: 141,
+    marginBottom: -8,
   },
   rightColumn: {
     flex: 1,
@@ -220,6 +238,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  primaryActionCompact: {
+    width: '54%',
+    minWidth: 84,
+    paddingHorizontal: 10,
   },
   primaryActionText: { color: '#fff', fontSize: 12, fontWeight: '900' },
   primaryActionArrow: { color: '#fff', fontSize: 20, lineHeight: 22, fontWeight: '700' },

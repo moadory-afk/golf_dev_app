@@ -8,7 +8,6 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from "react-native";
 import { useEffect, useRef, useState } from "react";
@@ -66,10 +65,9 @@ export function PremiumHomeHeroSection({
   topInset = 0,
 }: PremiumHomeHeroSectionProps) {
   const { palette } = useSkin();
-  const { width: windowWidth } = useWindowDimensions();
   const [activeIndex, setActiveIndex] = useState(0);
   const [measuredHeroWidth, setMeasuredHeroWidth] = useState(0);
-  const fallbackHeroWidth = Math.max(HERO_MIN_WIDTH, windowWidth);
+  const fallbackHeroWidth = HERO_MIN_WIDTH;
   const heroWidth = measuredHeroWidth || fallbackHeroWidth;
   const heroHeight = Math.round(
     heroWidth * HERO_DISPLAY_HEIGHT_RATIO + topInset,
@@ -1063,7 +1061,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   backInfoItem: {
-    width: "48%",
+    flexBasis: "47%",
+    flexGrow: 1,
+    minWidth: 0,
     borderRadius: 16,
     backgroundColor: "rgba(255,255,255,0.10)",
     paddingHorizontal: 10,

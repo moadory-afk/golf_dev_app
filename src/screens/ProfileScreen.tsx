@@ -1472,6 +1472,7 @@ const p = StyleSheet.create({
   },
   addressPickerText: {
     flex: 1,
+    minWidth: 0,
     color: C.text,
     fontSize: 14,
     lineHeight: 19,
@@ -1532,7 +1533,7 @@ const p = StyleSheet.create({
     gap: 8,
     marginTop: 12,
   },
-  distanceItem: { width: "31.5%" },
+  distanceItem: { flexBasis: "30%", flexGrow: 1, minWidth: 0 },
   distanceLabel: {
     color: C.text,
     fontSize: 12,
@@ -1558,7 +1559,7 @@ const p = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 16,
   },
-  skinCard: { width: "48%", borderWidth: 1.5, padding: 12, minHeight: 118 },
+  skinCard: { flexBasis: "47%", flexGrow: 1, minWidth: 0, borderWidth: 1.5, padding: 12, minHeight: 118 },
   skinSwatches: { flexDirection: "row", gap: 5, marginBottom: 10 },
   skinSwatch: {
     width: 20,
@@ -1590,7 +1591,7 @@ const p = StyleSheet.create({
   },
   menuIcon: { fontSize: 18, width: 26, textAlign: "center" },
   centerIcon: { alignItems: "center" },
-  menuText: { flex: 1, fontSize: 15, color: C.text, fontWeight: "500" },
+  menuText: { flex: 1, minWidth: 0, fontSize: 15, color: C.text, fontWeight: "500" },
   menuArrow: { fontSize: 16, color: C.muted },
   menuDivider: { height: 1, backgroundColor: C.border, marginLeft: 54 },
   version: {

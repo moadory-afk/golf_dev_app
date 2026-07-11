@@ -36,7 +36,7 @@ function StepCard({
         <View style={[s.stepCircle, done && s.stepCircleDone]}>
           <Text style={[s.stepNum, done && s.stepNumDone]}>{done ? '✓' : num}</Text>
         </View>
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={s.stepTitle}>{title}</Text>
           {done && !open && summary ? <Text style={s.stepSummary} numberOfLines={1}>{summary}</Text> : null}
         </View>

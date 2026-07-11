@@ -707,8 +707,8 @@ export default function RoundDetailScreen() {
                   <View style={s.awardIconWrap}>
                     <Text style={{ fontSize: 20 }}>{award.icon}</Text>
                   </View>
-                  <Text style={s.awardTitle}>{award.label}</Text>
-                  <Text style={s.awardWinner}>{shortName(award.winner)}</Text>
+                  <Text style={s.awardTitle} numberOfLines={1}>{award.label}</Text>
+                  <Text style={s.awardWinner} numberOfLines={1}>{shortName(award.winner)}</Text>
                   <View style={s.awardDetailWrap}>
                     <Text style={s.awardDetail}>{award.detail}</Text>
                   </View>
@@ -802,9 +802,9 @@ export default function RoundDetailScreen() {
               ) : (
                 pairs.map((p, i) => (
                   <View key={i} style={s.settleRow}>
-                    <Text style={s.settleName}>{shortName(p.from)}</Text>
+                    <Text style={s.settleName} numberOfLines={1}>{shortName(p.from)}</Text>
                     <Text style={s.settleArrow}>→</Text>
-                    <Text style={s.settleName}>{shortName(p.to)}</Text>
+                    <Text style={s.settleName} numberOfLines={1}>{shortName(p.to)}</Text>
                     <Text style={[s.settleAmount, { color: p.amount === 0 ? C.muted : C.text }]}>
                       {p.amount === 0 ? '동점' : fmtKRW(p.amount)}
                     </Text>
@@ -915,7 +915,7 @@ const s = StyleSheet.create({
   recalcBtn: { backgroundColor: C.greenLight, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 },
   recalcBtnText: { color: C.green, fontWeight: '700', fontSize: 13 },
   settleRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.border },
-  settleName: { fontSize: 14, fontWeight: '600', color: C.text, width: 54 },
+  settleName: { fontSize: 14, fontWeight: '600', color: C.text, flexBasis: 54, flexShrink: 1, minWidth: 36 },
   settleArrow: { fontSize: 14, color: C.muted, marginHorizontal: 4 },
   settleAmount: { marginLeft: 'auto', fontSize: 15, fontWeight: '700' },
   holeBlock: { borderBottomWidth: 1, borderBottomColor: C.border, paddingVertical: 10 },
@@ -941,8 +941,8 @@ const s = StyleSheet.create({
     backgroundColor: '#fffbe8', alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: '#f0e0a0',
   },
-  awardTitle: { fontSize: 13, color: C.muted, fontWeight: '500', width: 80 },
-  awardWinner: { flex: 1, fontSize: 15, fontWeight: '700', color: C.text },
+  awardTitle: { fontSize: 13, color: C.muted, fontWeight: '500', flexBasis: 80, flexShrink: 1, minWidth: 48 },
+  awardWinner: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '700', color: C.text },
   awardDetailWrap: { backgroundColor: C.greenLight, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
   awardDetail: { fontSize: 13, fontWeight: '800', color: C.green },
   lottoMissWrap: { backgroundColor: '#f5f5f5' },
@@ -955,8 +955,8 @@ const s = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: C.border,
   },
-  lottoAwardGroupText: { flex: 1.35, fontSize: 14, fontWeight: '900', color: C.text },
-  lottoAwardGroupNames: { flex: 1, fontSize: 14, fontWeight: '800', color: C.green, textAlign: 'right' },
+  lottoAwardGroupText: { flex: 1.35, minWidth: 0, fontSize: 14, fontWeight: '900', color: C.text },
+  lottoAwardGroupNames: { flex: 1, minWidth: 0, fontSize: 14, fontWeight: '800', color: C.green, textAlign: 'right' },
   // 신페리오 기준 드롭다운
   basisBtn: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, borderWidth: 1, borderColor: C.green, backgroundColor: C.green },
   basisBtnText: { fontSize: 11, color: '#fff', fontWeight: '600' },

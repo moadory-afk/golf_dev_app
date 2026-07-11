@@ -1,8 +1,8 @@
 import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
-import { useMemo, useRef, type ReactNode } from 'react'
-import { Animated, Dimensions, Easing, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { Animated, Easing, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SkinProvider, useSkin } from '../skins'
 import { Icon, type IconName } from '../components/Icon'
 import { colorLayers, radius, spacing, typography } from '../design/tokens'
@@ -43,11 +43,9 @@ const TAB_META: Record<keyof MainTabParamList, { title: string; emoji: string; i
 const MAIN_TAB_ORDER: (keyof MainTabParamList)[] = ['Home', 'Club', 'History']
 const SWIPE_MIN_DISTANCE = 56
 const SWIPE_DIRECTION_LOCK = 1.25
-const TAB_SLIDE_WIDTH = Dimensions.get('window').width
 const TAB_SLIDE_DURATION = 220
 // 상단 Hero/대문 카드 안의 가로 스와이프는 카드 캐러셀 전용으로 사용한다.
 // 메뉴 간 스와이프는 Hero 영역 아래에서 시작한 제스처만 처리한다.
-const TAB_SWIPE_GUARD_TOP = 430
 
 function SwipeableTabScene({
   current,
@@ -59,10 +57,20 @@ function SwipeableTabScene({
   children: ReactNode
 }) {
   const translateX = useRef(new Animated.Value(0)).current
+  const [sceneSize, setSceneSize] = useState({ width: 0, height: 0 })
+  const sceneWidth = sceneSize.width
+  const swipeGuardTop = sceneSize.height > 0
+    ? Math.max(0, Math.round(Math.min(sceneSize.height * 0.52, sceneSize.height - 180)))
+    : 0
 
   const moveToTab = (nextTab: keyof MainTabParamList, direction: -1 | 1) => {
+    if (sceneWidth <= 0) {
+      navigation.navigate(nextTab)
+      return
+    }
+
     Animated.timing(translateX, {
-      toValue: direction * -TAB_SLIDE_WIDTH,
+      toValue: direction * -sceneWidth,
       duration: TAB_SLIDE_DURATION,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
@@ -85,7 +93,7 @@ function SwipeableTabScene({
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponder: (_, gesture) => {
-          if (gesture.y0 <= TAB_SWIPE_GUARD_TOP) return false
+          if (swipeGuardTop > 0 && gesture.y0 <= swipeGuardTop) return false
 
           const absX = Math.abs(gesture.dx)
           const absY = Math.abs(gesture.dy)
@@ -123,11 +131,22 @@ function SwipeableTabScene({
         },
         onPanResponderTerminate: resetPosition,
       }),
-    [current, navigation, translateX],
+    [current, navigation, sceneWidth, swipeGuardTop, translateX],
   )
 
   return (
-    <View style={navStyles.swipeScene} {...panResponder.panHandlers}>
+    <View
+      style={navStyles.swipeScene}
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout
+        setSceneSize((prev) => (
+          prev.width === width && prev.height === height
+            ? prev
+            : { width, height }
+        ))
+      }}
+      {...panResponder.panHandlers}
+    >
       <Animated.View style={[navStyles.swipeAnimatedScene, { transform: [{ translateX }] }]}>
         {children}
       </Animated.View>

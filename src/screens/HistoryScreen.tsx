@@ -271,6 +271,7 @@ function monthLabel(key: string) {
 }
 
 function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicapBasis?: number }) {
+  const [containerWidth, setContainerWidth] = useState(0)
   if (rounds.length === 0) return <Text style={s.muted}>아직 라운드 기록이 없습니다.</Text>
 
   const filtered = [...rounds].sort((a, b) => {
@@ -278,11 +279,18 @@ function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicap
     if (a.isComplete && !b.isComplete) return 1
     return b.date.localeCompare(a.date)
   })
-  const cardWidth = Math.min(Dimensions.get('window').width - 32, 430)
+  const availableWidth = containerWidth > 0 ? containerWidth : Dimensions.get('window').width
+  const cardWidth = Math.min(Math.max(availableWidth - 32, 280), 430)
   const cardHeight = Math.max(500, Math.min(590, Dimensions.get('window').height - 220))
 
   return (
-    <View style={s.roundCarouselWrap}>
+    <View
+      style={s.roundCarouselWrap}
+      onLayout={(event) => {
+        const nextWidth = Math.round(event.nativeEvent.layout.width)
+        if (nextWidth > 0 && nextWidth !== containerWidth) setContainerWidth(nextWidth)
+      }}
+    >
       <ScrollView
         horizontal
         pagingEnabled
@@ -769,6 +777,7 @@ function firLabel(value: PersonalRoundFir) {
 function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: SavedRound[]; handicapBasis?: number; myName: string | null; myUserId: string | null }) {
   const [targetScore, setTargetScore] = useState('')
   const [detailModal, setDetailModal] = useState<'target' | 'trend' | 'hole' | 'score' | 'rank' | 'improve' | 'rounds' | 'shot' | null>(null)
+  const [reportSectionWidth, setReportSectionWidth] = useState(0)
   const [personalStatsBySchedule, setPersonalStatsBySchedule] = useState<Record<string, PersonalRoundHoleStat[]>>({})
   const [memberNamesBySchedule, setMemberNamesBySchedule] = useState<Record<string, string>>({})
   const byName = new Map<string, PlayerRound[]>()
@@ -1017,7 +1026,8 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
               : detailModal === 'shot' ? '샷/퍼팅 분석'
                 : '라운드별 상세'
 
-  const reportCardWidth = Math.min(270, Math.max(224, Dimensions.get('window').width * 0.64))
+  const reportBaseWidth = reportSectionWidth > 0 ? reportSectionWidth : 360
+  const reportCardWidth = Math.min(270, Math.max(224, reportBaseWidth * 0.64))
   const personalReportCards = [
     { key: 'target', icon: '🎯', title: '목표 설정', subtitle: `${targetScore || '100'}타 목표 관리`, modal: 'target' },
     { key: 'trend', icon: '📈', title: '스코어 추이', subtitle: `최근5 평균 ${recent5Avg}타`, modal: 'trend' },
@@ -1186,7 +1196,13 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
         </View>
       </View>
 
-      <View style={s.personalReportSection}>
+      <View
+        style={s.personalReportSection}
+        onLayout={(event) => {
+          const nextWidth = Math.round(event.nativeEvent.layout.width)
+          if (nextWidth > 0 && nextWidth !== reportSectionWidth) setReportSectionWidth(nextWidth)
+        }}
+      >
         <View style={s.personalReportHeader}>
           <View>
             <Text style={s.personalReportEyebrow}>Personal Report</Text>

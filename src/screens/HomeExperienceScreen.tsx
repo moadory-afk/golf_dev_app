@@ -1826,7 +1826,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   scratchCard: {
-    width: "31.7%",
+    flexBasis: "30%",
+    flexGrow: 1,
+    minWidth: 0,
     minHeight: 142,
     borderWidth: 1,
     borderRadius: 14,
@@ -2157,7 +2159,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   recordBadgeCard: {
-    width: "48%",
+    flexBasis: "47%",
+    flexGrow: 1,
+    minWidth: 0,
     minHeight: 92,
     borderWidth: 1,
     borderRadius: 16,
