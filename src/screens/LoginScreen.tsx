@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { AntDesign } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { ensureProfile } from '../lib/store';
 import { C } from '../theme';
@@ -183,18 +184,17 @@ export default function LoginScreen({ navigation }: { navigation: any }) {
             disabled={loading}
             activeOpacity={0.86}
           >
-            <Text style={s.googleMark}>G</Text>
+            <AntDesign name="google" size={20} color="#4285F4" />
             <Text style={s.googleBtnText}>Google로 계속하기</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[s.socialBtn, s.kakaoBtn, loading && s.btnDisabled]}
-            onPress={handleKakaoLogin}
-            disabled={loading}
+            disabled={true}
             activeOpacity={0.86}
           >
             <Text style={s.kakaoMark}>💬</Text>
-            <Text style={s.kakaoBtnText}>카카오로 계속하기</Text>
+            <Text style={s.kakaoBtnText}>카카오(준비중)</Text>
           </TouchableOpacity>
         </View>
 
@@ -231,7 +231,6 @@ const s = StyleSheet.create({
   dividerText: { marginHorizontal: 12, fontSize: 12, color: C.muted },
   socialBtn: { borderRadius: 12, minHeight: 48, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   googleBtn: { backgroundColor: '#fff', borderWidth: 1, borderColor: C.border },
-  googleMark: { fontSize: 18, fontWeight: '900', color: '#4285F4' },
   googleBtnText: { color: C.text, fontWeight: '700', fontSize: 14 },
   kakaoBtn: { marginTop: 10, backgroundColor: '#FEE500' },
   kakaoMark: { fontSize: 18 },
