@@ -506,8 +506,7 @@ export default function ClubScreen() {
                       {
                         marginHorizontal: isCompactScreen ? -12 : -16,
                         marginTop: -12,
-                        minHeight: isCompactScreen ? 245 : 280,
-                        maxHeight: Math.max(260, Math.round(windowHeight * 0.42)),
+                        height: Math.round(windowWidth * 0.7 + insets.top),
                       },
                     ]}
                   > 
@@ -1235,7 +1234,6 @@ const s = StyleSheet.create({
   },
   clubHeroCard: {
     width: 'auto',
-    aspectRatio: 16 / 10.5,
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
     borderBottomLeftRadius: 56,
