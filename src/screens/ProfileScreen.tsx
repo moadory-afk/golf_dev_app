@@ -22,8 +22,10 @@ import {
 } from "../components/ImageCropModal";
 import { supabase } from "../lib/supabase";
 import { useUserProfile } from "../lib/UserProfileContext";
+import { useClub } from "../lib/ClubContext";
 import { C } from "../theme";
 import { useSkin, type SkinId } from "../skins";
+import type { RootStackProps } from "../navigation/types";
 
 const PROFILE_EMOJIS = [
   "🏌️",
@@ -420,9 +422,11 @@ function KakaoAddressSearchModal({
   );
 }
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }: RootStackProps<"Profile">) {
   const { refreshProfile } = useUserProfile();
+  const { activeClub } = useClub();
   const { skinId, skins, setSkinId, palette } = useSkin();
+  const isAdmin = activeClub?.role === "admin";
   const [user, setUser] = useState<User | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [editNameVal, setEditNameVal] = useState("");
@@ -452,7 +456,7 @@ export default function ProfileScreen() {
     DEFAULT_DISTANCE_FORM,
   );
   const [savingDistances, setSavingDistances] = useState(false);
-  const departureBufferMinutes = 40;
+  const [departureBufferInput, setDepartureBufferInput] = useState("40");
 
   useEffect(() => {
     let alive = true;
@@ -468,7 +472,7 @@ export default function ProfileScreen() {
       if (authUser) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("name, nickname, home_address, home_latitude, home_longitude")
+          .select("name, nickname, home_address, home_latitude, home_longitude, departure_buffer_minutes")
           .eq("id", authUser.id)
           .maybeSingle();
         fallbackName = profile?.nickname ?? profile?.name ?? "";
@@ -480,6 +484,12 @@ export default function ProfileScreen() {
             Number.isFinite(latitude) && Number.isFinite(longitude)
               ? { latitude, longitude }
               : null,
+          );
+          const bufferMinutes = Number(profile.departure_buffer_minutes);
+          setDepartureBufferInput(
+            Number.isFinite(bufferMinutes) && bufferMinutes >= 0
+              ? String(Math.round(bufferMinutes))
+              : "40",
           );
         }
 
@@ -665,22 +675,25 @@ export default function ProfileScreen() {
     setShowAddressSearch(false);
   }
 
-  async function handleSaveHome() {
-    if (!user) return;
+  async function handleSaveHome(options?: { silent?: boolean }) {
+    if (!user) return false;
 
     const address = homeAddress.trim();
-    if (!address) {
-      Alert.alert("입력 확인", "집 주소를 입력해주세요.");
-      return;
-    }
+    const departureBufferMinutes = normalizeDistanceValue(
+      departureBufferInput,
+      40,
+    );
 
     setSavingHome(true);
     try {
-      const point = selectedHomePoint ?? (await geocodeAddress(address));
+      const point = address
+        ? selectedHomePoint ?? (await geocodeAddress(address))
+        : null;
       const payload = {
         home_address: address,
         home_latitude: point?.latitude ?? null,
         home_longitude: point?.longitude ?? null,
+        departure_buffer_minutes: departureBufferMinutes,
         updated_at: new Date().toISOString(),
       };
 
@@ -701,17 +714,21 @@ export default function ProfileScreen() {
         if (insertError) throw insertError;
       }
       await refreshProfile();
-      if (point) Alert.alert("저장 완료", "출발지 정보가 저장되었습니다.");
-      else
+      setDepartureBufferInput(String(departureBufferMinutes));
+      if (!options?.silent && point) Alert.alert("저장 완료", "출발지 정보가 저장되었습니다.");
+      else if (!options?.silent && address)
         Alert.alert(
           "주소 저장 완료",
           "주소는 저장했지만 좌표를 찾지 못했습니다. 카카오 REST API 키 또는 더 자세한 주소를 확인해주세요.",
         );
+      else if (!options?.silent) Alert.alert("저장 완료", "프로필 설정이 저장되었습니다.");
+      return true;
     } catch (e: unknown) {
       Alert.alert(
         "오류",
         e instanceof Error ? e.message : "출발지 저장에 실패했습니다.",
       );
+      return false;
     } finally {
       setSavingHome(false);
     }
@@ -724,8 +741,12 @@ export default function ProfileScreen() {
     }));
   }
 
-  async function handleSaveDistances() {
-    if (!user) return;
+  function handleChangeDepartureBuffer(value: string) {
+    setDepartureBufferInput(value.replace(/[^0-9]/g, ""));
+  }
+
+  async function handleSaveDistances(options?: { silent?: boolean }) {
+    if (!user) return false;
 
     const payload: Record<string, number | string> = {
       user_id: user.id,
@@ -750,16 +771,52 @@ export default function ProfileScreen() {
         nextForm[field.key] = String(payload[field.key]);
       });
       setDistanceForm(nextForm);
-      Alert.alert("저장 완료", "클럽별 거리 정보가 저장되었습니다.");
+      if (!options?.silent) Alert.alert("저장 완료", "클럽별 거리 정보가 저장되었습니다.");
+      return true;
     } catch (e: unknown) {
       Alert.alert(
         "오류",
         e instanceof Error ? e.message : "클럽 거리 저장에 실패했습니다.",
       );
+      return false;
     } finally {
       setSavingDistances(false);
     }
   }
+
+  async function handleSaveProfileSettings() {
+    const savedHome = await handleSaveHome({ silent: true });
+    if (!savedHome) return;
+    const savedDistances = await handleSaveDistances({ silent: true });
+    if (savedDistances) Alert.alert("저장 완료", "프로필 설정이 저장되었습니다.");
+  }
+
+  useEffect(() => {
+    const savingProfileSettings = savingHome || savingDistances;
+    navigation.setOptions({
+      headerRight: () => (
+        <View style={p.headerActions}>
+          <TouchableOpacity
+            style={[
+              p.headerSaveButton,
+              savingProfileSettings && { opacity: 0.55 },
+            ]}
+            onPress={handleSaveProfileSettings}
+            disabled={savingProfileSettings}
+          >
+            {savingProfileSettings ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={p.headerSaveText}>저장</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={p.headerCloseButton}>
+            <Text style={p.headerCloseText}>닫기</Text>
+          </TouchableOpacity>
+        </View>
+      ),
+    });
+  });
 
   async function handleChangePassword() {
     if (newPw.length < 6) {
@@ -1047,26 +1104,24 @@ export default function ProfileScreen() {
           </TouchableOpacity>
           <View style={p.bufferRow}>
             <View>
-              <Text style={p.bufferTitle}>🚗 출발 준비시간</Text>
+              <Text style={p.bufferTitle}>🚗 준비시간</Text>
               <Text style={p.settingHint}>
-                현재 Sprint에서는 40분으로 고정합니다.
+                출발 추천 시간 계산에 사용할 여유 시간을 분 단위로 입력하세요.
               </Text>
             </View>
-            <View style={p.bufferPill}>
-              <Text style={p.bufferPillText}>{departureBufferMinutes}분</Text>
+            <View style={p.bufferInputWrap}>
+              <TextInput
+                style={p.bufferInput}
+                value={departureBufferInput}
+                onChangeText={handleChangeDepartureBuffer}
+                placeholder="40"
+                placeholderTextColor={C.muted}
+                keyboardType="number-pad"
+                maxLength={3}
+              />
+              <Text style={p.bufferUnit}>분</Text>
             </View>
           </View>
-          <TouchableOpacity
-            style={[p.homeSaveButton, savingHome && { opacity: 0.6 }]}
-            onPress={handleSaveHome}
-            disabled={savingHome}
-          >
-            {savingHome ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={p.homeSaveButtonText}>출발지 저장</Text>
-            )}
-          </TouchableOpacity>
         </View>
 
         <Text style={p.sectionLabel}>클럽별 평균거리</Text>
@@ -1091,73 +1146,66 @@ export default function ProfileScreen() {
               </View>
             ))}
           </View>
-          <TouchableOpacity
-            style={[p.homeSaveButton, savingDistances && { opacity: 0.6 }]}
-            onPress={handleSaveDistances}
-            disabled={savingDistances}
-          >
-            {savingDistances ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={p.homeSaveButtonText}>클럽 거리 저장</Text>
-            )}
-          </TouchableOpacity>
         </View>
 
-        <Text style={p.sectionLabel}>디자인 스킨</Text>
-        <View style={p.skinGrid}>
-          {skins.map((item) => {
-            const active = item.id === skinId;
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  p.skinCard,
-                  {
-                    borderColor: active ? palette.green : palette.border,
-                    backgroundColor: palette.card,
-                    borderRadius: palette.cardRadius,
-                  },
-                  active && { backgroundColor: palette.greenLight },
-                ]}
-                onPress={() => setSkinId(item.id as SkinId)}
-                activeOpacity={0.82}
-              >
-                <View style={p.skinSwatches}>
-                  <View
+        {isAdmin && (
+          <>
+            <Text style={p.sectionLabel}>디자인 스킨</Text>
+            <View style={p.skinGrid}>
+              {skins.map((item) => {
+                const active = item.id === skinId;
+                return (
+                  <TouchableOpacity
+                    key={item.id}
                     style={[
-                      p.skinSwatch,
-                      { backgroundColor: item.palette.headerBg },
+                      p.skinCard,
+                      {
+                        borderColor: active ? palette.green : palette.border,
+                        backgroundColor: palette.card,
+                        borderRadius: palette.cardRadius,
+                      },
+                      active && { backgroundColor: palette.greenLight },
                     ]}
-                  />
-                  <View
-                    style={[
-                      p.skinSwatch,
-                      { backgroundColor: item.palette.accent },
-                    ]}
-                  />
-                  <View
-                    style={[p.skinSwatch, { backgroundColor: item.palette.bg }]}
-                  />
-                </View>
-                <Text style={[p.skinName, { color: palette.text }]}>
-                  {item.name}
-                </Text>
-                <Text
-                  style={[p.skinDesc, { color: palette.muted }]}
-                  numberOfLines={2}
-                >
-                  {item.description}
-                </Text>
-                {active && (
-                  <Text style={[p.skinActiveText, { color: palette.green }]}>
-                    적용중
-                  </Text>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+                    onPress={() => setSkinId(item.id as SkinId)}
+                    activeOpacity={0.82}
+                  >
+                    <View style={p.skinSwatches}>
+                      <View
+                        style={[
+                          p.skinSwatch,
+                          { backgroundColor: item.palette.headerBg },
+                        ]}
+                      />
+                      <View
+                        style={[
+                          p.skinSwatch,
+                          { backgroundColor: item.palette.accent },
+                        ]}
+                      />
+                      <View
+                        style={[p.skinSwatch, { backgroundColor: item.palette.bg }]}
+                      />
+                    </View>
+                    <Text style={[p.skinName, { color: palette.text }]}>
+                      {item.name}
+                    </Text>
+                    <Text
+                      style={[p.skinDesc, { color: palette.muted }]}
+                      numberOfLines={2}
+                    >
+                      {item.description}
+                    </Text>
+                    {active && (
+                      <Text style={[p.skinActiveText, { color: palette.green }]}>
+                        적용중
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </>
+        )}
 
         <Text style={p.sectionLabel}>계정</Text>
         <View style={p.menuCard}>
@@ -1232,6 +1280,26 @@ const p = StyleSheet.create({
     color: "rgba(255,255,255,0.6)",
     marginTop: 4,
   },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  headerSaveButton: {
+    minWidth: 54,
+    minHeight: 32,
+    borderRadius: 16,
+    backgroundColor: C.green,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 13,
+  },
+  headerSaveText: { color: "#fff", fontSize: 13, fontWeight: "900" },
+  headerCloseButton: {
+    minHeight: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  headerCloseText: { color: "#fff", fontSize: 13, fontWeight: "800" },
   nameInput: {
     fontSize: 18,
     fontWeight: "700",
@@ -1328,13 +1396,25 @@ const p = StyleSheet.create({
     paddingTop: 14,
   },
   bufferTitle: { fontSize: 14, fontWeight: "800", color: C.text },
-  bufferPill: {
-    backgroundColor: C.greenLight,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+  bufferInputWrap: {
+    minWidth: 92,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderRadius: 14,
+    backgroundColor: "#fafafa",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
   },
-  bufferPillText: { color: C.green, fontSize: 13, fontWeight: "900" },
+  bufferInput: {
+    flex: 1,
+    color: C.green,
+    fontSize: 15,
+    fontWeight: "900",
+    textAlign: "right",
+    paddingVertical: 8,
+  },
+  bufferUnit: { color: C.muted, fontSize: 13, fontWeight: "800", marginLeft: 4 },
   homeSaveButton: {
     backgroundColor: C.green,
     borderRadius: 50,

@@ -596,19 +596,19 @@ function RoundFlipCard({
                 <View style={s.roundCounter}><Text style={s.roundCounterText}>{index + 1} / {totalCount}</Text></View>
                 <View style={{ alignItems: 'flex-end', gap: 7 }}>
                   <View style={round.isComplete ? s.heroCompleteBadge : s.heroProgressBadge}><Text style={s.heroStatusText}>{round.isComplete ? '라운드 완료' : '라운드 중'}</Text></View>
-                  <TouchableOpacity
-                    activeOpacity={0.84}
-                    disabled={photoSaving}
-                    onPress={(event) => {
-                      event.stopPropagation()
-                      handlePickRoundPhoto()
-                    }}
-                    style={s.roundPhotoButton}
-                  >
-                    {photoSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.roundPhotoButtonText}>{coverPhoto ? '사진 변경' : '사진 등록'}</Text>}
-                  </TouchableOpacity>
                 </View>
               </View>
+              <TouchableOpacity
+                activeOpacity={0.84}
+                disabled={photoSaving}
+                onPress={(event) => {
+                  event.stopPropagation()
+                  handlePickRoundPhoto()
+                }}
+                style={s.roundPhotoButton}
+              >
+                {photoSaving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.roundPhotoButtonText}>{coverPhoto ? '사진 변경' : '사진 등록'}</Text>}
+              </TouchableOpacity>
               <View style={s.heroCourseBlock}>
                 <Text style={s.heroDate}>{round.date.replace(/-/g, '.')}</Text>
                 <Text style={s.heroCourseName} numberOfLines={2}>{round.courseName}</Text>
@@ -2019,7 +2019,7 @@ const s = StyleSheet.create({
   roundHeroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   roundCounter: { backgroundColor: 'rgba(7,22,18,0.58)', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 6 },
   roundCounterText: { color: '#fff', fontSize: 12, fontWeight: '800' },
-  roundPhotoButton: { minWidth: 78, minHeight: 31, borderRadius: 16, backgroundColor: 'rgba(7,22,18,0.58)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.34)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 11 },
+  roundPhotoButton: { position: 'absolute', right: 14, bottom: 14, minWidth: 78, minHeight: 31, borderRadius: 16, backgroundColor: 'rgba(7,22,18,0.58)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.34)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 11 },
   roundPhotoButtonText: { color: '#fff', fontSize: 11, fontWeight: '900' },
   roundSummaryBody: { flex: 1, padding: 14, gap: 10, justifyContent: 'space-between' },
   heroCompleteBadge: { backgroundColor: 'rgba(237,248,242,0.9)', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 6 },

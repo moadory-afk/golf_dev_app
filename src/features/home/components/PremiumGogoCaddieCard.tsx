@@ -124,7 +124,6 @@ export function PremiumGogoCaddieCard({
             {feedItems.map((item) => (
               <View key={item.id} style={[styles.slide, slideWidth > 0 ? { width: slideWidth } : null]}>
                 <TouchableOpacity activeOpacity={0.9} onPress={() => runFeedAction(item)} style={styles.content}>
-                  <Text style={[styles.title, { color: palette.text }]} numberOfLines={2}>{item.title}</Text>
                   <View style={styles.messageRow}>
                     <Text style={styles.messageIcon}>{item.icon}</Text>
                     <Text style={[styles.message, { color: palette.muted }]} numberOfLines={5}>{item.message}</Text>
@@ -187,9 +186,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   characterImage: {
-    width: 138,
-    height: 166,
-    marginBottom: -8,
+    width: 130,
+    height: 174,
+    marginBottom: -18,
   },
   rightColumn: {
     flex: 1,

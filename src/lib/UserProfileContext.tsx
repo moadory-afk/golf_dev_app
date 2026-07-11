@@ -56,7 +56,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
       try {
         const { data } = await supabase
           .from('profiles')
-          .select('name, nickname, home_address, home_latitude, home_longitude')
+          .select('name, nickname, home_address, home_latitude, home_longitude, departure_buffer_minutes')
           .eq('id', user.id)
           .maybeSingle()
         profileName = data?.name ?? null
@@ -64,6 +64,10 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
         const homeAddress = data?.home_address ?? ''
         const homeLatitude = typeof data?.home_latitude === 'number' ? data.home_latitude : null
         const homeLongitude = typeof data?.home_longitude === 'number' ? data.home_longitude : null
+        const savedBufferMinutes = Number(data?.departure_buffer_minutes)
+        const departureBufferMinutes = Number.isFinite(savedBufferMinutes) && savedBufferMinutes >= 0
+          ? Math.round(savedBufferMinutes)
+          : 40
         setProfile((prev) => {
           const name = profileName ?? (prev.userId === user.id ? prev.name ?? fallback : fallback)
           return {
@@ -76,7 +80,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
             homeAddress,
             homeLatitude,
             homeLongitude,
-            departureBufferMinutes: 40,
+            departureBufferMinutes,
             loading: false,
           }
         })
