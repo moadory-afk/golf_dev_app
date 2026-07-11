@@ -3,6 +3,7 @@ import { getHomeDashboard } from '../services/homeService'
 import { createEmptyHomeDashboard } from '../mappers/homeMapper'
 import type { HomeDashboard, HomeDashboardState } from '../types/home'
 import { supabase } from '../../../lib/supabase'
+import { subscribeHomeDashboardChanged } from '../../../lib/homeDashboardEvents'
 
 type UseHomeDashboardParams = {
   clubId?: string | null
@@ -88,6 +89,12 @@ export function useHomeDashboard({ clubId, userName, userId, homeLatitude, homeL
     return () => {
       supabase.removeChannel(channel)
     }
+  }, [clubId, refresh])
+
+  useEffect(() => {
+    return subscribeHomeDashboardChanged((changedClubId) => {
+      if (!changedClubId || changedClubId === clubId) refresh()
+    })
   }, [clubId, refresh])
 
   return useMemo(

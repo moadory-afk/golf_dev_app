@@ -21,6 +21,7 @@ import { EmojiIcon } from '../components/EmojiIcon'
 import { ImageCropModal, type ImageCropRect } from '../components/ImageCropModal'
 import type { MainTabParamList, RootStackParamList } from '../navigation/types'
 import { isCompactWidth } from '../lib/responsive'
+import { notifyHomeDashboardChanged } from '../lib/homeDashboardEvents'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
 type ClubRoute = RouteProp<MainTabParamList, 'Club'>
@@ -318,14 +319,6 @@ export default function ClubScreen() {
 
   const managementMenus = club ? [
     {
-      key: 'fee',
-      title: '회비 관리',
-      subtitle: '회비 정책과 납부 현황을 확인합니다',
-      icon: 'money' as const,
-      featured: true,
-      onPress: () => nav.navigate('FeePrototype', { returnToManageMenu: true }),
-    },
-    {
       key: 'roundSchedule',
       title: '라운드 관리',
       subtitle: '날짜, 시간, 골프장 정보를 등록하고 예정 라운드를 관리합니다',
@@ -333,32 +326,11 @@ export default function ClubScreen() {
       onPress: () => nav.navigate('RoundSchedulePrototype', { returnToManageMenu: true }),
     },
     {
-      key: 'lottoAward',
-      title: 'Lotto 시상 기준',
-      subtitle: '적중 개수별 시상금과 이월 여부를 설정합니다',
-      icon: 'trophy' as const,
-      onPress: () => setLottoAwardOpen(true),
-    },
-    {
       key: 'courseImages',
       title: '골프장 사진 관리',
       subtitle: '골프장 계절별 Hero 사진을 등록합니다',
       icon: 'camera' as const,
       onPress: () => setCourseImagesOpen(true),
-    },
-    {
-      key: 'notice',
-      title: '공지 관리',
-      subtitle: '공지 등록과 게시 상태를 관리합니다',
-      icon: 'mail' as const,
-      onPress: () => nav.navigate('NoticePrototype', { returnToManageMenu: true }),
-    },
-    {
-      key: 'createClub',
-      title: '새 동호회 만들기',
-      subtitle: '별도 클럽을 만들고 운영을 시작합니다',
-      icon: 'flag' as const,
-      onPress: () => setCreateClubOpen(true),
     },
     {
       key: 'heroLab',
@@ -679,17 +651,19 @@ export default function ClubScreen() {
                     <Text style={s.criteriaCollapsedText}>기네스북에 반영되는 기록 기준을 확인합니다.</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={s.card}
-                    onPress={() => nav.navigate('FeePrototype', { returnToManageMenu: true })}
-                    activeOpacity={0.86}
-                  >
-                    <View style={s.cardTitleRow}>
-                      <Text style={[s.cardTitle, { marginBottom: 0 }]}>회비관리 현황</Text>
-                      <Text style={s.more}>확인하기</Text>
-                    </View>
-                    <Text style={s.criteriaCollapsedText}>회비 현황과 납부 상태를 확인합니다.</Text>
-                  </TouchableOpacity>
+                  {isManagerView && (
+                    <TouchableOpacity
+                      style={s.card}
+                      onPress={() => setManageMenuOpen(true)}
+                      activeOpacity={0.86}
+                    >
+                      <View style={s.cardTitleRow}>
+                        <Text style={[s.cardTitle, { marginBottom: 0 }]}>기타관리</Text>
+                        <Text style={s.more}>열기</Text>
+                      </View>
+                      <Text style={s.criteriaCollapsedText}>관리자 전용 추가 기능을 확인합니다.</Text>
+                    </TouchableOpacity>
+                  )}
             </>
           )}
 
@@ -1266,6 +1240,7 @@ async function uploadCourseSeasonImage(courseId: string, season: SeasonKey, uri:
     }, { onConflict: 'golf_course_id,season' })
 
   if (saveError) throw saveError
+  notifyHomeDashboardChanged()
   return publicUrl
 }
 

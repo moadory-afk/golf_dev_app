@@ -22,6 +22,7 @@ import {
 } from '../lib/roundSchedule'
 import { completeRound, deleteRoundsBySchedule, getClubAwardConfig, getClubMembers, getClubSettlement, getCourseLayouts, getGolfCourses, getRoundLottoDraw, getRounds, saveClubAwardConfig, saveClubAwardSnapshots, saveClubSettlement, saveRound, saveRoundLottoDrafter, totalPar, type CourseLayout, type GolfCourse } from '../lib/store'
 import { AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
+import { notifyHomeDashboardChanged } from '../lib/homeDashboardEvents'
 import { computeClubAwardResults } from '../lib/awardResults'
 import { recognizeScorecard, mergeScorecards, type RecognizedScorecard } from '../features/ocr'
 import { findBestOcrMatch } from '../lib/nameMatch'
@@ -406,6 +407,7 @@ export default function RoundSchedulePrototypeScreen() {
           })),
         })
         setItems(next)
+        notifyHomeDashboardChanged(club.id)
         setDraft((current) => ({ ...current, awardConfig }))
       } else {
         await saveClubAwardConfig(club.id, awardConfig)
@@ -451,6 +453,7 @@ export default function RoundSchedulePrototypeScreen() {
           })),
         })
         setItems(next)
+        notifyHomeDashboardChanged(club.id)
       }
       if (!draft.id) {
         await saveClubSettlement(club.id, {
@@ -809,6 +812,7 @@ export default function RoundSchedulePrototypeScreen() {
         })),
       })
       setItems(next)
+      notifyHomeDashboardChanged(club.id)
       closeEditor()
     } finally {
       setSaving(false)
@@ -826,6 +830,7 @@ export default function RoundSchedulePrototypeScreen() {
       await deleteRoundsBySchedule(draft.id)
       const next = await deleteRoundSchedule(club.id, draft.id)
       setItems(next)
+      notifyHomeDashboardChanged(club.id)
       closeEditor()
     } finally {
       setSaving(false)
@@ -862,6 +867,7 @@ export default function RoundSchedulePrototypeScreen() {
         })),
       })
       setItems(next)
+      notifyHomeDashboardChanged(club.id)
       const rounds = await getRounds(club.id)
       const finishedRound = rounds.find((round) => draft.id && round.scheduleId === draft.id) ?? rounds.find((round) =>
         round.date === draft.date && (!draft.courseName || round.courseName === draft.courseName)
@@ -946,6 +952,7 @@ export default function RoundSchedulePrototypeScreen() {
         })),
       })
       setItems(next)
+      notifyHomeDashboardChanged(club.id)
       closeEditor()
     } finally {
       setSaving(false)
