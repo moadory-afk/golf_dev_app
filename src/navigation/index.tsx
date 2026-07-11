@@ -255,16 +255,6 @@ function MainTabs() {
               paddingBottom: spacing.sm,
             },
         tabBarShowLabel: !isModern,
-        tabBarButton: (props: any) => (
-          <TouchableOpacity
-            {...props}
-            activeOpacity={0.78}
-            style={[
-              props.style,
-              isModern && ({ outlineStyle: 'none' } as any),
-            ]}
-          />
-        ),
         tabBarIconStyle: isModern
           ? {
               width: '100%',
@@ -424,9 +414,10 @@ const navStyles = StyleSheet.create({
     height: 58,
     borderRadius: radius.xl,
     borderWidth: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    gap: 6,
   },
   tabIconBubble: {
     width: 30,
@@ -436,8 +427,8 @@ const navStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   tabButtonText: {
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 13,
+    lineHeight: 16,
     fontWeight: '900',
     textAlign: 'center',
   },
