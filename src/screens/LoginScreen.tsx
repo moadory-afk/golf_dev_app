@@ -1,9 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { ensureProfile } from '../lib/store';
 import { C } from '../theme';
+
+
+function getSocialUserName(user: { email?: string | null; user_metadata?: Record<string, unknown> }): string {
+  const metadata = user.user_metadata ?? {}
+  const candidates = [metadata.full_name, metadata.name, metadata.user_name, metadata.nickname]
+  const socialName = candidates.find((value) => typeof value === 'string' && value.trim().length > 0)
+
+  if (typeof socialName === 'string') return socialName.trim()
+  return user.email?.split('@')[0] ?? 'GogoPar 회원'
+}
 
 function nameToEmail(name: string): string {
   const hex = Array.from(name.trim())
@@ -21,6 +31,80 @@ export default function LoginScreen({ navigation }: { navigation: any }) {
 
   function clearError() {
     setErrorMsg(null)
+  }
+
+  useEffect(() => {
+    let active = true
+
+    async function completeSocialLogin(user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> }) {
+      try {
+        await ensureProfile(user.id, getSocialUserName(user))
+      } catch {
+        // 로그인은 성공했으므로 프로필 보정 실패는 막지 않습니다.
+      }
+
+      if (active) {
+        navigation.reset({ index: 0, routes: [{ name: 'Main' }] })
+      }
+    }
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) completeSocialLogin(session.user)
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        completeSocialLogin(session.user)
+      }
+    })
+
+    return () => {
+      active = false
+      subscription.unsubscribe()
+    }
+  }, [navigation])
+
+  async function handleGoogleLogin() {
+    if (Platform.OS !== 'web') {
+      setErrorMsg('현재 Google 로그인은 웹 버전에서 사용할 수 있습니다.')
+      return
+    }
+
+    setErrorMsg(null)
+    setLoading(true)
+
+    const redirectTo = window.location.origin
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo },
+    })
+
+    if (error) {
+      setLoading(false)
+      setErrorMsg(`Google 로그인 실패: ${error.message}`)
+    }
+  }
+
+
+  async function handleKakaoLogin() {
+    if (Platform.OS !== 'web') {
+      setErrorMsg('현재 Kakao 로그인은 웹 버전에서 사용할 수 있습니다.')
+      return
+    }
+
+    setErrorMsg(null)
+    setLoading(true)
+
+    const redirectTo = window.location.origin
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'kakao',
+      options: { redirectTo },
+    })
+
+    if (error) {
+      setLoading(false)
+      setErrorMsg(`Kakao 로그인 실패: ${error.message}`)
+    }
   }
 
   async function handleLogin() {
@@ -86,6 +170,32 @@ export default function LoginScreen({ navigation }: { navigation: any }) {
           <TouchableOpacity style={[s.btn, loading && s.btnDisabled]} onPress={handleLogin} disabled={loading}>
             <Text style={s.btnText}>{loading ? '처리 중...' : '로그인'}</Text>
           </TouchableOpacity>
+
+          <View style={s.dividerRow}>
+            <View style={s.divider} />
+            <Text style={s.dividerText}>간편 로그인</Text>
+            <View style={s.divider} />
+          </View>
+
+          <TouchableOpacity
+            style={[s.socialBtn, s.googleBtn, loading && s.btnDisabled]}
+            onPress={handleGoogleLogin}
+            disabled={loading}
+            activeOpacity={0.86}
+          >
+            <Text style={s.googleMark}>G</Text>
+            <Text style={s.googleBtnText}>Google로 계속하기</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[s.socialBtn, s.kakaoBtn, loading && s.btnDisabled]}
+            onPress={handleKakaoLogin}
+            disabled={loading}
+            activeOpacity={0.86}
+          >
+            <Text style={s.kakaoMark}>💬</Text>
+            <Text style={s.kakaoBtnText}>카카오로 계속하기</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={s.signupCard}>
@@ -116,10 +226,16 @@ const s = StyleSheet.create({
   signupCard: { backgroundColor: '#fff', borderRadius: 16, padding: 18, borderWidth: 1, borderColor: C.border },
   signupTitle: { fontSize: 16, fontWeight: '900', color: C.text },
   signupSub: { fontSize: 12, color: C.muted, lineHeight: 18, marginTop: 6 },
-  socialRow: { gap: 8, marginTop: 14 },
-  socialBtn: { borderRadius: 12, paddingVertical: 13, alignItems: 'center', justifyContent: 'center' },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 18 },
+  divider: { flex: 1, height: 1, backgroundColor: C.border },
+  dividerText: { marginHorizontal: 12, fontSize: 12, color: C.muted },
+  socialBtn: { borderRadius: 12, minHeight: 48, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   googleBtn: { backgroundColor: '#fff', borderWidth: 1, borderColor: C.border },
-  kakaoBtn: { backgroundColor: '#fee500' },
+  googleMark: { fontSize: 18, fontWeight: '900', color: '#4285F4' },
+  googleBtnText: { color: C.text, fontWeight: '700', fontSize: 14 },
+  kakaoBtn: { marginTop: 10, backgroundColor: '#FEE500' },
+  kakaoMark: { fontSize: 18 },
+  kakaoBtnText: { color: '#191919', fontWeight: '700', fontSize: 14 },
   signupBtn: { backgroundColor: C.green, borderRadius: 12, paddingVertical: 10, alignItems: 'center' },
   signupBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
 })
