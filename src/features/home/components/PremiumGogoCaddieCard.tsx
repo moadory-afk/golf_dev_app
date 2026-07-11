@@ -118,6 +118,8 @@ export function PremiumGogoCaddieCard({
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             scrollEnabled={feedItems.length > 1}
+            scrollEventThrottle={16}
+            onScroll={(event) => syncPageFromOffset(event.nativeEvent.contentOffset.x)}
             onScrollEndDrag={(event) => syncPageFromOffset(event.nativeEvent.contentOffset.x)}
             onMomentumScrollEnd={(event) => syncPageFromOffset(event.nativeEvent.contentOffset.x)}
           >
@@ -207,6 +209,9 @@ const styles = StyleSheet.create({
   messageIcon: { fontSize: 13, lineHeight: 17 },
   message: { flex: 1, minWidth: 0, fontSize: 12, lineHeight: 17, fontWeight: '800' },
   primaryAction: {
+    alignSelf: 'flex-start',
+    minWidth: 136,
+    maxWidth: '70%',
     minHeight: 34,
     borderRadius: radius.lg,
     paddingHorizontal: 13,

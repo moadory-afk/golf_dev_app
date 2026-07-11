@@ -640,7 +640,7 @@ function RoundFlipCard({
       </Animated.View>
 
       <Animated.View pointerEvents={flipped ? 'auto' : 'none'} style={[s.flipFace, s.flipBackFace, { opacity: backOpacity, transform: [{ perspective: 1200 }, { rotateY: backRotate }] }]}>
-        <View style={s.backCard}>
+        <TouchableOpacity activeOpacity={1} style={s.backCard} onPress={toggleFlip}>
           <View style={s.backHeader}>
             <TouchableOpacity onPress={toggleFlip} style={s.backIconBtn}><Text style={s.backIconText}>↻</Text></TouchableOpacity>
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -712,7 +712,7 @@ function RoundFlipCard({
             </ScrollView>}
           </View>
           <TouchableOpacity style={s.flipBackHint} onPress={toggleFlip}><Text style={s.flipBackHintText}>↻ 앞면 요약으로 돌아가기</Text></TouchableOpacity>
-        </View>
+        </TouchableOpacity>
       </Animated.View>
     </View>
     {photoCropSource ? (
@@ -2019,7 +2019,7 @@ const s = StyleSheet.create({
   roundHeroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   roundCounter: { backgroundColor: 'rgba(7,22,18,0.58)', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 6 },
   roundCounterText: { color: '#fff', fontSize: 12, fontWeight: '800' },
-  roundPhotoButton: { position: 'absolute', right: 14, bottom: 14, minWidth: 78, minHeight: 31, borderRadius: 16, backgroundColor: 'rgba(7,22,18,0.58)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.34)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 11 },
+  roundPhotoButton: { position: 'absolute', right: 14, bottom: 14, zIndex: 20, elevation: 20, minWidth: 78, minHeight: 31, borderRadius: 16, backgroundColor: 'rgba(7,22,18,0.58)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.34)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 11 },
   roundPhotoButtonText: { color: '#fff', fontSize: 11, fontWeight: '900' },
   roundSummaryBody: { flex: 1, padding: 14, gap: 10, justifyContent: 'space-between' },
   heroCompleteBadge: { backgroundColor: 'rgba(237,248,242,0.9)', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 6 },

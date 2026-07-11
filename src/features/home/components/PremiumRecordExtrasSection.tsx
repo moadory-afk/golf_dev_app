@@ -30,6 +30,9 @@ export function PremiumRecordExtrasSection({ cards = defaultCards }: { cards?: R
 function RecordExtraCardView({ card }: { card: RecordExtraCard }) {
   const { palette } = useSkin()
   const isEmpty = !card.title
+  const valueMatch = (card.subtitle ?? '').match(/[+-]?\d+(?:\.\d+)?(?:개|회)?/)
+  const value = valueMatch?.[0] ?? ''
+  const caption = value ? (card.subtitle ?? '').replace(value, '').trim() : (card.subtitle ?? '')
 
   return (
     <TouchableOpacity
@@ -45,9 +48,9 @@ function RecordExtraCardView({ card }: { card: RecordExtraCard }) {
         },
       ]}
     >
-      {!!card.icon && <Text style={styles.icon}>{card.icon}</Text>}
       {!!card.title && <Text style={[styles.title, { color: palette.text }]} numberOfLines={1}>{card.title}</Text>}
-      {!!card.subtitle && <Text style={[styles.subtitle, { color: palette.muted }]} numberOfLines={1}>{card.subtitle}</Text>}
+      {!!value && <Text style={[styles.value, { color: palette.green }]} numberOfLines={1}>{value}</Text>}
+      {!!caption && <Text style={[styles.subtitle, { color: palette.muted }]} numberOfLines={1}>{caption}</Text>}
     </TouchableOpacity>
   )
 }
@@ -66,9 +69,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
     paddingVertical: spacing.sm,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  icon: { fontSize: 18, lineHeight: 22, marginBottom: 3 },
-  title: { fontSize: 11, lineHeight: 14, fontWeight: '900', letterSpacing: -0.3 },
+  title: { fontSize: 11, lineHeight: 14, fontWeight: '900', letterSpacing: -0.3, marginBottom: 3 },
+  value: { fontSize: 22, lineHeight: 27, fontWeight: '900', letterSpacing: -0.9 },
   subtitle: { fontSize: 9, lineHeight: 12, fontWeight: '800', marginTop: 3 },
 })
