@@ -49,6 +49,25 @@ function urgencyTone(date?: string): HomeHeroRound['urgencyTone'] {
   return 'calm'
 }
 
+function seasonForDate(date?: string): 'spring' | 'summer' | 'autumn' | 'winter' {
+  const month = Number(date?.slice(5, 7))
+  if (month >= 3 && month <= 5) return 'spring'
+  if (month >= 6 && month <= 8) return 'summer'
+  if (month >= 9 && month <= 11) return 'autumn'
+  return 'winter'
+}
+
+function resolveHeroImageUrl(raw: HomeDashboardRawData, course?: HomeCourseRow, date?: string) {
+  if (!course?.id) return course?.hero_image_url ?? null
+
+  const season = seasonForDate(date)
+  const seasonImage = raw.courseSeasonImages.find((item) =>
+    item.golf_course_id === course.id && item.season === season && item.image_url
+  )
+
+  return seasonImage?.image_url ?? course.hero_image_url ?? null
+}
+
 function routeTimeText() {
   return '이동시간 준비중'
 }
@@ -218,6 +237,7 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow, 
     windText: weather?.windText ?? '풍속 준비중',
     courseId: schedule.course_id ?? course?.id,
     layoutId: schedule.layout_id ?? layout?.id,
+    heroImageUrl: resolveHeroImageUrl(raw, course, schedule.round_date),
     locationLabel: locationParts.join(' · ') || '골프장 위치 준비중',
     routeTimeText: routeTimeText(),
     departureTimeText: departureTimeText(),

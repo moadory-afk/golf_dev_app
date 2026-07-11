@@ -8,7 +8,8 @@ import type { RouteProp } from '@react-navigation/native'
 import { useState, useCallback, useEffect } from 'react'
 import * as ImageManipulator from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
-import { DEFAULT_LOTTO_AWARD_CONFIG, createClub, getClubLottoAwardConfig, getClubMembers, getClubNotices, getRounds, playerTotal, totalPar, computeHandicaps, saveClubLottoAwardConfig, shortName, updateClubSettings, type ClubInfo, type ClubNotice, type LottoAwardConfig, type SavedRound } from '../lib/store'
+import { DEFAULT_LOTTO_AWARD_CONFIG, createClub, getClubLottoAwardConfig, getClubMembers, getClubNotices, getGolfCourses, getRounds, playerTotal, totalPar, computeHandicaps, saveClubLottoAwardConfig, shortName, updateClubSettings, type ClubInfo, type ClubNotice, type GolfCourse, type LottoAwardConfig, type SavedRound } from '../lib/store'
+import { supabase } from '../lib/supabase'
 import { useClub } from '../lib/ClubContext'
 import { useUserProfile } from '../lib/UserProfileContext'
 import { useAsync } from '../lib/useAsync'
@@ -95,6 +96,7 @@ export default function ClubScreen() {
   const [showHallCriteria, setShowHallCriteria] = useState(false)
   const [manageMenuOpen, setManageMenuOpen] = useState(false)
   const [createClubOpen, setCreateClubOpen] = useState(false)
+  const [courseImagesOpen, setCourseImagesOpen] = useState(false)
   const [lottoAwardOpen, setLottoAwardOpen] = useState(false)
   const { name: myName } = useUserProfile()
 
@@ -338,6 +340,13 @@ export default function ClubScreen() {
       onPress: () => setLottoAwardOpen(true),
     },
     {
+      key: 'courseImages',
+      title: '골프장 사진 관리',
+      subtitle: '골프장 계절별 Hero 사진을 등록합니다',
+      icon: 'camera' as const,
+      onPress: () => setCourseImagesOpen(true),
+    },
+    {
       key: 'notice',
       title: '공지 관리',
       subtitle: '공지 등록과 게시 상태를 관리합니다',
@@ -406,6 +415,13 @@ export default function ClubScreen() {
             setRefreshKey((key) => key + 1)
             setLottoAwardOpen(false)
           }}
+        />
+      )}
+      {courseImagesOpen && (
+        <CourseSeasonImageModal
+          compact={isCompactScreen}
+          windowHeight={windowHeight}
+          onClose={() => setCourseImagesOpen(false)}
         />
       )}
       {manageMenuOpen && isManagerView && (
@@ -1203,6 +1219,243 @@ function LottoAwardConfigModal({
   )
 }
 
+type SeasonKey = 'spring' | 'summer' | 'autumn' | 'winter'
+type CourseSeasonImageRow = {
+  golf_course_id: string
+  season: SeasonKey
+  image_url: string
+}
+
+const SEASONS: Array<{ key: SeasonKey; label: string; desc: string }> = [
+  { key: 'spring', label: '봄', desc: '3~5월' },
+  { key: 'summer', label: '여름', desc: '6~8월' },
+  { key: 'autumn', label: '가을', desc: '9~11월' },
+  { key: 'winter', label: '겨울', desc: '12~2월' },
+]
+
+async function uploadCourseSeasonImage(courseId: string, season: SeasonKey, uri: string) {
+  const compressed = await ImageManipulator.manipulateAsync(
+    uri,
+    [{ resize: { width: 1400 } }],
+    { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG },
+  )
+  const response = await fetch(compressed.uri)
+  const blob = await response.blob()
+  const path = `${courseId}/${season}.jpg`
+
+  const { error: uploadError } = await supabase.storage
+    .from('course-images')
+    .upload(path, blob, {
+      contentType: 'image/jpeg',
+      upsert: true,
+    })
+  if (uploadError) throw uploadError
+
+  const { data } = supabase.storage.from('course-images').getPublicUrl(path)
+  const publicUrl = `${data.publicUrl}?v=${Date.now()}`
+
+  const { error: saveError } = await supabase
+    .from('golf_course_season_images')
+    .upsert({
+      golf_course_id: courseId,
+      season,
+      image_url: publicUrl,
+      image_source: 'supabase_storage',
+      is_active: true,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'golf_course_id,season' })
+
+  if (saveError) throw saveError
+  return publicUrl
+}
+
+function CourseSeasonImageModal({
+  compact,
+  windowHeight,
+  onClose,
+}: {
+  compact: boolean
+  windowHeight: number
+  onClose: () => void
+}) {
+  const [courseReloadKey, setCourseReloadKey] = useState(0)
+  const { data: courses, loading: coursesLoading } = useAsync(() => getGolfCourses(), [courseReloadKey])
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null)
+  const [images, setImages] = useState<Record<SeasonKey, string | null>>({
+    spring: null,
+    summer: null,
+    autumn: null,
+    winter: null,
+  })
+  const [loadingImages, setLoadingImages] = useState(false)
+  const [savingSeason, setSavingSeason] = useState<SeasonKey | null>(null)
+  const courseList = courses ?? []
+  const selectedCourse = courseList.find((course) => course.id === selectedCourseId) ?? courseList[0] ?? null
+
+  useEffect(() => {
+    if (courseList[0] && (!selectedCourseId || !courseList.some((course) => course.id === selectedCourseId))) {
+      setSelectedCourseId(courseList[0].id)
+    }
+  }, [courseList, selectedCourseId])
+
+  useEffect(() => {
+    if (!selectedCourse?.id) return
+    let mounted = true
+    setLoadingImages(true)
+    supabase
+      .from('golf_course_season_images')
+      .select('golf_course_id, season, image_url')
+      .eq('golf_course_id', selectedCourse.id)
+      .eq('is_active', true)
+      .then(({ data, error }) => {
+        if (!mounted) return
+        if (error) throw error
+        const next: Record<SeasonKey, string | null> = {
+          spring: null,
+          summer: null,
+          autumn: null,
+          winter: null,
+        }
+        ;((data ?? []) as CourseSeasonImageRow[]).forEach((row) => {
+          next[row.season] = row.image_url
+        })
+        setImages(next)
+      })
+      .catch((error) => {
+        if (mounted) Alert.alert('오류', error instanceof Error ? error.message : String(error))
+      })
+      .finally(() => {
+        if (mounted) setLoadingImages(false)
+      })
+    return () => {
+      mounted = false
+    }
+  }, [selectedCourse?.id])
+
+  async function pickSeasonImage(season: SeasonKey) {
+    if (!selectedCourse?.id) return
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) {
+      Alert.alert('권한 필요', '사진 접근 권한이 필요합니다.')
+      return
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [16, 10],
+      quality: 0.9,
+    })
+    if (result.canceled || !result.assets[0]) return
+
+    setSavingSeason(season)
+    try {
+      const publicUrl = await uploadCourseSeasonImage(selectedCourse.id, season, result.assets[0].uri)
+      setImages((prev) => ({ ...prev, [season]: publicUrl }))
+    } catch (error) {
+      Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
+    } finally {
+      setSavingSeason(null)
+    }
+  }
+
+  return (
+    <Modal transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity
+          style={[
+            s.modalCard,
+            {
+              width: compact ? '94%' : '90%',
+              maxHeight: Math.round(windowHeight * 0.86),
+              padding: compact ? 16 : 20,
+            },
+          ]}
+          activeOpacity={1}
+          onPress={() => {}}
+        >
+          <View style={s.modalHeader}>
+            <Text style={s.modalTitle}>골프장 사진 관리</Text>
+            <TouchableOpacity style={s.closeBtn} onPress={onClose}>
+              <Text style={s.closeBtnText}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+
+          {coursesLoading ? (
+            <ActivityIndicator color={C.green} />
+          ) : (
+            <ScrollView contentContainerStyle={s.courseImageBody}>
+              <Text style={s.courseImageHelp}>라운드 날짜의 계절에 맞는 사진이 홈 히어로에 표시됩니다.</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.courseChipRow}>
+                {courseList.map((course: GolfCourse) => {
+                  const active = course.id === selectedCourse?.id
+                  return (
+                    <TouchableOpacity
+                      key={course.id}
+                      style={[s.courseChip, active && s.courseChipActive]}
+                      onPress={() => setSelectedCourseId(course.id)}
+                      activeOpacity={0.82}
+                    >
+                      <Text style={[s.courseChipText, active && s.courseChipTextActive]} numberOfLines={1}>{course.name}</Text>
+                    </TouchableOpacity>
+                  )
+                })}
+              </ScrollView>
+
+              {selectedCourse ? (
+                <>
+                  <View style={s.selectedCourseBox}>
+                    <Text style={s.selectedCourseName}>{selectedCourse.name}</Text>
+                    <Text style={s.selectedCourseRegion}>{selectedCourse.region}</Text>
+                  </View>
+                  {loadingImages ? (
+                    <ActivityIndicator color={C.green} />
+                  ) : (
+                    <View style={s.seasonImageGrid}>
+                      {SEASONS.map((season) => {
+                        const imageUrl = images[season.key]
+                        const saving = savingSeason === season.key
+                        return (
+                          <TouchableOpacity
+                            key={season.key}
+                            style={s.seasonImageCard}
+                            activeOpacity={0.86}
+                            onPress={() => pickSeasonImage(season.key)}
+                            disabled={!!savingSeason}
+                          >
+                            {imageUrl ? (
+                              <Image source={{ uri: imageUrl }} style={s.seasonImagePreview} resizeMode="cover" />
+                            ) : (
+                              <View style={s.seasonImageEmpty}>
+                                <Icon name="camera" size={24} color={C.green} />
+                              </View>
+                            )}
+                            <View style={s.seasonImageFooter}>
+                              <View>
+                                <Text style={s.seasonImageTitle}>{season.label}</Text>
+                                <Text style={s.seasonImageDesc}>{season.desc}</Text>
+                              </View>
+                              {saving ? <ActivityIndicator color={C.green} /> : <Text style={s.seasonImageAction}>{imageUrl ? '변경' : '등록'}</Text>}
+                            </View>
+                          </TouchableOpacity>
+                        )
+                      })}
+                    </View>
+                  )}
+                </>
+              ) : (
+                <Text style={s.muted}>등록된 골프장이 없습니다.</Text>
+              )}
+              <TouchableOpacity style={s.infoActionBtn} onPress={() => setCourseReloadKey((key) => key + 1)} activeOpacity={0.82}>
+                <Text style={s.infoActionText}>골프장 목록 새로고침</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          )}
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  )
+}
+
 const s = StyleSheet.create({
   header: {
     backgroundColor: C.greenDark, paddingBottom: 20, paddingHorizontal: 20,
@@ -1548,6 +1801,55 @@ const s = StyleSheet.create({
   lottoSwitchOn: { backgroundColor: C.green },
   lottoSwitchText: { fontSize: 11, fontWeight: '900', color: C.muted },
   lottoSwitchTextOn: { color: '#fff' },
+  courseImageBody: { gap: 12, paddingBottom: 8 },
+  courseImageHelp: { fontSize: 13, color: C.muted, lineHeight: 19 },
+  courseChipRow: { gap: 8, paddingRight: 4 },
+  courseChip: {
+    maxWidth: 170,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: '#f2f4f6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  courseChipActive: { backgroundColor: C.greenLight, borderColor: C.green },
+  courseChipText: { fontSize: 12, fontWeight: '900', color: C.muted },
+  courseChipTextActive: { color: C.green },
+  selectedCourseBox: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: '#fff',
+    padding: 12,
+  },
+  selectedCourseName: { fontSize: 15, fontWeight: '900', color: C.text },
+  selectedCourseRegion: { marginTop: 3, fontSize: 12, fontWeight: '700', color: C.muted },
+  seasonImageGrid: { gap: 10 },
+  seasonImageCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  seasonImagePreview: { width: '100%', height: 128, backgroundColor: C.greenLight },
+  seasonImageEmpty: {
+    height: 128,
+    backgroundColor: C.greenLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  seasonImageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    padding: 12,
+  },
+  seasonImageTitle: { fontSize: 14, fontWeight: '900', color: C.text },
+  seasonImageDesc: { marginTop: 2, fontSize: 11, fontWeight: '800', color: C.muted },
+  seasonImageAction: { fontSize: 12, fontWeight: '900', color: C.green },
   closeBtn: { backgroundColor: C.green, borderRadius: 20, paddingVertical: 5, paddingHorizontal: 14 },
   closeBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   tableHeader: { flexDirection: 'row', borderBottomWidth: 1.5, borderBottomColor: C.border, paddingBottom: 7, marginBottom: 2 },

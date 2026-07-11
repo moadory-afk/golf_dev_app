@@ -40,12 +40,22 @@ export type HomeCourseRow = {
   region: string
   latitude?: number | null
   longitude?: number | null
+  hero_image_url?: string | null
+  hero_image_source?: string | null
 }
 
 export type HomeLayoutRow = {
   id: string
   golf_course_id: string
   name: string
+}
+
+export type HomeCourseSeasonImageRow = {
+  golf_course_id: string
+  season: 'spring' | 'summer' | 'autumn' | 'winter'
+  image_url: string
+  image_source?: string | null
+  is_active?: boolean | null
 }
 
 export type HomeWeatherSnapshot = {
@@ -64,6 +74,7 @@ export type HomeDashboardRawData = {
   groups: HomeScheduleGroupRow[]
   members: HomeScheduleGroupMemberRow[]
   courses: HomeCourseRow[]
+  courseSeasonImages: HomeCourseSeasonImageRow[]
   layouts: HomeLayoutRow[]
   rounds: SavedRound[]
   weatherByCourseId: Record<string, HomeWeatherSnapshot>
@@ -129,7 +140,7 @@ async function fetchHomeCourses(courseIds: string[]) {
 
   const extendedResult = await supabase
     .from('golf_courses')
-    .select('id, name, region, latitude, longitude')
+    .select('id, name, region, latitude, longitude, hero_image_url, hero_image_source')
     .in('id', courseIds)
 
   if (!extendedResult.error) return extendedResult
@@ -139,6 +150,16 @@ async function fetchHomeCourses(courseIds: string[]) {
     .from('golf_courses')
     .select('id, name, region')
     .in('id', courseIds)
+}
+
+async function fetchCourseSeasonImages(courseIds: string[]) {
+  if (!courseIds.length) return { data: [] as HomeCourseSeasonImageRow[], error: null }
+
+  return supabase
+    .from('golf_course_season_images')
+    .select('golf_course_id, season, image_url, image_source, is_active')
+    .in('golf_course_id', courseIds)
+    .eq('is_active', true)
 }
 
 export async function getHomeDashboardRawData(clubId: string): Promise<HomeDashboardRawData> {
@@ -161,7 +182,7 @@ export async function getHomeDashboardRawData(clubId: string): Promise<HomeDashb
   const courseIds = uniqueValues(scheduleRows.map((schedule) => schedule.course_id))
   const layoutIds = uniqueValues(scheduleRows.map((schedule) => schedule.layout_id))
 
-  const [groupResult, memberResult, courseResult, layoutResult, rounds] = await Promise.all([
+  const [groupResult, memberResult, courseResult, seasonImageResult, layoutResult, rounds] = await Promise.all([
     scheduleIds.length
       ? supabase
           .from('club_round_groups')
@@ -177,6 +198,7 @@ export async function getHomeDashboardRawData(clubId: string): Promise<HomeDashb
           .order('sort_order', { ascending: true })
       : Promise.resolve({ data: [], error: null }),
     fetchHomeCourses(courseIds),
+    fetchCourseSeasonImages(courseIds),
     layoutIds.length
       ? supabase
           .from('course_layouts')
@@ -189,6 +211,7 @@ export async function getHomeDashboardRawData(clubId: string): Promise<HomeDashb
   if (groupResult.error) throw groupResult.error
   if (memberResult.error) throw memberResult.error
   if (courseResult.error) throw courseResult.error
+  if (seasonImageResult.error) throw seasonImageResult.error
   if (layoutResult.error) throw layoutResult.error
 
   const courseRows = (courseResult.data ?? []) as HomeCourseRow[]
@@ -199,6 +222,7 @@ export async function getHomeDashboardRawData(clubId: string): Promise<HomeDashb
     groups: (groupResult.data ?? []) as HomeScheduleGroupRow[],
     members: (memberResult.data ?? []) as HomeScheduleGroupMemberRow[],
     courses: courseRows,
+    courseSeasonImages: (seasonImageResult.data ?? []) as HomeCourseSeasonImageRow[],
     layouts: (layoutResult.data ?? []) as HomeLayoutRow[],
     rounds,
     weatherByCourseId: buildWeatherByCourseId(scheduleRows, weatherByScheduleId),

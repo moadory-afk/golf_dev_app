@@ -192,7 +192,9 @@ function HeroRoundCard({
   onAwardPress?: (round: HomeHeroRound) => void;
   onEditRoundPress?: (round: HomeHeroRound) => void;
 }) {
-  const roundHeroImageSource = getCourseHeroImageSource(round.courseName);
+  const roundHeroImageSource = round.heroImageUrl
+    ? { uri: round.heroImageUrl }
+    : getCourseHeroImageSource(round.courseName);
   const [flipped, setFlipped] = useState(false);
   const flip = useRef(new Animated.Value(0)).current;
 

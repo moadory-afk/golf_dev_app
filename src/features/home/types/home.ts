@@ -23,6 +23,7 @@ export type HomeUpcomingRound = {
   windText?: string
   courseId?: string
   layoutId?: string
+  heroImageUrl?: string | null
 }
 
 export type HomeHeroRound = HomeUpcomingRound & {
