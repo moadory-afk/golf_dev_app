@@ -7,7 +7,7 @@ import Navigation from './src/navigation'
 
 import InviteScreen from './src/screens/InviteScreen'
 import PromoScreen from './src/screens/PromoScreen'
-import { Platform, View, ActivityIndicator, Text, ScrollView, StyleSheet } from 'react-native'
+import { Platform, View, ActivityIndicator, Text, ScrollView, StyleSheet, useWindowDimensions } from 'react-native'
 import { C } from './src/theme'
 import { AppProviders } from './src/app'
 
@@ -30,13 +30,20 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 }
 
 function WebFrame({ children }: { children: ReactNode }) {
+  const { width } = useWindowDimensions()
   if (Platform.OS !== 'web') return <>{children}</>
+  const isMobileWeb = width <= 430
+
   return (
     <View style={{ flex: 1, backgroundColor: '#c8d8c8', alignItems: 'center', justifyContent: 'center' }}>
       <View style={{
-        width: 390, height: '100%', maxHeight: 844,
-        overflow: 'hidden', borderRadius: 12,
-        boxShadow: '0 8px 40px rgba(0,0,0,0.3)',
+        width: isMobileWeb ? '100%' : 390,
+        maxWidth: isMobileWeb ? '100%' : 390,
+        height: '100%',
+        maxHeight: isMobileWeb ? '100%' : 844,
+        overflow: 'hidden',
+        borderRadius: isMobileWeb ? 0 : 12,
+        boxShadow: isMobileWeb ? 'none' : '0 8px 40px rgba(0,0,0,0.3)',
       } as any}>
         {children}
       </View>

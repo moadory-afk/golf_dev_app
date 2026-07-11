@@ -1,7 +1,7 @@
 import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Animated, Easing, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SkinProvider, useSkin } from '../skins'
 import { Icon, type IconName } from '../components/Icon'
@@ -89,6 +89,10 @@ function SwipeableTabScene({
     }).start()
   }
 
+  useEffect(() => {
+    translateX.setValue(0)
+  }, [current, sceneWidth, translateX])
+
   const panResponder = useMemo(
     () =>
       PanResponder.create({
@@ -167,11 +171,13 @@ function TabIcon({
   color,
   emoji,
   icon,
+  title,
 }: {
   focused: boolean
   color: string
   emoji: string
   icon: IconName
+  title: string
 }) {
   const { palette, isModern } = useSkin()
   if (!isModern) {
@@ -181,12 +187,28 @@ function TabIcon({
   return (
     <View
       style={[
-        navStyles.tabIconPill,
-        { borderColor: focused ? palette.gold : palette.border },
+        navStyles.tabButtonContent,
+        { borderColor: focused ? palette.green : 'transparent' },
         focused && { backgroundColor: palette.tabActiveBg },
       ]}
     >
-      <Icon name={icon} size={20} color={focused ? palette.accentText : palette.muted} strokeWidth={focused ? 2.3 : 1.8} />
+      <View
+        style={[
+          navStyles.tabIconBubble,
+          { backgroundColor: focused ? palette.green : 'transparent' },
+        ]}
+      >
+        <Icon name={icon} size={focused ? 19 : 18} color={focused ? '#fff' : palette.muted} strokeWidth={focused ? 2.5 : 1.9} />
+      </View>
+      <Text
+        style={[
+          navStyles.tabButtonText,
+          { color: focused ? palette.text : palette.muted },
+        ]}
+        numberOfLines={1}
+      >
+        {title}
+      </Text>
     </View>
   )
 }
@@ -195,7 +217,7 @@ function MainTabs() {
   const { palette, isModern } = useSkin()
   const tabBarIcon = (name: keyof MainTabParamList) =>
     ({ focused, color }: { focused: boolean; color: string }) => (
-      <TabIcon focused={focused} color={color} emoji={TAB_META[name].emoji} icon={TAB_META[name].icon} />
+      <TabIcon focused={focused} color={color} emoji={TAB_META[name].emoji} icon={TAB_META[name].icon} title={TAB_META[name].title} />
     )
 
   return (
@@ -208,17 +230,18 @@ function MainTabs() {
         tabBarStyle: isModern
           ? {
               position: 'absolute',
-              left: spacing.lg,
-              right: spacing.lg,
-              bottom: spacing.md,
-              height: 72,
+              left: spacing.md,
+              right: spacing.md,
+              bottom: spacing.sm,
+              height: 78,
               borderTopWidth: 0,
               borderRadius: radius.xxl,
               borderWidth: 1,
               borderColor: colorLayers.cardHairline,
               backgroundColor: palette.tabBg,
-              paddingTop: spacing.sm,
-              paddingBottom: spacing.sm,
+              paddingHorizontal: spacing.sm,
+              paddingTop: 7,
+              paddingBottom: 7,
               shadowColor: palette.greenDark,
               shadowOpacity: palette.shadowOpacity * 2,
               shadowRadius: 18,
@@ -231,10 +254,29 @@ function MainTabs() {
               height: 58,
               paddingBottom: spacing.sm,
             },
+        tabBarShowLabel: !isModern,
+        tabBarButton: (props: any) => (
+          <TouchableOpacity
+            {...props}
+            activeOpacity={0.78}
+            style={[
+              props.style,
+              isModern && ({ outlineStyle: 'none' } as any),
+            ]}
+          />
+        ),
+        tabBarIconStyle: isModern
+          ? {
+              width: '100%',
+              height: 58,
+              marginTop: 0,
+            }
+          : undefined,
         tabBarItemStyle: isModern
           ? {
+              height: 64,
               borderRadius: radius.xl,
-              paddingVertical: spacing.xs,
+              paddingVertical: 0,
             }
           : undefined,
         tabBarLabelStyle: {
@@ -377,12 +419,26 @@ const navStyles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  tabIconPill: {
-    minWidth: 48,
-    height: 30,
-    borderRadius: radius.pill,
+  tabButtonContent: {
+    width: '94%',
+    height: 58,
+    borderRadius: radius.xl,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 2,
+  },
+  tabIconBubble: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabButtonText: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '900',
+    textAlign: 'center',
   },
 })
