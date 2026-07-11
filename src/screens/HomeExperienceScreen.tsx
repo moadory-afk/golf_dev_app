@@ -248,6 +248,30 @@ function formatGolfScore(score: number | undefined, par: number | undefined) {
   return `+${diff}`;
 }
 
+function compactGolfScoreLabel(label: string) {
+  return label
+    .replace("더블보기", "더블")
+    .replace("트리플보기", "트리플")
+    .replace("더블+", "더블")
+    .replace("양파+", "양파")
+    .trim();
+}
+
+function isLottoScoreHit(
+  myScore: number | undefined,
+  par: number | undefined,
+  drawScore: RoundLottoDrawScore | null,
+) {
+  if (typeof myScore !== "number" || typeof par !== "number" || !drawScore) return false;
+
+  const myLabel = compactGolfScoreLabel(formatGolfScore(myScore, par));
+  const drawLabel = compactGolfScoreLabel(
+    drawScore.label ?? formatGolfScore(drawScore.score, drawScore.par ?? par),
+  );
+
+  return myLabel === drawLabel;
+}
+
 function weightedLottoScore(par: number) {
   const rand = Math.random();
   const weights =
@@ -1159,6 +1183,7 @@ function RoundInfoModal({
   onManage: () => void;
 }) {
   const { palette } = useSkin();
+  const [revealedLottoHoles, setRevealedLottoHoles] = useState<number[]>([]);
   const groups = groupLines(round);
   const isGroups = mode === "groups";
   const isLotto = mode === "lotto";
@@ -1222,6 +1247,25 @@ function RoundInfoModal({
     myScore: myLottoStrokes?.[hole - 1],
     drawScore: lottoDraw?.drawnScores?.[String(hole)] ?? null,
   }));
+
+  const myLottoHitCount = myLottoResultRows.filter((item) =>
+    isLottoScoreHit(item.myScore, item.par, item.drawScore)
+  ).length;
+  const myLottoResultText =
+    myLottoHitCount === 6
+      ? `6개 적중 ${formatWon(lottoJackpot)}`
+      : myLottoHitCount === 4
+        ? `4개 적중 ${formatWon(lottoConfig.prizes["4"] ?? 10000)}`
+        : myLottoHitCount === 3
+          ? `3개 적중 ${formatWon(lottoConfig.prizes["3"] ?? 5000)}`
+          : "낙첨";
+  const allLottoCardsRevealed =
+    myLottoResultRows.length === 6 &&
+    myLottoResultRows.every((item) => revealedLottoHoles.includes(item.hole));
+
+  useEffect(() => {
+    setRevealedLottoHoles([]);
+  }, [visible, round?.id, lottoDraw?.drawStatus]);
 
   const modalTitle = isGroups
     ? "조편성 결과"
@@ -1361,9 +1405,7 @@ function RoundInfoModal({
 
               <View style={[styles.popupSection, { borderColor: palette.border }]}>
                 <View style={styles.popupSectionHeader}>
-                  <Text style={[styles.popupSectionTitle, { color: palette.text }]}>
-                    결과 확인
-                  </Text>
+                  <View />
                   {canDrawLotto ? (
                     <TouchableOpacity
                       activeOpacity={0.86}
@@ -1382,14 +1424,20 @@ function RoundInfoModal({
 
                 {lottoDraw?.drawStatus === "COMPLETED" && lottoDraw.drawnScores ? (
                   <>
-                    <View style={styles.lottoPrizeRow}>
-                      <Text style={[styles.lottoPrizeText, { color: palette.green }]}>
-                        6개 적중 상금
-                      </Text>
-                      <Text style={[styles.lottoPrizeAmount, { color: palette.text }]}>
-                        {formatWon(lottoJackpot)}
-                      </Text>
-                    </View>
+                    {allLottoCardsRevealed ? (
+                      <View style={styles.lottoPrizeRow}>
+                        <Text style={[styles.lottoResultSummary, { color: palette.green }]}>
+                          결과 :{" "}
+                          <Text
+                            style={{
+                              color: myLottoHitCount >= 3 ? palette.green : "#E8594F",
+                            }}
+                          >
+                            {myLottoResultText}
+                          </Text>
+                        </Text>
+                      </View>
+                    ) : null}
                     {myLottoEntry && myLottoResultRows.length === 6 ? (
                       <>
                         <View style={styles.myLottoScratchGrid}>
@@ -1400,6 +1448,13 @@ function RoundInfoModal({
                               par={item.par}
                               myScore={item.myScore}
                               drawScore={item.drawScore}
+                              onReveal={() =>
+                                setRevealedLottoHoles((current) =>
+                                  current.includes(item.hole)
+                                    ? current
+                                    : [...current, item.hole]
+                                )
+                              }
                             />
                           ))}
                         </View>
@@ -1468,42 +1523,47 @@ function ScratchLottoResultCard({
   par,
   myScore,
   drawScore,
+  onReveal,
 }: {
   hole: number;
   par?: number;
   myScore?: number;
   drawScore: RoundLottoDrawScore | null;
+  onReveal: () => void;
 }) {
   const { palette } = useSkin();
   const [revealed, setRevealed] = useState(false);
   const scratchCount = useRef(0);
+  const revealCard = () => {
+    setRevealed((current) => {
+      if (!current) onReveal();
+      return true;
+    });
+  };
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
         scratchCount.current += 1;
-        if (scratchCount.current >= 2) setRevealed(true);
+        if (scratchCount.current >= 2) revealCard();
       },
       onPanResponderMove: () => {
         scratchCount.current += 1;
-        if (scratchCount.current >= 5) setRevealed(true);
+        if (scratchCount.current >= 5) revealCard();
       },
     }),
   ).current;
-  const isHit = typeof myScore === "number" && !!drawScore && myScore === drawScore.score;
+  const isHit = isLottoScoreHit(myScore, par, drawScore);
   const drawLabel = drawScore
-    ? (drawScore.label ?? formatGolfScore(drawScore.score, par))
+    ? compactGolfScoreLabel(drawScore.label ?? formatGolfScore(drawScore.score, drawScore.par ?? par))
     : "-";
 
   return (
     <View style={[styles.scratchCard, { borderColor: palette.border }]}>
-      <Text style={[styles.scratchHole, { color: palette.text }]}>{hole}H</Text>
-
       <View style={styles.scratchScoreRow}>
-        <Text style={[styles.scratchScoreLabel, { color: palette.muted }]}>내 스코어 :</Text>
         <Text style={[styles.scratchMyScore, { color: palette.text }]}>
-          {formatGolfScore(myScore, par)}
+          {`${hole}H : ${compactGolfScoreLabel(formatGolfScore(myScore, par))}`}
         </Text>
       </View>
 
@@ -1810,6 +1870,12 @@ const styles = StyleSheet.create({
   lottoPrizeAmount: {
     fontSize: 14,
     lineHeight: 19,
+    fontWeight: "900",
+  },
+  lottoResultSummary: {
+    flex: 1,
+    fontSize: 18,
+    lineHeight: 24,
     fontWeight: "900",
   },
   lottoDrawStartButton: {
