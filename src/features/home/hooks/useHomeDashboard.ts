@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getHomeDashboard } from '../services/homeService'
 import { createEmptyHomeDashboard } from '../mappers/homeMapper'
 import type { HomeDashboard, HomeDashboardState } from '../types/home'
+import { supabase } from '../../../lib/supabase'
 
 type UseHomeDashboardParams = {
   clubId?: string | null
@@ -50,6 +51,44 @@ export function useHomeDashboard({ clubId, userName, userId, homeLatitude, homeL
   const refresh = useCallback(() => {
     setRefreshKey((value) => value + 1)
   }, [])
+
+  useEffect(() => {
+    if (!clubId) return
+
+    const channel = supabase
+      .channel(`home-dashboard:${clubId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'club_round_schedules',
+        filter: `club_id=eq.${clubId}`,
+      }, refresh)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'club_round_groups',
+      }, refresh)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'club_round_group_members',
+      }, refresh)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'golf_courses',
+      }, refresh)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'golf_course_season_images',
+      }, refresh)
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [clubId, refresh])
 
   return useMemo(
     () => ({ dashboard, loading, error, refresh }),

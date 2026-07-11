@@ -501,6 +501,7 @@ export default function HomeExperienceScreen() {
   useFocusEffect(
     useCallback(() => {
       let mounted = true;
+      refresh();
       AsyncStorage.getItem(COURSE_HERO_STORAGE_KEY)
         .then((value) => {
           if (mounted) setSelectedHeroKey(value);
@@ -511,7 +512,7 @@ export default function HomeExperienceScreen() {
       return () => {
         mounted = false;
       };
-    }, []),
+    }, [refresh]),
   );
 
   const activeHeroImageSource = selectedHeroKey
