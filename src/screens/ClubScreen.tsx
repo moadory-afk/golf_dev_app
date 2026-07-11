@@ -543,7 +543,7 @@ export default function ClubScreen() {
                       {
                         marginHorizontal: isCompactScreen ? -12 : -16,
                         marginTop: -12,
-                        height: Math.round(windowWidth * 0.7 + insets.top),
+                        height: Math.round(windowWidth * 0.56 + insets.top),
                       },
                     ]}
                   > 
@@ -1244,10 +1244,10 @@ const s = StyleSheet.create({
     width: 'auto',
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
-    borderBottomLeftRadius: 56,
-    borderBottomRightRadius: 56,
+    borderBottomLeftRadius: 48,
+    borderBottomRightRadius: 48,
     overflow: 'hidden',
-    marginBottom: 7,
+    marginBottom: 3,
     backgroundColor: '#10291d',
     shadowColor: '#10291d',
     shadowOpacity: 0.16,
