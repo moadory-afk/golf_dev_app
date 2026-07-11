@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -26,6 +27,8 @@ import { useClub } from "../lib/ClubContext";
 import { C } from "../theme";
 import { useSkin, type SkinId } from "../skins";
 import type { RootStackProps } from "../navigation/types";
+
+const APP_URL = "https://golf-seven-psi.vercel.app";
 
 const PROFILE_EMOJIS = [
   "🏌️",
@@ -847,6 +850,28 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
     if (Platform.OS === "web") window.location.href = "/";
   }
 
+  async function handleSendSignupGuideSms() {
+    const message = [
+      "GogoPar 골프 동호회 앱 설치 및 회원가입 안내",
+      "",
+      "아래 링크를 눌러 앱에 접속한 뒤 회원가입을 진행해주세요.",
+      APP_URL,
+    ].join("\n");
+    const separator = Platform.OS === "ios" ? "&" : "?";
+    const url = `sms:${separator}body=${encodeURIComponent(message)}`;
+
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        Alert.alert("문자 앱을 열 수 없습니다", message);
+        return;
+      }
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert("문자 앱을 열 수 없습니다", message);
+    }
+  }
+
   return (
     <View style={p.screen}>
       {pendingPhotoCrop && (
@@ -1103,10 +1128,10 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
             <Text style={p.addressPickerAction}>검색</Text>
           </TouchableOpacity>
           <View style={p.bufferRow}>
-            <View>
+            <View style={p.bufferTextArea}>
               <Text style={p.bufferTitle}>🚗 준비시간</Text>
               <Text style={p.settingHint}>
-                출발 추천 시간 계산에 사용할 여유 시간을 분 단위로 입력하세요.
+                출발 추천에 사용할 여유 시간입니다.
               </Text>
             </View>
             <View style={p.bufferInputWrap}>
@@ -1215,6 +1240,12 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
           >
             <Text style={p.menuIcon}>🔑</Text>
             <Text style={p.menuText}>비밀번호 변경</Text>
+            <Text style={p.menuArrow}>›</Text>
+          </TouchableOpacity>
+          <View style={p.menuDivider} />
+          <TouchableOpacity style={p.menuRow} onPress={handleSendSignupGuideSms}>
+            <Text style={p.menuIcon}>📝</Text>
+            <Text style={p.menuText}>어플 회원가입 안내</Text>
             <Text style={p.menuArrow}>›</Text>
           </TouchableOpacity>
           <View style={p.menuDivider} />
@@ -1396,8 +1427,9 @@ const p = StyleSheet.create({
     paddingTop: 14,
   },
   bufferTitle: { fontSize: 14, fontWeight: "800", color: C.text },
+  bufferTextArea: { flex: 1, minWidth: 0 },
   bufferInputWrap: {
-    minWidth: 92,
+    width: 76,
     borderWidth: 1.5,
     borderColor: C.border,
     borderRadius: 14,
