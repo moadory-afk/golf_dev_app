@@ -232,7 +232,7 @@ function MainTabs() {
               position: 'absolute',
               left: spacing.md,
               right: spacing.md,
-              bottom: spacing.sm,
+              bottom: spacing.sm + 10,
               height: 55,
               borderTopWidth: 0,
               borderRadius: radius.xxl,
@@ -252,7 +252,7 @@ function MainTabs() {
               borderTopColor: palette.border,
               backgroundColor: palette.tabBg,
               height: 52,
-              paddingBottom: 4,
+              paddingBottom: 14,
             },
         tabBarShowLabel: !isModern,
         tabBarIconStyle: isModern

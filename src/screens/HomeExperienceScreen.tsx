@@ -234,6 +234,20 @@ function formatWon(value: number) {
   return `${Math.max(0, Math.round(value)).toLocaleString("ko-KR")}원`;
 }
 
+function formatGolfScore(score: number | undefined, par: number | undefined) {
+  if (typeof score !== "number" || typeof par !== "number") return "미입력";
+
+  const diff = score - par;
+  if (diff <= -3) return "알바트로스";
+  if (diff === -2) return "이글";
+  if (diff === -1) return "버디";
+  if (diff === 0) return "파";
+  if (diff === 1) return "보기";
+  if (diff === 2) return "더블보기";
+  if (diff === 3) return "트리플보기";
+  return `+${diff}`;
+}
+
 function weightedLottoScore(par: number) {
   const rand = Math.random();
   const weights =
@@ -1204,6 +1218,7 @@ function RoundInfoModal({
     isRoundDateAvailable(round?.date);
   const myLottoResultRows = myPurchasedHoles.map((hole) => ({
     hole,
+    par: lottoPars[hole - 1],
     myScore: myLottoStrokes?.[hole - 1],
     drawScore: lottoDraw?.drawnScores?.[String(hole)] ?? null,
   }));
@@ -1345,28 +1360,6 @@ function RoundInfoModal({
               </View>
 
               <View style={[styles.popupSection, { borderColor: palette.border }]}>
-                <Text style={[styles.popupSectionTitle, { color: palette.text }]}>
-                  구매 현황
-                </Text>
-                {lottoPurchaseRows.length > 0 ? (
-                  lottoPurchaseRows.map((row) => (
-                    <View key={row.id} style={styles.lottoRow}>
-                      <Text style={[styles.lottoName, { color: palette.text }]}>
-                        {row.name}
-                      </Text>
-                      <Text style={[styles.lottoHoles, { color: palette.muted }]} numberOfLines={1}>
-                        {row.holes.length ? row.holes.join(", ") : "선택 없음"}
-                      </Text>
-                    </View>
-                  ))
-                ) : (
-                  <Text style={[styles.modalEmptySmall, { color: palette.muted }]}>
-                    아직 구매 내역이 없습니다.
-                  </Text>
-                )}
-              </View>
-
-              <View style={[styles.popupSection, { borderColor: palette.border }]}>
                 <View style={styles.popupSectionHeader}>
                   <Text style={[styles.popupSectionTitle, { color: palette.text }]}>
                     결과 확인
@@ -1404,6 +1397,7 @@ function RoundInfoModal({
                             <ScratchLottoResultCard
                               key={`${item.hole}-${item.drawScore?.score ?? "pending"}`}
                               hole={item.hole}
+                              par={item.par}
                               myScore={item.myScore}
                               drawScore={item.drawScore}
                             />
@@ -1471,10 +1465,12 @@ function RoundInfoModal({
 
 function ScratchLottoResultCard({
   hole,
+  par,
   myScore,
   drawScore,
 }: {
   hole: number;
+  par?: number;
   myScore?: number;
   drawScore: RoundLottoDrawScore | null;
 }) {
@@ -1496,34 +1492,36 @@ function ScratchLottoResultCard({
     }),
   ).current;
   const isHit = typeof myScore === "number" && !!drawScore && myScore === drawScore.score;
+  const drawLabel = drawScore
+    ? (drawScore.label ?? formatGolfScore(drawScore.score, par))
+    : "-";
 
   return (
-    <View style={[styles.scratchCard, { borderColor: isHit ? palette.green : palette.border }]}>
-      <View style={styles.scratchCardHeader}>
-        <Text style={[styles.scratchHole, { color: palette.text }]}>{hole}H</Text>
-        <Text style={[styles.scratchHitBadge, { color: isHit ? palette.green : palette.muted }]}>
-          {revealed && drawScore ? (isHit ? "적중" : "미적중") : "확인"}
-        </Text>
-      </View>
+    <View style={[styles.scratchCard, { borderColor: palette.border }]}>
+      <Text style={[styles.scratchHole, { color: palette.text }]}>{hole}H</Text>
+
       <View style={styles.scratchScoreRow}>
-        <Text style={[styles.scratchScoreLabel, { color: palette.muted }]}>내 스코어</Text>
+        <Text style={[styles.scratchScoreLabel, { color: palette.muted }]}>내 스코어 :</Text>
         <Text style={[styles.scratchMyScore, { color: palette.text }]}>
-          {typeof myScore === "number" ? `${myScore}타` : "미입력"}
+          {formatGolfScore(myScore, par)}
         </Text>
       </View>
+
       <View style={styles.scratchResultBox}>
-        <Text style={[styles.scratchScoreLabel, { color: palette.muted }]}>추첨번호</Text>
-        <Text style={[styles.scratchDrawScore, { color: palette.green }]}>
-          {drawScore ? `${drawScore.score}타` : "-"}
+        <Text style={[styles.scratchDrawScore, { color: palette.text }]}>
+          {drawLabel}
         </Text>
-        <Text style={[styles.scratchDrawLabel, { color: palette.muted }]}>
-          {drawScore?.label ?? "대기"}
-        </Text>
+
+        {revealed && drawScore ? (
+          isHit ? (
+            <View pointerEvents="none" style={styles.scratchHitCircle} />
+          ) : (
+            <Text pointerEvents="none" style={styles.scratchMissMark}>×</Text>
+          )
+        ) : null}
+
         {!revealed ? (
-          <View
-            {...panResponder.panHandlers}
-            style={styles.scratchCover}
-          >
+          <View {...panResponder.panHandlers} style={styles.scratchCover}>
             <Text style={styles.scratchCoverText}>문질러 확인</Text>
           </View>
         ) : null}
@@ -1837,48 +1835,38 @@ const styles = StyleSheet.create({
     flexBasis: "30%",
     flexGrow: 1,
     minWidth: 0,
-    minHeight: 142,
+    minHeight: 154,
     borderWidth: 1,
     borderRadius: 14,
-    padding: 9,
+    padding: 10,
     backgroundColor: "rgba(0,0,0,0.025)",
   },
-  scratchCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 4,
+  scratchHole: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "900",
     marginBottom: 8,
   },
-  scratchHole: {
-    fontSize: 13,
-    lineHeight: 17,
-    fontWeight: "900",
+  scratchScoreRow: {
+    minHeight: 26,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 10,
   },
-  scratchHitBadge: {
+  scratchScoreLabel: {
     fontSize: 10,
     lineHeight: 13,
     fontWeight: "900",
   },
-  scratchScoreRow: {
-    minHeight: 38,
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  scratchScoreLabel: {
-    fontSize: 9,
-    lineHeight: 12,
-    fontWeight: "900",
-  },
   scratchMyScore: {
-    marginTop: 2,
     fontSize: 14,
     lineHeight: 18,
     fontWeight: "900",
   },
   scratchResultBox: {
     position: "relative",
-    minHeight: 58,
+    minHeight: 76,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
@@ -1886,15 +1874,27 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   scratchDrawScore: {
-    marginTop: 1,
-    fontSize: 17,
-    lineHeight: 21,
+    fontSize: 26,
+    lineHeight: 32,
     fontWeight: "900",
+    letterSpacing: -0.8,
   },
-  scratchDrawLabel: {
-    fontSize: 9,
-    lineHeight: 12,
-    fontWeight: "800",
+  scratchHitCircle: {
+    position: "absolute",
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 5,
+    borderColor: "#E53935",
+    transform: [{ rotate: "-8deg" }],
+  },
+  scratchMissMark: {
+    position: "absolute",
+    color: "#E53935",
+    fontSize: 58,
+    lineHeight: 62,
+    fontWeight: "900",
+    transform: [{ rotate: "-8deg" }],
   },
   scratchCover: {
     position: "absolute",

@@ -2021,9 +2021,9 @@ const s = StyleSheet.create({
     color: C.green,
   },
   aiCaddieRecommendText: { flex: 1, fontSize: 12, lineHeight: 18, fontWeight: '800', color: C.text },
-  roundCarouselWrap: { marginHorizontal: -16 },
+  roundCarouselWrap: { marginHorizontal: 0 },
 roundCarouselContent: {
-  paddingLeft: 24,
+  paddingLeft:24,
   paddingRight: 16,
   gap: 12,
 },
