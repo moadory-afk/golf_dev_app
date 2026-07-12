@@ -53,6 +53,7 @@ import {
   getClubLottoAwardConfig,
   getClubMembers,
   getCourseLayouts,
+  getHandicapsForRound,
   getRoundLottoDraw,
   getRoundLottoEntries,
   getRoundLottoEntry,
@@ -71,6 +72,8 @@ import {
   type SavedRound,
 } from "../lib/store";
 import { AWARD_CATEGORIES, fillToCount } from "../lib/awardConfig";
+import { computeClubAwardResults } from "../lib/awardResults";
+import { subscribeHomeDashboardChanged } from "../lib/homeDashboardEvents";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type LottoSelection = { par3: number[]; par4: number[]; par5: number[] };
@@ -376,44 +379,188 @@ function handicapDiffSumByOpponent(rounds: SavedRound[], userName?: string | nul
   return [...opponents].reduce((sum, opponent) => sum + (myHandicap - (handicaps.get(opponent) ?? 0)), 0);
 }
 
+function regularWinnerForRound(round: SavedRound, handicaps: Map<string, number>) {
+  const best = Math.min(...round.players.map((player) => playerTotal(player.strokes)));
+  const medalWinner = round.players.find((player) => playerTotal(player.strokes) === best)?.name;
+  const ranked = round.players
+    .map((player) => ({
+      name: player.name,
+      net: playerTotal(player.strokes) - (handicaps.get(player.name) ?? 0),
+    }))
+    .sort((a, b) => a.net - b.net);
+  if (ranked[0]?.name === medalWinner) return ranked[1]?.name ?? null;
+  return ranked[0]?.name ?? null;
+}
+
 function guinnessRecordsForUser(rounds: SavedRound[], userName?: string | null) {
   const target = normalizePersonName(userName);
-  if (!target) return [];
-  const entries = rounds.flatMap((round) => round.players.map((player) => {
-    const total = playerTotal(player.strokes);
-    const front = playerTotal(player.strokes.slice(0, 9));
-    const back = playerTotal(player.strokes.slice(9, 18));
-    const birdies = player.strokes.reduce((count, score, index) => count + (score - (round.pars[index] ?? 0) <= -1 ? 1 : 0), 0);
-    const pars = player.strokes.reduce((count, score, index) => count + (score - (round.pars[index] ?? 0) === 0 ? 1 : 0), 0);
-    return { round, player, total, front, back, birdies, pars };
-  }));
+  if (!target || rounds.length === 0) return [];
 
-  const pickMin = (label: string, value: (entry: typeof entries[number]) => number, unit = "타") => {
-    const best = entries.reduce<typeof entries[number] | null>((current, entry) => !current || value(entry) < value(current) ? entry : current, null);
-    return best && normalizePersonName(best.player.name) === target
-      ? { label, value: `${value(best)}${unit}`, courseName: best.round.courseName, date: best.round.date }
-      : null;
-  };
-  const pickMax = (label: string, value: (entry: typeof entries[number]) => number, unit = "개") => {
-    const best = entries.reduce<typeof entries[number] | null>((current, entry) => !current || value(entry) > value(current) ? entry : current, null);
-    return best && normalizePersonName(best.player.name) === target
-      ? { label, value: `${value(best)}${unit}`, courseName: best.round.courseName, date: best.round.date }
-      : null;
+  const avgOf = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
+  const rows: Array<{ label: string; value: string; courseName?: string; date?: string }> = [];
+  const sortedRounds = [...rounds].sort((a, b) => a.date.localeCompare(b.date));
+  const handicaps = computeHandicaps(rounds, 5);
+
+  const addTop = <T,>(
+    label: string,
+    ranking: T[],
+    valueOf: (row: T) => number,
+    nameOf: (row: T) => string,
+    unit: string,
+    extra?: (row: T) => { courseName?: string; date?: string },
+  ) => {
+    if (ranking.length === 0) return;
+    const topValue = valueOf(ranking[0]);
+    const myRow = ranking
+      .filter((row) => valueOf(row) === topValue)
+      .find((row) => normalizePersonName(nameOf(row)) === target);
+    if (!myRow) return;
+    rows.push({ label, value: `${topValue}${unit}`, ...(extra?.(myRow) ?? {}) });
   };
 
-  return [
-    pickMin("최저타", (entry) => entry.total),
-    pickMin("전반 베스트", (entry) => entry.front),
-    pickMin("후반 베스트", (entry) => entry.back),
-    pickMax("최다 버디", (entry) => entry.birdies),
-    pickMax("최다 파", (entry) => entry.pars),
-  ].filter((item): item is NonNullable<typeof item> => !!item);
+  const winCount = new Map<string, number>();
+  for (const round of sortedRounds) {
+    const winner = regularWinnerForRound(round, getHandicapsForRound(round, rounds));
+    if (winner) winCount.set(winner, (winCount.get(winner) ?? 0) + 1);
+  }
+  addTop("최다 우승", [...winCount.entries()].map(([name, wins]) => ({ name, wins })).sort((a, b) => b.wins - a.wins), (row) => row.wins, (row) => row.name, "회");
+
+  let maxStreak = 0;
+  let maxStreakPlayer = "";
+  let curStreak = 0;
+  let curPlayer = "";
+  for (const round of sortedRounds) {
+    const winner = regularWinnerForRound(round, getHandicapsForRound(round, rounds));
+    if (winner && winner === curPlayer) curStreak += 1;
+    else {
+      if (curStreak > maxStreak) {
+        maxStreak = curStreak;
+        maxStreakPlayer = curPlayer;
+      }
+      curPlayer = winner ?? "";
+      curStreak = winner ? 1 : 0;
+    }
+  }
+  if (curStreak > maxStreak) {
+    maxStreak = curStreak;
+    maxStreakPlayer = curPlayer;
+  }
+  if (maxStreak > 0 && normalizePersonName(maxStreakPlayer) === target) rows.push({ label: "최다 연속 우승", value: `${maxStreak}연승` });
+
+  const birdieCount = new Map<string, number>();
+  const singleBirdieMap = new Map<string, { name: string; count: number; date: string; courseName: string }>();
+  const singleParMap = new Map<string, { name: string; count: number; date: string; courseName: string }>();
+  const scoreRecords: { name: string; total: number; date: string; courseName: string }[] = [];
+  const playerRounds = new Map<string, { date: string; total: number; diff: number }[]>();
+  const frontBackRanking: { name: string; improvement: number; date: string; courseName: string }[] = [];
+
+  for (const round of rounds) {
+    const coursePar = totalPar(round.pars);
+    for (const player of round.players) {
+      const total = playerTotal(player.strokes);
+      let birdies = 0;
+      let pars = 0;
+      player.strokes.forEach((score, index) => {
+        const diff = score - (round.pars[index] ?? 0);
+        if (diff <= -1) birdies += 1;
+        if (diff === 0) pars += 1;
+      });
+
+      birdieCount.set(player.name, (birdieCount.get(player.name) ?? 0) + birdies);
+      const prevBirdie = singleBirdieMap.get(player.name);
+      if (!prevBirdie || birdies > prevBirdie.count) singleBirdieMap.set(player.name, { name: player.name, count: birdies, date: round.date, courseName: round.courseName });
+      const prevPar = singleParMap.get(player.name);
+      if (!prevPar || pars > prevPar.count) singleParMap.set(player.name, { name: player.name, count: pars, date: round.date, courseName: round.courseName });
+
+      scoreRecords.push({ name: player.name, total, date: round.date, courseName: round.courseName });
+      const list = playerRounds.get(player.name) ?? [];
+      list.push({ date: round.date, total, diff: total - coursePar });
+      playerRounds.set(player.name, list);
+
+      const front = playerTotal(player.strokes.slice(0, 9));
+      const back = playerTotal(player.strokes.slice(9, 18));
+      frontBackRanking.push({ name: player.name, improvement: front - back, date: round.date, courseName: round.courseName });
+    }
+  }
+
+  addTop("최저 핸디", [...handicaps.entries()].map(([name, handicap]) => ({ name, handicap })).sort((a, b) => a.handicap - b.handicap), (row) => row.handicap, (row) => row.name, "");
+  addTop("버디왕(전체)", [...birdieCount.entries()].map(([name, count]) => ({ name, count })).filter((row) => row.count > 0).sort((a, b) => b.count - a.count), (row) => row.count, (row) => row.name, "개");
+  addTop("버디왕(1경기)", [...singleBirdieMap.values()].filter((row) => row.count > 0).sort((a, b) => b.count - a.count), (row) => row.count, (row) => row.name, "개", (row) => ({ date: row.date, courseName: row.courseName }));
+  addTop("파왕(1경기)", [...singleParMap.values()].filter((row) => row.count > 0).sort((a, b) => b.count - a.count), (row) => row.count, (row) => row.name, "개", (row) => ({ date: row.date, courseName: row.courseName }));
+  addTop("최다 라운드 참가", [...playerRounds.entries()].map(([name, list]) => ({ name, count: list.length })).sort((a, b) => b.count - a.count), (row) => row.count, (row) => row.name, "회");
+  addTop("최저타", [...scoreRecords].sort((a, b) => a.total - b.total), (row) => row.total, (row) => row.name, "타", (row) => ({ date: row.date, courseName: row.courseName }));
+  addTop("최고타", [...scoreRecords].sort((a, b) => b.total - a.total), (row) => row.total, (row) => row.name, "타", (row) => ({ date: row.date, courseName: row.courseName }));
+  addTop("전후반 개선", frontBackRanking.filter((row) => row.improvement > 0).sort((a, b) => b.improvement - a.improvement), (row) => row.improvement, (row) => row.name, "타", (row) => ({ date: row.date, courseName: row.courseName }));
+
+  const avgImproveRanking = [...playerRounds.entries()]
+    .map(([name, list]) => {
+      const sorted = [...list].sort((a, b) => a.date.localeCompare(b.date));
+      if (sorted.length < 10) return null;
+      return { name, improvement: Math.round(avgOf(sorted.slice(-10, -3).map((round) => round.total))) - Math.round(avgOf(sorted.slice(-3).map((round) => round.total))) };
+    })
+    .filter((row): row is { name: string; improvement: number } => !!row && row.improvement > 0)
+    .sort((a, b) => b.improvement - a.improvement);
+  addTop("평균타 개선", avgImproveRanking, (row) => row.improvement, (row) => row.name, "타");
+
+  const handicapImproveRanking = [...playerRounds.entries()]
+    .map(([name, list]) => {
+      const sorted = [...list].sort((a, b) => a.date.localeCompare(b.date));
+      if (sorted.length < 10) return null;
+      return { name, improvement: Math.ceil(avgOf(sorted.slice(0, 5).map((round) => round.diff))) - Math.ceil(avgOf(sorted.slice(-5).map((round) => round.diff))) };
+    })
+    .filter((row): row is { name: string; improvement: number } => !!row && row.improvement > 0)
+    .sort((a, b) => b.improvement - a.improvement);
+  addTop("핸디 개선", handicapImproveRanking, (row) => row.improvement, (row) => row.name, "타");
+
+  return rows;
 }
 
 function awardRowsForUser(awards: AwardDetailRow[], userName?: string | null) {
   const target = normalizePersonName(userName);
   if (!target) return [];
   return awards.filter((award) => normalizePersonName(award.winner) === target);
+}
+
+async function getHomeAwardRows(clubId: string, rounds: SavedRound[]): Promise<AwardDetailRow[]> {
+  const [clubAwardConfig, schedules] = await Promise.all([
+    getClubAwardConfig(clubId).catch(() => null),
+    getRoundSchedules(clubId).catch(() => [] as ScheduledRound[]),
+  ]);
+  const scheduleAwardConfigById = new Map(schedules.map((schedule) => [schedule.id, schedule.awardConfig ?? null]));
+
+  const rows = await Promise.all(
+    rounds.map(async (round) => {
+      const snapshots = await getClubAwardSnapshots(round.id).catch(() => []);
+      const awards = snapshots.length > 0
+        ? snapshots
+        : (() => {
+            const awardConfig = (round.scheduleId ? scheduleAwardConfigById.get(round.scheduleId) : null) ?? clubAwardConfig;
+            if (!awardConfig) return [];
+            return computeClubAwardResults(
+              fillToCount(awardConfig.items, awardConfig.count),
+              round,
+              getHandicapsForRound(round, rounds),
+              totalPar(round.pars),
+            ).map((award, index) => ({
+              id: `${round.id}-${award.awardKey}`,
+              awardKey: award.awardKey,
+              icon: award.icon,
+              label: award.label,
+              winner: award.winner,
+              detail: award.detail,
+              sortOrder: index,
+            }));
+          })();
+
+      return awards.map((award) => ({
+        ...award,
+        roundDate: round.date,
+        courseName: round.courseName,
+      }));
+    }),
+  );
+
+  return rows.flat();
 }
 
 function handicapBeforeHome(name: string, rounds: SavedRound[], beforeDate: string, basis = 5): number {
@@ -498,10 +645,33 @@ export default function HomeExperienceScreen() {
   const [recordCardsReady, setRecordCardsReady] = useState(false);
   const [recordDetailLoading, setRecordDetailLoading] = useState(false);
 
+  const loadRecordCards = useCallback(async () => {
+    setRecordCardsReady(false);
+    if (!club?.id) {
+      setRecordDetailRounds([]);
+      setRecordAwardRows([]);
+      setRecordCardsReady(true);
+      return;
+    }
+
+    try {
+      const rounds = await getRounds(club.id);
+      const awardRows = await getHomeAwardRows(club.id, rounds);
+      setRecordDetailRounds(rounds);
+      setRecordAwardRows(awardRows);
+    } catch {
+      setRecordDetailRounds([]);
+      setRecordAwardRows([]);
+    } finally {
+      setRecordCardsReady(true);
+    }
+  }, [club?.id]);
+
   useFocusEffect(
     useCallback(() => {
       let mounted = true;
       refresh();
+      loadRecordCards();
       AsyncStorage.getItem(COURSE_HERO_STORAGE_KEY)
         .then((value) => {
           if (mounted) setSelectedHeroKey(value);
@@ -512,7 +682,7 @@ export default function HomeExperienceScreen() {
       return () => {
         mounted = false;
       };
-    }, [refresh]),
+    }, [loadRecordCards, refresh]),
   );
 
   const activeHeroImageSource = selectedHeroKey
@@ -680,19 +850,7 @@ export default function HomeExperienceScreen() {
       try {
         const rounds = await getRounds(club.id);
         setRecordDetailRounds(rounds);
-        if (mode === "awards") {
-          const awardRows = await Promise.all(
-            rounds.map(async (round) => {
-              const awards = await getClubAwardSnapshots(round.id).catch(() => []);
-              return awards.map((award) => ({
-                ...award,
-                roundDate: round.date,
-                courseName: round.courseName,
-              }));
-            }),
-          );
-          setRecordAwardRows(awardRows.flat());
-        }
+        if (mode === "awards") setRecordAwardRows(await getHomeAwardRows(club.id, rounds));
       } catch {
         setRecordDetailRounds([]);
         if (mode === "awards") setRecordAwardRows([]);
@@ -704,45 +862,15 @@ export default function HomeExperienceScreen() {
   );
 
   useEffect(() => {
-    let mounted = true;
-    setRecordCardsReady(false);
-    if (!club?.id) {
-      setRecordDetailRounds([]);
-      setRecordAwardRows([]);
-      setRecordCardsReady(true);
-      return;
-    }
+    loadRecordCards();
+  }, [loadRecordCards]);
 
-    getRounds(club.id)
-      .then(async (rounds) => {
-        if (!mounted) return;
-        setRecordDetailRounds(rounds);
-        const awardRows = await Promise.all(
-          rounds.map(async (round) => {
-            const awards = await getClubAwardSnapshots(round.id).catch(() => []);
-            return awards.map((award) => ({
-              ...award,
-              roundDate: round.date,
-              courseName: round.courseName,
-            }));
-          }),
-        );
-        if (mounted) {
-          setRecordAwardRows(awardRows.flat());
-          setRecordCardsReady(true);
-        }
-      })
-      .catch(() => {
-        if (!mounted) return;
-        setRecordDetailRounds([]);
-        setRecordAwardRows([]);
-        setRecordCardsReady(true);
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, [club?.id]);
+  useEffect(() => {
+    if (!club?.id) return;
+    return subscribeHomeDashboardChanged((changedClubId) => {
+      if (!changedClubId || changedClubId === club.id) loadRecordCards();
+    });
+  }, [club?.id, loadRecordCards]);
 
   const recentStats = useMemo(
     () => applyStatNavigation(dashboard.stats.items, openRecordDetail),

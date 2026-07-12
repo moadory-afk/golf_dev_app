@@ -32,6 +32,8 @@ import {
   getClubMembers,
   getClubNotices,
   getGolfCourses,
+  getRoundLottoDraw,
+  getRoundLottoEntries,
   getRounds,
   playerTotal,
   totalPar,
@@ -43,6 +45,7 @@ import {
   type ClubNotice,
   type GolfCourse,
   type LottoAwardConfig,
+  type RoundLottoDrawScore,
   type SavedRound,
 } from "../lib/store";
 import { supabase } from "../lib/supabase";
@@ -1226,7 +1229,7 @@ export default function ClubScreen() {
                 </Text>
               </TouchableOpacity>
 
-              {isManagerView && (
+              {club && (
                 <TouchableOpacity
                   style={[s.card, s.summaryCard]}
                   onPress={() =>
