@@ -1,357 +1,703 @@
 import {
-  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Image, Share, Alert, TextInput, ActivityIndicator, useWindowDimensions,
-} from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { CommonActions, useNavigation, useRoute } from '@react-navigation/native'
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import type { RouteProp } from '@react-navigation/native'
-import { useState, useCallback, useEffect } from 'react'
-import * as ImageManipulator from 'expo-image-manipulator'
-import * as ImagePicker from 'expo-image-picker'
-import { DEFAULT_LOTTO_AWARD_CONFIG, createClub, getClubLottoAwardConfig, getClubMembers, getClubNotices, getGolfCourses, getRounds, playerTotal, totalPar, computeHandicaps, saveClubLottoAwardConfig, shortName, updateClubSettings, type ClubInfo, type ClubNotice, type GolfCourse, type LottoAwardConfig, type SavedRound } from '../lib/store'
-import { supabase } from '../lib/supabase'
-import { useClub } from '../lib/ClubContext'
-import { useUserProfile } from '../lib/UserProfileContext'
-import { useAsync } from '../lib/useAsync'
-import { loadHandicapBasis, saveHandicapBasis, type HandicapBasis } from '../lib/handicapBasis'
-import { C } from '../theme'
-import { TopActionButtons } from '../components/TopActionButtons'
-import { Icon } from '../components/Icon'
-import { EmojiIcon } from '../components/EmojiIcon'
-import { ImageCropModal, type ImageCropRect } from '../components/ImageCropModal'
-import type { MainTabParamList, RootStackParamList } from '../navigation/types'
-import { isCompactWidth } from '../lib/responsive'
-import { notifyHomeDashboardChanged } from '../lib/homeDashboardEvents'
+  ScrollView,
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  RefreshControl,
+  Modal,
+  Image,
+  Share,
+  Alert,
+  TextInput,
+  ActivityIndicator,
+  useWindowDimensions,
+  PanResponder,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  CommonActions,
+  useNavigation,
+  useRoute,
+} from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { RouteProp } from "@react-navigation/native";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import * as ImageManipulator from "expo-image-manipulator";
+import * as ImagePicker from "expo-image-picker";
+import {
+  DEFAULT_LOTTO_AWARD_CONFIG,
+  createClub,
+  getClubLottoAwardConfig,
+  getClubMembers,
+  getClubNotices,
+  getGolfCourses,
+  getRounds,
+  playerTotal,
+  totalPar,
+  computeHandicaps,
+  saveClubLottoAwardConfig,
+  shortName,
+  updateClubSettings,
+  type ClubInfo,
+  type ClubNotice,
+  type GolfCourse,
+  type LottoAwardConfig,
+  type SavedRound,
+} from "../lib/store";
+import { supabase } from "../lib/supabase";
+import { useClub } from "../lib/ClubContext";
+import { useUserProfile } from "../lib/UserProfileContext";
+import { useAsync } from "../lib/useAsync";
+import {
+  loadHandicapBasis,
+  saveHandicapBasis,
+  type HandicapBasis,
+} from "../lib/handicapBasis";
+import { C } from "../theme";
+import { TopActionButtons } from "../components/TopActionButtons";
+import { Icon } from "../components/Icon";
+import { EmojiIcon } from "../components/EmojiIcon";
+import {
+  ImageCropModal,
+  type ImageCropRect,
+} from "../components/ImageCropModal";
+import type { MainTabParamList, RootStackParamList } from "../navigation/types";
+import { isCompactWidth } from "../lib/responsive";
+import { notifyHomeDashboardChanged } from "../lib/homeDashboardEvents";
 
-type Nav = NativeStackNavigationProp<RootStackParamList>
-type ClubRoute = RouteProp<MainTabParamList, 'Club'>
-type RankingType = 'recentMedal' | 'recentWins' | 'wins' | 'streak' | 'lowestHandicap' | 'birdie' | 'singleBirdie'
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+type ClubRoute = RouteProp<MainTabParamList, "Club">;
+type RankingType =
+  | "recentMedal"
+  | "recentWins"
+  | "wins"
+  | "streak"
+  | "lowestHandicap"
+  | "birdie"
+  | "singleBirdie";
 
-const CLUB_HERO_IMAGE = 'https://images.unsplash.com/photo-1592919505780-303950717480?auto=format&fit=crop&w=1200&q=80'
-const CLUB_HERO_DISPLAY_HEIGHT_RATIO = 0.7
-const CLUB_HERO_MIN_WIDTH = 280
-const APP_URL = 'https://golf-seven-psi.vercel.app'
+const CLUB_HERO_IMAGE =
+  "https://images.unsplash.com/photo-1592919505780-303950717480?auto=format&fit=crop&w=1200&q=80";
+const CLUB_HERO_DISPLAY_HEIGHT_RATIO = 0.7;
+const CLUB_HERO_MIN_WIDTH = 280;
+const APP_URL = "https://golf-seven-psi.vercel.app";
 
 function formatNoticeDate(value: string) {
-  if (!value) return '-'
-  const date = value.slice(5, 10)
-  return date.length === 5 ? date.replace('-', '.') : value
+  if (!value) return "-";
+  const date = value.slice(5, 10);
+  return date.length === 5 ? date.replace("-", ".") : value;
 }
 
-function diffText(d: number) { return d > 0 ? `+${d}` : `${d}` }
+function diffText(d: number) {
+  return d > 0 ? `+${d}` : `${d}`;
+}
 
 function formatWon(value: number) {
-  return `${Math.max(0, Math.round(value)).toLocaleString('ko-KR')}원`
+  return `${Math.max(0, Math.round(value)).toLocaleString("ko-KR")}원`;
 }
 
 // 공동 수상자 포맷: 3명 이하 전원, 4명 이상 "A 외 N명"
 function formatWinners(names: string[], value: string): string {
-  if (names.length === 0) return '-'
-  const label = names.length <= 3
-    ? names.map(shortName).join(', ')
-    : `${shortName(names[0])} 외 ${names.length - 1}명`
-  return `${label} (${value})`
+  if (names.length === 0) return "-";
+  const label =
+    names.length <= 3
+      ? names.map(shortName).join(", ")
+      : `${shortName(names[0])} 외 ${names.length - 1}명`;
+  return `${label} (${value})`;
 }
 
-function getWinner(r: SavedRound, handicaps: Map<string, number>): string | null {
+function getWinner(
+  r: SavedRound,
+  handicaps: Map<string, number>,
+): string | null {
   const ranked = r.players
     .map((p) => {
-      const total = playerTotal(p.strokes)
-      return { name: p.name, net: total - (handicaps.get(p.name) ?? 0), total }
+      const total = playerTotal(p.strokes);
+      return { name: p.name, net: total - (handicaps.get(p.name) ?? 0), total };
     })
-    .sort((a, b) => a.net !== b.net ? a.net - b.net : a.total - b.total) // net 동점 → 총타수 낮은 순
-  return ranked[0]?.name ?? null
+    .sort((a, b) => (a.net !== b.net ? a.net - b.net : a.total - b.total)); // net 동점 → 총타수 낮은 순
+  return ranked[0]?.name ?? null;
 }
 
 export default function ClubScreen() {
-  const insets = useSafeAreaInsets()
-  const { width: windowWidth, height: windowHeight } = useWindowDimensions()
-  const nav = useNavigation<Nav>()
-  const route = useRoute<ClubRoute>()
-  const [refreshKey, setRefreshKey] = useState(0)
-  const [measuredClubHeroWidth, setMeasuredClubHeroWidth] = useState(0)
-  const isCompactScreen = isCompactWidth(windowWidth)
-  const clubHeroWidth = measuredClubHeroWidth || CLUB_HERO_MIN_WIDTH
+  const insets = useSafeAreaInsets();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const nav = useNavigation<Nav>();
+  const route = useRoute<ClubRoute>();
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [measuredClubHeroWidth, setMeasuredClubHeroWidth] = useState(0);
+  const clubHeroScrollRef = useRef<ScrollView>(null);
+  const clubHeroDragStartXRef = useRef(0);
+  const clubHeroDragStartIndexRef = useRef(0);
+  const [clubHeroIndex, setClubHeroIndex] = useState(0);
+  const isCompactScreen = isCompactWidth(windowWidth);
+  const clubHeroWidth = measuredClubHeroWidth || CLUB_HERO_MIN_WIDTH;
   const clubHeroHeight = Math.round(
     clubHeroWidth * CLUB_HERO_DISPLAY_HEIGHT_RATIO + insets.top,
-  )
-  const { activeClub: club, myClubs, setActiveClub, refreshClubs } = useClub()
+  );
+  const { activeClub: club, myClubs, setActiveClub, refreshClubs } = useClub();
+
+  const clubHeroPageCount = myClubs.length + 1;
+  const clubHeroClubIds = myClubs.map((item) => item.id).join("|");
   const { data, loading } = useAsync(
     () => (club ? getRounds(club.id) : Promise.resolve([])),
     [refreshKey, club?.id],
-  )
+  );
   const { data: clubMembers } = useAsync(
     () => (club ? getClubMembers(club.id) : Promise.resolve([])),
     [refreshKey, club?.id],
-  )
+  );
   const { data: lottoAwardConfig } = useAsync(
-    () => (club ? getClubLottoAwardConfig(club.id) : Promise.resolve(DEFAULT_LOTTO_AWARD_CONFIG)),
+    () =>
+      club
+        ? getClubLottoAwardConfig(club.id)
+        : Promise.resolve(DEFAULT_LOTTO_AWARD_CONFIG),
     [refreshKey, club?.id],
-  )
+  );
   const { data: clubNotices } = useAsync(
     () => (club ? getClubNotices(club.id) : Promise.resolve([])),
     [refreshKey, club?.id],
-  )
-  const rounds = data ?? []
-  const members = clubMembers ?? []
-  const recentNotices = (clubNotices ?? []).filter((notice) => notice.isPublished).slice(0, 1)
-  const adminMembers = members.filter((member) => member.role === 'admin')
-  const onRefresh = useCallback(() => setRefreshKey((k) => k + 1), [])
-  const [rankingType, setRankingType] = useState<RankingType | null>(null)
-  const [clubInfoOpen, setClubInfoOpen] = useState(false)
-  const [selectedNotice, setSelectedNotice] = useState<ClubNotice | null>(null)
-  const [showLottoAwardGuide, setShowLottoAwardGuide] = useState(false)
-  const [showHallCriteria, setShowHallCriteria] = useState(false)
-  const [manageMenuOpen, setManageMenuOpen] = useState(false)
-  const [createClubOpen, setCreateClubOpen] = useState(false)
-  const [courseImagesOpen, setCourseImagesOpen] = useState(false)
-  const [lottoAwardOpen, setLottoAwardOpen] = useState(false)
-  const { name: myName } = useUserProfile()
+  );
+  const rounds = data ?? [];
+  const members = clubMembers ?? [];
+  const recentNotices = (clubNotices ?? [])
+    .filter((notice) => notice.isPublished)
+    .slice(0, 1);
+  const adminMembers = members.filter((member) => member.role === "admin");
+  const onRefresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+  const [rankingType, setRankingType] = useState<RankingType | null>(null);
+  const [clubInfoOpen, setClubInfoOpen] = useState(false);
+  const [selectedNotice, setSelectedNotice] = useState<ClubNotice | null>(null);
+  const [showLottoAwardGuide, setShowLottoAwardGuide] = useState(false);
+  const [showHallCriteria, setShowHallCriteria] = useState(false);
+  const [manageMenuOpen, setManageMenuOpen] = useState(false);
+  const [createClubOpen, setCreateClubOpen] = useState(false);
+  const [courseImagesOpen, setCourseImagesOpen] = useState(false);
+  const [lottoAwardOpen, setLottoAwardOpen] = useState(false);
+  const { name: myName } = useUserProfile();
 
-  const [handicapBasis, setHandicapBasis] = useState<HandicapBasis>(5)
-  const currentLottoAwardConfig = lottoAwardConfig ?? DEFAULT_LOTTO_AWARD_CONFIG
+  const [handicapBasis, setHandicapBasis] = useState<HandicapBasis>(5);
+  const currentLottoAwardConfig =
+    lottoAwardConfig ?? DEFAULT_LOTTO_AWARD_CONFIG;
 
   useEffect(() => {
-    loadHandicapBasis(club?.id).then(setHandicapBasis)
-  }, [club?.id])
+    loadHandicapBasis(club?.id).then(setHandicapBasis);
+  }, [club?.id]);
+
+  useEffect(() => {
+    if (!club?.id || clubHeroWidth <= 0 || myClubs.length === 0) return;
+    const nextIndex = myClubs.findIndex((item) => item.id === club.id);
+    if (nextIndex < 0) return;
+    setClubHeroIndex(nextIndex);
+    requestAnimationFrame(() => {
+      clubHeroScrollRef.current?.scrollTo({
+        x: nextIndex * clubHeroWidth,
+        animated: false,
+      });
+    });
+  }, [club?.id, clubHeroWidth, clubHeroClubIds]);
+
+  const handleClubHeroScrollEnd = useCallback(
+    (offsetX: number) => {
+      if (clubHeroWidth <= 0) return;
+      const nextIndex = Math.max(
+        0,
+        Math.min(clubHeroPageCount - 1, Math.round(offsetX / clubHeroWidth)),
+      );
+      setClubHeroIndex(nextIndex);
+      const nextClub = myClubs[nextIndex];
+      if (nextClub && nextClub.id !== club?.id) {
+        setActiveClub(nextClub);
+        setRefreshKey((key) => key + 1);
+      }
+    },
+    [club?.id, clubHeroPageCount, clubHeroWidth, myClubs, setActiveClub],
+  );
+
+  const moveClubHeroToIndex = useCallback(
+    (index: number, animated = true) => {
+      if (clubHeroWidth <= 0) return;
+      const nextIndex = Math.max(0, Math.min(clubHeroPageCount - 1, index));
+      clubHeroScrollRef.current?.scrollTo({
+        x: nextIndex * clubHeroWidth,
+        animated,
+      });
+      handleClubHeroScrollEnd(nextIndex * clubHeroWidth);
+    },
+    [clubHeroPageCount, clubHeroWidth, handleClubHeroScrollEnd],
+  );
+
+  // RN Web의 일반 마우스 드래그까지 지원하고, 모바일에서는
+  // 세로 스크롤보다 좌우 이동이 명확할 때만 Hero 제스처를 가져옵니다.
+  const clubHeroPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponderCapture: (_event, gesture) =>
+          Math.abs(gesture.dx) > 8 &&
+          Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.15,
+        onPanResponderGrant: () => {
+          clubHeroDragStartIndexRef.current = clubHeroIndex;
+          clubHeroDragStartXRef.current = clubHeroIndex * clubHeroWidth;
+        },
+        onPanResponderMove: (_event, gesture) => {
+          const maxX = Math.max(0, (clubHeroPageCount - 1) * clubHeroWidth);
+          const nextX = Math.max(
+            0,
+            Math.min(maxX, clubHeroDragStartXRef.current - gesture.dx),
+          );
+          clubHeroScrollRef.current?.scrollTo({ x: nextX, animated: false });
+          setClubHeroIndex(
+            Math.max(
+              0,
+              Math.min(
+                clubHeroPageCount - 1,
+                Math.round(nextX / Math.max(1, clubHeroWidth)),
+              ),
+            ),
+          );
+        },
+        onPanResponderRelease: (_event, gesture) => {
+          const startIndex = clubHeroDragStartIndexRef.current;
+          const shouldMove =
+            Math.abs(gesture.dx) > clubHeroWidth * 0.16 ||
+            Math.abs(gesture.vx) > 0.35;
+          const direction = gesture.dx < 0 ? 1 : -1;
+          moveClubHeroToIndex(shouldMove ? startIndex + direction : startIndex);
+        },
+        onPanResponderTerminate: () => {
+          moveClubHeroToIndex(clubHeroDragStartIndexRef.current);
+        },
+      }),
+    [
+      clubHeroIndex,
+      clubHeroPageCount,
+      clubHeroWidth,
+      moveClubHeroToIndex,
+    ],
+  );
 
   async function handleInviteMember() {
-    if (!club) return
-    const link = `${APP_URL}/?join=${club.inviteCode}`
-    const senderName = myName ?? '클럽 회원'
-    const message = `[${senderName}]님이 [${club.name}] 골프 클럽에 초대합니다!\n\n${link}`
+    if (!club) return;
+    const link = `${APP_URL}/?join=${club.inviteCode}`;
+    const senderName = myName ?? "클럽 회원";
+    const message = `[${senderName}]님이 [${club.name}] 골프 클럽에 초대합니다!\n\n${link}`;
     try {
-      await Share.share({ title: `${club.name} 골프 클럽 초대`, message })
+      await Share.share({ title: `${club.name} 골프 클럽 초대`, message });
     } catch {
-      Alert.alert('초대코드', club.inviteCode)
+      Alert.alert("초대코드", club.inviteCode);
     }
   }
 
-  async function handleSaveClubInfo(name: string, subtitle: string, coverImage?: string) {
-    if (!club) return
-    await updateClubSettings(club.id, name, subtitle, coverImage)
-    await refreshClubs()
-    setRefreshKey((k) => k + 1)
+  async function handleSaveClubInfo(
+    name: string,
+    subtitle: string,
+    coverImage?: string,
+  ) {
+    if (!club) return;
+    await updateClubSettings(club.id, name, subtitle, coverImage);
+    await refreshClubs();
+    setRefreshKey((k) => k + 1);
   }
 
   async function handleCreateClub(name: string, subtitle: string) {
-    const nextClub = await createClub(name, subtitle)
-    await refreshClubs()
-    setActiveClub(nextClub)
-    setRefreshKey((k) => k + 1)
+    const nextClub = await createClub(name, subtitle);
+    await refreshClubs();
+    setActiveClub(nextClub);
+    setRefreshKey((k) => k + 1);
   }
 
   async function handleChangeHandicapBasis(value: HandicapBasis) {
-    if (!club?.id) return
-    setHandicapBasis(value)
-    await saveHandicapBasis(club.id, value)
+    if (!club?.id) return;
+    setHandicapBasis(value);
+    await saveHandicapBasis(club.id, value);
   }
 
-  const handicaps = computeHandicaps(rounds, handicapBasis)
-  const sortedRounds = [...rounds].sort((a, b) => a.date.localeCompare(b.date))
+  const handicaps = computeHandicaps(rounds, handicapBasis);
+  const sortedRounds = [...rounds].sort((a, b) => a.date.localeCompare(b.date));
 
   // 선수별 평균 타수 (기준 경기 수)
-  const avgScoreByPlayer = new Map<string, number>()
-  const scoresByPlayer = new Map<string, Array<{ date: string; score: number }>>()
+  const avgScoreByPlayer = new Map<string, number>();
+  const scoresByPlayer = new Map<
+    string,
+    Array<{ date: string; score: number }>
+  >();
   for (const r of rounds) {
     for (const p of r.players) {
-      const arr = scoresByPlayer.get(p.name) ?? []
-      arr.push({ date: r.date, score: playerTotal(p.strokes) })
-      scoresByPlayer.set(p.name, arr)
+      const arr = scoresByPlayer.get(p.name) ?? [];
+      arr.push({ date: r.date, score: playerTotal(p.strokes) });
+      scoresByPlayer.set(p.name, arr);
     }
   }
   for (const [name, entries] of scoresByPlayer) {
-    const lastN = [...entries].sort((a, b) => a.date.localeCompare(b.date)).slice(-handicapBasis)
-    avgScoreByPlayer.set(name, Math.round(lastN.reduce((s, e) => s + e.score, 0) / lastN.length))
+    const lastN = [...entries]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-handicapBasis);
+    avgScoreByPlayer.set(
+      name,
+      Math.round(lastN.reduce((s, e) => s + e.score, 0) / lastN.length),
+    );
   }
 
   // 핸디캡 랭킹 (낮을수록 잘하는 것)
   const handicapRanking = [...handicaps.entries()]
     .sort((a, b) => a[1] - b[1])
-    .map(([name, h]) => ({ name, handicap: h, avgScore: avgScoreByPlayer.get(name) ?? 0 }))
+    .map(([name, h]) => ({
+      name,
+      handicap: h,
+      avgScore: avgScoreByPlayer.get(name) ?? 0,
+    }));
 
   // 우승 집계
-  const winCount = new Map<string, number>()
+  const winCount = new Map<string, number>();
   for (const r of sortedRounds) {
-    const w = getWinner(r, handicaps)
-    if (w) winCount.set(w, (winCount.get(w) ?? 0) + 1)
+    const w = getWinner(r, handicaps);
+    if (w) winCount.set(w, (winCount.get(w) ?? 0) + 1);
   }
   const winRanking = [...winCount.entries()]
     .map(([name, wins]) => ({ name, wins }))
-    .sort((a, b) => b.wins - a.wins)
+    .sort((a, b) => b.wins - a.wins);
 
   // 연속 우승
-  let maxStreak = 0, maxStreakPlayer = '', curStreak = 0, curPlayer = ''
+  let maxStreak = 0,
+    maxStreakPlayer = "",
+    curStreak = 0,
+    curPlayer = "";
   for (const r of sortedRounds) {
-    const w = getWinner(r, handicaps)
-    if (w && w === curPlayer) { curStreak++ }
-    else {
-      if (curStreak > maxStreak) { maxStreak = curStreak; maxStreakPlayer = curPlayer }
-      curPlayer = w ?? ''; curStreak = w ? 1 : 0
+    const w = getWinner(r, handicaps);
+    if (w && w === curPlayer) {
+      curStreak++;
+    } else {
+      if (curStreak > maxStreak) {
+        maxStreak = curStreak;
+        maxStreakPlayer = curPlayer;
+      }
+      curPlayer = w ?? "";
+      curStreak = w ? 1 : 0;
     }
   }
-  if (curStreak > maxStreak) { maxStreak = curStreak; maxStreakPlayer = curPlayer }
-  const streakRanking = [...winCount.keys()]
-    .map((name) => ({ name, streak: 0 }))
+  if (curStreak > maxStreak) {
+    maxStreak = curStreak;
+    maxStreakPlayer = curPlayer;
+  }
+  const streakRanking = [...winCount.keys()].map((name) => ({
+    name,
+    streak: 0,
+  }));
 
   // 버디 집계
-  const birdieCount = new Map<string, number>()
+  const birdieCount = new Map<string, number>();
   for (const r of rounds)
     for (const p of r.players) {
-      let b = 0
-      p.strokes.forEach((s, i) => { if (s - r.pars[i] <= -1) b++ })
-      birdieCount.set(p.name, (birdieCount.get(p.name) ?? 0) + b)
+      let b = 0;
+      p.strokes.forEach((s, i) => {
+        if (s - r.pars[i] <= -1) b++;
+      });
+      birdieCount.set(p.name, (birdieCount.get(p.name) ?? 0) + b);
     }
   const birdieRanking = [...birdieCount.entries()]
     .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count)
+    .sort((a, b) => b.count - a.count);
 
   // 한경기 최다 버디
-  const singleBirdieMap = new Map<string, { count: number; date: string; courseName: string }>()
+  const singleBirdieMap = new Map<
+    string,
+    { count: number; date: string; courseName: string }
+  >();
   for (const r of rounds)
     for (const p of r.players) {
-      let b = 0
-      p.strokes.forEach((s, i) => { if (s - r.pars[i] <= -1) b++ })
-      const prev = singleBirdieMap.get(p.name)
+      let b = 0;
+      p.strokes.forEach((s, i) => {
+        if (s - r.pars[i] <= -1) b++;
+      });
+      const prev = singleBirdieMap.get(p.name);
       if (!prev || b > prev.count)
-        singleBirdieMap.set(p.name, { count: b, date: r.date, courseName: r.courseName })
+        singleBirdieMap.set(p.name, {
+          count: b,
+          date: r.date,
+          courseName: r.courseName,
+        });
     }
   const singleBirdieRanking = [...singleBirdieMap.entries()]
     .map(([name, v]) => ({ name, ...v }))
     .filter((x) => x.count > 0)
-    .sort((a, b) => b.count - a.count)
+    .sort((a, b) => b.count - a.count);
 
   // 최근 5경기 메달리스트 / 우승자 (공동 포함)
   const recentMedalRows = rounds.slice(0, 5).map((r) => {
-    const best = Math.min(...r.players.map((p) => playerTotal(p.strokes)))
-    const medals = r.players.filter((p) => playerTotal(p.strokes) === best).map((p) => p.name)
-    const label = medals.length <= 3 ? medals.map(shortName).join(', ') : `${shortName(medals[0])} 외 ${medals.length - 1}명`
-    return { name: label || '-', value: `${best}타`, sub: `${r.date.slice(5)} ${r.courseName}` }
-  })
+    const best = Math.min(...r.players.map((p) => playerTotal(p.strokes)));
+    const medals = r.players
+      .filter((p) => playerTotal(p.strokes) === best)
+      .map((p) => p.name);
+    const label =
+      medals.length <= 3
+        ? medals.map(shortName).join(", ")
+        : `${shortName(medals[0])} 외 ${medals.length - 1}명`;
+    return {
+      name: label || "-",
+      value: `${best}타`,
+      sub: `${r.date.slice(5)} ${r.courseName}`,
+    };
+  });
   const recentWinsRows = rounds.slice(0, 5).map((r) => {
-    const pts = r.players.map((p) => { const total = playerTotal(p.strokes); return { name: p.name, net: total - (handicaps.get(p.name) ?? 0), total } })
-    const minNet = Math.min(...pts.map((p) => p.net))
-    const winners = pts.filter((p) => p.net === minNet)
-    const topGross = Math.min(...winners.map((w) => w.total))
-    const label = winners.length <= 3 ? winners.map((w) => shortName(w.name)).join(', ') : `${shortName(winners[0].name)} 외 ${winners.length - 1}명`
-    return { name: label || '-', value: `${topGross}타`, sub: `${r.date.slice(5)} ${r.courseName}` }
-  })
+    const pts = r.players.map((p) => {
+      const total = playerTotal(p.strokes);
+      return { name: p.name, net: total - (handicaps.get(p.name) ?? 0), total };
+    });
+    const minNet = Math.min(...pts.map((p) => p.net));
+    const winners = pts.filter((p) => p.net === minNet);
+    const topGross = Math.min(...winners.map((w) => w.total));
+    const label =
+      winners.length <= 3
+        ? winners.map((w) => shortName(w.name)).join(", ")
+        : `${shortName(winners[0].name)} 외 ${winners.length - 1}명`;
+    return {
+      name: label || "-",
+      value: `${topGross}타`,
+      sub: `${r.date.slice(5)} ${r.courseName}`,
+    };
+  });
 
-  const rankingConfig: Record<RankingType, { title: string; col: string; rows: { name: string; value: string; sub?: string }[] }> = {
-    recentMedal: { title: '최근 5경기 메달리스트', col: '최저타', rows: recentMedalRows },
-    recentWins: { title: '최근 5경기 우승자', col: '핸디대비', rows: recentWinsRows },
-    wins: { title: '최다 우승', col: '우승 횟수', rows: winRanking.map((r) => ({ name: shortName(r.name), value: `${r.wins}회` })) },
-    streak: { title: '최다 연속 우승', col: '연속', rows: maxStreak > 0 ? [{ name: shortName(maxStreakPlayer), value: `${maxStreak}연승` }] : [] },
-    lowestHandicap: { title: `핸디캡 랭킹 (최근 ${handicapBasis}경기)`, col: '평균타 (핸디)', rows: handicapRanking.map((r) => ({ name: shortName(r.name), value: r.avgScore ? `${r.avgScore} (${diffText(r.handicap)})` : diffText(r.handicap) })) },
-    birdie: { title: '버디왕 (전체)', col: '버디 수', rows: birdieRanking.map((r) => ({ name: shortName(r.name), value: `${r.count}개` })) },
-    singleBirdie: { title: '버디왕 (1경기)', col: '버디 수', rows: singleBirdieRanking.map((r) => ({ name: shortName(r.name), value: `${r.count}개`, sub: `${r.date.slice(5)} ${r.courseName}` })) },
-  }
+  const rankingConfig: Record<
+    RankingType,
+    {
+      title: string;
+      col: string;
+      rows: { name: string; value: string; sub?: string }[];
+    }
+  > = {
+    recentMedal: {
+      title: "최근 5경기 메달리스트",
+      col: "최저타",
+      rows: recentMedalRows,
+    },
+    recentWins: {
+      title: "최근 5경기 우승자",
+      col: "핸디대비",
+      rows: recentWinsRows,
+    },
+    wins: {
+      title: "최다 우승",
+      col: "우승 횟수",
+      rows: winRanking.map((r) => ({
+        name: shortName(r.name),
+        value: `${r.wins}회`,
+      })),
+    },
+    streak: {
+      title: "최다 연속 우승",
+      col: "연속",
+      rows:
+        maxStreak > 0
+          ? [{ name: shortName(maxStreakPlayer), value: `${maxStreak}연승` }]
+          : [],
+    },
+    lowestHandicap: {
+      title: `핸디캡 랭킹 (최근 ${handicapBasis}경기)`,
+      col: "평균타 (핸디)",
+      rows: handicapRanking.map((r) => ({
+        name: shortName(r.name),
+        value: r.avgScore
+          ? `${r.avgScore} (${diffText(r.handicap)})`
+          : diffText(r.handicap),
+      })),
+    },
+    birdie: {
+      title: "버디왕 (전체)",
+      col: "버디 수",
+      rows: birdieRanking.map((r) => ({
+        name: shortName(r.name),
+        value: `${r.count}개`,
+      })),
+    },
+    singleBirdie: {
+      title: "버디왕 (1경기)",
+      col: "버디 수",
+      rows: singleBirdieRanking.map((r) => ({
+        name: shortName(r.name),
+        value: `${r.count}개`,
+        sub: `${r.date.slice(5)} ${r.courseName}`,
+      })),
+    },
+  };
 
   // 최근 라운드
-  const recent3 = rounds.slice(0, 3)
+  const recent3 = rounds.slice(0, 3);
 
-  const topWinner = winRanking[0]
-  const latestRound = rounds[0]
-  const lowestHandicapEntry = [...handicaps.entries()].sort((a, b) => a[1] - b[1])[0]
-  const topBirdie = birdieRanking[0]
-  const topSingleBirdie = singleBirdieRanking[0]
+  const topWinner = winRanking[0];
+  const latestRound = rounds[0];
+  const lowestHandicapEntry = [...handicaps.entries()].sort(
+    (a, b) => a[1] - b[1],
+  )[0];
+  const topBirdie = birdieRanking[0];
+  const topSingleBirdie = singleBirdieRanking[0];
 
   // 공동 수상 포함 텍스트 계산
   const recentMedalText = (() => {
-    if (!latestRound) return '-'
-    const best = Math.min(...latestRound.players.map((p) => playerTotal(p.strokes)))
-    const names = latestRound.players.filter((p) => playerTotal(p.strokes) === best).map((p) => p.name)
-    return formatWinners(names, `${best}타`)
-  })()
+    if (!latestRound) return "-";
+    const best = Math.min(
+      ...latestRound.players.map((p) => playerTotal(p.strokes)),
+    );
+    const names = latestRound.players
+      .filter((p) => playerTotal(p.strokes) === best)
+      .map((p) => p.name);
+    return formatWinners(names, `${best}타`);
+  })();
 
   const recentWinnerText = (() => {
-    if (!latestRound) return '-'
-    const pts = latestRound.players.map((p) => { const total = playerTotal(p.strokes); return { name: p.name, net: total - (handicaps.get(p.name) ?? 0), total } })
-    const minNet = Math.min(...pts.map((p) => p.net))
-    const winners = pts.filter((p) => p.net === minNet)
-    const topGross = Math.min(...winners.map((w) => w.total))
-    return formatWinners(winners.map((w) => w.name), `${topGross}타`)
-  })()
+    if (!latestRound) return "-";
+    const pts = latestRound.players.map((p) => {
+      const total = playerTotal(p.strokes);
+      return { name: p.name, net: total - (handicaps.get(p.name) ?? 0), total };
+    });
+    const minNet = Math.min(...pts.map((p) => p.net));
+    const winners = pts.filter((p) => p.net === minNet);
+    const topGross = Math.min(...winners.map((w) => w.total));
+    return formatWinners(
+      winners.map((w) => w.name),
+      `${topGross}타`,
+    );
+  })();
 
   const mostWinsText = (() => {
-    if (!topWinner) return '-'
-    const tied = winRanking.filter((r) => r.wins === topWinner.wins)
-    return formatWinners(tied.map((r) => r.name), `${topWinner.wins}회`)
-  })()
+    if (!topWinner) return "-";
+    const tied = winRanking.filter((r) => r.wins === topWinner.wins);
+    return formatWinners(
+      tied.map((r) => r.name),
+      `${topWinner.wins}회`,
+    );
+  })();
 
   const lowestHandiText = (() => {
-    if (!lowestHandicapEntry) return '-'
-    const minH = lowestHandicapEntry[1]
-    const tied = [...handicaps.entries()].filter(([, h]) => h === minH).map(([n]) => n)
-    return formatWinners(tied, diffText(minH))
-  })()
+    if (!lowestHandicapEntry) return "-";
+    const minH = lowestHandicapEntry[1];
+    const tied = [...handicaps.entries()]
+      .filter(([, h]) => h === minH)
+      .map(([n]) => n);
+    return formatWinners(tied, diffText(minH));
+  })();
 
   const topBirdieText = (() => {
-    if (!topBirdie || topBirdie.count === 0) return '-'
-    const tied = birdieRanking.filter((r) => r.count === topBirdie.count)
-    return formatWinners(tied.map((r) => r.name), `${topBirdie.count}개`)
-  })()
+    if (!topBirdie || topBirdie.count === 0) return "-";
+    const tied = birdieRanking.filter((r) => r.count === topBirdie.count);
+    return formatWinners(
+      tied.map((r) => r.name),
+      `${topBirdie.count}개`,
+    );
+  })();
 
   const topSingleBirdieText = (() => {
-    if (!topSingleBirdie) return '-'
-    const tied = singleBirdieRanking.filter((r) => r.count === topSingleBirdie.count)
-    return formatWinners(tied.map((r) => r.name), `${topSingleBirdie.count}개`)
-  })()
+    if (!topSingleBirdie) return "-";
+    const tied = singleBirdieRanking.filter(
+      (r) => r.count === topSingleBirdie.count,
+    );
+    return formatWinners(
+      tied.map((r) => r.name),
+      `${topSingleBirdie.count}개`,
+    );
+  })();
 
   const highlights = [
-    { icon: '🏆', label: '최근 메달리스트', value: recentMedalText,    type: 'recentMedal'     as RankingType },
-    { icon: '🥇', label: '최근 우승',       value: recentWinnerText,   type: 'recentWins'      as RankingType },
-    { icon: '🏅', label: '최다 우승',       value: mostWinsText,       type: 'wins'            as RankingType },
-    { icon: '🔥', label: '최다 연속 우승',  value: maxStreak > 0 ? `${shortName(maxStreakPlayer)} (${maxStreak}연승)` : '-', type: 'streak' as RankingType },
-    { icon: '📉', label: '최저 핸디',       value: lowestHandiText,    type: 'lowestHandicap'  as RankingType },
-    { icon: '🐦', label: '버디왕 (전체)',   value: topBirdieText,      type: 'birdie'          as RankingType },
-    { icon: '⛳', label: '버디왕 (1경기)',  value: topSingleBirdieText, type: 'singleBirdie'   as RankingType },
-  ]
+    {
+      icon: "🏆",
+      label: "최근 메달리스트",
+      value: recentMedalText,
+      type: "recentMedal" as RankingType,
+    },
+    {
+      icon: "🥇",
+      label: "최근 우승",
+      value: recentWinnerText,
+      type: "recentWins" as RankingType,
+    },
+    {
+      icon: "🏅",
+      label: "최다 우승",
+      value: mostWinsText,
+      type: "wins" as RankingType,
+    },
+    {
+      icon: "🔥",
+      label: "최다 연속 우승",
+      value:
+        maxStreak > 0
+          ? `${shortName(maxStreakPlayer)} (${maxStreak}연승)`
+          : "-",
+      type: "streak" as RankingType,
+    },
+    {
+      icon: "📉",
+      label: "최저 핸디",
+      value: lowestHandiText,
+      type: "lowestHandicap" as RankingType,
+    },
+    {
+      icon: "🐦",
+      label: "버디왕 (전체)",
+      value: topBirdieText,
+      type: "birdie" as RankingType,
+    },
+    {
+      icon: "⛳",
+      label: "버디왕 (1경기)",
+      value: topSingleBirdieText,
+      type: "singleBirdie" as RankingType,
+    },
+  ];
 
-  const MEDAL_BG = ['#fffbe8', '#f4f6f8', '#fdf5f0']
-  const MEDAL_COLOR = [C.gold, C.silver, C.bronze]
-  const isManagerView = club?.role === 'admin'
+  const MEDAL_BG = ["#fffbe8", "#f4f6f8", "#fdf5f0"];
+  const MEDAL_COLOR = [C.gold, C.silver, C.bronze];
+  const isManagerView = club?.role === "admin";
 
   useEffect(() => {
-    if (!route.params?.openManageMenu || !isManagerView) return
-    setManageMenuOpen(true)
-    nav.dispatch(CommonActions.setParams({ openManageMenu: false }))
-  }, [route.params?.openManageMenu, isManagerView, nav])
+    if (!route.params?.openManageMenu || !isManagerView) return;
+    setManageMenuOpen(true);
+    nav.dispatch(CommonActions.setParams({ openManageMenu: false }));
+  }, [route.params?.openManageMenu, isManagerView, nav]);
 
   useEffect(() => {
-    if (!route.params?.openCreateClub) return
-    setCreateClubOpen(true)
-    nav.dispatch(CommonActions.setParams({ openCreateClub: false }))
-  }, [route.params?.openCreateClub, nav])
+    if (!route.params?.openCreateClub) return;
+    setCreateClubOpen(true);
+    nav.dispatch(CommonActions.setParams({ openCreateClub: false }));
+  }, [route.params?.openCreateClub, nav]);
 
-  const managementMenus = club ? [
-    {
-      key: 'roundSchedule',
-      title: '라운드 관리',
-      subtitle: '날짜, 시간, 골프장 정보를 등록하고 예정 라운드를 관리합니다',
-      icon: 'flag' as const,
-      onPress: () => nav.navigate('RoundSchedulePrototype', { returnToManageMenu: true }),
-    },
-    {
-      key: 'courseImages',
-      title: '골프장 사진 관리',
-      subtitle: '골프장 계절별 Hero 사진을 등록합니다',
-      icon: 'camera' as const,
-      onPress: () => setCourseImagesOpen(true),
-    },
-    {
-      key: 'heroLab',
-      title: 'Hero Lab',
-      subtitle: '골프장 Hero 이미지를 미리보고 홈 화면에 적용합니다',
-      icon: 'settings' as const,
-      onPress: () => nav.navigate('HeroLab'),
-    },
-  ] : []
+  const managementMenus = club
+    ? [
+        {
+          key: "roundSchedule",
+          title: "라운드 관리",
+          subtitle:
+            "날짜, 시간, 골프장 정보를 등록하고 예정 라운드를 관리합니다",
+          icon: "flag" as const,
+          onPress: () =>
+            nav.navigate("RoundSchedulePrototype", {
+              returnToManageMenu: true,
+            }),
+        },
+        {
+          key: "courseImages",
+          title: "골프장 사진 관리",
+          subtitle: "골프장 계절별 Hero 사진을 등록합니다",
+          icon: "camera" as const,
+          onPress: () => setCourseImagesOpen(true),
+        },
+        {
+          key: "heroLab",
+          title: "Hero Lab",
+          subtitle: "골프장 Hero 이미지를 미리보고 홈 화면에 적용합니다",
+          icon: "settings" as const,
+          onPress: () => nav.navigate("HeroLab"),
+        },
+      ]
+    : [];
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       {rankingType && (
-        <RankingModal config={rankingConfig[rankingType]} onClose={() => setRankingType(null)} />
+        <RankingModal
+          config={rankingConfig[rankingType]}
+          onClose={() => setRankingType(null)}
+        />
       )}
       {clubInfoOpen && club && (
         <ClubInfoModal
@@ -361,15 +707,15 @@ export default function ClubScreen() {
           admins={adminMembers}
           onClose={() => setClubInfoOpen(false)}
           onSelectClub={(nextClub) => {
-            setActiveClub(nextClub)
-            setRefreshKey((k) => k + 1)
+            setActiveClub(nextClub);
+            setRefreshKey((k) => k + 1);
           }}
           onSaveClub={handleSaveClubInfo}
           handicapBasis={handicapBasis}
           onChangeHandicapBasis={handleChangeHandicapBasis}
           onMembers={() => {
-            setClubInfoOpen(false)
-            nav.navigate('Members', { clubId: club.id })
+            setClubInfoOpen(false);
+            nav.navigate("Members", { clubId: club.id });
           }}
           onInvite={handleInviteMember}
         />
@@ -380,8 +726,8 @@ export default function ClubScreen() {
           windowHeight={windowHeight}
           onClose={() => setCreateClubOpen(false)}
           onCreate={async (name, subtitle) => {
-            await handleCreateClub(name, subtitle)
-            setCreateClubOpen(false)
+            await handleCreateClub(name, subtitle);
+            setCreateClubOpen(false);
           }}
         />
       )}
@@ -390,9 +736,9 @@ export default function ClubScreen() {
           config={lottoAwardConfig ?? DEFAULT_LOTTO_AWARD_CONFIG}
           onClose={() => setLottoAwardOpen(false)}
           onSave={async (config) => {
-            await saveClubLottoAwardConfig(club.id, config)
-            setRefreshKey((key) => key + 1)
-            setLottoAwardOpen(false)
+            await saveClubLottoAwardConfig(club.id, config);
+            setRefreshKey((key) => key + 1);
+            setLottoAwardOpen(false);
           }}
         />
       )}
@@ -404,13 +750,21 @@ export default function ClubScreen() {
         />
       )}
       {manageMenuOpen && isManagerView && (
-        <Modal transparent animationType="fade" onRequestClose={() => setManageMenuOpen(false)}>
-          <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setManageMenuOpen(false)}>
+        <Modal
+          transparent
+          animationType="fade"
+          onRequestClose={() => setManageMenuOpen(false)}
+        >
+          <TouchableOpacity
+            style={s.overlay}
+            activeOpacity={1}
+            onPress={() => setManageMenuOpen(false)}
+          >
             <TouchableOpacity
               style={[
                 s.modalCard,
                 {
-                  width: isCompactScreen ? '94%' : '90%',
+                  width: isCompactScreen ? "94%" : "90%",
                   maxHeight: Math.round(windowHeight * 0.86),
                   padding: isCompactScreen ? 16 : 20,
                 },
@@ -420,7 +774,10 @@ export default function ClubScreen() {
             >
               <View style={s.modalHeader}>
                 <Text style={s.modalTitle}>관리 메뉴</Text>
-                <TouchableOpacity style={s.closeBtn} onPress={() => setManageMenuOpen(false)}>
+                <TouchableOpacity
+                  style={s.closeBtn}
+                  onPress={() => setManageMenuOpen(false)}
+                >
                   <Text style={s.closeBtnText}>닫기</Text>
                 </TouchableOpacity>
               </View>
@@ -428,7 +785,10 @@ export default function ClubScreen() {
                 contentInsetAdjustmentBehavior="automatic"
                 contentContainerStyle={[
                   s.managementModalBody,
-                  { gap: isCompactScreen ? 8 : 10, paddingBottom: insets.bottom + 8 },
+                  {
+                    gap: isCompactScreen ? 8 : 10,
+                    paddingBottom: insets.bottom + 8,
+                  },
                 ]}
               >
                 {managementMenus.map((menu) => (
@@ -440,12 +800,18 @@ export default function ClubScreen() {
                       menu.featured && s.managementCardFeatured,
                     ]}
                     onPress={() => {
-                      setManageMenuOpen(false)
-                      menu.onPress()
+                      setManageMenuOpen(false);
+                      menu.onPress();
                     }}
                     activeOpacity={0.86}
                   >
-                    <View style={[s.managementIcon, isCompactScreen && s.managementIconCompact, menu.featured && s.managementIconFeatured]}>
+                    <View
+                      style={[
+                        s.managementIcon,
+                        isCompactScreen && s.managementIconCompact,
+                        menu.featured && s.managementIconFeatured,
+                      ]}
+                    >
                       <Icon
                         name={menu.icon}
                         size={20}
@@ -454,8 +820,22 @@ export default function ClubScreen() {
                       />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[s.managementTitle, isCompactScreen && s.managementTitleCompact]}>{menu.title}</Text>
-                      <Text style={[s.managementSubtitle, isCompactScreen && s.managementSubtitleCompact]}>{menu.subtitle}</Text>
+                      <Text
+                        style={[
+                          s.managementTitle,
+                          isCompactScreen && s.managementTitleCompact,
+                        ]}
+                      >
+                        {menu.title}
+                      </Text>
+                      <Text
+                        style={[
+                          s.managementSubtitle,
+                          isCompactScreen && s.managementSubtitleCompact,
+                        ]}
+                      >
+                        {menu.subtitle}
+                      </Text>
                     </View>
                     <Icon name="chevronRight" size={16} color={C.muted} />
                   </TouchableOpacity>
@@ -466,20 +846,39 @@ export default function ClubScreen() {
         </Modal>
       )}
       {selectedNotice && (
-        <Modal transparent animationType="fade" onRequestClose={() => setSelectedNotice(null)}>
-          <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setSelectedNotice(null)}>
-            <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+        <Modal
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSelectedNotice(null)}
+        >
+          <TouchableOpacity
+            style={s.overlay}
+            activeOpacity={1}
+            onPress={() => setSelectedNotice(null)}
+          >
+            <TouchableOpacity
+              style={s.modalCard}
+              activeOpacity={1}
+              onPress={() => {}}
+            >
               <View style={s.modalHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.modalTitle}>{selectedNotice.title}</Text>
-                  <Text style={s.noticeDetailDate}>{formatNoticeDate(selectedNotice.createdAt)}</Text>
+                  <Text style={s.noticeDetailDate}>
+                    {formatNoticeDate(selectedNotice.createdAt)}
+                  </Text>
                 </View>
-                <TouchableOpacity style={s.closeBtn} onPress={() => setSelectedNotice(null)}>
+                <TouchableOpacity
+                  style={s.closeBtn}
+                  onPress={() => setSelectedNotice(null)}
+                >
                   <Text style={s.closeBtnText}>닫기</Text>
                 </TouchableOpacity>
               </View>
               <ScrollView>
-                <Text style={s.noticeDetailBody}>{selectedNotice.body || '내용 없음'}</Text>
+                <Text style={s.noticeDetailBody}>
+                  {selectedNotice.body || "내용 없음"}
+                </Text>
               </ScrollView>
             </TouchableOpacity>
           </TouchableOpacity>
@@ -487,12 +886,27 @@ export default function ClubScreen() {
       )}
 
       {showHallCriteria && (
-        <Modal transparent animationType="fade" onRequestClose={() => setShowHallCriteria(false)}>
-          <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setShowHallCriteria(false)}>
-            <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+        <Modal
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowHallCriteria(false)}
+        >
+          <TouchableOpacity
+            style={s.overlay}
+            activeOpacity={1}
+            onPress={() => setShowHallCriteria(false)}
+          >
+            <TouchableOpacity
+              style={s.modalCard}
+              activeOpacity={1}
+              onPress={() => {}}
+            >
               <View style={s.modalHeader}>
                 <Text style={s.modalTitle}>기네스북 기록 기준</Text>
-                <TouchableOpacity style={s.closeBtn} onPress={() => setShowHallCriteria(false)}>
+                <TouchableOpacity
+                  style={s.closeBtn}
+                  onPress={() => setShowHallCriteria(false)}
+                >
                   <Text style={s.closeBtnText}>닫기</Text>
                 </TouchableOpacity>
               </View>
@@ -503,11 +917,15 @@ export default function ClubScreen() {
                 </View>
                 <View style={s.ruleRow}>
                   <Text style={s.ruleLabel}>스코어 기록</Text>
-                  <Text style={s.ruleValue}>최저타 · 최고타 · 버디왕 · 파왕</Text>
+                  <Text style={s.ruleValue}>
+                    최저타 · 최고타 · 버디왕 · 파왕
+                  </Text>
                 </View>
                 <View style={s.ruleRow}>
                   <Text style={s.ruleLabel}>성장 기록</Text>
-                  <Text style={s.ruleValue}>최저 핸디 · 전후반/평균타/핸디 개선</Text>
+                  <Text style={s.ruleValue}>
+                    최저 핸디 · 전후반/평균타/핸디 개선
+                  </Text>
                 </View>
                 <View style={s.ruleRow}>
                   <Text style={s.ruleLabel}>참가 기록</Text>
@@ -527,156 +945,306 @@ export default function ClubScreen() {
         style={{ flex: 1 }}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} tintColor={C.green} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={onRefresh}
+            tintColor={C.green}
+          />
+        }
       >
-        <View style={[s.content, { paddingHorizontal: isCompactScreen ? 12 : 16 }]}>
+        <View
+          style={[s.content, { paddingHorizontal: isCompactScreen ? 12 : 16 }]}
+        >
           {club && (
             <>
-                  <View
-                    onLayout={(event) => {
-                      const nextWidth = Math.round(event.nativeEvent.layout.width)
-                      if (nextWidth > 0 && nextWidth !== measuredClubHeroWidth) {
-                        setMeasuredClubHeroWidth(nextWidth)
-                      }
-                    }}
-                    style={[
-                      s.clubHeroCard,
-                      {
-                        marginHorizontal: isCompactScreen ? -12 : -16,
-                        marginTop: -12,
-                        height: clubHeroHeight,
-                      },
-                    ]}
-                  >
-                    <Image source={{ uri: club.coverImage || CLUB_HERO_IMAGE }} style={s.clubHeroImage} resizeMode="cover" />
-                    <View style={s.clubHeroScrim} />
-                    <TopActionButtons topInset={insets.top} floating />
+              <View
+                {...clubHeroPanResponder.panHandlers}
+                onLayout={(event) => {
+                  const nextWidth = Math.round(event.nativeEvent.layout.width);
+                  if (nextWidth > 0 && nextWidth !== measuredClubHeroWidth) {
+                    setMeasuredClubHeroWidth(nextWidth);
+                  }
+                }}
+                style={[
+                  s.clubHeroViewport,
+                  {
+                    marginHorizontal: isCompactScreen ? -12 : -16,
+                    marginTop: -12,
+                    height: clubHeroHeight,
+                  },
+                ]}
+              >
+                <ScrollView
+                  ref={clubHeroScrollRef}
+                  horizontal
+                  pagingEnabled
+                  nestedScrollEnabled
+                  directionalLockEnabled
+                  snapToInterval={clubHeroWidth}
+                  snapToAlignment="start"
+                  decelerationRate="fast"
+                  disableIntervalMomentum
+                  showsHorizontalScrollIndicator={false}
+                  bounces={false}
+                  scrollEventThrottle={16}
+                  onScroll={(event) => {
+                    if (clubHeroWidth <= 0) return;
+                    const nextIndex = Math.max(
+                      0,
+                      Math.min(
+                        clubHeroPageCount - 1,
+                        Math.round(event.nativeEvent.contentOffset.x / clubHeroWidth),
+                      ),
+                    );
+                    if (nextIndex !== clubHeroIndex) setClubHeroIndex(nextIndex);
+                  }}
+                  onScrollEndDrag={(event) => {
+                    const velocityX = event.nativeEvent.velocity?.x ?? 0;
+                    if (Math.abs(velocityX) < 0.05) {
+                      handleClubHeroScrollEnd(event.nativeEvent.contentOffset.x);
+                    }
+                  }}
+                  onMomentumScrollEnd={(event) =>
+                    handleClubHeroScrollEnd(event.nativeEvent.contentOffset.x)
+                  }
+                >
+                  {myClubs.map((heroClub) => (
                     <View
+                      key={heroClub.id}
                       style={[
-                        s.clubHeroBody,
-                        {
-                          left: isCompactScreen ? 16 : 20,
-                          right: isCompactScreen ? 16 : 20,
-                          bottom: isCompactScreen ? 16 : 20,
-                          gap: isCompactScreen ? 8 : 12,
-                        },
+                        s.clubHeroCard,
+                        { width: clubHeroWidth, height: clubHeroHeight },
                       ]}
                     >
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.clubHeroLabel}>MY CLUB</Text>
-                        <Text
-                          style={[
-                            s.clubHeroName,
-                            { fontSize: isCompactScreen ? 22 : 26 },
-                          ]}
-                          numberOfLines={1}
-                          adjustsFontSizeToFit
-                          minimumFontScale={0.82}
-                        >
-                          {club.name}
-                        </Text>
-                        <Text
-                          style={[
-                            s.clubHeroMeta,
-                            {
-                              fontSize: isCompactScreen ? 12 : 13,
-                              lineHeight: isCompactScreen ? 17 : 19,
-                            },
-                          ]}
-                          numberOfLines={2}
-                        >
-                          {club.subtitle?.trim() ? club.subtitle : '운영 중인 골프 클럽'}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
+                      <Image
+                        source={{ uri: heroClub.coverImage || CLUB_HERO_IMAGE }}
+                        style={s.clubHeroImage}
+                        resizeMode="cover"
+                      />
+                      <View style={s.clubHeroScrim} />
+                      <View
                         style={[
-                          s.clubInfoBtn,
+                          s.clubHeroBody,
                           {
-                            paddingHorizontal: isCompactScreen ? 12 : 15,
-                            paddingVertical: isCompactScreen ? 8 : 10,
+                            left: isCompactScreen ? 16 : 20,
+                            right: isCompactScreen ? 16 : 20,
+                            bottom: isCompactScreen ? 28 : 32,
+                            gap: isCompactScreen ? 8 : 12,
                           },
                         ]}
-                        onPress={() => setClubInfoOpen(true)}
-                        activeOpacity={0.84}
                       >
-                        <Text style={s.clubInfoBtnText}>클럽 정보</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <View style={[s.card, s.summaryCard]}>
-                    <View style={s.cardTitleRow}>
-                      <Text style={[s.cardTitle, { marginBottom: 0 }]}>공지사항</Text>
-                      <TouchableOpacity onPress={() => nav.navigate('NoticePrototype')} activeOpacity={0.82}>
-                        <Text style={s.more}>전체보기 ›</Text>
-                      </TouchableOpacity>
-                    </View>
-                    {recentNotices.length === 0 ? (
-                      <Text style={s.noticeEmpty}>등록된 공지사항이 없습니다.</Text>
-                    ) : recentNotices.map((notice) => (
-                      <TouchableOpacity key={notice.id} style={s.noticeRow} onPress={() => setSelectedNotice(notice)} activeOpacity={0.82}>
-                        <Text style={s.noticeTitle} numberOfLines={1}>{notice.title}</Text>
-                        <Text style={s.noticeMeta}>{formatNoticeDate(notice.createdAt)}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  <View style={[s.card, s.summaryCard]}>
-                    <TouchableOpacity
-                      style={s.cardTitleRow}
-                      onPress={() => {
-                        if (isManagerView) setLottoAwardOpen(true)
-                        else setShowLottoAwardGuide((value) => !value)
-                      }}
-                      activeOpacity={0.82}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text style={[s.cardTitle, { marginBottom: 0 }]}>Lotto 6/18 당첨금 안내</Text>
-                        <Text style={s.lottoGuideSummary}>현재 누적 당첨금 {formatWon(currentLottoAwardConfig.carryoverAmount ?? 0)}</Text>
-                      </View>
-                      <Text style={s.more}>{isManagerView ? '설정' : showLottoAwardGuide ? '접기' : '펼치기'}</Text>
-                    </TouchableOpacity>
-                    {(!isManagerView && showLottoAwardGuide) ? (
-                      <View>
-                        {(['3', '4', '5', '6'] as const).map((count) => (
-                          <View key={count} style={s.lottoGuideRow}>
-                            <Text style={s.lottoGuideLabel}>{count}개 적중</Text>
-                            <Text style={s.lottoGuideValue}>{formatWon(currentLottoAwardConfig.prizes[count])}</Text>
-                          </View>
-                        ))}
-                        <View style={s.lottoGuideRow}>
-                          <Text style={s.lottoGuideLabel}>미당첨 이월</Text>
-                          <Text style={s.lottoGuideValue}>{currentLottoAwardConfig.rollover ? `${formatWon(currentLottoAwardConfig.rolloverIncrement)} 증가` : '미적용'}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.clubHeroLabel}>MY CLUB</Text>
+                          <Text
+                            style={[
+                              s.clubHeroName,
+                              { fontSize: isCompactScreen ? 22 : 26 },
+                            ]}
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                            minimumFontScale={0.82}
+                          >
+                            {heroClub.name}
+                          </Text>
+                          <Text
+                            style={[
+                              s.clubHeroMeta,
+                              {
+                                fontSize: isCompactScreen ? 12 : 13,
+                                lineHeight: isCompactScreen ? 17 : 19,
+                              },
+                            ]}
+                            numberOfLines={2}
+                          >
+                            {heroClub.subtitle?.trim()
+                              ? heroClub.subtitle
+                              : "운영 중인 골프 클럽"}
+                          </Text>
                         </View>
+                        <TouchableOpacity
+                          style={[
+                            s.clubInfoBtn,
+                            {
+                              paddingHorizontal: isCompactScreen ? 12 : 15,
+                              paddingVertical: isCompactScreen ? 8 : 10,
+                            },
+                          ]}
+                          onPress={() => {
+                            if (heroClub.id !== club?.id) {
+                              setActiveClub(heroClub);
+                              setRefreshKey((key) => key + 1);
+                            }
+                            setClubInfoOpen(true);
+                          }}
+                          activeOpacity={0.84}
+                        >
+                          <Text style={s.clubInfoBtnText}>클럽 정보</Text>
+                        </TouchableOpacity>
                       </View>
-                    ) : null}
-                  </View>
+                    </View>
+                  ))}
 
+                  <View
+                    style={[
+                      s.clubHeroCard,
+                      s.createClubHeroCard,
+                      { width: clubHeroWidth, height: clubHeroHeight },
+                    ]}
+                  >
+                    <View style={s.createClubHeroContent}>
+                      <View style={s.createClubHeroIcon}>
+                        <Text style={s.createClubHeroPlus}>＋</Text>
+                      </View>
+                      <Text style={s.createClubHeroTitle}>
+                        새 동호회 만들기
+                      </Text>
+                      <Text style={s.createClubHeroDescription}>
+                        새로운 골프 동호회를 만들고 회원을 초대해 보세요.
+                      </Text>
+                      <TouchableOpacity
+                        style={s.createClubHeroButton}
+                        onPress={() => setCreateClubOpen(true)}
+                        activeOpacity={0.86}
+                      >
+                        <Text style={s.createClubHeroButtonText}>
+                          동호회 만들기
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </ScrollView>
+
+                <TopActionButtons topInset={insets.top} floating />
+                <View style={s.clubHeroPagination} pointerEvents="none">
+                  {Array.from({ length: clubHeroPageCount }).map((_, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        s.clubHeroDot,
+                        index === clubHeroIndex && s.clubHeroDotActive,
+                      ]}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              <View style={[s.card, s.summaryCard]}>
+                <View style={s.cardTitleRow}>
+                  <Text style={[s.cardTitle, { marginBottom: 0 }]}>
+                    공지사항
+                  </Text>
                   <TouchableOpacity
-                    style={[s.card, s.summaryCard]}
-                    onPress={() => setShowHallCriteria(true)}
+                    onPress={() => nav.navigate("NoticePrototype")}
                     activeOpacity={0.82}
                   >
-                    <View style={s.cardTitleRow}>
-                      <Text style={[s.cardTitle, { marginBottom: 0 }]}>기네스북 기록 기준</Text>
-                      <Text style={s.more}>결과 확인</Text>
-                    </View>
-                    <Text style={s.criteriaCollapsedText}>기네스북에 반영되는 기록 기준을 확인합니다.</Text>
+                    <Text style={s.more}>전체보기 ›</Text>
                   </TouchableOpacity>
-
-                  {isManagerView && (
+                </View>
+                {recentNotices.length === 0 ? (
+                  <Text style={s.noticeEmpty}>등록된 공지사항이 없습니다.</Text>
+                ) : (
+                  recentNotices.map((notice) => (
                     <TouchableOpacity
-                      style={[s.card, s.summaryCard]}
-                      onPress={() => nav.navigate('FeePrototype', { returnToManageMenu: true })}
-                      activeOpacity={0.86}
+                      key={notice.id}
+                      style={s.noticeRow}
+                      onPress={() => setSelectedNotice(notice)}
+                      activeOpacity={0.82}
                     >
-                      <View style={s.cardTitleRow}>
-                        <Text style={[s.cardTitle, { marginBottom: 0 }]}>회비관리 현황</Text>
-                        <Text style={s.more}>확인하기</Text>
-                      </View>
-                      <Text style={s.criteriaCollapsedText}>회비 현황과 납부 상태를 확인합니다.</Text>
+                      <Text style={s.noticeTitle} numberOfLines={1}>
+                        {notice.title}
+                      </Text>
+                      <Text style={s.noticeMeta}>
+                        {formatNoticeDate(notice.createdAt)}
+                      </Text>
                     </TouchableOpacity>
-                  )}
+                  ))
+                )}
+              </View>
+
+              <View style={[s.card, s.summaryCard]}>
+                <TouchableOpacity
+                  style={s.cardTitleRow}
+                  onPress={() => {
+                    if (isManagerView) setLottoAwardOpen(true);
+                    else setShowLottoAwardGuide((value) => !value);
+                  }}
+                  activeOpacity={0.82}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.cardTitle, { marginBottom: 0 }]}>
+                      Lotto 6/18 당첨금 안내
+                    </Text>
+                    <Text style={s.lottoGuideSummary}>
+                      현재 누적 당첨금{" "}
+                      {formatWon(currentLottoAwardConfig.carryoverAmount ?? 0)}
+                    </Text>
+                  </View>
+                  <Text style={s.more}>
+                    {isManagerView
+                      ? "설정"
+                      : showLottoAwardGuide
+                        ? "접기"
+                        : "펼치기"}
+                  </Text>
+                </TouchableOpacity>
+                {!isManagerView && showLottoAwardGuide ? (
+                  <View>
+                    {(["3", "4", "5", "6"] as const).map((count) => (
+                      <View key={count} style={s.lottoGuideRow}>
+                        <Text style={s.lottoGuideLabel}>{count}개 적중</Text>
+                        <Text style={s.lottoGuideValue}>
+                          {formatWon(currentLottoAwardConfig.prizes[count])}
+                        </Text>
+                      </View>
+                    ))}
+                    <View style={s.lottoGuideRow}>
+                      <Text style={s.lottoGuideLabel}>미당첨 이월</Text>
+                      <Text style={s.lottoGuideValue}>
+                        {currentLottoAwardConfig.rollover
+                          ? `${formatWon(currentLottoAwardConfig.rolloverIncrement)} 증가`
+                          : "미적용"}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+
+              <TouchableOpacity
+                style={[s.card, s.summaryCard]}
+                onPress={() => setShowHallCriteria(true)}
+                activeOpacity={0.82}
+              >
+                <View style={s.cardTitleRow}>
+                  <Text style={[s.cardTitle, { marginBottom: 0 }]}>
+                    기네스북 기록 기준
+                  </Text>
+                  <Text style={s.more}>결과 확인</Text>
+                </View>
+                <Text style={s.criteriaCollapsedText}>
+                  기네스북에 반영되는 기록 기준을 확인합니다.
+                </Text>
+              </TouchableOpacity>
+
+              {isManagerView && (
+                <TouchableOpacity
+                  style={[s.card, s.summaryCard]}
+                  onPress={() =>
+                    nav.navigate("FeePrototype", { returnToManageMenu: true })
+                  }
+                  activeOpacity={0.86}
+                >
+                  <View style={s.cardTitleRow}>
+                    <Text style={[s.cardTitle, { marginBottom: 0 }]}>
+                      회비관리 현황
+                    </Text>
+                    <Text style={s.more}>확인하기</Text>
+                  </View>
+                  <Text style={s.criteriaCollapsedText}>
+                    회비 현황과 납부 상태를 확인합니다.
+                  </Text>
+                </TouchableOpacity>
+              )}
             </>
           )}
 
@@ -684,14 +1252,37 @@ export default function ClubScreen() {
           {!club && !loading && (
             <View style={s.emptyCard}>
               <Icon name="flag" size={38} color={C.green} strokeWidth={1.6} />
-              <Text style={{ fontSize: 16, fontWeight: '700', color: C.text, marginBottom: 6, marginTop: 12 }}>소속 클럽이 없어요</Text>
-              <Text style={{ fontSize: 13, color: C.muted, textAlign: 'center', lineHeight: 20 }}>
-                동호회를 만들거나{'\n'}초대 링크로 참여해보세요
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: "700",
+                  color: C.text,
+                  marginBottom: 6,
+                  marginTop: 12,
+                }}
+              >
+                소속 클럽이 없어요
               </Text>
-              <TouchableOpacity style={s.goProfileBtn} onPress={() => setCreateClubOpen(true)}>
+              <Text
+                style={{
+                  fontSize: 13,
+                  color: C.muted,
+                  textAlign: "center",
+                  lineHeight: 20,
+                }}
+              >
+                동호회를 만들거나{"\n"}초대 링크로 참여해보세요
+              </Text>
+              <TouchableOpacity
+                style={s.goProfileBtn}
+                onPress={() => setCreateClubOpen(true)}
+              >
                 <Text style={s.goProfileBtnText}>동호회 만들기</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={s.emptySecondaryBtn} onPress={() => nav.navigate('Profile')}>
+              <TouchableOpacity
+                style={s.emptySecondaryBtn}
+                onPress={() => nav.navigate("Profile")}
+              >
                 <Text style={s.emptySecondaryText}>프로필 바로가기</Text>
               </TouchableOpacity>
             </View>
@@ -701,14 +1292,22 @@ export default function ClubScreen() {
           {club && !loading && rounds.length === 0 && (
             <View style={s.emptyCard}>
               <Icon name="flag" size={34} color={C.green} strokeWidth={1.6} />
-              <Text style={{ fontSize: 15, fontWeight: '700', color: C.text, marginTop: 10 }}>아직 클럽 기록이 없어요</Text>
+              <Text
+                style={{
+                  fontSize: 15,
+                  fontWeight: "700",
+                  color: C.text,
+                  marginTop: 10,
+                }}
+              >
+                아직 클럽 기록이 없어요
+              </Text>
             </View>
           )}
-
         </View>
       </ScrollView>
     </View>
-  )
+  );
 }
 
 function CreateClubModal({
@@ -717,30 +1316,33 @@ function CreateClubModal({
   onClose,
   onCreate,
 }: {
-  compact: boolean
-  windowHeight: number
-  onClose: () => void
-  onCreate: (name: string, subtitle: string) => Promise<void>
+  compact: boolean;
+  windowHeight: number;
+  onClose: () => void;
+  onCreate: (name: string, subtitle: string) => Promise<void>;
 }) {
-  const [name, setName] = useState('')
-  const [subtitle, setSubtitle] = useState('')
-  const [saving, setSaving] = useState(false)
+  const [name, setName] = useState("");
+  const [subtitle, setSubtitle] = useState("");
+  const [saving, setSaving] = useState(false);
 
   async function handleSubmit() {
-    const trimmedName = name.trim()
+    const trimmedName = name.trim();
     if (!trimmedName) {
-      Alert.alert('입력 확인', '동호회 이름을 입력하세요.')
-      return
+      Alert.alert("입력 확인", "동호회 이름을 입력하세요.");
+      return;
     }
 
-    setSaving(true)
+    setSaving(true);
     try {
-      await onCreate(trimmedName, subtitle.trim())
-      Alert.alert('생성 완료', '새 동호회를 만들었습니다.')
+      await onCreate(trimmedName, subtitle.trim());
+      Alert.alert("생성 완료", "새 동호회를 만들었습니다.");
     } catch (error) {
-      Alert.alert('오류', error instanceof Error ? error.message : String(error))
+      Alert.alert(
+        "오류",
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
   }
 
@@ -751,7 +1353,7 @@ function CreateClubModal({
           style={[
             s.modalCard,
             {
-              width: compact ? '94%' : '90%',
+              width: compact ? "94%" : "90%",
               maxHeight: Math.round(windowHeight * 0.82),
               padding: compact ? 16 : 20,
             },
@@ -801,7 +1403,7 @@ function CreateClubModal({
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
-  )
+  );
 }
 
 function ClubInfoModal({
@@ -817,93 +1419,107 @@ function ClubInfoModal({
   onMembers,
   onInvite,
 }: {
-  club: ClubInfo
-  clubs: ClubInfo[]
-  memberCount: number
-  admins: Array<{ userId: string; name: string; role: string }>
-  onClose: () => void
-  onSelectClub: (club: ClubInfo) => void
-  onSaveClub: (name: string, subtitle: string, coverImage?: string) => Promise<void>
-  handicapBasis: 3 | 5 | 10
-  onChangeHandicapBasis: (value: 3 | 5 | 10) => void | Promise<void>
-  onMembers: () => void
-  onInvite: () => void
+  club: ClubInfo;
+  clubs: ClubInfo[];
+  memberCount: number;
+  admins: Array<{ userId: string; name: string; role: string }>;
+  onClose: () => void;
+  onSelectClub: (club: ClubInfo) => void;
+  onSaveClub: (
+    name: string,
+    subtitle: string,
+    coverImage?: string,
+  ) => Promise<void>;
+  handicapBasis: 3 | 5 | 10;
+  onChangeHandicapBasis: (value: 3 | 5 | 10) => void | Promise<void>;
+  onMembers: () => void;
+  onInvite: () => void;
 }) {
-  const [editing, setEditing] = useState(false)
-  const [editName, setEditName] = useState(club.name)
-  const [editSubtitle, setEditSubtitle] = useState(club.subtitle)
-  const [editCoverImage, setEditCoverImage] = useState(club.coverImage)
-  const [saving, setSaving] = useState(false)
-  const [uploadingCover, setUploadingCover] = useState(false)
-  const [pendingCoverCrop, setPendingCoverCrop] = useState<{ uri: string; width: number; height: number } | null>(null)
-  const [showHandicapDrop, setShowHandicapDrop] = useState(false)
-  const isAdmin = club.role === 'admin'
-  const subtitle = club.subtitle?.trim() ? club.subtitle : '골프의 모든 경험을 하나로.'
-  const role = isAdmin ? '관리자' : '일반회원'
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(club.name);
+  const [editSubtitle, setEditSubtitle] = useState(club.subtitle);
+  const [editCoverImage, setEditCoverImage] = useState(club.coverImage);
+  const [saving, setSaving] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [pendingCoverCrop, setPendingCoverCrop] = useState<{
+    uri: string;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [showHandicapDrop, setShowHandicapDrop] = useState(false);
+  const isAdmin = club.role === "admin";
+  const subtitle = club.subtitle?.trim()
+    ? club.subtitle
+    : "골프의 모든 경험을 하나로.";
+  const role = isAdmin ? "관리자" : "일반회원";
 
   useEffect(() => {
-    setEditing(false)
-    setEditName(club.name)
-    setEditSubtitle(club.subtitle)
-    setEditCoverImage(club.coverImage)
-  }, [club.id, club.name, club.subtitle, club.coverImage])
+    setEditing(false);
+    setEditName(club.name);
+    setEditSubtitle(club.subtitle);
+    setEditCoverImage(club.coverImage);
+  }, [club.id, club.name, club.subtitle, club.coverImage]);
 
   async function handleSave() {
     if (!editName.trim()) {
-      Alert.alert('클럽명을 입력하세요.')
-      return
+      Alert.alert("클럽명을 입력하세요.");
+      return;
     }
-    setSaving(true)
+    setSaving(true);
     try {
-      await onSaveClub(editName.trim(), editSubtitle.trim(), editCoverImage)
-      setEditing(false)
+      await onSaveClub(editName.trim(), editSubtitle.trim(), editCoverImage);
+      setEditing(false);
     } catch (e: unknown) {
-      Alert.alert('오류', e instanceof Error ? e.message : String(e))
+      Alert.alert("오류", e instanceof Error ? e.message : String(e));
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
   }
 
   async function handlePickCoverImage() {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('권한 필요', '사진 접근 권한이 필요합니다.')
-      return
+      Alert.alert("권한 필요", "사진 접근 권한이 필요합니다.");
+      return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ["images"],
       allowsEditing: false,
       quality: 0.8,
-    })
-    if (result.canceled || !result.assets[0]) return
-    const asset = result.assets[0]
+    });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
     setPendingCoverCrop({
       uri: asset.uri,
       width: asset.width || 1600,
       height: asset.height || 900,
-    })
+    });
   }
 
   async function handleApplyCoverCrop(crop: ImageCropRect) {
-    if (!pendingCoverCrop) return
-    setPendingCoverCrop(null)
-    setUploadingCover(true)
+    if (!pendingCoverCrop) return;
+    setPendingCoverCrop(null);
+    setUploadingCover(true);
     try {
       const compressed = await ImageManipulator.manipulateAsync(
         pendingCoverCrop.uri,
         [{ crop }, { resize: { width: 720 } }],
-        { compress: 0.45, format: ImageManipulator.SaveFormat.JPEG, base64: true },
-      )
-      const dataUri = `data:image/jpeg;base64,${compressed.base64}`
+        {
+          compress: 0.45,
+          format: ImageManipulator.SaveFormat.JPEG,
+          base64: true,
+        },
+      );
+      const dataUri = `data:image/jpeg;base64,${compressed.base64}`;
       if (dataUri.length > 220000) {
-        Alert.alert('사진이 너무 큽니다', '더 작은 사진을 선택해주세요.')
-        return
+        Alert.alert("사진이 너무 큽니다", "더 작은 사진을 선택해주세요.");
+        return;
       }
-      setEditCoverImage(dataUri)
+      setEditCoverImage(dataUri);
     } catch {
-      Alert.alert('오류', '사진 처리에 실패했습니다.')
+      Alert.alert("오류", "사진 처리에 실패했습니다.");
     } finally {
-      setUploadingCover(false)
+      setUploadingCover(false);
     }
   }
 
@@ -921,17 +1537,31 @@ function ClubInfoModal({
         />
       )}
       <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
-        <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+        <TouchableOpacity
+          style={s.modalCard}
+          activeOpacity={1}
+          onPress={() => {}}
+        >
           <View style={s.modalHeader}>
             <View style={{ flex: 1 }}>
               {editing ? (
                 <>
-                  <TouchableOpacity style={s.clubCoverPicker} onPress={handlePickCoverImage} activeOpacity={0.86}>
-                    <Image source={{ uri: editCoverImage || CLUB_HERO_IMAGE }} style={s.clubCoverPreview} resizeMode="cover" />
+                  <TouchableOpacity
+                    style={s.clubCoverPicker}
+                    onPress={handlePickCoverImage}
+                    activeOpacity={0.86}
+                  >
+                    <Image
+                      source={{ uri: editCoverImage || CLUB_HERO_IMAGE }}
+                      style={s.clubCoverPreview}
+                      resizeMode="cover"
+                    />
                     <View style={s.clubCoverOverlay}>
-                      {uploadingCover
-                        ? <ActivityIndicator color="#fff" size="small" />
-                        : <Text style={s.clubCoverText}>대문 사진 변경</Text>}
+                      {uploadingCover ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <Text style={s.clubCoverText}>대문 사진 변경</Text>
+                      )}
                     </View>
                   </TouchableOpacity>
                   <TextInput
@@ -951,8 +1581,14 @@ function ClubInfoModal({
                     placeholderTextColor={C.muted}
                   />
                   {editCoverImage ? (
-                    <TouchableOpacity style={s.clubCoverResetBtn} onPress={() => setEditCoverImage('')} activeOpacity={0.82}>
-                      <Text style={s.clubCoverResetText}>기본 사진으로 변경</Text>
+                    <TouchableOpacity
+                      style={s.clubCoverResetBtn}
+                      onPress={() => setEditCoverImage("")}
+                      activeOpacity={0.82}
+                    >
+                      <Text style={s.clubCoverResetText}>
+                        기본 사진으로 변경
+                      </Text>
                     </TouchableOpacity>
                   ) : null}
                 </>
@@ -969,19 +1605,34 @@ function ClubInfoModal({
           </View>
 
           {clubs.length > 1 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.clubSwitchScroll} contentContainerStyle={s.clubSwitchRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={s.clubSwitchScroll}
+              contentContainerStyle={s.clubSwitchRow}
+            >
               {clubs.map((item) => {
-                const selected = item.id === club.id
+                const selected = item.id === club.id;
                 return (
                   <TouchableOpacity
                     key={item.id}
-                    style={[s.clubSwitchChip, selected && s.clubSwitchChipActive]}
+                    style={[
+                      s.clubSwitchChip,
+                      selected && s.clubSwitchChipActive,
+                    ]}
                     onPress={() => onSelectClub(item)}
                     activeOpacity={0.82}
                   >
-                    <Text style={[s.clubSwitchText, selected && s.clubSwitchTextActive]}>{item.name}</Text>
+                    <Text
+                      style={[
+                        s.clubSwitchText,
+                        selected && s.clubSwitchTextActive,
+                      ]}
+                    >
+                      {item.name}
+                    </Text>
                   </TouchableOpacity>
-                )
+                );
               })}
             </ScrollView>
           )}
@@ -990,15 +1641,32 @@ function ClubInfoModal({
             <View style={s.clubEditRow}>
               {editing ? (
                 <>
-                  <TouchableOpacity style={[s.clubEditBtn, saving && { opacity: 0.6 }]} onPress={handleSave} disabled={saving} activeOpacity={0.82}>
-                    {saving ? <ActivityIndicator color={C.green} size="small" /> : <Text style={s.clubEditText}>저장</Text>}
+                  <TouchableOpacity
+                    style={[s.clubEditBtn, saving && { opacity: 0.6 }]}
+                    onPress={handleSave}
+                    disabled={saving}
+                    activeOpacity={0.82}
+                  >
+                    {saving ? (
+                      <ActivityIndicator color={C.green} size="small" />
+                    ) : (
+                      <Text style={s.clubEditText}>저장</Text>
+                    )}
                   </TouchableOpacity>
-                  <TouchableOpacity style={s.clubEditBtn} onPress={() => setEditing(false)} activeOpacity={0.82}>
+                  <TouchableOpacity
+                    style={s.clubEditBtn}
+                    onPress={() => setEditing(false)}
+                    activeOpacity={0.82}
+                  >
                     <Text style={s.clubEditText}>취소</Text>
                   </TouchableOpacity>
                 </>
               ) : (
-                <TouchableOpacity style={s.clubEditBtn} onPress={() => setEditing(true)} activeOpacity={0.82}>
+                <TouchableOpacity
+                  style={s.clubEditBtn}
+                  onPress={() => setEditing(true)}
+                  activeOpacity={0.82}
+                >
                   <Text style={s.clubEditText}>클럽 정보 수정</Text>
                 </TouchableOpacity>
               )}
@@ -1016,8 +1684,14 @@ function ClubInfoModal({
               <View style={s.settingLine}>
                 <Text style={s.settingLineLabel}>핸디 기준 경기</Text>
                 <View>
-                  <TouchableOpacity style={s.handicapSelectBtn} onPress={() => setShowHandicapDrop((value) => !value)} activeOpacity={0.82}>
-                    <Text style={s.handicapSelectText}>{handicapBasis}경기 ▾</Text>
+                  <TouchableOpacity
+                    style={s.handicapSelectBtn}
+                    onPress={() => setShowHandicapDrop((value) => !value)}
+                    activeOpacity={0.82}
+                  >
+                    <Text style={s.handicapSelectText}>
+                      {handicapBasis}경기 ▾
+                    </Text>
                   </TouchableOpacity>
                   {showHandicapDrop && (
                     <View style={s.handicapMenu}>
@@ -1026,13 +1700,19 @@ function ClubInfoModal({
                           key={value}
                           style={s.handicapMenuItem}
                           onPress={async () => {
-                            setShowHandicapDrop(false)
-                            await onChangeHandicapBasis(value)
+                            setShowHandicapDrop(false);
+                            await onChangeHandicapBasis(value);
                           }}
                           activeOpacity={0.82}
                         >
-                          <Text style={[s.handicapMenuText, handicapBasis === value && s.handicapMenuTextActive]}>
-                            {value}경기{handicapBasis === value ? ' ✓' : ''}
+                          <Text
+                            style={[
+                              s.handicapMenuText,
+                              handicapBasis === value &&
+                                s.handicapMenuTextActive,
+                            ]}
+                          >
+                            {value}경기{handicapBasis === value ? " ✓" : ""}
                           </Text>
                         </TouchableOpacity>
                       ))}
@@ -1047,19 +1727,29 @@ function ClubInfoModal({
             <Text style={s.infoSectionTitle}>멤버</Text>
             <View style={s.infoDivider} />
             <Text style={s.infoLabel}>운영진</Text>
-            {admins.length > 0 ? admins.map((admin) => (
-              <View key={admin.userId} style={s.adminRow}>
-                <Text style={s.adminName}>{admin.name}</Text>
-                <Text style={s.adminRole}>관리자</Text>
-              </View>
-            )) : (
+            {admins.length > 0 ? (
+              admins.map((admin) => (
+                <View key={admin.userId} style={s.adminRow}>
+                  <Text style={s.adminName}>{admin.name}</Text>
+                  <Text style={s.adminRole}>관리자</Text>
+                </View>
+              ))
+            ) : (
               <Text style={s.infoMuted}>등록된 운영진이 없습니다.</Text>
             )}
             <View style={s.infoActionRow}>
-              <TouchableOpacity style={s.infoActionBtn} onPress={onMembers} activeOpacity={0.82}>
+              <TouchableOpacity
+                style={s.infoActionBtn}
+                onPress={onMembers}
+                activeOpacity={0.82}
+              >
                 <Text style={s.infoActionText}>전체 멤버 보기</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={s.infoActionBtn} onPress={onInvite} activeOpacity={0.82}>
+              <TouchableOpacity
+                style={s.infoActionBtn}
+                onPress={onInvite}
+                activeOpacity={0.82}
+              >
                 <Text style={s.infoActionText}>멤버 초대</Text>
               </TouchableOpacity>
             </View>
@@ -1068,7 +1758,10 @@ function ClubInfoModal({
           <View style={s.infoSection}>
             <Text style={s.infoSectionTitle}>회칙</Text>
             <View style={s.infoDivider} />
-            <Text style={s.ruleDesc}>회원 자격, 회비, 운영진, 탈퇴 기준 등 동호회 운영 기준을 확인합니다.</Text>
+            <Text style={s.ruleDesc}>
+              회원 자격, 회비, 운영진, 탈퇴 기준 등 동호회 운영 기준을
+              확인합니다.
+            </Text>
             <Text style={s.infoMuted}>최근 수정일: 2026.06.30</Text>
             <TouchableOpacity style={s.infoActionBtn} activeOpacity={0.82}>
               <Text style={s.infoActionText}>회칙 보기</Text>
@@ -1077,50 +1770,101 @@ function ClubInfoModal({
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
-  )
+  );
 }
 
 // ─── 랭킹 모달 ────────────────────────────────────────────────────────────────
 
-function RankingModal({ config, onClose }: {
-  config: { title: string; col: string; rows: { name: string; value: string; sub?: string }[] }
-  onClose: () => void
+function RankingModal({
+  config,
+  onClose,
+}: {
+  config: {
+    title: string;
+    col: string;
+    rows: { name: string; value: string; sub?: string }[];
+  };
+  onClose: () => void;
 }) {
-  const MEDAL_BG = ['#fffbe8', '#f4f6f8', '#fdf5f0']
-  const MEDAL_COLOR = [C.gold, C.silver, C.bronze]
+  const MEDAL_BG = ["#fffbe8", "#f4f6f8", "#fdf5f0"];
+  const MEDAL_COLOR = [C.gold, C.silver, C.bronze];
   return (
     <Modal transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
-        <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+        <TouchableOpacity
+          style={s.modalCard}
+          activeOpacity={1}
+          onPress={() => {}}
+        >
           <View style={s.modalHeader}>
             <Text style={s.modalTitle}>{config.title}</Text>
-            <TouchableOpacity style={s.closeBtn} onPress={onClose}><Text style={s.closeBtnText}>닫기</Text></TouchableOpacity>
+            <TouchableOpacity style={s.closeBtn} onPress={onClose}>
+              <Text style={s.closeBtnText}>닫기</Text>
+            </TouchableOpacity>
           </View>
           <ScrollView>
             <View style={s.tableHeader}>
               <Text style={[s.th, { flex: 0.6 }]}>순위</Text>
               <Text style={[s.th, { flex: 2.5 }]}>플레이어</Text>
-              <Text style={[s.th, { flex: 1.5, textAlign: 'right' }]}>{config.col}</Text>
+              <Text style={[s.th, { flex: 1.5, textAlign: "right" }]}>
+                {config.col}
+              </Text>
             </View>
             {config.rows.length === 0 ? (
-              <Text style={[s.muted, { padding: 16, textAlign: 'center' }]}>데이터 없음</Text>
-            ) : config.rows.map((row, i) => (
-              <View key={i} style={[s.tableRow, i < 3 && { backgroundColor: MEDAL_BG[i], borderRadius: 8, marginBottom: 2 }]}>
-                <View style={{ flex: 0.6, alignItems: 'center' }}>
-                  {i < 3 ? <EmojiIcon char={['🥇','🥈','🥉'][i]} size={17} /> : <Text style={[s.td, { fontSize: 13 }]}>{i + 1}</Text>}
+              <Text style={[s.muted, { padding: 16, textAlign: "center" }]}>
+                데이터 없음
+              </Text>
+            ) : (
+              config.rows.map((row, i) => (
+                <View
+                  key={i}
+                  style={[
+                    s.tableRow,
+                    i < 3 && {
+                      backgroundColor: MEDAL_BG[i],
+                      borderRadius: 8,
+                      marginBottom: 2,
+                    },
+                  ]}
+                >
+                  <View style={{ flex: 0.6, alignItems: "center" }}>
+                    {i < 3 ? (
+                      <EmojiIcon char={["🥇", "🥈", "🥉"][i]} size={17} />
+                    ) : (
+                      <Text style={[s.td, { fontSize: 13 }]}>{i + 1}</Text>
+                    )}
+                  </View>
+                  <View style={{ flex: 2.5 }}>
+                    <Text style={[s.td, { fontWeight: i < 3 ? "700" : "500" }]}>
+                      {row.name}
+                    </Text>
+                    {row.sub && (
+                      <Text style={{ fontSize: 11, color: C.muted }}>
+                        {row.sub}
+                      </Text>
+                    )}
+                  </View>
+                  <Text
+                    style={[
+                      s.td,
+                      {
+                        flex: 1.5,
+                        textAlign: "right",
+                        fontWeight: "700",
+                        color: i < 3 ? MEDAL_COLOR[i] : C.text,
+                      },
+                    ]}
+                  >
+                    {row.value}
+                  </Text>
                 </View>
-                <View style={{ flex: 2.5 }}>
-                  <Text style={[s.td, { fontWeight: i < 3 ? '700' : '500' }]}>{row.name}</Text>
-                  {row.sub && <Text style={{ fontSize: 11, color: C.muted }}>{row.sub}</Text>}
-                </View>
-                <Text style={[s.td, { flex: 1.5, textAlign: 'right', fontWeight: '700', color: i < 3 ? MEDAL_COLOR[i] : C.text }]}>{row.value}</Text>
-              </View>
-            ))}
+              ))
+            )}
           </ScrollView>
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
-  )
+  );
 }
 
 function LottoAwardConfigModal({
@@ -1128,133 +1872,182 @@ function LottoAwardConfigModal({
   onClose,
   onSave,
 }: {
-  config: LottoAwardConfig
-  onClose: () => void
-  onSave: (config: LottoAwardConfig) => Promise<void>
+  config: LottoAwardConfig;
+  onClose: () => void;
+  onSave: (config: LottoAwardConfig) => Promise<void>;
 }) {
-  const [prize3, setPrize3] = useState(String(config.prizes['3'] ?? 0))
-  const [prize4, setPrize4] = useState(String(config.prizes['4'] ?? 0))
-  const [prize5, setPrize5] = useState(String(config.prizes['5'] ?? 0))
-  const [prize6, setPrize6] = useState(String(config.prizes['6'] ?? 0))
-  const [rollover, setRollover] = useState(config.rollover)
-  const [rolloverIncrement, setRolloverIncrement] = useState(String(config.rolloverIncrement ?? 0))
-  const [saving, setSaving] = useState(false)
-  const parseMoney = (value: string) => Number(value.replace(/[^0-9]/g, '')) || 0
+  const [prize3, setPrize3] = useState(String(config.prizes["3"] ?? 0));
+  const [prize4, setPrize4] = useState(String(config.prizes["4"] ?? 0));
+  const [prize5, setPrize5] = useState(String(config.prizes["5"] ?? 0));
+  const [prize6, setPrize6] = useState(String(config.prizes["6"] ?? 0));
+  const [rollover, setRollover] = useState(config.rollover);
+  const [rolloverIncrement, setRolloverIncrement] = useState(
+    String(config.rolloverIncrement ?? 0),
+  );
+  const [saving, setSaving] = useState(false);
+  const parseMoney = (value: string) =>
+    Number(value.replace(/[^0-9]/g, "")) || 0;
   const save = async () => {
-    setSaving(true)
+    setSaving(true);
     try {
       await onSave({
         prizes: {
-          '3': parseMoney(prize3),
-          '4': parseMoney(prize4),
-          '5': parseMoney(prize5),
-          '6': parseMoney(prize6),
+          "3": parseMoney(prize3),
+          "4": parseMoney(prize4),
+          "5": parseMoney(prize5),
+          "6": parseMoney(prize6),
         },
         rollover,
         rolloverIncrement: parseMoney(rolloverIncrement),
         carryoverAmount: config.carryoverAmount ?? 0,
-      })
+      });
     } catch (error) {
-      Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
+      Alert.alert(
+        "저장 실패",
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   return (
     <Modal transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
-        <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+        <TouchableOpacity
+          style={s.modalCard}
+          activeOpacity={1}
+          onPress={() => {}}
+        >
           <View style={s.modalHeader}>
             <Text style={s.modalTitle}>Lotto 시상 기준</Text>
             <TouchableOpacity style={s.closeBtn} onPress={onClose}>
               <Text style={s.closeBtnText}>닫기</Text>
             </TouchableOpacity>
           </View>
-          <Text style={s.lottoAwardSummary}>현재 누적 당첨금 {formatWon(config.carryoverAmount ?? 0)}</Text>
-          {([
-            ['3', prize3, setPrize3],
-            ['4', prize4, setPrize4],
-            ['5', prize5, setPrize5],
-            ['6', prize6, setPrize6],
-          ] as const).map(([count, value, setter]) => (
+          <Text style={s.lottoAwardSummary}>
+            현재 누적 당첨금 {formatWon(config.carryoverAmount ?? 0)}
+          </Text>
+          {(
+            [
+              ["3", prize3, setPrize3],
+              ["4", prize4, setPrize4],
+              ["5", prize5, setPrize5],
+              ["6", prize6, setPrize6],
+            ] as const
+          ).map(([count, value, setter]) => (
             <View key={count} style={s.lottoAwardInputRow}>
               <Text style={s.lottoAwardInputLabel}>{count}개 적중</Text>
-              <TextInput value={value} onChangeText={setter} keyboardType="numeric" placeholder="0" style={s.lottoAwardInput} />
+              <TextInput
+                value={value}
+                onChangeText={setter}
+                keyboardType="numeric"
+                placeholder="0"
+                style={s.lottoAwardInput}
+              />
               <Text style={s.lottoAwardUnit}>원</Text>
             </View>
           ))}
-          <TouchableOpacity style={s.lottoRolloverRow} onPress={() => setRollover((value) => !value)} activeOpacity={0.82}>
+          <TouchableOpacity
+            style={s.lottoRolloverRow}
+            onPress={() => setRollover((value) => !value)}
+            activeOpacity={0.82}
+          >
             <Text style={s.lottoRolloverText}>미당첨 시 이월</Text>
             <View style={[s.lottoSwitch, rollover && s.lottoSwitchOn]}>
-              <Text style={[s.lottoSwitchText, rollover && s.lottoSwitchTextOn]}>{rollover ? 'ON' : 'OFF'}</Text>
+              <Text
+                style={[s.lottoSwitchText, rollover && s.lottoSwitchTextOn]}
+              >
+                {rollover ? "ON" : "OFF"}
+              </Text>
             </View>
           </TouchableOpacity>
           {rollover && (
             <View style={s.lottoAwardInputRow}>
               <Text style={s.lottoAwardInputLabel}>이월 증가</Text>
-              <TextInput value={rolloverIncrement} onChangeText={setRolloverIncrement} keyboardType="numeric" placeholder="0" style={s.lottoAwardInput} />
+              <TextInput
+                value={rolloverIncrement}
+                onChangeText={setRolloverIncrement}
+                keyboardType="numeric"
+                placeholder="0"
+                style={s.lottoAwardInput}
+              />
               <Text style={s.lottoAwardUnit}>원</Text>
             </View>
           )}
-          <TouchableOpacity style={[s.infoActionBtn, saving && { opacity: 0.6 }]} onPress={save} disabled={saving}>
-            {saving ? <ActivityIndicator color={C.green} /> : <Text style={s.infoActionText}>저장</Text>}
+          <TouchableOpacity
+            style={[s.infoActionBtn, saving && { opacity: 0.6 }]}
+            onPress={save}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator color={C.green} />
+            ) : (
+              <Text style={s.infoActionText}>저장</Text>
+            )}
           </TouchableOpacity>
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
-  )
+  );
 }
 
-type SeasonKey = 'spring' | 'summer' | 'autumn' | 'winter'
+type SeasonKey = "spring" | "summer" | "autumn" | "winter";
 type CourseSeasonImageRow = {
-  golf_course_id: string
-  season: SeasonKey
-  image_url: string
-}
+  golf_course_id: string;
+  season: SeasonKey;
+  image_url: string;
+};
 
 const SEASONS: Array<{ key: SeasonKey; label: string; desc: string }> = [
-  { key: 'spring', label: '봄', desc: '3~5월' },
-  { key: 'summer', label: '여름', desc: '6~8월' },
-  { key: 'autumn', label: '가을', desc: '9~11월' },
-  { key: 'winter', label: '겨울', desc: '12~2월' },
-]
+  { key: "spring", label: "봄", desc: "3~5월" },
+  { key: "summer", label: "여름", desc: "6~8월" },
+  { key: "autumn", label: "가을", desc: "9~11월" },
+  { key: "winter", label: "겨울", desc: "12~2월" },
+];
 
-async function uploadCourseSeasonImage(courseId: string, season: SeasonKey, uri: string) {
+async function uploadCourseSeasonImage(
+  courseId: string,
+  season: SeasonKey,
+  uri: string,
+) {
   const compressed = await ImageManipulator.manipulateAsync(
     uri,
     [{ resize: { width: 1400 } }],
     { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG },
-  )
-  const response = await fetch(compressed.uri)
-  const blob = await response.blob()
-  const path = `${courseId}/${season}.jpg`
+  );
+  const response = await fetch(compressed.uri);
+  const blob = await response.blob();
+  const path = `${courseId}/${season}.jpg`;
 
   const { error: uploadError } = await supabase.storage
-    .from('course-images')
+    .from("course-images")
     .upload(path, blob, {
-      contentType: 'image/jpeg',
+      contentType: "image/jpeg",
       upsert: true,
-    })
-  if (uploadError) throw uploadError
+    });
+  if (uploadError) throw uploadError;
 
-  const { data } = supabase.storage.from('course-images').getPublicUrl(path)
-  const publicUrl = `${data.publicUrl}?v=${Date.now()}`
+  const { data } = supabase.storage.from("course-images").getPublicUrl(path);
+  const publicUrl = `${data.publicUrl}?v=${Date.now()}`;
 
   const { error: saveError } = await supabase
-    .from('golf_course_season_images')
-    .upsert({
-      golf_course_id: courseId,
-      season,
-      image_url: publicUrl,
-      image_source: 'supabase_storage',
-      is_active: true,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'golf_course_id,season' })
+    .from("golf_course_season_images")
+    .upsert(
+      {
+        golf_course_id: courseId,
+        season,
+        image_url: publicUrl,
+        image_source: "supabase_storage",
+        is_active: true,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "golf_course_id,season" },
+    );
 
-  if (saveError) throw saveError
-  notifyHomeDashboardChanged()
-  return publicUrl
+  if (saveError) throw saveError;
+  notifyHomeDashboardChanged();
+  return publicUrl;
 }
 
 function CourseSeasonImageModal({
@@ -1262,294 +2055,405 @@ function CourseSeasonImageModal({
   windowHeight,
   onClose,
 }: {
-  compact: boolean
-  windowHeight: number
-  onClose: () => void
+  compact: boolean;
+  windowHeight: number;
+  onClose: () => void;
 }) {
-  const [courseReloadKey, setCourseReloadKey] = useState(0)
-  const { data: courses, loading: coursesLoading } = useAsync(() => getGolfCourses(), [courseReloadKey])
-  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null)
-  const [coursePickerOpen, setCoursePickerOpen] = useState(false)
-  const [courseSearch, setCourseSearch] = useState('')
+  const [courseReloadKey, setCourseReloadKey] = useState(0);
+  const { data: courses, loading: coursesLoading } = useAsync(
+    () => getGolfCourses(),
+    [courseReloadKey],
+  );
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  const [coursePickerOpen, setCoursePickerOpen] = useState(false);
+  const [courseSearch, setCourseSearch] = useState("");
   const [images, setImages] = useState<Record<SeasonKey, string | null>>({
     spring: null,
     summer: null,
     autumn: null,
     winter: null,
-  })
-  const [loadingImages, setLoadingImages] = useState(false)
-  const [savingSeason, setSavingSeason] = useState<SeasonKey | null>(null)
-  const courseList = courses ?? []
-  const selectedCourse = courseList.find((course) => course.id === selectedCourseId) ?? courseList[0] ?? null
-  const normalizedCourseSearch = courseSearch.trim().toLocaleLowerCase('ko-KR')
+  });
+  const [loadingImages, setLoadingImages] = useState(false);
+  const [savingSeason, setSavingSeason] = useState<SeasonKey | null>(null);
+  const courseList = courses ?? [];
+  const selectedCourse =
+    courseList.find((course) => course.id === selectedCourseId) ??
+    courseList[0] ??
+    null;
+  const normalizedCourseSearch = courseSearch.trim().toLocaleLowerCase("ko-KR");
   const filteredCourseList = normalizedCourseSearch
-    ? courseList.filter((course) => `${course.name} ${course.region ?? ''}`.toLocaleLowerCase('ko-KR').includes(normalizedCourseSearch))
-    : courseList
+    ? courseList.filter((course) =>
+        `${course.name} ${course.region ?? ""}`
+          .toLocaleLowerCase("ko-KR")
+          .includes(normalizedCourseSearch),
+      )
+    : courseList;
 
   useEffect(() => {
-    if (courseList[0] && (!selectedCourseId || !courseList.some((course) => course.id === selectedCourseId))) {
-      setSelectedCourseId(courseList[0].id)
+    if (
+      courseList[0] &&
+      (!selectedCourseId ||
+        !courseList.some((course) => course.id === selectedCourseId))
+    ) {
+      setSelectedCourseId(courseList[0].id);
     }
-  }, [courseList, selectedCourseId])
+  }, [courseList, selectedCourseId]);
 
   useEffect(() => {
-    if (!selectedCourse?.id) return
-    let mounted = true
-    setLoadingImages(true)
+    if (!selectedCourse?.id) return;
+    let mounted = true;
+    setLoadingImages(true);
     supabase
-      .from('golf_course_season_images')
-      .select('golf_course_id, season, image_url')
-      .eq('golf_course_id', selectedCourse.id)
-      .eq('is_active', true)
+      .from("golf_course_season_images")
+      .select("golf_course_id, season, image_url")
+      .eq("golf_course_id", selectedCourse.id)
+      .eq("is_active", true)
       .then(({ data, error }) => {
-        if (!mounted) return
-        if (error) throw error
+        if (!mounted) return;
+        if (error) throw error;
         const next: Record<SeasonKey, string | null> = {
           spring: null,
           summer: null,
           autumn: null,
           winter: null,
-        }
-        ;((data ?? []) as CourseSeasonImageRow[]).forEach((row) => {
-          next[row.season] = row.image_url
-        })
-        setImages(next)
+        };
+        ((data ?? []) as CourseSeasonImageRow[]).forEach((row) => {
+          next[row.season] = row.image_url;
+        });
+        setImages(next);
       })
       .catch((error) => {
-        if (mounted) Alert.alert('오류', error instanceof Error ? error.message : String(error))
+        if (mounted)
+          Alert.alert(
+            "오류",
+            error instanceof Error ? error.message : String(error),
+          );
       })
       .finally(() => {
-        if (mounted) setLoadingImages(false)
-      })
+        if (mounted) setLoadingImages(false);
+      });
     return () => {
-      mounted = false
-    }
-  }, [selectedCourse?.id])
+      mounted = false;
+    };
+  }, [selectedCourse?.id]);
 
   async function pickSeasonImage(season: SeasonKey) {
-    if (!selectedCourse?.id) return
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!selectedCourse?.id) return;
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('권한 필요', '사진 접근 권한이 필요합니다.')
-      return
+      Alert.alert("권한 필요", "사진 접근 권한이 필요합니다.");
+      return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [16, 10],
       quality: 0.9,
-    })
-    if (result.canceled || !result.assets[0]) return
+    });
+    if (result.canceled || !result.assets[0]) return;
 
-    setSavingSeason(season)
+    setSavingSeason(season);
     try {
-      const publicUrl = await uploadCourseSeasonImage(selectedCourse.id, season, result.assets[0].uri)
-      setImages((prev) => ({ ...prev, [season]: publicUrl }))
+      const publicUrl = await uploadCourseSeasonImage(
+        selectedCourse.id,
+        season,
+        result.assets[0].uri,
+      );
+      setImages((prev) => ({ ...prev, [season]: publicUrl }));
     } catch (error) {
-      Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
+      Alert.alert(
+        "저장 실패",
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
-      setSavingSeason(null)
+      setSavingSeason(null);
     }
   }
 
   return (
     <>
-    <Modal transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
-        <TouchableOpacity
-          style={[
-            s.modalCard,
-            {
-              width: compact ? '94%' : '90%',
-              maxHeight: Math.round(windowHeight * 0.86),
-              padding: compact ? 16 : 20,
-            },
-          ]}
-          activeOpacity={1}
-          onPress={() => {}}
-        >
-          <View style={s.modalHeader}>
-            <Text style={s.modalTitle}>골프장 사진 관리</Text>
-            <TouchableOpacity style={s.closeBtn} onPress={onClose}>
-              <Text style={s.closeBtnText}>닫기</Text>
-            </TouchableOpacity>
-          </View>
-
-          {coursesLoading ? (
-            <ActivityIndicator color={C.green} />
-          ) : (
-            <ScrollView contentContainerStyle={s.courseImageBody}>
-              <Text style={s.courseImageHelp}>라운드 날짜의 계절에 맞는 사진이 홈 히어로에 표시됩니다.</Text>
-              <View>
-                <Text style={s.courseSelectorLabel}>골프장</Text>
-                <TouchableOpacity
-                  style={s.courseSelector}
-                  onPress={() => setCoursePickerOpen(true)}
-                  activeOpacity={0.84}
-                  disabled={courseList.length === 0}
-                >
-                  <View style={s.courseSelectorTextWrap}>
-                    <Text style={[s.courseSelectorText, !selectedCourse && s.courseSelectorPlaceholder]} numberOfLines={1}>
-                      {selectedCourse?.name ?? '골프장 선택'}
-                    </Text>
-                    {selectedCourse?.region ? (
-                      <Text style={s.courseSelectorMeta} numberOfLines={1}>{selectedCourse.region}</Text>
-                    ) : null}
-                  </View>
-                  <Icon name="chevronRight" size={18} color={C.muted} />
-                </TouchableOpacity>
-              </View>
-
-              {selectedCourse ? (
-                <>
-                  <View style={s.selectedCourseBox}>
-                    <Text style={s.selectedCourseName}>{selectedCourse.name}</Text>
-                    <Text style={s.selectedCourseRegion}>{selectedCourse.region}</Text>
-                  </View>
-                  {loadingImages ? (
-                    <ActivityIndicator color={C.green} />
-                  ) : (
-                    <View style={s.seasonImageGrid}>
-                      {SEASONS.map((season) => {
-                        const imageUrl = images[season.key]
-                        const saving = savingSeason === season.key
-                        return (
-                          <TouchableOpacity
-                            key={season.key}
-                            style={s.seasonImageCard}
-                            activeOpacity={0.86}
-                            onPress={() => pickSeasonImage(season.key)}
-                            disabled={!!savingSeason}
-                          >
-                            {imageUrl ? (
-                              <Image source={{ uri: imageUrl }} style={s.seasonImagePreview} resizeMode="cover" />
-                            ) : (
-                              <View style={s.seasonImageEmpty}>
-                                <Icon name="camera" size={24} color={C.green} />
-                              </View>
-                            )}
-                            <View style={s.seasonImageFooter}>
-                              <View>
-                                <Text style={s.seasonImageTitle}>{season.label}</Text>
-                                <Text style={s.seasonImageDesc}>{season.desc}</Text>
-                              </View>
-                              {saving ? <ActivityIndicator color={C.green} /> : <Text style={s.seasonImageAction}>{imageUrl ? '변경' : '등록'}</Text>}
-                            </View>
-                          </TouchableOpacity>
-                        )
-                      })}
-                    </View>
-                  )}
-                </>
-              ) : (
-                <Text style={s.muted}>등록된 골프장이 없습니다.</Text>
-              )}
-              <TouchableOpacity style={s.infoActionBtn} onPress={() => setCourseReloadKey((key) => key + 1)} activeOpacity={0.82}>
-                <Text style={s.infoActionText}>골프장 목록 새로고침</Text>
+      <Modal transparent animationType="fade" onRequestClose={onClose}>
+        <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
+          <TouchableOpacity
+            style={[
+              s.modalCard,
+              {
+                width: compact ? "94%" : "90%",
+                maxHeight: Math.round(windowHeight * 0.86),
+                padding: compact ? 16 : 20,
+              },
+            ]}
+            activeOpacity={1}
+            onPress={() => {}}
+          >
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>골프장 사진 관리</Text>
+              <TouchableOpacity style={s.closeBtn} onPress={onClose}>
+                <Text style={s.closeBtnText}>닫기</Text>
               </TouchableOpacity>
-            </ScrollView>
-          )}
-        </TouchableOpacity>
-      </TouchableOpacity>
-    </Modal>
+            </View>
 
-    <Modal
-      transparent
-      animationType="fade"
-      visible={coursePickerOpen}
-      onRequestClose={() => {
-        setCoursePickerOpen(false)
-        setCourseSearch('')
-      }}
-    >
-      <TouchableOpacity
-        style={s.coursePickerOverlay}
-        activeOpacity={1}
-        onPress={() => {
-          setCoursePickerOpen(false)
-          setCourseSearch('')
+            {coursesLoading ? (
+              <ActivityIndicator color={C.green} />
+            ) : (
+              <ScrollView contentContainerStyle={s.courseImageBody}>
+                <Text style={s.courseImageHelp}>
+                  라운드 날짜의 계절에 맞는 사진이 홈 히어로에 표시됩니다.
+                </Text>
+                <View>
+                  <Text style={s.courseSelectorLabel}>골프장</Text>
+                  <TouchableOpacity
+                    style={s.courseSelector}
+                    onPress={() => setCoursePickerOpen(true)}
+                    activeOpacity={0.84}
+                    disabled={courseList.length === 0}
+                  >
+                    <View style={s.courseSelectorTextWrap}>
+                      <Text
+                        style={[
+                          s.courseSelectorText,
+                          !selectedCourse && s.courseSelectorPlaceholder,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {selectedCourse?.name ?? "골프장 선택"}
+                      </Text>
+                      {selectedCourse?.region ? (
+                        <Text style={s.courseSelectorMeta} numberOfLines={1}>
+                          {selectedCourse.region}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Icon name="chevronRight" size={18} color={C.muted} />
+                  </TouchableOpacity>
+                </View>
+
+                {selectedCourse ? (
+                  <>
+                    <View style={s.selectedCourseBox}>
+                      <Text style={s.selectedCourseName}>
+                        {selectedCourse.name}
+                      </Text>
+                      <Text style={s.selectedCourseRegion}>
+                        {selectedCourse.region}
+                      </Text>
+                    </View>
+                    {loadingImages ? (
+                      <ActivityIndicator color={C.green} />
+                    ) : (
+                      <View style={s.seasonImageGrid}>
+                        {SEASONS.map((season) => {
+                          const imageUrl = images[season.key];
+                          const saving = savingSeason === season.key;
+                          return (
+                            <TouchableOpacity
+                              key={season.key}
+                              style={s.seasonImageCard}
+                              activeOpacity={0.86}
+                              onPress={() => pickSeasonImage(season.key)}
+                              disabled={!!savingSeason}
+                            >
+                              {imageUrl ? (
+                                <Image
+                                  source={{ uri: imageUrl }}
+                                  style={s.seasonImagePreview}
+                                  resizeMode="cover"
+                                />
+                              ) : (
+                                <View style={s.seasonImageEmpty}>
+                                  <Icon
+                                    name="camera"
+                                    size={24}
+                                    color={C.green}
+                                  />
+                                </View>
+                              )}
+                              <View style={s.seasonImageFooter}>
+                                <View>
+                                  <Text style={s.seasonImageTitle}>
+                                    {season.label}
+                                  </Text>
+                                  <Text style={s.seasonImageDesc}>
+                                    {season.desc}
+                                  </Text>
+                                </View>
+                                {saving ? (
+                                  <ActivityIndicator color={C.green} />
+                                ) : (
+                                  <Text style={s.seasonImageAction}>
+                                    {imageUrl ? "변경" : "등록"}
+                                  </Text>
+                                )}
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </>
+                ) : (
+                  <Text style={s.muted}>등록된 골프장이 없습니다.</Text>
+                )}
+                <TouchableOpacity
+                  style={s.infoActionBtn}
+                  onPress={() => setCourseReloadKey((key) => key + 1)}
+                  activeOpacity={0.82}
+                >
+                  <Text style={s.infoActionText}>골프장 목록 새로고침</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal
+        transparent
+        animationType="fade"
+        visible={coursePickerOpen}
+        onRequestClose={() => {
+          setCoursePickerOpen(false);
+          setCourseSearch("");
         }}
       >
-        <TouchableOpacity style={s.coursePickerCard} activeOpacity={1} onPress={() => {}}>
-          <View style={s.coursePickerHeader}>
-            <Text style={s.coursePickerTitle}>골프장 선택</Text>
-            <TouchableOpacity
-              style={s.coursePickerCloseBtn}
-              onPress={() => {
-                setCoursePickerOpen(false)
-                setCourseSearch('')
-              }}
-              activeOpacity={0.82}
+        <TouchableOpacity
+          style={s.coursePickerOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            setCoursePickerOpen(false);
+            setCourseSearch("");
+          }}
+        >
+          <TouchableOpacity
+            style={s.coursePickerCard}
+            activeOpacity={1}
+            onPress={() => {}}
+          >
+            <View style={s.coursePickerHeader}>
+              <Text style={s.coursePickerTitle}>골프장 선택</Text>
+              <TouchableOpacity
+                style={s.coursePickerCloseBtn}
+                onPress={() => {
+                  setCoursePickerOpen(false);
+                  setCourseSearch("");
+                }}
+                activeOpacity={0.82}
+              >
+                <Text style={s.coursePickerCloseText}>닫기</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={s.coursePickerSearchInput}
+              value={courseSearch}
+              onChangeText={setCourseSearch}
+              placeholder="골프장명 또는 지역 검색"
+              placeholderTextColor={C.muted}
+              autoCapitalize="none"
+            />
+
+            <ScrollView
+              style={s.coursePickerList}
+              keyboardShouldPersistTaps="handled"
             >
-              <Text style={s.coursePickerCloseText}>닫기</Text>
-            </TouchableOpacity>
-          </View>
-
-          <TextInput
-            style={s.coursePickerSearchInput}
-            value={courseSearch}
-            onChangeText={setCourseSearch}
-            placeholder="골프장명 또는 지역 검색"
-            placeholderTextColor={C.muted}
-            autoCapitalize="none"
-          />
-
-          <ScrollView style={s.coursePickerList} keyboardShouldPersistTaps="handled">
-            {filteredCourseList.length === 0 ? (
-              <Text style={s.coursePickerEmptyText}>검색 결과가 없습니다.</Text>
-            ) : filteredCourseList.map((course) => {
-              const active = course.id === selectedCourse?.id
-              return (
-                <TouchableOpacity
-                  key={course.id}
-                  style={[s.coursePickerRow, active && s.coursePickerRowActive]}
-                  onPress={() => {
-                    setSelectedCourseId(course.id)
-                    setCoursePickerOpen(false)
-                    setCourseSearch('')
-                  }}
-                  activeOpacity={0.84}
-                >
-                  <View style={s.coursePickerRowTextWrap}>
-                    <Text style={[s.coursePickerRowText, active && s.coursePickerRowTextActive]}>{course.name}</Text>
-                    <Text style={s.coursePickerRowMeta}>{course.region}</Text>
-                  </View>
-                  {active ? <Icon name="check" size={18} color={C.green} /> : null}
-                </TouchableOpacity>
-              )
-            })}
-          </ScrollView>
+              {filteredCourseList.length === 0 ? (
+                <Text style={s.coursePickerEmptyText}>
+                  검색 결과가 없습니다.
+                </Text>
+              ) : (
+                filteredCourseList.map((course) => {
+                  const active = course.id === selectedCourse?.id;
+                  return (
+                    <TouchableOpacity
+                      key={course.id}
+                      style={[
+                        s.coursePickerRow,
+                        active && s.coursePickerRowActive,
+                      ]}
+                      onPress={() => {
+                        setSelectedCourseId(course.id);
+                        setCoursePickerOpen(false);
+                        setCourseSearch("");
+                      }}
+                      activeOpacity={0.84}
+                    >
+                      <View style={s.coursePickerRowTextWrap}>
+                        <Text
+                          style={[
+                            s.coursePickerRowText,
+                            active && s.coursePickerRowTextActive,
+                          ]}
+                        >
+                          {course.name}
+                        </Text>
+                        <Text style={s.coursePickerRowMeta}>
+                          {course.region}
+                        </Text>
+                      </View>
+                      {active ? (
+                        <Icon name="check" size={18} color={C.green} />
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
+          </TouchableOpacity>
         </TouchableOpacity>
-      </TouchableOpacity>
-    </Modal>
+      </Modal>
     </>
-  )
+  );
 }
 
 const s = StyleSheet.create({
   header: {
-    backgroundColor: C.greenDark, paddingBottom: 20, paddingHorizontal: 20,
-    flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between',
+    backgroundColor: C.greenDark,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
   },
-  headerTitle: { color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
-  headerSub: { color: 'rgba(255,255,255,0.65)', fontSize: 12, marginTop: 3 },
+  headerTitle: {
+    color: "#fff",
+    fontSize: 22,
+    fontWeight: "900",
+    letterSpacing: -0.5,
+  },
+  headerSub: { color: "rgba(255,255,255,0.65)", fontSize: 12, marginTop: 3 },
   profileBtn: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: C.gold,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.4)",
   },
-  profileInitial: { color: '#fff', fontSize: 16, fontWeight: '900' },
+  profileInitial: { color: "#fff", fontSize: 16, fontWeight: "900" },
 
   clubSelector: { backgroundColor: C.greenDark, paddingBottom: 14 },
-  clubPill: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
-  clubPillActive: { backgroundColor: '#fff' },
-  clubPillText: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600' },
+  clubPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+  },
+  clubPillActive: { backgroundColor: "#fff" },
+  clubPillText: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 13,
+    fontWeight: "600",
+  },
   clubPillTextActive: { color: C.greenDark },
 
   content: { paddingVertical: 16, paddingTop: 12 },
   pageSectionTitle: {
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: "800",
     color: C.text,
     marginBottom: 12,
   },
@@ -1557,61 +2461,149 @@ const s = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: "rgba(255,255,255,0.15)",
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.24)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "rgba(255,255,255,0.24)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  clubHeroCard: {
-    width: 'auto',
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
+  clubHeroViewport: {
+    overflow: "hidden",
+    marginBottom: 7,
     borderBottomLeftRadius: 56,
     borderBottomRightRadius: 56,
-    overflow: 'hidden',
-    marginBottom: 7,
-    backgroundColor: '#10291d',
-    shadowColor: '#10291d',
+    backgroundColor: "#10291d",
+    shadowColor: "#10291d",
     shadowOpacity: 0.16,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
     elevation: 4,
   },
+  clubHeroCard: {
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 56,
+    borderBottomRightRadius: 56,
+    overflow: "hidden",
+    backgroundColor: "#10291d",
+  },
+  clubHeroPagination: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 10,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+  },
+  clubHeroDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.48)",
+  },
+  clubHeroDotActive: {
+    width: 16,
+    backgroundColor: "#fff",
+  },
+  createClubHeroCard: {
+    backgroundColor: C.greenDark,
+  },
+  createClubHeroContent: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 28,
+    paddingTop: 28,
+  },
+  createClubHeroIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.34)",
+    marginBottom: 12,
+  },
+  createClubHeroPlus: {
+    color: "#fff",
+    fontSize: 34,
+    fontWeight: "300",
+    lineHeight: 38,
+  },
+  createClubHeroTitle: { color: "#fff", fontSize: 22, fontWeight: "900" },
+  createClubHeroDescription: {
+    color: "rgba(255,255,255,0.76)",
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
+    marginTop: 8,
+  },
+  createClubHeroButton: {
+    marginTop: 16,
+    borderRadius: 999,
+    backgroundColor: "#fff",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  createClubHeroButtonText: {
+    color: C.greenDark,
+    fontSize: 13,
+    fontWeight: "900",
+  },
   clubHeroImage: {
     ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   clubHeroScrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.32)',
+    backgroundColor: "rgba(0,0,0,0.32)",
   },
   clubHeroBody: {
-    position: 'absolute',
+    position: "absolute",
     left: 20,
     right: 20,
     bottom: 20,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    alignItems: "flex-end",
     gap: 12,
   },
-  clubHeroLabel: { fontSize: 11, fontWeight: '900', color: 'rgba(255,255,255,0.72)', letterSpacing: 1.2, marginBottom: 6 },
-  clubHeroName: { fontSize: 26, fontWeight: '900', color: '#fff', letterSpacing: -0.4 },
-  clubHeroMeta: { fontSize: 13, color: 'rgba(255,255,255,0.82)', marginTop: 7, lineHeight: 19 },
+  clubHeroLabel: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: "rgba(255,255,255,0.72)",
+    letterSpacing: 1.2,
+    marginBottom: 6,
+  },
+  clubHeroName: {
+    fontSize: 26,
+    fontWeight: "900",
+    color: "#fff",
+    letterSpacing: -0.4,
+  },
+  clubHeroMeta: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.82)",
+    marginTop: 7,
+    lineHeight: 19,
+  },
   clubInfoBtn: {
     borderRadius: 999,
     paddingHorizontal: 15,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.42)',
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderColor: "rgba(255,255,255,0.42)",
+    backgroundColor: "rgba(255,255,255,0.16)",
   },
-  clubInfoBtnText: { fontSize: 13, fontWeight: '900', color: '#fff' },
+  clubInfoBtnText: { fontSize: 13, fontWeight: "900", color: "#fff" },
   managementModalBody: { gap: 10, paddingBottom: 4 },
   managementModalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     backgroundColor: C.card,
     borderRadius: 16,
@@ -1625,16 +2617,16 @@ const s = StyleSheet.create({
     borderRadius: 14,
   },
   managementCardFeatured: {
-    borderColor: '#94bb36',
-    backgroundColor: '#f8ffd9',
+    borderColor: "#94bb36",
+    backgroundColor: "#f8ffd9",
   },
   managementIcon: {
     width: 44,
     height: 44,
     borderRadius: 22,
     backgroundColor: C.greenLight,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   managementIconCompact: {
     width: 38,
@@ -1644,112 +2636,315 @@ const s = StyleSheet.create({
   managementIconFeatured: {
     backgroundColor: C.accent,
   },
-  managementTitle: { fontSize: 18, fontWeight: '900', color: C.text },
-  managementSubtitle: { fontSize: 13, color: C.muted, lineHeight: 19, marginTop: 10 },
+  managementTitle: { fontSize: 18, fontWeight: "900", color: C.text },
+  managementSubtitle: {
+    fontSize: 13,
+    color: C.muted,
+    lineHeight: 19,
+    marginTop: 10,
+  },
   managementTitleCompact: { fontSize: 16 },
   managementSubtitleCompact: { fontSize: 12, lineHeight: 17, marginTop: 6 },
-  emptyCard: { backgroundColor: C.card, borderRadius: 20, padding: 32, alignItems: 'center', marginBottom: 14 },
-  goProfileBtn: { marginTop: 16, paddingVertical: 10, paddingHorizontal: 24, backgroundColor: C.green, borderRadius: 20 },
-  goProfileBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  emptySecondaryBtn: { marginTop: 9, paddingVertical: 8, paddingHorizontal: 18, borderRadius: 16, backgroundColor: C.greenLight },
-  emptySecondaryText: { color: C.green, fontWeight: '800', fontSize: 12 },
+  emptyCard: {
+    backgroundColor: C.card,
+    borderRadius: 20,
+    padding: 32,
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  goProfileBtn: {
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    backgroundColor: C.green,
+    borderRadius: 20,
+  },
+  goProfileBtnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
+  emptySecondaryBtn: {
+    marginTop: 9,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: 16,
+    backgroundColor: C.greenLight,
+  },
+  emptySecondaryText: { color: C.green, fontWeight: "800", fontSize: 12 },
 
   card: {
-    backgroundColor: C.card, borderRadius: 20, padding: 18, marginBottom: 7,
-    shadowColor: '#1a6b44', shadowOpacity: 0.07, shadowRadius: 10, elevation: 2,
+    backgroundColor: C.card,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 7,
+    shadowColor: "#1a6b44",
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    elevation: 2,
   },
   summaryCard: {
     height: 96,
   },
-  cardTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: C.text, marginBottom: 14 },
-  more: { fontSize: 13, color: C.green, fontWeight: '600' },
-  noticeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 4, borderTopWidth: 1, borderTopColor: C.border },
-  noticeIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
-  noticeTitle: { flex: 1, fontSize: 13, fontWeight: '700', color: C.text, textAlign: 'left' },
-  noticeMeta: { fontSize: 11, color: C.muted, textAlign: 'right' },
+  cardTitleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: C.text,
+    marginBottom: 14,
+  },
+  more: { fontSize: 13, color: C.green, fontWeight: "600" },
+  noticeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingVertical: 4,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+  noticeIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: C.greenLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  noticeTitle: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
+    color: C.text,
+    textAlign: "left",
+  },
+  noticeMeta: { fontSize: 11, color: C.muted, textAlign: "right" },
   noticeEmpty: { paddingTop: 12, fontSize: 13, color: C.muted },
-  noticeDetailDate: { marginTop: 5, fontSize: 12, fontWeight: '700', color: C.muted },
+  noticeDetailDate: {
+    marginTop: 5,
+    fontSize: 12,
+    fontWeight: "700",
+    color: C.muted,
+  },
   noticeDetailBody: { fontSize: 14, lineHeight: 22, color: C.text },
-  lottoGuideSummary: { marginTop: 6, fontSize: 12, fontWeight: '800', color: C.green },
-  lottoGuideRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: C.border },
-  lottoGuideLabel: { fontSize: 13, fontWeight: '700', color: C.muted },
-  lottoGuideValue: { flex: 1, fontSize: 13, fontWeight: '900', color: C.text, textAlign: 'right' },
-  recordToggleBtn: { borderRadius: 999, backgroundColor: C.greenLight, paddingHorizontal: 10, paddingVertical: 5 },
-  recordToggleText: { fontSize: 12, fontWeight: '800', color: C.green },
-  criteriaCollapsedText: { fontSize: 13, fontWeight: '700', color: C.muted, lineHeight: 20 },
-  ruleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: C.border },
-  ruleLabel: { fontSize: 13, fontWeight: '700', color: C.muted },
-  ruleValue: { flex: 1, fontSize: 13, fontWeight: '800', color: C.text, textAlign: 'right' },
+  lottoGuideSummary: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: "800",
+    color: C.green,
+  },
+  lottoGuideRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    paddingVertical: 9,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+  lottoGuideLabel: { fontSize: 13, fontWeight: "700", color: C.muted },
+  lottoGuideValue: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "900",
+    color: C.text,
+    textAlign: "right",
+  },
+  recordToggleBtn: {
+    borderRadius: 999,
+    backgroundColor: C.greenLight,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  recordToggleText: { fontSize: 12, fontWeight: "800", color: C.green },
+  criteriaCollapsedText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: C.muted,
+    lineHeight: 20,
+  },
+  ruleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    paddingVertical: 9,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+  ruleLabel: { fontSize: 13, fontWeight: "700", color: C.muted },
+  ruleValue: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "800",
+    color: C.text,
+    textAlign: "right",
+  },
 
   // 핸디캡 랭킹
-  rankRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 6, marginBottom: 2 },
-  rankNum: { width: 32, fontSize: 13, textAlign: 'center', color: C.muted },
-  rankName: { flex: 1, fontSize: 14, fontWeight: '500', color: C.text },
-  rankValue: { fontSize: 16, fontWeight: '800' },
+  rankRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    marginBottom: 2,
+  },
+  rankNum: { width: 32, fontSize: 13, textAlign: "center", color: C.muted },
+  rankName: { flex: 1, fontSize: 14, fontWeight: "500", color: C.text },
+  rankValue: { fontSize: 16, fontWeight: "800" },
 
   // 명예의 전당
-  hallRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border, gap: 10 },
-  hallIconWrap: { width: 32, height: 32, borderRadius: 16, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
+  hallRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    gap: 10,
+  },
+  hallIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: C.greenLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   hallLabel: { flex: 1, fontSize: 13, color: C.muted },
-  hallValue: { fontSize: 13, fontWeight: '600', color: C.text, textAlign: 'right', flexShrink: 1 },
+  hallValue: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: C.text,
+    textAlign: "right",
+    flexShrink: 1,
+  },
 
   // 최근 라운드
-  roundRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.border },
+  roundRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
   roundLeft: { flex: 1 },
-  roundCourse: { fontSize: 14, fontWeight: '700', color: C.text },
+  roundCourse: { fontSize: 14, fontWeight: "700", color: C.text },
   roundMeta: { fontSize: 12, color: C.muted, marginTop: 2 },
   roundStat: { fontSize: 12, color: C.muted },
 
   memberBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 10, paddingHorizontal: 7, paddingVertical: 3,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
   },
   memberBtnText: {
-    fontSize: 10, fontWeight: '700',
-    color: 'rgba(255,255,255,0.85)',
+    fontSize: 10,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.85)",
   },
   clubDropdownBtn: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     maxWidth: 120,
   },
-  clubDropdownText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  clubDropdownText: { color: "#fff", fontSize: 12, fontWeight: "600" },
   dropdownOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'flex-start', alignItems: 'flex-end',
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.3)",
+    justifyContent: "flex-start",
+    alignItems: "flex-end",
     paddingRight: 16,
   },
   dropdownCard: {
-    backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden',
-    minWidth: 200, maxWidth: 260,
-    shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 16, elevation: 8,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    overflow: "hidden",
+    minWidth: 200,
+    maxWidth: 260,
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
   },
   dropdownTitle: {
-    fontSize: 11, fontWeight: '700', color: C.muted, letterSpacing: 0.5,
-    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8,
+    fontSize: 11,
+    fontWeight: "700",
+    color: C.muted,
+    letterSpacing: 0.5,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   dropdownRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  dropdownRowDivider: { borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  dropdownClubName: { fontSize: 14, fontWeight: '700', color: C.text },
+  dropdownRowDivider: { borderBottomWidth: 1, borderBottomColor: "#f0f0f0" },
+  dropdownClubName: { fontSize: 14, fontWeight: "700", color: C.text },
   dropdownClubSub: { fontSize: 11, color: C.muted, marginTop: 1 },
 
   muted: { fontSize: 13, color: C.muted },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalCard: { backgroundColor: C.card, borderRadius: 20, padding: 20, width: '90%', maxHeight: '78%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  modalTitle: { fontSize: 15, fontWeight: '700', color: C.text, flex: 1, marginRight: 8 },
-  createClubLabel: { fontSize: 12, fontWeight: '900', color: C.muted, marginBottom: 6 },
-  createClubSubmitBtn: { minHeight: 46, borderRadius: 16, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center', marginTop: 10 },
-  createClubSubmitText: { color: '#fff', fontSize: 14, fontWeight: '900' },
-  clubInfoTitle: { fontSize: 22, fontWeight: '900', color: C.text },
-  clubInfoSubtitle: { fontSize: 13, color: C.muted, marginTop: 5, lineHeight: 18 },
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalCard: {
+    backgroundColor: C.card,
+    borderRadius: 20,
+    padding: 20,
+    width: "90%",
+    maxHeight: "78%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: C.text,
+    flex: 1,
+    marginRight: 8,
+  },
+  createClubLabel: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: C.muted,
+    marginBottom: 6,
+  },
+  createClubSubmitBtn: {
+    minHeight: 46,
+    borderRadius: 16,
+    backgroundColor: C.green,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 10,
+  },
+  createClubSubmitText: { color: "#fff", fontSize: 14, fontWeight: "900" },
+  clubInfoTitle: { fontSize: 22, fontWeight: "900", color: C.text },
+  clubInfoSubtitle: {
+    fontSize: 13,
+    color: C.muted,
+    marginTop: 5,
+    lineHeight: 18,
+  },
   clubInfoInput: {
     borderWidth: 1,
     borderColor: C.border,
@@ -1759,165 +2954,250 @@ const s = StyleSheet.create({
     fontSize: 14,
     color: C.text,
     marginBottom: 8,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   clubCoverPicker: {
     height: 112,
     borderRadius: 14,
-    overflow: 'hidden',
+    overflow: "hidden",
     marginBottom: 10,
-    backgroundColor: '#eef3ef',
+    backgroundColor: "#eef3ef",
   },
-  clubCoverPreview: { width: '100%', height: '100%' },
+  clubCoverPreview: { width: "100%", height: "100%" },
   clubCoverOverlay: {
     ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.24)',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.24)",
   },
-  clubCoverText: { color: '#fff', fontSize: 13, fontWeight: '900' },
+  clubCoverText: { color: "#fff", fontSize: 13, fontWeight: "900" },
   clubCoverResetBtn: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 7,
-    backgroundColor: '#f2f4f6',
+    backgroundColor: "#f2f4f6",
     marginBottom: 8,
   },
-  clubCoverResetText: { fontSize: 12, fontWeight: '800', color: C.muted },
+  clubCoverResetText: { fontSize: 12, fontWeight: "800", color: C.muted },
   clubSwitchScroll: { marginBottom: 12 },
   clubSwitchRow: { gap: 8, paddingRight: 4 },
   clubSwitchChip: {
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    backgroundColor: '#f2f4f6',
+    backgroundColor: "#f2f4f6",
     borderWidth: 1,
     borderColor: C.border,
   },
   clubSwitchChipActive: { backgroundColor: C.greenLight, borderColor: C.green },
-  clubSwitchText: { fontSize: 12, fontWeight: '800', color: C.muted },
+  clubSwitchText: { fontSize: 12, fontWeight: "800", color: C.muted },
   clubSwitchTextActive: { color: C.green },
-  clubEditRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  clubEditRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
   clubEditBtn: {
     borderRadius: 14,
     backgroundColor: C.greenLight,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    alignItems: 'center',
+    alignItems: "center",
     minWidth: 70,
   },
-  clubEditText: { fontSize: 12, fontWeight: '800', color: C.green },
-  clubInfoStatsText: { fontSize: 12, fontWeight: '800', color: C.muted, marginBottom: 14 },
+  clubEditText: { fontSize: 12, fontWeight: "800", color: C.green },
+  clubInfoStatsText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: C.muted,
+    marginBottom: 14,
+  },
   infoSection: { paddingTop: 12, marginTop: 4 },
-  infoSectionTitle: { fontSize: 15, fontWeight: '900', color: C.text },
-  infoDivider: { height: 1, backgroundColor: C.border, marginTop: 10, marginBottom: 10 },
-  infoLabel: { fontSize: 12, fontWeight: '800', color: C.muted, marginBottom: 6 },
-  adminRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
-  adminName: { fontSize: 14, fontWeight: '800', color: C.text },
-  adminRole: { fontSize: 12, fontWeight: '800', color: C.green },
+  infoSectionTitle: { fontSize: 15, fontWeight: "900", color: C.text },
+  infoDivider: {
+    height: 1,
+    backgroundColor: C.border,
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  infoLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: C.muted,
+    marginBottom: 6,
+  },
+  adminRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 6,
+  },
+  adminName: { fontSize: 14, fontWeight: "800", color: C.text },
+  adminRole: { fontSize: 12, fontWeight: "800", color: C.green },
   infoMuted: { fontSize: 12, color: C.muted, lineHeight: 18 },
-  infoActionRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  infoActionBtn: { flex: 1, borderRadius: 14, backgroundColor: C.greenLight, paddingVertical: 11, alignItems: 'center', marginTop: 10 },
-  infoActionText: { fontSize: 13, fontWeight: '800', color: C.green },
-  settingLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 2, gap: 12 },
-  settingLineLabel: { fontSize: 13, fontWeight: '800', color: C.text },
-  handicapSelectBtn: { borderRadius: 999, backgroundColor: C.greenLight, paddingHorizontal: 13, paddingVertical: 8 },
-  handicapSelectText: { fontSize: 12, fontWeight: '900', color: C.green },
+  infoActionRow: { flexDirection: "row", gap: 8, marginTop: 12 },
+  infoActionBtn: {
+    flex: 1,
+    borderRadius: 14,
+    backgroundColor: C.greenLight,
+    paddingVertical: 11,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  infoActionText: { fontSize: 13, fontWeight: "800", color: C.green },
+  settingLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 2,
+    gap: 12,
+  },
+  settingLineLabel: { fontSize: 13, fontWeight: "800", color: C.text },
+  handicapSelectBtn: {
+    borderRadius: 999,
+    backgroundColor: C.greenLight,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+  },
+  handicapSelectText: { fontSize: 12, fontWeight: "900", color: C.green },
   handicapMenu: {
-    position: 'absolute',
+    position: "absolute",
     top: 38,
     right: 0,
     width: 92,
     borderRadius: 12,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: C.border,
     paddingVertical: 4,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 5,
     zIndex: 30,
   },
   handicapMenuItem: { paddingVertical: 8, paddingHorizontal: 10 },
-  handicapMenuText: { fontSize: 12, fontWeight: '800', color: C.muted, textAlign: 'center' },
+  handicapMenuText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: C.muted,
+    textAlign: "center",
+  },
   handicapMenuTextActive: { color: C.green },
   ruleDesc: { fontSize: 13, color: C.text, lineHeight: 20, marginBottom: 8 },
-  lottoAwardSummary: { fontSize: 14, fontWeight: '900', color: C.green, marginBottom: 12 },
+  lottoAwardSummary: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: C.green,
+    marginBottom: 12,
+  },
   lottoAwardInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     borderWidth: 1,
     borderColor: C.border,
     borderRadius: 12,
     paddingHorizontal: 10,
     marginBottom: 8,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
-  lottoAwardInputLabel: { width: 72, fontSize: 13, fontWeight: '800', color: C.text },
-  lottoAwardInput: { flex: 1, fontSize: 16, fontWeight: '900', color: C.text, paddingVertical: 10, textAlign: 'right' },
-  lottoAwardUnit: { fontSize: 12, fontWeight: '800', color: C.muted },
+  lottoAwardInputLabel: {
+    width: 72,
+    fontSize: 13,
+    fontWeight: "800",
+    color: C.text,
+  },
+  lottoAwardInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "900",
+    color: C.text,
+    paddingVertical: 10,
+    textAlign: "right",
+  },
+  lottoAwardUnit: { fontSize: 12, fontWeight: "800", color: C.muted },
   lottoRolloverRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     borderRadius: 12,
     paddingVertical: 11,
     paddingHorizontal: 12,
-    backgroundColor: '#f2f4f6',
+    backgroundColor: "#f2f4f6",
     marginTop: 4,
   },
-  lottoRolloverText: { fontSize: 13, fontWeight: '900', color: C.text },
-  lottoSwitch: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5, backgroundColor: '#d7dcd8' },
+  lottoRolloverText: { fontSize: 13, fontWeight: "900", color: C.text },
+  lottoSwitch: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    backgroundColor: "#d7dcd8",
+  },
   lottoSwitchOn: { backgroundColor: C.green },
-  lottoSwitchText: { fontSize: 11, fontWeight: '900', color: C.muted },
-  lottoSwitchTextOn: { color: '#fff' },
+  lottoSwitchText: { fontSize: 11, fontWeight: "900", color: C.muted },
+  lottoSwitchTextOn: { color: "#fff" },
   courseImageBody: { gap: 12, paddingBottom: 8 },
   courseImageHelp: { fontSize: 13, color: C.muted, lineHeight: 19 },
-  courseSelectorLabel: { fontSize: 12, fontWeight: '900', color: C.muted, marginBottom: 6 },
+  courseSelectorLabel: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: C.muted,
+    marginBottom: 6,
+  },
   courseSelector: {
     minHeight: 54,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: C.border,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     paddingHorizontal: 14,
     paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 12,
   },
   courseSelectorTextWrap: { flex: 1 },
-  courseSelectorText: { fontSize: 14, fontWeight: '900', color: C.text },
+  courseSelectorText: { fontSize: 14, fontWeight: "900", color: C.text },
   courseSelectorPlaceholder: { color: C.muted },
-  courseSelectorMeta: { marginTop: 3, fontSize: 11, fontWeight: '700', color: C.muted },
+  courseSelectorMeta: {
+    marginTop: 3,
+    fontSize: 11,
+    fontWeight: "700",
+    color: C.muted,
+  },
   coursePickerOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.52)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0,0,0,0.52)",
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 18,
   },
   coursePickerCard: {
-    width: '100%',
+    width: "100%",
     maxWidth: 560,
-    maxHeight: '78%',
+    maxHeight: "78%",
     borderRadius: 20,
     backgroundColor: C.card,
     padding: 18,
   },
-  coursePickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  coursePickerTitle: { fontSize: 17, fontWeight: '900', color: C.text },
-  coursePickerCloseBtn: { borderRadius: 999, backgroundColor: C.green, paddingHorizontal: 14, paddingVertical: 8 },
-  coursePickerCloseText: { fontSize: 12, fontWeight: '900', color: '#fff' },
+  coursePickerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  coursePickerTitle: { fontSize: 17, fontWeight: "900", color: C.text },
+  coursePickerCloseBtn: {
+    borderRadius: 999,
+    backgroundColor: C.green,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  coursePickerCloseText: { fontSize: 12, fontWeight: "900", color: "#fff" },
   coursePickerSearchInput: {
     borderWidth: 1,
     borderColor: C.border,
     borderRadius: 14,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     paddingHorizontal: 13,
     paddingVertical: 11,
     fontSize: 14,
@@ -1931,55 +3211,100 @@ const s = StyleSheet.create({
     borderBottomColor: C.border,
     paddingHorizontal: 8,
     paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 12,
   },
-  coursePickerRowActive: { backgroundColor: C.greenLight, borderRadius: 12, borderBottomColor: 'transparent' },
+  coursePickerRowActive: {
+    backgroundColor: C.greenLight,
+    borderRadius: 12,
+    borderBottomColor: "transparent",
+  },
   coursePickerRowTextWrap: { flex: 1 },
-  coursePickerRowText: { fontSize: 14, fontWeight: '900', color: C.text },
+  coursePickerRowText: { fontSize: 14, fontWeight: "900", color: C.text },
   coursePickerRowTextActive: { color: C.green },
-  coursePickerRowMeta: { marginTop: 3, fontSize: 11, fontWeight: '700', color: C.muted },
-  coursePickerEmptyText: { paddingVertical: 24, textAlign: 'center', fontSize: 13, color: C.muted },
+  coursePickerRowMeta: {
+    marginTop: 3,
+    fontSize: 11,
+    fontWeight: "700",
+    color: C.muted,
+  },
+  coursePickerEmptyText: {
+    paddingVertical: 24,
+    textAlign: "center",
+    fontSize: 13,
+    color: C.muted,
+  },
   selectedCourseBox: {
     borderRadius: 14,
     borderWidth: 1,
     borderColor: C.border,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     padding: 12,
   },
-  selectedCourseName: { fontSize: 15, fontWeight: '900', color: C.text },
-  selectedCourseRegion: { marginTop: 3, fontSize: 12, fontWeight: '700', color: C.muted },
+  selectedCourseName: { fontSize: 15, fontWeight: "900", color: C.text },
+  selectedCourseRegion: {
+    marginTop: 3,
+    fontSize: 12,
+    fontWeight: "700",
+    color: C.muted,
+  },
   seasonImageGrid: { gap: 10 },
   seasonImageCard: {
     borderRadius: 16,
     borderWidth: 1,
     borderColor: C.border,
-    backgroundColor: '#fff',
-    overflow: 'hidden',
+    backgroundColor: "#fff",
+    overflow: "hidden",
   },
-  seasonImagePreview: { width: '100%', height: 128, backgroundColor: C.greenLight },
+  seasonImagePreview: {
+    width: "100%",
+    height: 128,
+    backgroundColor: C.greenLight,
+  },
   seasonImageEmpty: {
     height: 128,
     backgroundColor: C.greenLight,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   seasonImageFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 12,
     padding: 12,
   },
-  seasonImageTitle: { fontSize: 14, fontWeight: '900', color: C.text },
-  seasonImageDesc: { marginTop: 2, fontSize: 11, fontWeight: '800', color: C.muted },
-  seasonImageAction: { fontSize: 12, fontWeight: '900', color: C.green },
-  closeBtn: { backgroundColor: C.green, borderRadius: 20, paddingVertical: 5, paddingHorizontal: 14 },
-  closeBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  tableHeader: { flexDirection: 'row', borderBottomWidth: 1.5, borderBottomColor: C.border, paddingBottom: 7, marginBottom: 2 },
-  tableRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.border },
-  th: { fontSize: 11, color: C.muted, fontWeight: '700' },
+  seasonImageTitle: { fontSize: 14, fontWeight: "900", color: C.text },
+  seasonImageDesc: {
+    marginTop: 2,
+    fontSize: 11,
+    fontWeight: "800",
+    color: C.muted,
+  },
+  seasonImageAction: { fontSize: 12, fontWeight: "900", color: C.green },
+  closeBtn: {
+    backgroundColor: C.green,
+    borderRadius: 20,
+    paddingVertical: 5,
+    paddingHorizontal: 14,
+  },
+  closeBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  tableHeader: {
+    flexDirection: "row",
+    borderBottomWidth: 1.5,
+    borderBottomColor: C.border,
+    paddingBottom: 7,
+    marginBottom: 2,
+  },
+  tableRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  th: { fontSize: 11, color: C.muted, fontWeight: "700" },
   td: { fontSize: 13, color: C.text },
-})
+});
