@@ -604,7 +604,7 @@ export default function ClubScreen() {
                     </View>
                   </View>
 
-                  <View style={s.card}>
+                  <View style={[s.card, s.summaryCard]}>
                     <View style={s.cardTitleRow}>
                       <Text style={[s.cardTitle, { marginBottom: 0 }]}>공지사항</Text>
                       <TouchableOpacity onPress={() => nav.navigate('NoticePrototype')} activeOpacity={0.82}>
@@ -621,7 +621,7 @@ export default function ClubScreen() {
                     ))}
                   </View>
 
-                  <View style={s.card}>
+                  <View style={[s.card, s.summaryCard]}>
                     <TouchableOpacity
                       style={s.cardTitleRow}
                       onPress={() => {
@@ -653,7 +653,7 @@ export default function ClubScreen() {
                   </View>
 
                   <TouchableOpacity
-                    style={s.card}
+                    style={[s.card, s.summaryCard]}
                     onPress={() => setShowHallCriteria(true)}
                     activeOpacity={0.82}
                   >
@@ -666,7 +666,7 @@ export default function ClubScreen() {
 
                   {isManagerView && (
                     <TouchableOpacity
-                      style={s.card}
+                      style={[s.card, s.summaryCard]}
                       onPress={() => nav.navigate('FeePrototype', { returnToManageMenu: true })}
                       activeOpacity={0.86}
                     >
@@ -1658,10 +1658,13 @@ const s = StyleSheet.create({
     backgroundColor: C.card, borderRadius: 20, padding: 18, marginBottom: 7,
     shadowColor: '#1a6b44', shadowOpacity: 0.07, shadowRadius: 10, elevation: 2,
   },
+  summaryCard: {
+    height: 96,
+  },
   cardTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   cardTitle: { fontSize: 15, fontWeight: '700', color: C.text, marginBottom: 14 },
   more: { fontSize: 13, color: C.green, fontWeight: '600' },
-  noticeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border },
+  noticeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingVertical: 4, borderTopWidth: 1, borderTopColor: C.border },
   noticeIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
   noticeTitle: { flex: 1, fontSize: 13, fontWeight: '700', color: C.text, textAlign: 'left' },
   noticeMeta: { fontSize: 11, color: C.muted, textAlign: 'right' },
