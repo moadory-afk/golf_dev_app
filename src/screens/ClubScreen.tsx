@@ -85,6 +85,8 @@ const CLUB_HERO_IMAGE =
 const CLUB_HERO_DISPLAY_HEIGHT_RATIO = 0.7;
 const CLUB_HERO_MIN_WIDTH = 280;
 const APP_URL = "https://golf-seven-psi.vercel.app";
+const LOTTO_JACKPOT_BASE = 50000;
+const LOTTO_JACKPOT_STEP = 10000;
 
 function formatNoticeDate(value: string) {
   if (!value) return "-";
@@ -98,6 +100,83 @@ function diffText(d: number) {
 
 function formatWon(value: number) {
   return `${Math.max(0, Math.round(value)).toLocaleString("ko-KR")}원`;
+}
+
+function formatLottoScore(score: number | undefined, par: number | undefined) {
+  if (typeof score !== "number" || typeof par !== "number") return "";
+  const diff = score - par;
+  if (diff <= -3) return "알바트로스";
+  if (diff === -2) return "이글";
+  if (diff === -1) return "버디";
+  if (diff === 0) return "파";
+  if (diff === 1) return "보기";
+  if (diff === 2) return "더블";
+  if (diff >= par) return "양파";
+  return `+${diff}`;
+}
+
+function compactLottoScoreLabel(label: string) {
+  return label
+    .replace("더블보기", "더블")
+    .replace("트리플보기", "트리플")
+    .replace("더블+", "더블")
+    .replace("양파+", "양파")
+    .trim();
+}
+
+function isLottoScoreHit(
+  myScore: number | undefined,
+  par: number | undefined,
+  drawScore: RoundLottoDrawScore | null,
+) {
+  if (typeof myScore !== "number" || typeof par !== "number" || !drawScore) return false;
+  const myLabel = compactLottoScoreLabel(formatLottoScore(myScore, par));
+  const drawLabel = compactLottoScoreLabel(drawScore.label ?? formatLottoScore(drawScore.score, drawScore.par ?? par));
+  return myLabel === drawLabel;
+}
+
+async function calculateLottoCarryoverAmount(
+  rounds: SavedRound[],
+  members: Array<{ userId: string; name: string; role: string }>,
+) {
+  const memberNameById = new Map(members.map((member) => [member.userId, member.name]));
+  const completedLottoRounds = (
+    await Promise.all(
+      rounds
+        .filter((round) => !!round.scheduleId)
+        .map(async (round) => {
+          const draw = await getRoundLottoDraw(round.scheduleId!).catch(() => null);
+          if (!draw || draw.drawStatus !== "COMPLETED" || !draw.drawnScores) return null;
+          const entries = await getRoundLottoEntries(round.scheduleId!).catch(() => []);
+          return { round, draw, entries };
+        }),
+    )
+  )
+    .filter((item): item is NonNullable<typeof item> => !!item)
+    .sort((a, b) => a.round.date.localeCompare(b.round.date));
+
+  return completedLottoRounds.reduce((amount, item) => {
+    const hasFirstPrizeWinner = item.entries.some((entry) => {
+      const playerName = memberNameById.get(entry.userId);
+      const player = item.round.players.find((roundPlayer) => roundPlayer.name === playerName);
+      if (!player) return false;
+      const selectedHoles = [
+        ...entry.selectedHoles.par3,
+        ...entry.selectedHoles.par4,
+        ...entry.selectedHoles.par5,
+      ];
+      const hits = selectedHoles.filter((hole) =>
+        isLottoScoreHit(
+          player.strokes[hole - 1],
+          item.round.pars[hole - 1],
+          item.draw.drawnScores?.[String(hole)] ?? null,
+        ),
+      ).length;
+      return hits >= 6;
+    });
+
+    return hasFirstPrizeWinner ? LOTTO_JACKPOT_BASE : amount + LOTTO_JACKPOT_STEP;
+  }, LOTTO_JACKPOT_BASE);
 }
 
 // 공동 수상자 포맷: 3명 이하 전원, 4명 이상 "A 외 N명"
@@ -164,6 +243,10 @@ export default function ClubScreen() {
   );
   const rounds = data ?? [];
   const members = clubMembers ?? [];
+  const { data: lottoCarryoverAmount } = useAsync(
+    () => calculateLottoCarryoverAmount(rounds, members),
+    [refreshKey, club?.id, rounds.length, members.length],
+  );
   const recentNotices = (clubNotices ?? [])
     .filter((notice) => notice.isPublished)
     .slice(0, 1);
@@ -183,6 +266,7 @@ export default function ClubScreen() {
   const [handicapBasis, setHandicapBasis] = useState<HandicapBasis>(5);
   const currentLottoAwardConfig =
     lottoAwardConfig ?? DEFAULT_LOTTO_AWARD_CONFIG;
+  const currentLottoCarryoverAmount = lottoCarryoverAmount ?? LOTTO_JACKPOT_BASE;
 
   useEffect(() => {
     loadHandicapBasis(club?.id).then(setHandicapBasis);
@@ -1180,7 +1264,7 @@ export default function ClubScreen() {
                     </Text>
                     <Text style={s.lottoGuideSummary}>
                       현재 누적 당첨금{" "}
-                      {formatWon(currentLottoAwardConfig.carryoverAmount ?? 0)}
+                      {formatWon(currentLottoCarryoverAmount)}
                     </Text>
                   </View>
                   <Text style={s.more}>
@@ -1205,7 +1289,7 @@ export default function ClubScreen() {
                       <Text style={s.lottoGuideLabel}>미당첨 이월</Text>
                       <Text style={s.lottoGuideValue}>
                         {currentLottoAwardConfig.rollover
-                          ? `${formatWon(currentLottoAwardConfig.rolloverIncrement)} 증가`
+                          ? `${formatWon(LOTTO_JACKPOT_STEP)} 증가`
                           : "미적용"}
                       </Text>
                     </View>

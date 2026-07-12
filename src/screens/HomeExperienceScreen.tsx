@@ -79,6 +79,8 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 type LottoSelection = { par3: number[]; par4: number[]; par5: number[] };
 type PersonalCourseSegment = { label: string; layoutId?: string; start: number; end: number };
 type AwardDetailRow = ClubAwardSnapshot & { roundDate: string; courseName: string };
+const LOTTO_JACKPOT_BASE = 50000;
+const LOTTO_JACKPOT_STEP = 10000;
 
 function caddieBookParams(round: HomeUpcomingRound | null) {
   if (!round) return undefined;
@@ -273,6 +275,50 @@ function isLottoScoreHit(
   );
 
   return myLabel === drawLabel;
+}
+
+async function calculateLottoJackpotAmount(
+  rounds: SavedRound[],
+  members: Array<{ userId: string; name: string; role: string }>,
+) {
+  const memberNameById = new Map(members.map((member) => [member.userId, member.name]));
+  const completedLottoRounds = (
+    await Promise.all(
+      rounds
+        .filter((round) => !!round.scheduleId)
+        .map(async (round) => {
+          const draw = await getRoundLottoDraw(round.scheduleId!).catch(() => null);
+          if (!draw || draw.drawStatus !== "COMPLETED" || !draw.drawnScores) return null;
+          const entries = await getRoundLottoEntries(round.scheduleId!).catch(() => []);
+          return { round, draw, entries };
+        }),
+    )
+  )
+    .filter((item): item is NonNullable<typeof item> => !!item)
+    .sort((a, b) => a.round.date.localeCompare(b.round.date));
+
+  return completedLottoRounds.reduce((amount, item) => {
+    const hasFirstPrizeWinner = item.entries.some((entry) => {
+      const playerName = memberNameById.get(entry.userId);
+      const player = item.round.players.find((roundPlayer) => roundPlayer.name === playerName);
+      if (!player) return false;
+      const selectedHoles = [
+        ...entry.selectedHoles.par3,
+        ...entry.selectedHoles.par4,
+        ...entry.selectedHoles.par5,
+      ];
+      const hits = selectedHoles.filter((hole) =>
+        isLottoScoreHit(
+          player.strokes[hole - 1],
+          item.round.pars[hole - 1],
+          item.draw.drawnScores?.[String(hole)] ?? null,
+        ),
+      ).length;
+      return hits >= 6;
+    });
+
+    return hasFirstPrizeWinner ? LOTTO_JACKPOT_BASE : amount + LOTTO_JACKPOT_STEP;
+  }, LOTTO_JACKPOT_BASE);
 }
 
 function weightedLottoScore(par: number) {
@@ -635,6 +681,7 @@ export default function HomeExperienceScreen() {
   const [popupLottoEntries, setPopupLottoEntries] = useState<RoundLottoEntry[]>([]);
   const [popupLottoDraw, setPopupLottoDraw] = useState<RoundLottoDraw | null>(null);
   const [popupLottoConfig, setPopupLottoConfig] = useState<LottoAwardConfig>(DEFAULT_LOTTO_AWARD_CONFIG);
+  const [popupLottoJackpot, setPopupLottoJackpot] = useState(LOTTO_JACKPOT_BASE);
   const [popupMyLottoStrokes, setPopupMyLottoStrokes] = useState<number[] | null>(null);
   const [popupLottoSaving, setPopupLottoSaving] = useState(false);
   const [popupDrawSaving, setPopupDrawSaving] = useState(false);
@@ -701,6 +748,7 @@ export default function HomeExperienceScreen() {
       setPopupLottoEntries([]);
       setPopupLottoDraw(null);
       setPopupLottoConfig(DEFAULT_LOTTO_AWARD_CONFIG);
+      setPopupLottoJackpot(LOTTO_JACKPOT_BASE);
       setPopupMyLottoStrokes(null);
       setPopupLottoSaving(false);
       setPopupAwardConfig(null);
@@ -728,10 +776,12 @@ export default function HomeExperienceScreen() {
           ]);
           const roundRecord = savedRounds.find((item) => item.scheduleId === round.id);
           const myPlayer = roundRecord ? findPlayer(roundRecord, myName) : null;
+          const jackpot = await calculateLottoJackpotAmount(savedRounds, members);
           setPopupLottoSelection(saved?.selectedHoles ?? emptyLottoSelection());
           setPopupLottoEntries(entries);
           setPopupLottoDraw(draw);
           setPopupLottoConfig(lottoConfig);
+          setPopupLottoJackpot(jackpot);
           setPopupMyLottoStrokes(myPlayer?.strokes ?? null);
         }
 
@@ -746,6 +796,7 @@ export default function HomeExperienceScreen() {
         setPopupLottoSelection(emptyLottoSelection());
         setPopupLottoEntries([]);
         setPopupLottoDraw(null);
+        setPopupLottoJackpot(LOTTO_JACKPOT_BASE);
         setPopupMyLottoStrokes(null);
         setPopupAwardConfig(null);
       } finally {
@@ -1044,6 +1095,7 @@ export default function HomeExperienceScreen() {
         lottoSelection={popupLottoSelection}
         lottoDraw={popupLottoDraw}
         lottoConfig={popupLottoConfig}
+        lottoJackpot={popupLottoJackpot}
         myLottoStrokes={popupMyLottoStrokes}
         awardConfig={popupAwardConfig}
         myUserId={userId}
@@ -1275,6 +1327,7 @@ function RoundInfoModal({
   lottoSelection,
   lottoDraw,
   lottoConfig,
+  lottoJackpot,
   myLottoStrokes,
   awardConfig,
   myUserId,
@@ -1298,6 +1351,7 @@ function RoundInfoModal({
   lottoSelection: LottoSelection;
   lottoDraw: RoundLottoDraw | null;
   lottoConfig: LottoAwardConfig;
+  lottoJackpot: number;
   myLottoStrokes: number[] | null;
   awardConfig: ClubAwardConfig | null;
   myUserId?: string | null;
@@ -1321,9 +1375,6 @@ function RoundInfoModal({
     () => new Map(members.map((member) => [member.userId, member.name])),
     [members],
   );
-  const lottoJackpot =
-    lottoConfig.prizes["6"] +
-    (lottoConfig.rollover ? lottoConfig.carryoverAmount : 0);
   const myLottoEntry = myUserId ? lottoEntries.find((entry) => entry.userId === myUserId) : null;
   const myPurchasedHoles = myLottoEntry
     ? [
@@ -1469,6 +1520,9 @@ function RoundInfoModal({
               <View style={[styles.popupSection, { borderColor: palette.border }]}>
                 <Text style={[styles.popupSectionTitle, { color: palette.text }]}>
                   내 Lotto 구매
+                </Text>
+                <Text style={[styles.lottoJackpotText, { color: palette.green }]}>
+                  1등 당첨금 {formatWon(lottoJackpot)}
                 </Text>
                 {myLottoEntry && myPurchasedHoles.length === 6 ? (
                   <View style={styles.myLottoPurchasedBox}>
@@ -1876,6 +1930,12 @@ const styles = StyleSheet.create({
   popupSectionTitle: {
     fontSize: 15,
     lineHeight: 20,
+    fontWeight: "900",
+    marginBottom: 10,
+  },
+  lottoJackpotText: {
+    fontSize: 14,
+    lineHeight: 19,
     fontWeight: "900",
     marginBottom: 10,
   },
