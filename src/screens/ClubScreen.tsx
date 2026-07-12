@@ -28,6 +28,8 @@ type ClubRoute = RouteProp<MainTabParamList, 'Club'>
 type RankingType = 'recentMedal' | 'recentWins' | 'wins' | 'streak' | 'lowestHandicap' | 'birdie' | 'singleBirdie'
 
 const CLUB_HERO_IMAGE = 'https://images.unsplash.com/photo-1592919505780-303950717480?auto=format&fit=crop&w=1200&q=80'
+const CLUB_HERO_DISPLAY_HEIGHT_RATIO = 0.7
+const CLUB_HERO_MIN_WIDTH = 280
 const APP_URL = 'https://golf-seven-psi.vercel.app'
 
 function formatNoticeDate(value: string) {
@@ -67,7 +69,12 @@ export default function ClubScreen() {
   const nav = useNavigation<Nav>()
   const route = useRoute<ClubRoute>()
   const [refreshKey, setRefreshKey] = useState(0)
+  const [measuredClubHeroWidth, setMeasuredClubHeroWidth] = useState(0)
   const isCompactScreen = isCompactWidth(windowWidth)
+  const clubHeroWidth = measuredClubHeroWidth || CLUB_HERO_MIN_WIDTH
+  const clubHeroHeight = Math.round(
+    clubHeroWidth * CLUB_HERO_DISPLAY_HEIGHT_RATIO + insets.top,
+  )
   const { activeClub: club, myClubs, setActiveClub, refreshClubs } = useClub()
   const { data, loading } = useAsync(
     () => (club ? getRounds(club.id) : Promise.resolve([])),
@@ -526,15 +533,21 @@ export default function ClubScreen() {
           {club && (
             <>
                   <View
+                    onLayout={(event) => {
+                      const nextWidth = Math.round(event.nativeEvent.layout.width)
+                      if (nextWidth > 0 && nextWidth !== measuredClubHeroWidth) {
+                        setMeasuredClubHeroWidth(nextWidth)
+                      }
+                    }}
                     style={[
                       s.clubHeroCard,
                       {
                         marginHorizontal: isCompactScreen ? -12 : -16,
                         marginTop: -12,
-                        height: Math.round(windowWidth * 0.7 + insets.top),
+                        height: clubHeroHeight,
                       },
                     ]}
-                  > 
+                  >
                     <Image source={{ uri: club.coverImage || CLUB_HERO_IMAGE }} style={s.clubHeroImage} resizeMode="cover" />
                     <View style={s.clubHeroScrim} />
                     <TopActionButtons topInset={insets.top} floating />
@@ -654,14 +667,14 @@ export default function ClubScreen() {
                   {isManagerView && (
                     <TouchableOpacity
                       style={s.card}
-                      onPress={() => setManageMenuOpen(true)}
+                      onPress={() => nav.navigate('FeePrototype', { returnToManageMenu: true })}
                       activeOpacity={0.86}
                     >
                       <View style={s.cardTitleRow}>
-                        <Text style={[s.cardTitle, { marginBottom: 0 }]}>기타관리</Text>
-                        <Text style={s.more}>열기</Text>
+                        <Text style={[s.cardTitle, { marginBottom: 0 }]}>회비관리 현황</Text>
+                        <Text style={s.more}>확인하기</Text>
                       </View>
-                      <Text style={s.criteriaCollapsedText}>관리자 전용 추가 기능을 확인합니다.</Text>
+                      <Text style={s.criteriaCollapsedText}>회비 현황과 납부 상태를 확인합니다.</Text>
                     </TouchableOpacity>
                   )}
             </>
