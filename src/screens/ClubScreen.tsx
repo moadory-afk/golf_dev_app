@@ -1269,6 +1269,8 @@ function CourseSeasonImageModal({
   const [courseReloadKey, setCourseReloadKey] = useState(0)
   const { data: courses, loading: coursesLoading } = useAsync(() => getGolfCourses(), [courseReloadKey])
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null)
+  const [coursePickerOpen, setCoursePickerOpen] = useState(false)
+  const [courseSearch, setCourseSearch] = useState('')
   const [images, setImages] = useState<Record<SeasonKey, string | null>>({
     spring: null,
     summer: null,
@@ -1279,6 +1281,10 @@ function CourseSeasonImageModal({
   const [savingSeason, setSavingSeason] = useState<SeasonKey | null>(null)
   const courseList = courses ?? []
   const selectedCourse = courseList.find((course) => course.id === selectedCourseId) ?? courseList[0] ?? null
+  const normalizedCourseSearch = courseSearch.trim().toLocaleLowerCase('ko-KR')
+  const filteredCourseList = normalizedCourseSearch
+    ? courseList.filter((course) => `${course.name} ${course.region ?? ''}`.toLocaleLowerCase('ko-KR').includes(normalizedCourseSearch))
+    : courseList
 
   useEffect(() => {
     if (courseList[0] && (!selectedCourseId || !courseList.some((course) => course.id === selectedCourseId))) {
@@ -1347,6 +1353,7 @@ function CourseSeasonImageModal({
   }
 
   return (
+    <>
     <Modal transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity
@@ -1373,21 +1380,25 @@ function CourseSeasonImageModal({
           ) : (
             <ScrollView contentContainerStyle={s.courseImageBody}>
               <Text style={s.courseImageHelp}>라운드 날짜의 계절에 맞는 사진이 홈 히어로에 표시됩니다.</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.courseChipRow}>
-                {courseList.map((course: GolfCourse) => {
-                  const active = course.id === selectedCourse?.id
-                  return (
-                    <TouchableOpacity
-                      key={course.id}
-                      style={[s.courseChip, active && s.courseChipActive]}
-                      onPress={() => setSelectedCourseId(course.id)}
-                      activeOpacity={0.82}
-                    >
-                      <Text style={[s.courseChipText, active && s.courseChipTextActive]} numberOfLines={1}>{course.name}</Text>
-                    </TouchableOpacity>
-                  )
-                })}
-              </ScrollView>
+              <View>
+                <Text style={s.courseSelectorLabel}>골프장</Text>
+                <TouchableOpacity
+                  style={s.courseSelector}
+                  onPress={() => setCoursePickerOpen(true)}
+                  activeOpacity={0.84}
+                  disabled={courseList.length === 0}
+                >
+                  <View style={s.courseSelectorTextWrap}>
+                    <Text style={[s.courseSelectorText, !selectedCourse && s.courseSelectorPlaceholder]} numberOfLines={1}>
+                      {selectedCourse?.name ?? '골프장 선택'}
+                    </Text>
+                    {selectedCourse?.region ? (
+                      <Text style={s.courseSelectorMeta} numberOfLines={1}>{selectedCourse.region}</Text>
+                    ) : null}
+                  </View>
+                  <Icon name="chevronRight" size={18} color={C.muted} />
+                </TouchableOpacity>
+              </View>
 
               {selectedCourse ? (
                 <>
@@ -1441,6 +1452,77 @@ function CourseSeasonImageModal({
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
+
+    <Modal
+      transparent
+      animationType="fade"
+      visible={coursePickerOpen}
+      onRequestClose={() => {
+        setCoursePickerOpen(false)
+        setCourseSearch('')
+      }}
+    >
+      <TouchableOpacity
+        style={s.coursePickerOverlay}
+        activeOpacity={1}
+        onPress={() => {
+          setCoursePickerOpen(false)
+          setCourseSearch('')
+        }}
+      >
+        <TouchableOpacity style={s.coursePickerCard} activeOpacity={1} onPress={() => {}}>
+          <View style={s.coursePickerHeader}>
+            <Text style={s.coursePickerTitle}>골프장 선택</Text>
+            <TouchableOpacity
+              style={s.coursePickerCloseBtn}
+              onPress={() => {
+                setCoursePickerOpen(false)
+                setCourseSearch('')
+              }}
+              activeOpacity={0.82}
+            >
+              <Text style={s.coursePickerCloseText}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+
+          <TextInput
+            style={s.coursePickerSearchInput}
+            value={courseSearch}
+            onChangeText={setCourseSearch}
+            placeholder="골프장명 또는 지역 검색"
+            placeholderTextColor={C.muted}
+            autoCapitalize="none"
+          />
+
+          <ScrollView style={s.coursePickerList} keyboardShouldPersistTaps="handled">
+            {filteredCourseList.length === 0 ? (
+              <Text style={s.coursePickerEmptyText}>검색 결과가 없습니다.</Text>
+            ) : filteredCourseList.map((course) => {
+              const active = course.id === selectedCourse?.id
+              return (
+                <TouchableOpacity
+                  key={course.id}
+                  style={[s.coursePickerRow, active && s.coursePickerRowActive]}
+                  onPress={() => {
+                    setSelectedCourseId(course.id)
+                    setCoursePickerOpen(false)
+                    setCourseSearch('')
+                  }}
+                  activeOpacity={0.84}
+                >
+                  <View style={s.coursePickerRowTextWrap}>
+                    <Text style={[s.coursePickerRowText, active && s.coursePickerRowTextActive]}>{course.name}</Text>
+                    <Text style={s.coursePickerRowMeta}>{course.region}</Text>
+                  </View>
+                  {active ? <Icon name="check" size={18} color={C.green} /> : null}
+                </TouchableOpacity>
+              )
+            })}
+          </ScrollView>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+    </>
   )
 }
 
@@ -1791,19 +1873,72 @@ const s = StyleSheet.create({
   lottoSwitchTextOn: { color: '#fff' },
   courseImageBody: { gap: 12, paddingBottom: 8 },
   courseImageHelp: { fontSize: 13, color: C.muted, lineHeight: 19 },
-  courseChipRow: { gap: 8, paddingRight: 4 },
-  courseChip: {
-    maxWidth: 170,
-    borderRadius: 999,
+  courseSelectorLabel: { fontSize: 12, fontWeight: '900', color: C.muted, marginBottom: 6 },
+  courseSelector: {
+    minHeight: 54,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: C.border,
-    backgroundColor: '#f2f4f6',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    backgroundColor: '#fff',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  courseChipActive: { backgroundColor: C.greenLight, borderColor: C.green },
-  courseChipText: { fontSize: 12, fontWeight: '900', color: C.muted },
-  courseChipTextActive: { color: C.green },
+  courseSelectorTextWrap: { flex: 1 },
+  courseSelectorText: { fontSize: 14, fontWeight: '900', color: C.text },
+  courseSelectorPlaceholder: { color: C.muted },
+  courseSelectorMeta: { marginTop: 3, fontSize: 11, fontWeight: '700', color: C.muted },
+  coursePickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.52)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  coursePickerCard: {
+    width: '100%',
+    maxWidth: 560,
+    maxHeight: '78%',
+    borderRadius: 20,
+    backgroundColor: C.card,
+    padding: 18,
+  },
+  coursePickerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  coursePickerTitle: { fontSize: 17, fontWeight: '900', color: C.text },
+  coursePickerCloseBtn: { borderRadius: 999, backgroundColor: C.green, paddingHorizontal: 14, paddingVertical: 8 },
+  coursePickerCloseText: { fontSize: 12, fontWeight: '900', color: '#fff' },
+  coursePickerSearchInput: {
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    fontSize: 14,
+    color: C.text,
+    marginBottom: 10,
+  },
+  coursePickerList: { flexGrow: 0 },
+  coursePickerRow: {
+    minHeight: 58,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  coursePickerRowActive: { backgroundColor: C.greenLight, borderRadius: 12, borderBottomColor: 'transparent' },
+  coursePickerRowTextWrap: { flex: 1 },
+  coursePickerRowText: { fontSize: 14, fontWeight: '900', color: C.text },
+  coursePickerRowTextActive: { color: C.green },
+  coursePickerRowMeta: { marginTop: 3, fontSize: 11, fontWeight: '700', color: C.muted },
+  coursePickerEmptyText: { paddingVertical: 24, textAlign: 'center', fontSize: 13, color: C.muted },
   selectedCourseBox: {
     borderRadius: 14,
     borderWidth: 1,

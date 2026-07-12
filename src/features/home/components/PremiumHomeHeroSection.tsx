@@ -4,6 +4,8 @@ import {
   ImageSourcePropType,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  PanResponder,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -67,19 +69,106 @@ export function PremiumHomeHeroSection({
   const { palette } = useSkin();
   const [activeIndex, setActiveIndex] = useState(0);
   const [measuredHeroWidth, setMeasuredHeroWidth] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const dotsScrollRef = useRef<ScrollView>(null);
+  const activeIndexRef = useRef(0);
+  const dragStartOffsetRef = useRef(0);
+  const heroWidthRef = useRef(HERO_MIN_WIDTH);
+  const totalCountRef = useRef(1);
   const fallbackHeroWidth = HERO_MIN_WIDTH;
   const heroWidth = measuredHeroWidth || fallbackHeroWidth;
   const heroHeight = Math.round(
     heroWidth * HERO_DISPLAY_HEIGHT_RATIO + topInset,
   );
   const hasRounds = rounds.length > 0;
-  const totalCount = Math.max(1, rounds.length + (isAdmin ? 1 : 0));
+  const totalCount = hasRounds
+    ? rounds.length + (isAdmin ? 1 : 0)
+    : 1;
   const dots = Array.from({ length: totalCount });
+  heroWidthRef.current = heroWidth;
+  totalCountRef.current = totalCount;
+
+  const updateActiveIndex = (nextIndex: number) => {
+    const clampedIndex = Math.max(0, Math.min(nextIndex, totalCount - 1));
+    activeIndexRef.current = clampedIndex;
+    setActiveIndex(clampedIndex);
+    return clampedIndex;
+  };
+
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (heroWidth <= 0) return;
+    const index = Math.round(event.nativeEvent.contentOffset.x / heroWidth);
+    if (index !== activeIndexRef.current) updateActiveIndex(index);
+  };
 
   const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const index = Math.round(event.nativeEvent.contentOffset.x / heroWidth);
-    setActiveIndex(Math.max(0, Math.min(index, totalCount - 1)));
+    updateActiveIndex(index);
   };
+
+  useEffect(() => {
+    const dotStep = 15;
+    const targetX = Math.max(0, activeIndex * dotStep - dotStep * 2);
+    dotsScrollRef.current?.scrollTo({ x: targetX, y: 0, animated: true });
+  }, [activeIndex, totalCount]);
+
+  const webDragResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        Platform.OS === "web" &&
+        Math.abs(gestureState.dx) > 8 &&
+        Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
+      onMoveShouldSetPanResponderCapture: (_, gestureState) =>
+        Platform.OS === "web" &&
+        Math.abs(gestureState.dx) > 8 &&
+        Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
+      onPanResponderGrant: () => {
+        dragStartOffsetRef.current =
+          activeIndexRef.current * heroWidthRef.current;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        const width = heroWidthRef.current;
+        const maxOffset = Math.max(
+          0,
+          (totalCountRef.current - 1) * width,
+        );
+        const nextOffset = Math.max(
+          0,
+          Math.min(maxOffset, dragStartOffsetRef.current - gestureState.dx),
+        );
+        scrollRef.current?.scrollTo({ x: nextOffset, y: 0, animated: false });
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const width = heroWidthRef.current;
+        const movedFarEnough = Math.abs(gestureState.dx) > width * 0.16;
+        const movedFastEnough = Math.abs(gestureState.vx) > 0.35;
+        const direction = gestureState.dx < 0 ? 1 : -1;
+        const targetIndex =
+          movedFarEnough || movedFastEnough
+            ? activeIndexRef.current + direction
+            : activeIndexRef.current;
+        const clampedIndex = Math.max(
+          0,
+          Math.min(targetIndex, totalCountRef.current - 1),
+        );
+        activeIndexRef.current = clampedIndex;
+        setActiveIndex(clampedIndex);
+        scrollRef.current?.scrollTo({
+          x: clampedIndex * width,
+          y: 0,
+          animated: true,
+        });
+      },
+      onPanResponderTerminate: () => {
+        scrollRef.current?.scrollTo({
+          x: activeIndexRef.current * heroWidthRef.current,
+          y: 0,
+          animated: true,
+        });
+      },
+      onPanResponderTerminationRequest: () => false,
+    }),
+  ).current;
 
   return (
     <View style={styles.shell}>
@@ -90,14 +179,22 @@ export function PremiumHomeHeroSection({
             setMeasuredHeroWidth(nextWidth);
         }}
         style={[styles.heroCard, { height: heroHeight }]}
+        {...(Platform.OS === "web" ? webDragResponder.panHandlers : {})}
       >
         <View style={styles.heroImage}>
           <TopActionButtons topInset={topInset} floating />
           <ScrollView
+            ref={scrollRef}
             horizontal
             pagingEnabled
+            snapToInterval={heroWidth}
+            snapToAlignment="start"
+            disableIntervalMomentum
             decelerationRate="fast"
             showsHorizontalScrollIndicator={false}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            onScrollEndDrag={handleScrollEnd}
             onMomentumScrollEnd={handleScrollEnd}
             style={styles.carousel}
           >
@@ -145,23 +242,31 @@ export function PremiumHomeHeroSection({
             )}
           </ScrollView>
 
-          <View style={styles.dotsRow} pointerEvents="none">
-            {dots.map((_, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.dot,
-                  {
-                    backgroundColor:
-                      index === activeIndex
-                        ? palette.text
-                        : "rgba(255,255,255,0.48)",
-                    width: index === activeIndex ? 9 : 7,
-                    height: index === activeIndex ? 9 : 7,
-                  },
-                ]}
-              />
-            ))}
+          <View style={styles.dotsViewport} pointerEvents="none">
+            <ScrollView
+              ref={dotsScrollRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              scrollEnabled={false}
+              contentContainerStyle={styles.dotsRow}
+            >
+              {dots.map((_, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.dot,
+                    {
+                      backgroundColor:
+                        index === activeIndex
+                          ? palette.text
+                          : "rgba(255,255,255,0.48)",
+                      width: index === activeIndex ? 9 : 7,
+                      height: index === activeIndex ? 9 : 7,
+                    },
+                  ]}
+                />
+              ))}
+            </ScrollView>
           </View>
         </View>
       </View>
@@ -1131,15 +1236,20 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: -0.35,
   },
-  dotsRow: {
+  dotsViewport: {
     position: "absolute",
-    left: 0,
-    right: 0,
+    alignSelf: "center",
     bottom: 7,
+    width: 112,
+    overflow: "hidden",
+  },
+  dotsRow: {
+    minWidth: 112,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
   },
   dot: { borderRadius: radius.pill },
   heroWave: {
