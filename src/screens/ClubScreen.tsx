@@ -743,6 +743,7 @@ export default function ClubScreen() {
   const MEDAL_BG = ["#fffbe8", "#f4f6f8", "#fdf5f0"];
   const MEDAL_COLOR = [C.gold, C.silver, C.bronze];
   const isManagerView = club?.role === "admin";
+  const summaryCardActionLabel = isManagerView ? "관리하기" : "전체보기";
 
   useEffect(() => {
     if (!route.params?.openManageMenu || !isManagerView) return;
@@ -1233,7 +1234,7 @@ export default function ClubScreen() {
                     onPress={() => nav.navigate("NoticePrototype")}
                     activeOpacity={0.82}
                   >
-                    <Text style={s.more}>전체보기 ›</Text>
+                    <Text style={s.more}>{summaryCardActionLabel}</Text>
                   </TouchableOpacity>
                 </View>
                 {recentNotices.length === 0 ? (
@@ -1275,13 +1276,7 @@ export default function ClubScreen() {
                       {formatWon(currentLottoCarryoverAmount)}
                     </Text>
                   </View>
-                  <Text style={s.more}>
-                    {isManagerView
-                      ? "설정"
-                      : showLottoAwardGuide
-                        ? "접기"
-                        : "펼치기"}
-                  </Text>
+                  <Text style={s.more}>{summaryCardActionLabel}</Text>
                 </TouchableOpacity>
                 {!isManagerView && showLottoAwardGuide ? (
                   <View>
@@ -1314,7 +1309,7 @@ export default function ClubScreen() {
                   <Text style={[s.cardTitle, { marginBottom: 0 }]}>
                     기네스북 기록 기준
                   </Text>
-                  <Text style={s.more}>결과 확인</Text>
+                  <Text style={s.more}>{summaryCardActionLabel}</Text>
                 </View>
                 <Text style={s.criteriaCollapsedText}>
                   기네스북에 반영되는 기록 기준을 확인합니다.
@@ -1333,7 +1328,7 @@ export default function ClubScreen() {
                     <Text style={[s.cardTitle, { marginBottom: 0 }]}>
                       회비관리 현황
                     </Text>
-                    <Text style={s.more}>확인하기</Text>
+                    <Text style={s.more}>{summaryCardActionLabel}</Text>
                   </View>
                   <Text style={s.criteriaCollapsedText}>
                     회비 현황과 납부 상태를 확인합니다.

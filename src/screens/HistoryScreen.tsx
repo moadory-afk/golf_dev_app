@@ -30,6 +30,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>
 type Tab = 'byRound' | 'byPlayer' | 'club' | 'hall'
 type RankingType = 'wins' | 'streak' | 'lowestHandicap' | 'birdie' | 'singleBirdie' | 'frontBack' | 'avgImprove' | 'handicapImprove' | 'singlePar' | 'roundsPlayed' | 'lowestScore' | 'highestScore'
 type RoundDetailTab = 'regular' | 'peoria' | 'score' | 'award'
+type HistoryMember = { userId: string; name: string; role: string }
 
 function formatWon(value: number) {
   return `${Math.max(0, Math.round(value)).toLocaleString('ko-KR')}원`
@@ -208,7 +209,12 @@ export default function HistoryScreen() {
     () => (activeClub ? getRoundHistoryCards(activeClub.id) : Promise.resolve([])),
     [refreshKey, activeClub?.id],
   )
+  const { data: memberData } = useAsync(
+    () => (activeClub ? getClubMembers(activeClub.id) : Promise.resolve([])),
+    [activeClub?.id],
+  )
   const rounds = data ?? []
+  const members = memberData ?? []
   const onRefresh = useCallback(() => setRefreshKey((k) => k + 1), [])
 
   // 화면 포커스 복귀 시 자동 새로고침 (삭제/저장 후 즉시 반영)
@@ -241,9 +247,9 @@ export default function HistoryScreen() {
           <Text style={s.muted}>데이터를 불러오는 중입니다.</Text>
         ) : (
           <>
-            {tab === 'byRound' && <ByRound rounds={rounds} handicapBasis={handicapBasis} />}
+            {tab === 'byRound' && <ByRound rounds={rounds} handicapBasis={handicapBasis} members={members} />}
             {tab === 'byPlayer' && <ByPlayer rounds={rounds} handicapBasis={handicapBasis} myName={myName} myUserId={myUserId} />}
-            {tab === 'club' && <Club rounds={rounds} handicapBasis={handicapBasis} />}
+            {tab === 'club' && <Club rounds={rounds} handicapBasis={handicapBasis} members={members} />}
             {tab === 'hall' && <HallOfFame rounds={rounds} handicapBasis={handicapBasis} />}
           </>
         )}
@@ -270,9 +276,209 @@ function monthLabel(key: string) {
   return `${year}년 ${Number(month)}월`
 }
 
-function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicapBasis?: number }) {
+function memberPlaceholders(members: HistoryMember[]) {
+  const names = members
+    .map((member) => shortName(member.name || ''))
+    .filter((name) => name.length > 0)
+    .slice(0, 8)
+  return names.length > 0 ? names : ['회원']
+}
+
+function EmptyByRound({ members }: { members: HistoryMember[] }) {
   const [containerWidth, setContainerWidth] = useState(0)
-  if (rounds.length === 0) return <Text style={s.muted}>아직 라운드 기록이 없습니다.</Text>
+  const cardWidth = containerWidth > 0 ? Math.min(Math.max(containerWidth - 32, 280), 430) : 0
+  const cardHeight = Math.max(500, Math.min(590, Dimensions.get('window').height - 220))
+  return (
+    <View
+      style={s.roundCarouselWrap}
+      onLayout={(event) => {
+        const nextWidth = Math.round(event.nativeEvent.layout.width)
+        if (nextWidth > 0 && nextWidth !== containerWidth) setContainerWidth(nextWidth)
+      }}
+    >
+      {cardWidth > 0 ? (
+        <View style={[s.roundCardShell, { width: cardWidth, height: cardHeight }]}>
+          <View style={s.roundHero}>
+            <View style={[s.roundPhotoHeader, { backgroundColor: C.greenLight }]}>
+              <View style={s.roundHeroTopRow}>
+                <View style={s.roundCounter}><Text style={s.roundCounterText}>0 / 0</Text></View>
+                <View style={s.heroProgressBadge}><Text style={s.heroStatusText}>기록 대기</Text></View>
+              </View>
+              <View>
+                <Text style={s.heroDate}>----.--.--</Text>
+                <Text style={s.heroCourseName}>라운드 기록</Text>
+              </View>
+            </View>
+            <View style={s.roundSummaryBody}>
+              <View style={s.heroSummaryPanel}>
+                <View style={s.summaryCell}><Text style={s.summaryLabel}>우승</Text><Text style={s.summaryValue}>-</Text></View>
+                <View style={s.summaryCell}><Text style={s.summaryLabel}>스코어</Text><Text style={s.summaryValue}>-</Text></View>
+                <View style={[s.summaryCell, { borderRightWidth: 0 }]}><Text style={s.summaryLabel}>참가</Text><Text style={s.summaryValue}>{members.length}명</Text></View>
+              </View>
+              <View style={s.heroInfoPanel}>
+                <Text style={s.heroSectionTitle}>기네스 북 갱신 현황</Text>
+                <Text style={s.muted}>라운드 결과가 등록되면 기존 카드 양식에 맞춰 표시됩니다.</Text>
+              </View>
+              <View style={s.highlightRow}>
+                <View style={s.highlightCard}><Text style={s.highlightLabel}>정규</Text><Text style={s.highlightValue}>-</Text></View>
+                <View style={s.highlightCard}><Text style={s.highlightLabel}>신페리오</Text><Text style={s.highlightValue}>-</Text></View>
+                <View style={s.highlightCard}><Text style={s.highlightLabel}>시상</Text><Text style={s.highlightValue}>-</Text></View>
+              </View>
+            </View>
+          </View>
+        </View>
+      ) : <View style={[s.roundCarouselPlaceholder, { height: cardHeight }]} />}
+      <Text style={s.roundSwipeHint}>라운드 결과가 등록되면 좌우로 넘겨볼 수 있습니다</Text>
+    </View>
+  )
+}
+
+function EmptyByPlayer() {
+  const emptyReportCards = [
+    { key: 'target', icon: '🎯', title: '목표 설정', subtitle: '100타 목표 관리' },
+    { key: 'trend', icon: '📈', title: '스코어 추이', subtitle: '기록 대기' },
+    { key: 'shot', icon: '🏌️', title: '샷·퍼팅', subtitle: '기록 대기' },
+    { key: 'hole', icon: '⛳', title: '홀 유형', subtitle: '기록 대기' },
+    { key: 'score', icon: '📊', title: '스코어 분포', subtitle: '기록 대기' },
+  ]
+  return (
+    <>
+      <View style={s.aiCaddieCard}>
+        <View style={s.aiCaddieHeader}>
+          <View style={s.aiCaddieIconWrap}>
+            <Text style={s.aiCaddieIcon}>🤖</Text>
+          </View>
+          <View style={s.aiCaddieTitleBlock}>
+            <Text style={s.aiCaddieEyebrow}>AI Caddie</Text>
+            <Text style={s.aiCaddieTitle}>개인 기록 분석</Text>
+          </View>
+        </View>
+
+        <View style={s.aiCaddieInsightBox}>
+          <Text style={s.aiCaddieLead}>아직 분석할 라운드 기록이 없습니다.</Text>
+          {[
+            '라운드 결과가 등록되면 최근 흐름을 분석합니다.',
+            '전후반 차이와 홀 유형별 강약점을 확인할 수 있습니다.',
+            '더블 이상, OB, 퍼팅 기록을 바탕으로 개선 포인트를 제안합니다.',
+          ].map((comment) => (
+            <View key={comment} style={s.aiCaddieBulletRow}>
+              <Text style={s.aiCaddieBulletDot}>•</Text>
+              <Text style={s.aiCaddieBulletText}>{comment}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={s.aiCaddieRecommendRow}>
+          <Text style={s.aiCaddieRecommendLabel}>추천</Text>
+          <Text style={s.aiCaddieRecommendText} numberOfLines={2}>
+            라운드 결과를 입력하면 개인 맞춤 리포트가 자동으로 생성됩니다.
+          </Text>
+        </View>
+      </View>
+
+      <View style={s.personalReportSection}>
+        <View style={s.personalReportHeader}>
+          <View>
+            <Text style={s.personalReportEyebrow}>Personal Report</Text>
+            <Text style={s.personalReportTitle}>개인 리포트</Text>
+          </View>
+          <Text style={s.personalReportHint}>좌우로 넘겨보기</Text>
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          snapToInterval={280}
+          contentContainerStyle={s.personalReportCarousel}
+        >
+          {emptyReportCards.map((card) => (
+            <View key={card.key} style={[s.personalReportCard, { width: 270 }]}>
+              <View style={s.personalReportIconWrap}>
+                <Text style={s.personalReportIcon}>{card.icon}</Text>
+              </View>
+              <Text style={s.personalReportCardTitle}>{card.title}</Text>
+              <Text style={s.personalReportCardSubtitle} numberOfLines={2}>{card.subtitle}</Text>
+              <Text style={s.personalReportCardAction}>자세히 보기 ›</Text>
+            </View>
+          ))}
+        </ScrollView>
+      </View>
+    </>
+  )
+}
+
+function EmptyClub({ members, handicapBasis }: { members: HistoryMember[]; handicapBasis: HandicapBasis }) {
+  const names = memberPlaceholders(members)
+  return (
+    <>
+      <View style={s.card}>
+        <Text style={s.cardTitle}>통합 통계</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+          <View style={{ flex: 1, alignItems: 'center' }}><Text style={{ fontSize: 22, fontWeight: '700', color: C.text }}>0</Text><Text style={[s.muted, { fontSize: 11, textAlign: 'center' }]}>총 라운드</Text></View>
+          <View style={{ flex: 1, alignItems: 'center' }}><Text style={{ fontSize: 22, fontWeight: '700', color: C.text }}>0</Text><Text style={[s.muted, { fontSize: 11, textAlign: 'center' }]}>연인원</Text></View>
+          <View style={{ flex: 1, alignItems: 'center' }}><Text style={{ fontSize: 22, fontWeight: '700', color: C.green }}>-</Text><Text style={[s.muted, { fontSize: 11, textAlign: 'center' }]}>클럽 평균</Text></View>
+          <View style={{ flex: 1, alignItems: 'center' }}><Text style={{ fontSize: 22, fontWeight: '700', color: C.text }}>-</Text><Text style={[s.muted, { fontSize: 11, textAlign: 'center' }]}>최저타</Text></View>
+        </View>
+      </View>
+      <View style={s.card}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <Text style={[s.cardTitle, { marginBottom: 0 }]}>클럽 랭킹</Text>
+          <Text style={{ fontSize: 12, color: C.muted, fontWeight: '800' }}>핸디 {handicapBasis}경기</Text>
+        </View>
+        <View style={s.tableHeader}>
+          <Text style={[s.th, { flex: 0.6 }]}>순위</Text>
+          <Text style={[s.th, { flex: 2 }]}>이름</Text>
+          <Text style={[s.th, { flex: 1, textAlign: 'center' }]}>경기</Text>
+          <Text style={[s.th, { flex: 1, textAlign: 'right' }]}>평균</Text>
+          <Text style={[s.th, { flex: 1, textAlign: 'right' }]}>핸디</Text>
+        </View>
+        {names.map((name, index) => (
+          <View key={`${name}-${index}`} style={s.tableRow}>
+            <Text style={[s.td, { flex: 0.6, textAlign: 'center', color: C.muted }]}>{index + 1}</Text>
+            <Text style={[s.td, { flex: 2, fontWeight: '700' }]}>{name}</Text>
+            <Text style={[s.td, { flex: 1, textAlign: 'center', color: C.muted }]}>-</Text>
+            <Text style={[s.td, { flex: 1, textAlign: 'right', color: C.muted }]}>-</Text>
+            <Text style={[s.td, { flex: 1, textAlign: 'right', color: C.muted }]}>-</Text>
+          </View>
+        ))}
+      </View>
+    </>
+  )
+}
+
+function EmptyHallOfFame() {
+  const sections = [
+    { title: '우승 기록', items: ['최다 우승', '최다 연속 우승'] },
+    { title: '스코어 기록', items: ['최저타', '최고타', '버디왕 (전체)', '버디왕 (1경기)', '파왕 (1경기)'] },
+    { title: '성장 기록', items: ['최저 핸디', '전후반 개선', '평균타 개선', '핸디 개선'] },
+    { title: '참가 기록', items: ['최다 라운드 참가'] },
+  ]
+  return (
+    <View style={s.card}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+        <Icon name="trophy" size={16} color={C.text} />
+        <Text style={[s.cardTitle, { marginBottom: 0 }]}>기네스 북</Text>
+      </View>
+      {sections.map((section) => (
+        <View key={section.title} style={s.hallSection}>
+          <Text style={s.hallSectionTitle}>{section.title}</Text>
+          {section.items.map((label) => (
+            <View key={label} style={s.hallRow}>
+              <View style={s.hallIconWrap}><Icon name="trophy" size={15} color={C.green} /></View>
+              <Text style={s.hallLabel}>{label}</Text>
+              <Text style={s.hallValue}>-</Text>
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
+  )
+}
+
+function ByRound({ rounds, handicapBasis = 5, members = [] }: { rounds: SavedRound[]; handicapBasis?: number; members?: HistoryMember[] }) {
+  const [containerWidth, setContainerWidth] = useState(0)
+  if (rounds.length === 0) return <EmptyByRound members={members} />
 
   const filtered = [...rounds].sort((a, b) => {
     if (!a.isComplete && b.isComplete) return -1
@@ -926,7 +1132,7 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
     return () => { cancelled = true }
   }, [myUserId, scheduleIds.join('|')])
 
-  if (!personalPlayerName || playerRounds.length === 0) return <Text style={s.muted}>내 개인 기록 데이터가 없습니다.</Text>
+  if (!personalPlayerName || playerRounds.length === 0) return <EmptyByPlayer />
 
   const totals = playerRounds.map((round) => round.total)
   const avg = Math.ceil(totals.reduce((sum, total) => sum + total, 0) / totals.length)
@@ -1531,7 +1737,7 @@ function DetailButton({ label, onPress }: { label: string; onPress: () => void }
 
 // ─── 클럽 전체 ───────────────────────────────────────────────────────────────
 
-function Club({ rounds, handicapBasis: currentHandicapBasis }: { rounds: SavedRound[]; handicapBasis: HandicapBasis }) {
+function Club({ rounds, handicapBasis: currentHandicapBasis, members = [] }: { rounds: SavedRound[]; handicapBasis: HandicapBasis; members?: HistoryMember[] }) {
   const [showChart, setShowChart] = useState<'avg' | 'best' | false>(false)
   const [handicapBasis, setHandicapBasis] = useState<HandicapBasis>(currentHandicapBasis)
   const [showBasisDropdown, setShowBasisDropdown] = useState(false)
@@ -1539,7 +1745,7 @@ function Club({ rounds, handicapBasis: currentHandicapBasis }: { rounds: SavedRo
     setHandicapBasis(currentHandicapBasis)
   }, [currentHandicapBasis])
 
-  if (rounds.length === 0) return <Text style={s.muted}>데이터가 없습니다.</Text>
+  if (rounds.length === 0) return <EmptyClub members={members} handicapBasis={currentHandicapBasis} />
 
   let bestRecord: { name: string; date: string; courseName: string; total: number } | null = null
   for (const r of rounds)
@@ -1701,7 +1907,7 @@ function Club({ rounds, handicapBasis: currentHandicapBasis }: { rounds: SavedRo
 function HallOfFame({ rounds, handicapBasis }: { rounds: SavedRound[]; handicapBasis: number }) {
   const [rankingType, setRankingType] = useState<RankingType | null>(null)
 
-  if (rounds.length === 0) return <Text style={s.muted}>기네스 북 데이터가 없습니다.</Text>
+  if (rounds.length === 0) return <EmptyHallOfFame />
 
   const avgOf = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length
   const handicaps = computeHandicaps(rounds, handicapBasis)
@@ -2088,8 +2294,9 @@ roundCarouselContent: {
   paddingLeft:24,
   paddingRight: 16,
   gap: 12,
-},
+  },
   roundSwipeHint: { textAlign: 'center', marginTop: 10, fontSize: 11, fontWeight: '700', color: C.muted },
+  roundCardShell: { marginHorizontal: 16 },
   flipCardScene: { position: 'relative' },
   flipFace: { position: 'absolute', width: '100%', height: '100%', backfaceVisibility: 'hidden' },
   flipBackFace: { backfaceVisibility: 'hidden' },
