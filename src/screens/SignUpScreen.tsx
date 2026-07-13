@@ -19,6 +19,10 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
       setErrorMsg('이름과 비밀번호를 입력하세요');
       return;
     }
+    if (password.length < 6) {
+      setErrorMsg('비밀번호는 6자리 이상이어야 합니다');
+      return;
+    }
     setErrorMsg(null);
     setLoading(true);
     const email = nameToAuthEmail(name);
@@ -68,7 +72,7 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
             style={[s.input, { marginTop: 12 }]}
             value={password}
             onChangeText={(v) => { setPassword(v); clearError(); }}
-            placeholder="비밀번호"
+            placeholder="비밀번호 6자리 이상"
             secureTextEntry
           />
           {errorMsg ? (

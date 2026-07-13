@@ -54,6 +54,38 @@ export default function InviteScreen({ joinCode, onJoined, onDismiss }: Props) {
     }
   }
 
+  async function handleGoogleLogin() {
+    if (Platform.OS !== 'web') {
+      Alert.alert('안내', '현재 Google 로그인은 웹 버전에서 사용할 수 있습니다.')
+      return
+    }
+    setAuthLoading(true)
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.href },
+    })
+    if (error) {
+      setAuthLoading(false)
+      Alert.alert('Google 로그인 실패', error.message)
+    }
+  }
+
+  async function handleKakaoLogin() {
+    if (Platform.OS !== 'web') {
+      Alert.alert('안내', '현재 Kakao 로그인은 웹 버전에서 사용할 수 있습니다.')
+      return
+    }
+    setAuthLoading(true)
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'kakao',
+      options: { redirectTo: window.location.href },
+    })
+    if (error) {
+      setAuthLoading(false)
+      Alert.alert('Kakao 로그인 실패', error.message)
+    }
+  }
+
   async function handleLogin() {
     if (!name.trim() || !password) { Alert.alert('이름과 비밀번호를 입력하세요.'); return }
     setAuthLoading(true)
@@ -76,7 +108,7 @@ export default function InviteScreen({ joinCode, onJoined, onDismiss }: Props) {
 
   async function handleSignUp() {
     if (!name.trim()) { Alert.alert('이름을 입력하세요.'); return }
-    if (password.length < 4) { Alert.alert('비밀번호는 4자 이상이어야 합니다.'); return }
+    if (password.length < 6) { Alert.alert('비밀번호는 6자리 이상이어야 합니다.'); return }
     setAuthLoading(true)
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -164,7 +196,7 @@ export default function InviteScreen({ joinCode, onJoined, onDismiss }: Props) {
             <Text style={s.inputLabel}>이름</Text>
             <TextInput style={s.input} value={name} onChangeText={setName} placeholder="이름 입력" autoCapitalize="none" />
             <Text style={s.inputLabel}>비밀번호</Text>
-            <TextInput style={s.input} value={password} onChangeText={setPassword} placeholder={authMode === 'signup' ? '4자 이상' : '비밀번호'} secureTextEntry />
+            <TextInput style={s.input} value={password} onChangeText={setPassword} placeholder={authMode === 'signup' ? '6자리 이상' : '비밀번호'} secureTextEntry />
             <TouchableOpacity
               style={[s.btnPrimary, authLoading && { opacity: 0.6 }]}
               onPress={authMode === 'login' ? handleLogin : handleSignUp}
@@ -174,6 +206,15 @@ export default function InviteScreen({ joinCode, onJoined, onDismiss }: Props) {
                 ? <ActivityIndicator color="#fff" />
                 : <Text style={s.btnPrimaryText}>{authMode === 'login' ? '로그인' : '가입하기'}</Text>}
             </TouchableOpacity>
+            <View style={s.socialBlock}>
+              <Text style={s.socialTitle}>간편 로그인으로 참여</Text>
+              <TouchableOpacity style={s.googleBtn} onPress={handleGoogleLogin} disabled={authLoading}>
+                <Text style={s.googleBtnText}>Google로 계속하기</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.kakaoBtn} onPress={handleKakaoLogin} disabled={authLoading}>
+                <Text style={s.kakaoBtnText}>카카오로 계속하기</Text>
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity style={s.btnGhost} onPress={() => setAuthMode('select')}>
               <Text style={s.btnGhostText}>← 뒤로</Text>
             </TouchableOpacity>
@@ -218,4 +259,10 @@ const s = StyleSheet.create({
   tabTextActive: { color: '#fff' },
   inputLabel: { fontSize: 12, color: C.muted, marginBottom: 4, marginTop: 8 },
   input: { borderWidth: 1.5, borderColor: C.border, borderRadius: 10, padding: 11, fontSize: 15, color: C.text, backgroundColor: '#fff', marginBottom: 4 },
+  socialBlock: { marginTop: 16, gap: 8 },
+  socialTitle: { fontSize: 12, fontWeight: '700', color: C.muted, textAlign: 'center', marginBottom: 2 },
+  googleBtn: { minHeight: 44, borderRadius: 12, borderWidth: 1.5, borderColor: C.border, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  googleBtnText: { fontSize: 14, fontWeight: '800', color: C.text },
+  kakaoBtn: { minHeight: 44, borderRadius: 12, backgroundColor: '#FEE500', alignItems: 'center', justifyContent: 'center' },
+  kakaoBtnText: { fontSize: 14, fontWeight: '900', color: '#181600' },
 })

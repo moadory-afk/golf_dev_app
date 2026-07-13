@@ -1185,6 +1185,7 @@ export default function HomeExperienceScreen() {
           myLottoStrokes={popupMyLottoStrokes}
           awardConfig={popupAwardConfig}
           myUserId={userId}
+          isAdmin={club?.role === "admin"}
           canPurchaseLotto={isAssignedToRound(popupRound, userId, myName)}
           lottoReady={popupLottoReady}
           lottoSaving={popupLottoSaving}
@@ -1420,6 +1421,7 @@ function RoundInfoModal({
   myLottoStrokes,
   awardConfig,
   myUserId,
+  isAdmin,
   canPurchaseLotto,
   lottoReady,
   lottoSaving,
@@ -1444,6 +1446,7 @@ function RoundInfoModal({
   myLottoStrokes: number[] | null;
   awardConfig: ClubAwardConfig | null;
   myUserId?: string | null;
+  isAdmin: boolean;
   canPurchaseLotto: boolean;
   lottoReady: boolean;
   lottoSaving: boolean;
@@ -1775,7 +1778,7 @@ function RoundInfoModal({
             </ScrollView>
           ) : null}
 
-          {isGroups ? (
+          {isGroups && isAdmin ? (
             <TouchableOpacity
               activeOpacity={0.86}
               onPress={onManage}
