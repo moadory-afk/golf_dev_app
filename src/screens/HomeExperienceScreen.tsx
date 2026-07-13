@@ -692,6 +692,7 @@ export default function HomeExperienceScreen() {
   const [recordCardsReady, setRecordCardsReady] = useState(false);
   const [recordDetailLoading, setRecordDetailLoading] = useState(false);
   const focusedClubIdRef = useRef<string | null | undefined>(undefined);
+  const recordRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadRecordCards = useCallback(async () => {
     setRecordCardsReady(false);
@@ -928,9 +929,23 @@ export default function HomeExperienceScreen() {
 
   useEffect(() => {
     if (!club?.id) return;
-    return subscribeHomeDashboardChanged((changedClubId) => {
-      if (!changedClubId || changedClubId === club.id) loadRecordCards();
+
+    const unsubscribe = subscribeHomeDashboardChanged((changedClubId) => {
+      if (changedClubId && changedClubId !== club.id) return;
+      if (recordRefreshTimerRef.current) clearTimeout(recordRefreshTimerRef.current);
+      recordRefreshTimerRef.current = setTimeout(() => {
+        recordRefreshTimerRef.current = null;
+        void loadRecordCards();
+      }, 400);
     });
+
+    return () => {
+      unsubscribe();
+      if (recordRefreshTimerRef.current) {
+        clearTimeout(recordRefreshTimerRef.current);
+        recordRefreshTimerRef.current = null;
+      }
+    };
   }, [club?.id, loadRecordCards]);
 
   const recentStats = useMemo(

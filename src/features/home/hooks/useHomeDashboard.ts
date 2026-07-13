@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   getHomeAiCaddieUpdate,
   getHomeDashboardBase,
@@ -33,6 +33,7 @@ export function useHomeDashboard({ clubId, userName, userId, homeLatitude, homeL
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -89,51 +90,55 @@ export function useHomeDashboard({ clubId, userName, userId, homeLatitude, homeL
     setRefreshKey((value) => value + 1)
   }, [])
 
+  const queueRefresh = useCallback(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current)
+    refreshTimerRef.current = setTimeout(() => {
+      refreshTimerRef.current = null
+      refresh()
+    }, 400)
+  }, [refresh])
+
   useEffect(() => {
     if (!clubId) return
 
-    const channelName = `home-dashboard:${clubId}:${Date.now()}:${Math.random().toString(36).slice(2)}`
+    // 한 번의 일정 저장 과정에서 일정/조/조원 이벤트가 연속 발생하므로
+    // 현재 클럽 이벤트만 구독하고 400ms 동안 하나의 새로고침으로 합친다.
     const channel = supabase
-      .channel(channelName)
+      .channel(`home-dashboard:${clubId}`)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'club_round_schedules',
         filter: `club_id=eq.${clubId}`,
-      }, refresh)
+      }, queueRefresh)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'club_round_groups',
-      }, refresh)
+        filter: `club_id=eq.${clubId}`,
+      }, queueRefresh)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'club_round_group_members',
-      }, refresh)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'golf_courses',
-      }, refresh)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'golf_course_season_images',
-      }, refresh)
+        filter: `club_id=eq.${clubId}`,
+      }, queueRefresh)
       .subscribe()
 
     return () => {
-      void channel.unsubscribe()
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current)
+        refreshTimerRef.current = null
+      }
       void supabase.removeChannel(channel)
     }
-  }, [clubId, refresh])
+  }, [clubId, queueRefresh])
 
   useEffect(() => {
     return subscribeHomeDashboardChanged((changedClubId) => {
-      if (!changedClubId || changedClubId === clubId) refresh()
+      if (!changedClubId || changedClubId === clubId) queueRefresh()
     })
-  }, [clubId, refresh])
+  }, [clubId, queueRefresh])
 
   return useMemo(
     () => ({ dashboard, loading, error, refresh }),
