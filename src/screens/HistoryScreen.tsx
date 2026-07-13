@@ -1,14 +1,13 @@
 import {
-  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Dimensions, TextInput, ImageBackground, Animated, Alert, ActivityIndicator,
+  FlatList, ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Dimensions, TextInput, ImageBackground, Animated, Alert, ActivityIndicator,
 } from 'react-native'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import * as ImageManipulator from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
 import Svg, { Polyline, Circle, Line, Text as SvgText, G, Polygon } from 'react-native-svg'
-import { DEFAULT_LOTTO_AWARD_CONFIG, getClubAwardConfig, getClubAwardSnapshots, getClubLottoAwardConfig, getClubMembers, getRoundLottoDraw, getRoundLottoEntries, getRounds, getRound, getPersonalRoundStat, playerTotal, totalPar, getHandicapsForRound, computeHandicaps, shortName, updateRound, type ClubAwardSnapshot, type LottoAwardConfig, type PersonalRoundFir, type PersonalRoundHoleStat, type RoundLottoDraw, type RoundLottoEntry, type SavedRound } from '../lib/store'
+import { DEFAULT_LOTTO_AWARD_CONFIG, getClubAwardConfig, getClubAwardSnapshots, getClubLottoAwardConfig, getClubMembers, getRoundLottoDraw, getRoundLottoEntries, getRoundHistoryCards, getRound, getPersonalRoundStat, playerTotal, totalPar, getHandicapsForRound, computeHandicaps, shortName, updateRound, type ClubAwardSnapshot, type LottoAwardConfig, type PersonalRoundFir, type PersonalRoundHoleStat, type RoundLottoDraw, type RoundLottoEntry, type SavedRound } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { useClub } from '../lib/ClubContext'
 import { useUserProfile } from '../lib/UserProfileContext'
@@ -24,6 +23,7 @@ import { Icon } from '../components/Icon'
 import { TopActionButtons } from '../components/TopActionButtons'
 import { ImageCropModal, type ImageCropRect } from '../components/ImageCropModal'
 import { getCourseHeroImageSource } from '../data/courseHeroImages'
+import { uploadRoundPhoto } from '../lib/roundPhotos'
 import type { RootStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
@@ -205,7 +205,7 @@ export default function HistoryScreen() {
   const [handicapBasis, setHandicapBasis] = useState<HandicapBasis>(5)
   const { activeClub, clubsLoaded } = useClub()
   const { data, loading } = useAsync(
-    () => (activeClub ? getRounds(activeClub.id) : Promise.resolve([])),
+    () => (activeClub ? getRoundHistoryCards(activeClub.id) : Promise.resolve([])),
     [refreshKey, activeClub?.id],
   )
   const rounds = data ?? []
@@ -279,8 +279,7 @@ function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicap
     if (a.isComplete && !b.isComplete) return 1
     return b.date.localeCompare(a.date)
   })
-  const availableWidth = containerWidth > 0 ? containerWidth : Dimensions.get('window').width
-  const cardWidth = Math.min(Math.max(availableWidth - 32, 280), 430)
+  const cardWidth = containerWidth > 0 ? Math.min(Math.max(containerWidth - 32, 280), 430) : 0
   const cardHeight = Math.max(500, Math.min(590, Dimensions.get('window').height - 220))
 
   return (
@@ -291,27 +290,34 @@ function ByRound({ rounds, handicapBasis = 5 }: { rounds: SavedRound[]; handicap
         if (nextWidth > 0 && nextWidth !== containerWidth) setContainerWidth(nextWidth)
       }}
     >
-      <ScrollView
-        horizontal
-        pagingEnabled
-        decelerationRate="fast"
-        snapToInterval={cardWidth + 12}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={s.roundCarouselContent}
-      >
-        {filtered.map((round, index) => (
-          <RoundFlipCard
-            key={round.id}
-            round={round}
-            rounds={rounds}
-            handicapBasis={handicapBasis}
-            index={index}
-            totalCount={filtered.length}
-            width={cardWidth}
-            height={cardHeight}
-          />
-        ))}
-      </ScrollView>
+      {cardWidth > 0 ? (
+        <FlatList
+          horizontal
+          pagingEnabled
+          data={filtered}
+          keyExtractor={(round) => round.id}
+          decelerationRate="fast"
+          snapToInterval={cardWidth + 12}
+          getItemLayout={(_, index) => ({ length: cardWidth + 12, offset: (cardWidth + 12) * index, index })}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.roundCarouselContent}
+          initialNumToRender={2}
+          maxToRenderPerBatch={2}
+          windowSize={3}
+          removeClippedSubviews
+          renderItem={({ item: round, index }) => (
+            <RoundFlipCard
+              round={round}
+              rounds={rounds}
+              handicapBasis={handicapBasis}
+              index={index}
+              totalCount={filtered.length}
+              width={cardWidth}
+              height={cardHeight}
+            />
+          )}
+        />
+      ) : <View style={[s.roundCarouselPlaceholder, { height: cardHeight }]} />}
       <Text style={s.roundSwipeHint}>좌우로 스와이프해 다른 라운드를 확인하세요</Text>
     </View>
   )
@@ -332,6 +338,8 @@ function RoundFlipCard({
   const { activeClub } = useClub()
   const [flipped, setFlipped] = useState(false)
   const [detailTab, setDetailTab] = useState<RoundDetailTab>('regular')
+  const [regularBasis, setRegularBasis] = useState<'score' | 'handicap'>('score')
+  const [shinperioBasis, setShinperioBasis] = useState<'score' | 'handicap'>('score')
   const [detailRound, setDetailRound] = useState<SavedRound | null>(null)
   const [awardSnapshots, setAwardSnapshots] = useState<ClubAwardSnapshot[]>([])
   const [lottoEntries, setLottoEntries] = useState<RoundLottoEntry[]>([])
@@ -368,20 +376,34 @@ function RoundFlipCard({
   })
   const birdieTop = [...playerHighlights].sort((a, b) => b.birdie - a.birdie)[0]
   const parTop = [...playerHighlights].sort((a, b) => b.par - a.par)[0]
-  const bestHole = round.players.flatMap((p) => p.strokes.map((score, i) => ({ name: p.name, hole: i + 1, par: round.pars[i], score, diff: score - round.pars[i] })))
-    .sort((a, b) => a.diff - b.diff)[0]
+  const frontBackTop = round.players
+    .map((p) => {
+      const front = p.strokes.slice(0, 9).reduce((sum, score) => sum + score, 0)
+      const back = p.strokes.slice(9, 18).reduce((sum, score) => sum + score, 0)
+      return { name: p.name, improvement: front - back }
+    })
+    .filter((row) => row.improvement > 0)
+    .sort((a, b) => b.improvement - a.improvement)[0]
 
   const priorRounds = rounds.filter((r) => r.date < round.date)
-  const records: { icon: string; label: string; value: string }[] = []
+  const clubRecordRows: { icon: string; label: string; value: string }[] = []
   const priorBest = priorRounds.length
     ? Math.min(...priorRounds.flatMap((r) => r.players.map((p) => playerTotal(p.strokes))))
     : Infinity
-  if (best < priorBest) records.push({ icon: '🏆', label: '최저타 갱신', value: `${shortName(bestPlayer?.name ?? '')} ${best}타` })
+  if (best < priorBest) clubRecordRows.push({ icon: '🏆', label: '최저타 갱신', value: `${shortName(bestPlayer?.name ?? '')} ${best}타` })
   const priorBirdie = priorRounds.length ? Math.max(0, ...priorRounds.flatMap((r) => r.players.map((p) => holeStats(p.strokes, r.pars).birdie))) : 0
-  if (birdieTop?.birdie > priorBirdie) records.push({ icon: '🟡', label: '버디왕 갱신', value: `${shortName(birdieTop.name)} ${birdieTop.birdie}개` })
+  if ((birdieTop?.birdie ?? 0) > 0 && birdieTop!.birdie > priorBirdie) clubRecordRows.push({ icon: '🟡', label: '버디왕 갱신', value: `${shortName(birdieTop!.name)} ${birdieTop!.birdie}개` })
   const priorPar = priorRounds.length ? Math.max(0, ...priorRounds.flatMap((r) => r.players.map((p) => holeStats(p.strokes, r.pars).par))) : 0
-  if (parTop?.par > priorPar) records.push({ icon: '⛳', label: '파왕 갱신', value: `${shortName(parTop.name)} ${parTop.par}개` })
-  if (records.length === 0) records.push({ icon: '✨', label: '라운드 기록', value: '새 기록 도전 완료' })
+  if ((parTop?.par ?? 0) > 0 && parTop!.par > priorPar) clubRecordRows.push({ icon: '⛳', label: '파왕 갱신', value: `${shortName(parTop!.name)} ${parTop!.par}개` })
+  const records = clubRecordRows.length > 0
+    ? clubRecordRows
+    : [{ icon: '—', label: '기록 갱신 없음', value: '다음 라운드 도전' }]
+  const frontHighlights = [
+    (birdieTop?.birdie ?? 0) > 0 ? { icon: '🐦', label: '버디왕 후보', value: `${shortName(birdieTop!.name)} ${birdieTop!.birdie}개` } : null,
+    (parTop?.par ?? 0) > 0 ? { icon: '⛳', label: '파왕 후보', value: `${shortName(parTop!.name)} ${parTop!.par}개` } : null,
+    frontBackTop ? { icon: '📈', label: '후반 반등', value: `${shortName(frontBackTop.name)} ${frontBackTop.improvement}타` } : null,
+    { icon: '✨', label: '기록 후보', value: '다음 갱신 도전' },
+  ].filter(Boolean).slice(0, 3) as { icon: string; label: string; value: string }[]
 
 
   const toggleFlip = async () => {
@@ -444,14 +466,8 @@ function RoundFlipCard({
     if (!photoCropSource) return
     setPhotoSaving(true)
     try {
-      const compressed = await ImageManipulator.manipulateAsync(
-        photoCropSource.uri,
-        [{ crop }, { resize: { width: 1200 } }],
-        { compress: 0.55, format: ImageManipulator.SaveFormat.JPEG, base64: true },
-      )
-      if (!compressed.base64) throw new Error('사진 처리에 실패했습니다.')
-
-      const nextPhotoData = [`data:image/jpeg;base64,${compressed.base64}`, ...photoData].slice(0, 8)
+      const uploadedUrl = await uploadRoundPhoto(photoCropSource.uri, round.id, crop)
+      const nextPhotoData = [uploadedUrl, ...photoData].slice(0, 8)
       const updated = await updateRound(round.id, {
         courseName: round.courseName,
         date: round.date,
@@ -482,16 +498,31 @@ function RoundFlipCard({
   }
 
   const detailPar = totalPar(effectiveRound.pars)
+  const detailHandicaps = getHandicapsForRound(effectiveRound, rounds, handicapBasis)
   const actualRegularRank = effectiveRound.players
     .map((p) => {
       const total = playerTotal(p.strokes)
       return { name: p.name, total, diff: total - detailPar }
     })
     .sort((a, b) => a.total - b.total)
+  const handicapRegularRank = effectiveRound.players
+    .map((p) => {
+      const total = playerTotal(p.strokes)
+      const handicap = detailHandicaps.get(p.name) ?? 0
+      const net = total - handicap
+      return { name: p.name, total, handicap, net, diff: net - detailPar }
+    })
+    .sort((a, b) => a.net - b.net || a.total - b.total)
 
   const hiddenHoles = effectiveRound.shinperioHoles.length
     ? effectiveRound.shinperioHoles
     : effectiveRound.pars.map((_, i) => i + 1)
+  const shinScoreRank = effectiveRound.players
+    .map((p) => {
+      const total = playerTotal(p.strokes)
+      return { name: p.name, total, diff: total - detailPar }
+    })
+    .sort((a, b) => a.total - b.total)
 
   const shinRank = effectiveRound.players
     .map((p) => {
@@ -509,9 +540,9 @@ function RoundFlipCard({
       const scaledPar = hiddenHoles.length > 0
         ? hiddenPar * (effectiveRound.pars.length / hiddenHoles.length)
         : hiddenPar
-      const handicap = Math.max(0, Math.round((scaledScore - scaledPar) * 0.8 * 10) / 10)
+      const handicap = Math.max(0, Math.ceil((scaledScore - scaledPar) * 0.8))
       const total = playerTotal(p.strokes)
-      const net = Math.round((total - handicap) * 10) / 10
+      const net = Math.ceil(total - handicap)
       return { name: p.name, total, handicap, net }
     })
     .sort((a, b) => a.net - b.net || a.total - b.total)
@@ -636,9 +667,9 @@ function RoundFlipCard({
                 </View>
                 <Text style={[s.heroSectionTitle, { marginTop: 7 }]}>⭐ 주요 하이라이트</Text>
                 <View style={s.highlightRow}>
-                  <Highlight icon="🏆" label="최다 버디" value={`${shortName(birdieTop?.name ?? '-')} ${birdieTop?.birdie ?? 0}개`} />
-                  <Highlight icon="🎯" label="베스트 홀" value={bestHole ? `${bestHole.hole}번 ${bestHole.score}타` : '-'} />
-                  <Highlight icon="⛳" label="파 세이브" value={`${shortName(parTop?.name ?? '-')} ${parTop?.par ?? 0}개`} />
+                  {frontHighlights.map((item) => (
+                    <Highlight key={item.label} icon={item.icon} label={item.label} value={item.value} />
+                  ))}
                 </View>
               </View>
               <Text style={s.flipHint}>탭하면 라운드 상세 보기 ↻</Text>
@@ -662,15 +693,45 @@ function RoundFlipCard({
           </View>
           <View style={s.backBody}>{!detailRound && <Text style={s.detailLoadingText}>라운드 상세 데이터를 불러오는 중입니다.</Text>}
             {detailTab === 'regular' && <View style={s.detailPanel}>
-              <View style={s.detailTableHeader}><Text style={[s.detailTh,{width:34}]}>순위</Text><Text style={[s.detailTh,{flex:1}]}>이름</Text><Text style={[s.detailTh,{width:52,textAlign:'right'}]}>스코어</Text><Text style={[s.detailTh,{width:52,textAlign:'right'}]}>파대비</Text></View>
-              {actualRegularRank.slice(0,7).map((row,i)=><View key={row.name} style={[s.detailTableRow,i<3&&s.detailPodiumRow]}><Text style={[s.detailRank,{width:34}]}>{i+1}</Text><Text style={s.detailPlayerName} numberOfLines={1}>{shortName(row.name)}</Text><Text style={s.detailScoreText}>{row.total}</Text><Text style={s.detailNetText}>{diffText(row.diff)}</Text></View>)}
+              <View style={s.detailPanelTopRow}>
+                <Text style={[s.detailPanelTitle, s.detailPanelTitleInline]}>{regularBasis === 'score' ? '정규 순위' : '핸디 기준 순위'}</Text>
+                <View style={s.detailBasisSwitch}>
+                  <TouchableOpacity style={[s.detailBasisBtn, regularBasis === 'score' && s.detailBasisBtnActive]} onPress={() => setRegularBasis('score')}><Text style={[s.detailBasisText, regularBasis === 'score' && s.detailBasisTextActive]}>스코어</Text></TouchableOpacity>
+                  <TouchableOpacity style={[s.detailBasisBtn, regularBasis === 'handicap' && s.detailBasisBtnActive]} onPress={() => setRegularBasis('handicap')}><Text style={[s.detailBasisText, regularBasis === 'handicap' && s.detailBasisTextActive]}>핸디</Text></TouchableOpacity>
+                </View>
+              </View>
+              <View style={s.detailTableHeader}><Text style={[s.detailTh,{width:34}]}>순위</Text><Text style={[s.detailTh,{flex:1}]}>이름</Text><Text style={[s.detailTh,{width:52,textAlign:'right'}]}>스코어</Text><Text style={[s.detailTh,{width:52,textAlign:'right'}]}>{regularBasis === 'score' ? '파대비' : '핸디Net'}</Text></View>
+              <ScrollView style={s.detailRankScroll} showsVerticalScrollIndicator={false}>
+                {(regularBasis === 'score' ? actualRegularRank : handicapRegularRank).map((row,i)=><View key={row.name} style={[s.detailTableRow,i<3&&s.detailPodiumRow]}><Text style={[s.detailRank,{width:34}]}>{i+1}</Text><Text style={s.detailPlayerName} numberOfLines={1}>{shortName(row.name)}</Text><Text style={s.detailScoreText}>{row.total}</Text><Text style={s.detailNetText}>{regularBasis === 'score' ? diffText(row.diff) : diffText(row.diff)}</Text></View>)}
+              </ScrollView>
             </View>}
-            {detailTab === 'peoria' && <View style={s.detailPanel}><Text style={s.shinperioHoleText}>숨김홀 {hiddenHoles.join(', ')}</Text>
-              <View style={s.detailTableHeader}><Text style={[s.detailTh,{width:34}]}>순위</Text><Text style={[s.detailTh,{flex:1}]}>이름</Text><Text style={[s.detailTh,{width:48,textAlign:'right'}]}>총타</Text><Text style={[s.detailTh,{width:48,textAlign:'right'}]}>핸디</Text><Text style={[s.detailTh,{width:48,textAlign:'right'}]}>NET</Text></View>
-              {shinRank.slice(0,7).map((row,i)=><View key={row.name} style={[s.detailTableRow,i<3&&s.detailPodiumRow]}><Text style={[s.detailRank,{width:34}]}>{i+1}</Text><Text style={s.detailPlayerName} numberOfLines={1}>{shortName(row.name)}</Text><Text style={s.detailSmallScore}>{row.total}</Text><Text style={s.detailSmallScore}>{row.handicap.toFixed(1)}</Text><Text style={s.detailNetText}>{row.net.toFixed(1)}</Text></View>)}
+            {detailTab === 'peoria' && <View style={s.detailPanel}>
+              <View style={s.detailPanelTopRow}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[s.detailPanelTitle, s.detailPanelTitleInline]}>{shinperioBasis === 'score' ? '신페리오 스코어' : '신페리오 핸디 기준'}</Text>
+                  <Text style={s.shinperioHoleText}>숨김홀 {hiddenHoles.join(', ')}</Text>
+                </View>
+                <View style={s.detailBasisSwitch}>
+                  <TouchableOpacity style={[s.detailBasisBtn, shinperioBasis === 'score' && s.detailBasisBtnActive]} onPress={() => setShinperioBasis('score')}><Text style={[s.detailBasisText, shinperioBasis === 'score' && s.detailBasisTextActive]}>스코어</Text></TouchableOpacity>
+                  <TouchableOpacity style={[s.detailBasisBtn, shinperioBasis === 'handicap' && s.detailBasisBtnActive]} onPress={() => setShinperioBasis('handicap')}><Text style={[s.detailBasisText, shinperioBasis === 'handicap' && s.detailBasisTextActive]}>핸디</Text></TouchableOpacity>
+                </View>
+              </View>
+              <View style={s.detailTableHeader}><Text style={[s.detailTh,{width:34}]}>순위</Text><Text style={[s.detailTh,{flex:1}]}>이름</Text><Text style={[s.detailTh,{width:48,textAlign:'right'}]}>총타</Text><Text style={[s.detailTh,{width:48,textAlign:'right'}]}>{shinperioBasis === 'score' ? '파대비' : '핸디'}</Text><Text style={[s.detailTh,{width:48,textAlign:'right'}]}>{shinperioBasis === 'score' ? '' : 'NET'}</Text></View>
+              <ScrollView style={s.detailRankScroll} showsVerticalScrollIndicator={false}>
+                {shinperioBasis === 'score'
+                  ? shinScoreRank.map((row,i)=><View key={row.name} style={[s.detailTableRow,i<3&&s.detailPodiumRow]}><Text style={[s.detailRank,{width:34}]}>{i+1}</Text><Text style={s.detailPlayerName} numberOfLines={1}>{shortName(row.name)}</Text><Text style={s.detailSmallScore}>{row.total}</Text><Text style={s.detailSmallScore}>{diffText(row.diff)}</Text><Text style={s.detailNetText}></Text></View>)
+                  : shinRank.map((row,i)=><View key={row.name} style={[s.detailTableRow,i<3&&s.detailPodiumRow]}><Text style={[s.detailRank,{width:34}]}>{i+1}</Text><Text style={s.detailPlayerName} numberOfLines={1}>{shortName(row.name)}</Text><Text style={s.detailSmallScore}>{row.total}</Text><Text style={s.detailSmallScore}>{row.handicap}</Text><Text style={s.detailNetText}>{row.net}</Text></View>)}
+              </ScrollView>
             </View>}
             {detailTab === 'score' && <View style={s.detailPanel}><View style={s.scoreSummaryGrid}>{scoreRows.slice(0,6).map((row)=><View key={row.name} style={s.scoreSummaryCard}><View style={{flex:1,minWidth:0}}><Text style={s.scoreSummaryName} numberOfLines={1}>{shortName(row.name)}</Text><Text style={s.scoreSummarySub}>버디 {row.stats.birdie} · 파 {row.stats.par} · 보기 {row.stats.bogey}</Text></View><View style={{alignItems:'flex-end'}}><Text style={s.scoreSummaryTotal}>{row.total}</Text><Text style={s.scoreSummaryDiff}>{diffText(row.diff)}</Text></View></View>)}</View></View>}
             {detailTab === 'award' && <ScrollView style={s.backAwardScroll} contentContainerStyle={s.backAwardStack} showsVerticalScrollIndicator={false}>
+              <AwardCard title={`${activeClub?.name ?? '클럽'} 기준 기록`} icon="👑">
+                {clubRecordRows.length === 0 ? (
+                  <Text style={s.backAwardMuted}>이번 라운드 신규 클럽 기록이 없습니다.</Text>
+                ) : clubRecordRows.map((record, i) => (
+                  <AwardRow key={`${record.label}-${i}`} icon={record.icon} label={record.label} winner={record.value.split(' ')[0] ?? '-'} detail={record.value.replace(/^\S+\s*/, '')} first={i === 0} />
+                ))}
+              </AwardCard>
               <AwardCard title="클럽 시상" icon="🏆">
                 {awardRows.length === 0 ? (
                   <Text style={s.backAwardMuted}>설정된 시상 항목이 없습니다.</Text>
@@ -1958,11 +2019,11 @@ const s = StyleSheet.create({
   headerTitle: { color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
   profileBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' },
   profileInitial: { color: '#fff', fontSize: 16, fontWeight: '900' },
-  tabs: { flexDirection: 'row', backgroundColor: C.greenLight, marginHorizontal: 12, marginTop: 8, marginBottom: 0, borderRadius: 50, padding: 3 },
-  tab: { flex: 1, paddingVertical: 6, alignItems: 'center', borderRadius: 50 },
+  tabs: { flexDirection: 'row', backgroundColor: C.greenLight, marginHorizontal: 12, marginTop: 12, marginBottom: 0, borderRadius: 50, padding: 3 },
+  tab: { flex: 1, paddingVertical: 5, alignItems: 'center', borderRadius: 50 },
   tabActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5, elevation: 2 },
-  tabText: { fontSize: 13, color: C.muted, fontWeight: '500' },
-  tabTextActive: { color: C.green, fontWeight: '700' },
+  tabText: { fontSize: 15, color: C.muted, fontWeight: '700' },
+  tabTextActive: { color: C.green, fontWeight: '900' },
   card: {
     backgroundColor: C.card, borderRadius: 20, padding: 18, marginBottom: 14,
     shadowColor: '#1a6b44', shadowOpacity: 0.07, shadowRadius: 12, shadowOffset: { width: 0, height: 3 }, elevation: 3,
@@ -2022,6 +2083,7 @@ const s = StyleSheet.create({
   },
   aiCaddieRecommendText: { flex: 1, fontSize: 12, lineHeight: 18, fontWeight: '800', color: C.text },
   roundCarouselWrap: { marginHorizontal: 0 },
+  roundCarouselPlaceholder: { marginHorizontal: 24, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.42)' },
 roundCarouselContent: {
   paddingLeft:24,
   paddingRight: 16,
@@ -2079,8 +2141,15 @@ roundCarouselContent: {
   backTabText: { color: C.muted, fontSize: 12, fontWeight: '800' },
   backTabTextActive: { color: C.green, fontWeight: '900' },
   backBody: { flex: 1 },
-  detailPanel: { backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 10 },
+  detailPanel: { flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 10 },
+  detailPanelTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 9 },
   detailPanelTitle: { fontSize: 15, fontWeight: '900', color: C.text, marginBottom: 10 },
+  detailPanelTitleInline: { marginBottom: 0 },
+  detailBasisSwitch: { flexDirection: 'row', backgroundColor: C.greenLight, borderRadius: 14, padding: 3 },
+  detailBasisBtn: { minWidth: 46, minHeight: 27, borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  detailBasisBtnActive: { backgroundColor: C.green },
+  detailBasisText: { fontSize: 11, fontWeight: '900', color: C.muted },
+  detailBasisTextActive: { color: '#fff' },
   rankRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 58, borderTopWidth: 1, borderTopColor: '#eef1ef' },
   rankNo: { width: 29, height: 29, borderRadius: 15, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
   rankNoFirst: { backgroundColor: C.green },
@@ -2144,6 +2213,7 @@ roundCarouselContent: {
   detailLoadingText: { fontSize: 11, color: C.muted, textAlign: 'center', marginBottom: 6 },
   shinperioHoleText: { fontSize: 10, color: C.muted, fontWeight: '700', marginBottom: 7 },
   detailTableHeader: { flexDirection: 'row', alignItems: 'center', paddingBottom: 7, borderBottomWidth: 1, borderBottomColor: C.border },
+  detailRankScroll: { flex: 1 },
   detailTableRow: { minHeight: 46, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#edf1ee', paddingHorizontal: 4 },
   detailPodiumRow: { backgroundColor: 'rgba(32,160,91,0.06)', borderRadius: 10 },
   detailTh: { fontSize: 10, fontWeight: '800', color: C.muted },

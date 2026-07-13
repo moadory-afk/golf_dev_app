@@ -32,9 +32,9 @@ import {
   getClubMembers,
   getClubNotices,
   getGolfCourses,
-  getRoundLottoDraw,
-  getRoundLottoEntries,
-  getRounds,
+  getRoundLottoDrawsByScheduleIds,
+  getRoundLottoEntriesByScheduleIds,
+  getRoundSummaries,
   playerTotal,
   totalPar,
   computeHandicaps,
@@ -140,19 +140,27 @@ async function calculateLottoCarryoverAmount(
   members: Array<{ userId: string; name: string; role: string }>,
 ) {
   const memberNameById = new Map(members.map((member) => [member.userId, member.name]));
-  const completedLottoRounds = (
-    await Promise.all(
-      rounds
-        .filter((round) => !!round.scheduleId)
-        .map(async (round) => {
-          const draw = await getRoundLottoDraw(round.scheduleId!).catch(() => null);
-          if (!draw || draw.drawStatus !== "COMPLETED" || !draw.drawnScores) return null;
-          const entries = await getRoundLottoEntries(round.scheduleId!).catch(() => []);
-          return { round, draw, entries };
-        }),
-    )
-  )
-    .filter((item): item is NonNullable<typeof item> => !!item)
+  const scheduleIds = rounds.map((round) => round.scheduleId).filter((id): id is string => !!id);
+  const [draws, entries] = await Promise.all([
+    getRoundLottoDrawsByScheduleIds(scheduleIds).catch(() => []),
+    getRoundLottoEntriesByScheduleIds(scheduleIds).catch(() => []),
+  ]);
+  const drawByScheduleId = new Map(draws.map((draw) => [draw.scheduleId, draw]));
+  const entriesByScheduleId = entries.reduce<Record<string, typeof entries>>((acc, entry) => {
+    if (!acc[entry.scheduleId]) acc[entry.scheduleId] = [];
+    acc[entry.scheduleId].push(entry);
+    return acc;
+  }, {});
+  const completedLottoRounds = rounds
+    .filter((round) => {
+      const draw = round.scheduleId ? drawByScheduleId.get(round.scheduleId) : null;
+      return !!draw && draw.drawStatus === "COMPLETED" && !!draw.drawnScores;
+    })
+    .map((round) => ({
+      round,
+      draw: drawByScheduleId.get(round.scheduleId!)!,
+      entries: entriesByScheduleId[round.scheduleId!] ?? [],
+    }))
     .sort((a, b) => a.round.date.localeCompare(b.round.date));
 
   return completedLottoRounds.reduce((amount, item) => {
@@ -223,7 +231,7 @@ export default function ClubScreen() {
   const clubHeroPageCount = myClubs.length + 1;
   const clubHeroClubIds = myClubs.map((item) => item.id).join("|");
   const { data, loading } = useAsync(
-    () => (club ? getRounds(club.id) : Promise.resolve([])),
+    () => (club ? getRoundSummaries(club.id) : Promise.resolve([])),
     [refreshKey, club?.id],
   );
   const { data: clubMembers } = useAsync(

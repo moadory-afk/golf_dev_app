@@ -131,7 +131,7 @@ export function useHomeDashboard({
     refreshTimerRef.current = setTimeout(() => {
       refreshTimerRef.current = null;
       refresh();
-    }, 400);
+    }, 700);
   }, [refresh]);
 
   useEffect(() => {

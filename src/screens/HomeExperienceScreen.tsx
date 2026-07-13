@@ -55,9 +55,11 @@ import {
   getCourseLayouts,
   getHandicapsForRound,
   getRoundLottoDraw,
+  getRoundLottoDrawsByScheduleIds,
   getRoundLottoEntries,
+  getRoundLottoEntriesByScheduleIds,
   getRoundLottoEntry,
-  getRounds,
+  getRoundSummaries,
   saveRoundLottoEntry,
   saveRoundLottoDrawResult,
   playerTotal,
@@ -73,7 +75,7 @@ import {
 } from "../lib/store";
 import { AWARD_CATEGORIES, fillToCount } from "../lib/awardConfig";
 import { computeClubAwardResults } from "../lib/awardResults";
-import { subscribeHomeDashboardChanged } from "../lib/homeDashboardEvents";
+import { subscribeHomeRecordsChanged } from "../lib/homeRecordEvents";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type LottoSelection = { par3: number[]; par4: number[]; par5: number[] };
@@ -81,6 +83,7 @@ type PersonalCourseSegment = { label: string; layoutId?: string; start: number; 
 type AwardDetailRow = ClubAwardSnapshot & { roundDate: string; courseName: string };
 const LOTTO_JACKPOT_BASE = 50000;
 const LOTTO_JACKPOT_STEP = 10000;
+const HOME_RECORD_CACHE_VERSION = 1;
 
 function caddieBookParams(round: HomeUpcomingRound | null) {
   if (!round) return undefined;
@@ -226,6 +229,30 @@ function applyStatNavigation(
   }));
 }
 
+const RECORD_STAT_PLACEHOLDERS: PremiumRecentStatItem[] = [
+  { key: "handicap", icon: "", label: "핸디캡", value: "-", caption: "불러오는 중", tone: "primary" },
+  { key: "average", icon: "", label: "평균", value: "-", caption: "불러오는 중", tone: "info" },
+  { key: "recent", icon: "", label: "최근", value: "-", caption: "불러오는 중", tone: "success" },
+  { key: "best", icon: "", label: "베스트", value: "-", caption: "불러오는 중", tone: "gold" },
+];
+
+const RECORD_EXTRA_PLACEHOLDERS = [
+  { key: "matchup", title: "상대 전적", subtitle: "불러오는 중" },
+  { key: "records", title: "보유 기록", subtitle: "불러오는 중" },
+  { key: "awards", title: "수상현황", subtitle: "불러오는 중" },
+  { key: "empty", title: "", subtitle: "" },
+];
+
+type HomeRecordCache = {
+  version: number;
+  rounds: SavedRound[];
+  awardRows: AwardDetailRow[];
+};
+
+function homeRecordCacheKey(clubId: string, userId?: string | null) {
+  return `home-record-cards:${clubId}:${userId || "guest"}`;
+}
+
 function diffText(value: number) {
   if (!Number.isFinite(value)) return "-";
   return value > 0 ? `+${value}` : `${value}`;
@@ -282,19 +309,27 @@ async function calculateLottoJackpotAmount(
   members: Array<{ userId: string; name: string; role: string }>,
 ) {
   const memberNameById = new Map(members.map((member) => [member.userId, member.name]));
-  const completedLottoRounds = (
-    await Promise.all(
-      rounds
-        .filter((round) => !!round.scheduleId)
-        .map(async (round) => {
-          const draw = await getRoundLottoDraw(round.scheduleId!).catch(() => null);
-          if (!draw || draw.drawStatus !== "COMPLETED" || !draw.drawnScores) return null;
-          const entries = await getRoundLottoEntries(round.scheduleId!).catch(() => []);
-          return { round, draw, entries };
-        }),
-    )
-  )
-    .filter((item): item is NonNullable<typeof item> => !!item)
+  const scheduleIds = rounds.map((round) => round.scheduleId).filter((id): id is string => !!id);
+  const [draws, entries] = await Promise.all([
+    getRoundLottoDrawsByScheduleIds(scheduleIds).catch(() => []),
+    getRoundLottoEntriesByScheduleIds(scheduleIds).catch(() => []),
+  ]);
+  const drawByScheduleId = new Map(draws.map((draw) => [draw.scheduleId, draw]));
+  const entriesByScheduleId = entries.reduce<Record<string, typeof entries>>((acc, entry) => {
+    if (!acc[entry.scheduleId]) acc[entry.scheduleId] = [];
+    acc[entry.scheduleId].push(entry);
+    return acc;
+  }, {});
+  const completedLottoRounds = rounds
+    .filter((round) => {
+      const draw = round.scheduleId ? drawByScheduleId.get(round.scheduleId) : null;
+      return !!draw && draw.drawStatus === "COMPLETED" && !!draw.drawnScores;
+    })
+    .map((round) => ({
+      round,
+      draw: drawByScheduleId.get(round.scheduleId!)!,
+      entries: entriesByScheduleId[round.scheduleId!] ?? [],
+    }))
     .sort((a, b) => a.round.date.localeCompare(b.round.date));
 
   return completedLottoRounds.reduce((amount, item) => {
@@ -694,8 +729,7 @@ export default function HomeExperienceScreen() {
   const focusedClubIdRef = useRef<string | null | undefined>(undefined);
   const recordRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const loadRecordCards = useCallback(async () => {
-    setRecordCardsReady(false);
+  const loadRecordCards = useCallback(async (options?: { force?: boolean }) => {
     if (!club?.id) {
       setRecordDetailRounds([]);
       setRecordAwardRows([]);
@@ -703,18 +737,41 @@ export default function HomeExperienceScreen() {
       return;
     }
 
+    const cacheKey = homeRecordCacheKey(club.id, userId);
+    if (!options?.force) {
+      try {
+        const cached = await AsyncStorage.getItem(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached) as HomeRecordCache;
+          if (parsed.version === HOME_RECORD_CACHE_VERSION) {
+            setRecordDetailRounds(parsed.rounds ?? []);
+            setRecordAwardRows(parsed.awardRows ?? []);
+            setRecordCardsReady(true);
+            return;
+          }
+        }
+      } catch {
+        // cache miss
+      }
+    }
+
+    setRecordCardsReady(false);
     try {
-      const rounds = await getRounds(club.id);
+      const rounds = await getRoundSummaries(club.id);
       const awardRows = await getHomeAwardRows(club.id, rounds);
       setRecordDetailRounds(rounds);
       setRecordAwardRows(awardRows);
+      await AsyncStorage.setItem(
+        cacheKey,
+        JSON.stringify({ version: HOME_RECORD_CACHE_VERSION, rounds, awardRows }),
+      );
     } catch {
       setRecordDetailRounds([]);
       setRecordAwardRows([]);
     } finally {
       setRecordCardsReady(true);
     }
-  }, [club?.id]);
+  }, [club?.id, userId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -724,7 +781,6 @@ export default function HomeExperienceScreen() {
       // 최초 진입과 클럽 변경 시 데이터 로딩은 각 hook/effect에 맡긴다.
       // 같은 클럽의 홈으로 다시 돌아온 경우에만 화면 데이터를 새로고침한다.
       if (focusedClubIdRef.current === currentClubId) {
-        refresh();
         void loadRecordCards();
       } else {
         focusedClubIdRef.current = currentClubId;
@@ -783,7 +839,7 @@ export default function HomeExperienceScreen() {
             getRoundLottoEntries(round.id),
             getRoundLottoDraw(round.id),
             getClubLottoAwardConfig(club.id),
-            getRounds(club.id),
+            getRoundSummaries(club.id),
           ]);
           const roundRecord = savedRounds.find((item) => item.scheduleId === round.id);
           const myPlayer = roundRecord ? findPlayer(roundRecord, myName) : null;
@@ -885,7 +941,7 @@ export default function HomeExperienceScreen() {
 
     setPopupDrawSaving(true);
     try {
-      const savedRounds = await getRounds(club.id);
+      const savedRounds = await getRoundSummaries(club.id);
       const roundRecord = savedRounds.find((item) => item.scheduleId === popupRound.id);
       const pars = roundRecord?.pars?.length === 18 ? roundRecord.pars : Array.from({ length: 18 }, () => 4);
       const drawnScores = generateLottoDrawScores(pars);
@@ -910,7 +966,7 @@ export default function HomeExperienceScreen() {
 
       setRecordDetailLoading(true);
       try {
-        const rounds = await getRounds(club.id);
+        const rounds = await getRoundSummaries(club.id);
         setRecordDetailRounds(rounds);
         if (mode === "awards") setRecordAwardRows(await getHomeAwardRows(club.id, rounds));
       } catch {
@@ -930,12 +986,12 @@ export default function HomeExperienceScreen() {
   useEffect(() => {
     if (!club?.id) return;
 
-    const unsubscribe = subscribeHomeDashboardChanged((changedClubId) => {
+    const unsubscribe = subscribeHomeRecordsChanged((changedClubId) => {
       if (changedClubId && changedClubId !== club.id) return;
       if (recordRefreshTimerRef.current) clearTimeout(recordRefreshTimerRef.current);
       recordRefreshTimerRef.current = setTimeout(() => {
         recordRefreshTimerRef.current = null;
-        void loadRecordCards();
+        void loadRecordCards({ force: true });
       }, 400);
     });
 
@@ -952,6 +1008,10 @@ export default function HomeExperienceScreen() {
     () => applyStatNavigation(dashboard.stats.items, openRecordDetail),
     [dashboard.stats.items, openRecordDetail],
   );
+
+  const visibleRecentStats = recordCardsReady && recentStats.length > 0
+    ? recentStats
+    : RECORD_STAT_PLACEHOLDERS;
 
   const recordExtraCards = useMemo(() => {
     const matchupDiffSum = handicapDiffSumByOpponent(recordDetailRounds, myName);
@@ -988,6 +1048,8 @@ export default function HomeExperienceScreen() {
       },
     ];
   }, [myName, openRecordDetail, recordAwardRows, recordDetailRounds]);
+
+  const visibleRecordExtraCards = recordCardsReady ? recordExtraCards : RECORD_EXTRA_PLACEHOLDERS;
 
 
   if (clubsLoaded && !club) {
@@ -1093,18 +1155,16 @@ export default function HomeExperienceScreen() {
                 />
               </PremiumHomeMotion>
             ),
-            stats:
-              recentStats.length > 0 && recordCardsReady ? (
-                <PremiumHomeMotion index={3}>
-                  <PremiumRecentStatsSection stats={recentStats} />
-                </PremiumHomeMotion>
-              ) : null,
-            recordExtras:
-              recentStats.length > 0 && recordCardsReady ? (
-                <PremiumHomeMotion index={3}>
-                  <PremiumRecordExtrasSection cards={recordExtraCards} />
-                </PremiumHomeMotion>
-              ) : null,
+            stats: (
+              <PremiumHomeMotion index={3}>
+                <PremiumRecentStatsSection stats={visibleRecentStats} />
+              </PremiumHomeMotion>
+            ),
+            recordExtras: (
+              <PremiumHomeMotion index={3}>
+                <PremiumRecordExtrasSection cards={visibleRecordExtraCards} />
+              </PremiumHomeMotion>
+            ),
           }}
         />
       </ScrollView>

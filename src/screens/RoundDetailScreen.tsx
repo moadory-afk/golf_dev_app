@@ -1,7 +1,7 @@
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Alert, Image, Platform } from 'react-native'
 import { useRoute, useNavigation } from '@react-navigation/native'
 import { useState, useEffect, useRef } from 'react'
-import { DEFAULT_LOTTO_AWARD_CONFIG, getClubAwardConfig, getClubAwardSnapshots, getClubLottoAwardConfig, getClubMembers, getRound, getRoundLottoDraw, getRoundLottoEntries, getRounds, deleteRound, updateRoundSettlement, playerTotal, totalPar, getHandicapsForRound, shortName, saveClubAwardSnapshots, type LottoAwardConfig } from '../lib/store'
+import { DEFAULT_LOTTO_AWARD_CONFIG, getClubAwardConfig, getClubAwardSnapshots, getClubLottoAwardConfig, getClubMembers, getRound, getRoundLottoDraw, getRoundLottoEntries, getRoundSummaries, deleteRound, updateRoundSettlement, playerTotal, totalPar, getHandicapsForRound, shortName, saveClubAwardSnapshots, type LottoAwardConfig } from '../lib/store'
 import { getRoundSchedules } from '../lib/roundSchedule'
 import { AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
 import { computeClubAwardResults } from '../lib/awardResults'
@@ -9,6 +9,7 @@ import { calcSettlement, holeNetForPlayer, fmtKRW } from '../features/settlement
 import { useAsync } from '../lib/useAsync'
 import { useClub } from '../lib/ClubContext'
 import { loadHandicapBasis, type HandicapBasis } from '../lib/handicapBasis'
+import { notifyHomeRecordsChanged } from '../lib/homeRecordEvents'
 import { C } from '../theme'
 import { Icon } from '../components/Icon'
 import AppTabBar from '../components/AppTabBar'
@@ -218,7 +219,7 @@ export default function RoundDetailScreen() {
   const { data: round, loading } = useAsync(() => getRound(route.params.id), [route.params.id, recalcKey])
   const { data: allRounds } = useAsync(async () => {
     if (!activeClub) return []
-    return getRounds(activeClub.id)
+    return getRoundSummaries(activeClub.id)
   }, [activeClub?.id])
   const { data: roundSchedules } = useAsync(async () => {
     if (!activeClub) return []
@@ -382,6 +383,7 @@ export default function RoundDetailScreen() {
     const doDelete = async () => {
       try {
         await deleteRound(round!.id)
+        notifyHomeRecordsChanged(activeClub?.id)
         nav.goBack()
       } catch {
         Alert.alert('오류', '삭제에 실패했습니다.')

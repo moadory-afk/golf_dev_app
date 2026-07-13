@@ -20,9 +20,10 @@ import {
   type ScheduledRoundGroup,
   type ScheduledRoundGroupMember,
 } from '../lib/roundSchedule'
-import { completeRound, deleteRoundsBySchedule, getClubAwardConfig, getClubMembers, getClubSettlement, getCourseLayouts, getGolfCourses, getRoundLottoDraw, getRounds, saveClubAwardConfig, saveClubAwardSnapshots, saveClubSettlement, saveRound, saveRoundLottoDrafter, totalPar, type CourseLayout, type GolfCourse } from '../lib/store'
+import { completeRound, deleteRoundsBySchedule, getClubAwardConfig, getClubMembers, getClubSettlement, getCourseLayouts, getGolfCourses, getRoundLottoDraw, getRoundSummaries, saveClubAwardConfig, saveClubAwardSnapshots, saveClubSettlement, saveRound, saveRoundLottoDrafter, totalPar, type CourseLayout, type GolfCourse } from '../lib/store'
 import { AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
 import { notifyHomeDashboardChanged } from '../lib/homeDashboardEvents'
+import { notifyHomeRecordsChanged } from '../lib/homeRecordEvents'
 import { computeClubAwardResults } from '../lib/awardResults'
 import { recognizeScorecard, mergeScorecards, type RecognizedScorecard } from '../features/ocr'
 import { findBestOcrMatch } from '../lib/nameMatch'
@@ -206,8 +207,9 @@ export default function RoundSchedulePrototypeScreen() {
     const queueRefresh = () => {
       if (realtimeTimer.current) clearTimeout(realtimeTimer.current)
       realtimeTimer.current = setTimeout(() => {
+        realtimeTimer.current = null
         setRefreshKey((key) => key + 1)
-      }, 500)
+      }, 700)
     }
 
     const channel = supabase
@@ -868,7 +870,7 @@ export default function RoundSchedulePrototypeScreen() {
       })
       setItems(next)
       notifyHomeDashboardChanged(club.id)
-      const rounds = await getRounds(club.id)
+      const rounds = await getRoundSummaries(club.id)
       const finishedRound = rounds.find((round) => draft.id && round.scheduleId === draft.id) ?? rounds.find((round) =>
         round.date === draft.date && (!draft.courseName || round.courseName === draft.courseName)
       )
@@ -878,6 +880,7 @@ export default function RoundSchedulePrototypeScreen() {
         const handicaps = new Map(Object.entries(finishedRound.handicaps ?? {}))
         const awards = computeClubAwardResults(itemIds, finishedRound, handicaps, totalPar(finishedRound.pars))
         await saveClubAwardSnapshots(club.id, finishedRound.id, awards)
+        notifyHomeRecordsChanged(club.id)
       } else {
         const members = draft.groups.flatMap((group) => group.members)
         const uniqueMembers = Array.from(new Map(members.map((member) => [member.userId || member.name, member])).values())
@@ -914,6 +917,7 @@ export default function RoundSchedulePrototypeScreen() {
         const handicaps = new Map(Object.entries(saved.handicaps ?? {}))
         const awards = computeClubAwardResults(itemIds, saved, handicaps, totalPar(saved.pars))
         await saveClubAwardSnapshots(club.id, saved.id, awards)
+        notifyHomeRecordsChanged(club.id)
         Alert.alert('완료', '저장된 스코어가 없어 전체 파 기록으로 종료했습니다.')
       }
       closeEditor()

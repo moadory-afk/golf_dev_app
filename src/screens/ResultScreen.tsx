@@ -1,9 +1,10 @@
 import { ScrollView, View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform } from 'react-native'
 import { useRoute, useNavigation } from '@react-navigation/native'
 import { useState } from 'react'
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator'
 import { saveRound, updateRound, playerTotal, totalPar } from '../lib/store'
 import { useClub } from '../lib/ClubContext'
+import { uploadRoundPhoto } from '../lib/roundPhotos'
+import { notifyHomeRecordsChanged } from '../lib/homeRecordEvents'
 import { C } from '../theme'
 import type { RootStackProps } from '../navigation/types'
 
@@ -55,24 +56,15 @@ export default function ResultScreen() {
     // 코스명은 자유 입력(빈칸 포함)으로 저장 — 추후 총무가 일괄 정리. 빈칸이면 '이름 없는 코스'로 저장됨.
     setSaving(true)
     try {
-      // 촬영된 사진을 800px / 60% 화질로 압축 후 base64 변환
-      const photoData: string[] = []
-      for (const uri of (photoUris ?? [])) {
-        try {
-          const res = await manipulateAsync(
-            uri,
-            [{ resize: { width: 800 } }],
-            { compress: 0.6, format: SaveFormat.JPEG, base64: true },
-          )
-          if (res.base64) photoData.push(`data:image/jpeg;base64,${res.base64}`)
-        } catch {
-          // 개별 사진 처리 실패는 무시
-        }
-      }
-      const input = { courseName, date, pars, players, photoData, clubId, settlement }
-      const saved = editId
+      const input = { courseName, date, pars, players, clubId, settlement }
+      let saved = editId
         ? await updateRound(editId, input)
         : await saveRound(input)
+      const uploadedPhotos = await Promise.all((photoUris ?? []).map((uri) => uploadRoundPhoto(uri, saved.id)))
+      if (uploadedPhotos.length > 0) {
+        saved = await updateRound(saved.id, { ...input, photoData: uploadedPhotos })
+      }
+      notifyHomeRecordsChanged(clubId)
       nav.navigate('RoundDetail', { id: saved.id })
     } catch (err: unknown) {
       notify('저장 실패', errMsg(err))

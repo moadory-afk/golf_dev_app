@@ -5,12 +5,13 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native'
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import * as ImagePicker from 'expo-image-picker'
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator'
 import { saveRound, updateRound, createRoundDraft, completeRound, deleteRound, shortName } from '../lib/store'
 import { calcSettlement, holeStrokeNetForPlayer, holeBonusNetForPlayer, fmtKRW } from '../features/settlement'
 import { recognizeScorecard, mergeScorecards, type RecognizedScorecard } from '../features/ocr'
 import { findBestOcrMatch } from '../lib/nameMatch'
 import { useClub } from '../lib/ClubContext'
+import { uploadRoundPhoto } from '../lib/roundPhotos'
+import { notifyHomeRecordsChanged } from '../lib/homeRecordEvents'
 import { C } from '../theme'
 import type { RootStackProps } from '../navigation/types'
 
@@ -181,39 +182,38 @@ export default function ScoreEntryScreen() {
   async function handleSave() {
     setSaving(true)
     try {
-      // 사진 압축 → base64 (실패한 장은 건너뜀)
-      const photoData: string[] = []
-      for (const uri of photoUris) {
-        try {
-          const res = await manipulateAsync(
-            uri, [{ resize: { width: 800 } }],
-            { compress: 0.6, format: SaveFormat.JPEG, base64: true },
-          )
-          if (res.base64) photoData.push(`data:image/jpeg;base64,${res.base64}`)
-        } catch { /* ignore */ }
-      }
+      {
+        const cleanPlayers = players.map((p) => ({ name: p.name, strokes: p.strokes }))
+        const id = roundIdRef.current
+        if (id) {
+          const uploadedPhotos = await Promise.all(photoUris.map((uri) => uploadRoundPhoto(uri, id)))
+          await updateRound(id, {
+            courseName, date, pars,
+            players: cleanPlayers,
+            golfCourseId, settlement,
+            holeLabels,
+            photoData: uploadedPhotos.length > 0 ? uploadedPhotos : undefined,
+          })
+          await completeRound(id)
+          notifyHomeRecordsChanged(activeClub?.id)
+          nav.navigate('RoundDetail', { id })
+          return
+        }
 
-      const id = roundIdRef.current
-      if (id) {
-        await updateRound(id, {
-          courseName, date, pars,
-          players: players.map((p) => ({ name: p.name, strokes: p.strokes })),
-          golfCourseId, settlement,
-          holeLabels,
-          photoData: photoData.length > 0 ? photoData : undefined,
-        })
-        await completeRound(id)
-        nav.navigate('RoundDetail', { id })
-      } else {
         const input = {
           courseName, date, pars,
-          players: players.map((p) => ({ name: p.name, strokes: p.strokes })),
+          players: cleanPlayers,
           golfCourseId, settlement, holeLabels, clubId: activeClub?.id,
-          photoData: photoData.length > 0 ? photoData : undefined,
         }
-        const saved = editId ? await updateRound(editId, input) : await saveRound(input)
+        let saved = editId ? await updateRound(editId, input) : await saveRound(input)
+        const uploadedPhotos = await Promise.all(photoUris.map((uri) => uploadRoundPhoto(uri, saved.id)))
+        if (uploadedPhotos.length > 0) {
+          saved = await updateRound(saved.id, { ...input, photoData: uploadedPhotos })
+        }
         await completeRound(saved.id)
+        notifyHomeRecordsChanged(activeClub?.id)
         nav.navigate('RoundDetail', { id: saved.id })
+        return
       }
     } catch (err) {
       Alert.alert('저장 실패', err instanceof Error ? err.message : String(err))
@@ -224,7 +224,10 @@ export default function ScoreEntryScreen() {
     const doDelete = async () => {
       const id = roundIdRef.current ?? editId
       if (id) {
-        try { await deleteRound(id) } catch { /* ignore */ }
+        try {
+          await deleteRound(id)
+          notifyHomeRecordsChanged(activeClub?.id)
+        } catch { /* ignore */ }
       }
       nav.navigate('Main', { screen: 'History' })
     }

@@ -1,13 +1,13 @@
-type HomeDashboardListener = (clubId?: string | null) => void
+type HomeRecordsListener = (clubId?: string | null) => void
 
-const listeners = new Set<HomeDashboardListener>()
+const listeners = new Set<HomeRecordsListener>()
 const pendingByClubId = new Map<string, ReturnType<typeof setTimeout>>()
 
 function notifyNow(clubId?: string | null) {
   listeners.forEach((listener) => listener(clubId))
 }
 
-export function notifyHomeDashboardChanged(clubId?: string | null) {
+export function notifyHomeRecordsChanged(clubId?: string | null) {
   const key = clubId ?? '*'
   const pending = pendingByClubId.get(key)
   if (pending) clearTimeout(pending)
@@ -17,7 +17,7 @@ export function notifyHomeDashboardChanged(clubId?: string | null) {
   }, 300))
 }
 
-export function subscribeHomeDashboardChanged(listener: HomeDashboardListener) {
+export function subscribeHomeRecordsChanged(listener: HomeRecordsListener) {
   listeners.add(listener)
   return () => {
     listeners.delete(listener)

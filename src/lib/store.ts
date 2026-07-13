@@ -192,6 +192,26 @@ export async function getRounds(clubId: string): Promise<SavedRound[]> {
   return (data ?? []).map(fromRow)
 }
 
+export async function getRoundSummaries(clubId: string): Promise<SavedRound[]> {
+  const { data, error } = await supabase
+    .from('rounds')
+    .select('id, date, course_name, pars, shinperio_holes, players, handicaps, golf_course_id, schedule_id, hole_labels, is_complete')
+    .eq('club_id', clubId)
+    .order('date', { ascending: false })
+  if (error) throw error
+  return (data ?? []).map(fromRow)
+}
+
+export async function getRoundHistoryCards(clubId: string): Promise<SavedRound[]> {
+  const { data, error } = await supabase
+    .from('rounds')
+    .select('id, date, course_name, pars, shinperio_holes, players, handicaps, photo_data, golf_course_id, schedule_id, hole_labels, is_complete')
+    .eq('club_id', clubId)
+    .order('date', { ascending: false })
+  if (error) throw error
+  return (data ?? []).map(fromRow)
+}
+
 export async function getRound(id: string): Promise<SavedRound | null> {
   const { data, error } = await supabase
     .from('rounds')
@@ -242,7 +262,7 @@ async function computeHandicapSnapshot(
 ): Promise<Record<string, number>> {
   const { data, error } = await supabase
     .from('rounds')
-    .select('id, date, course_name, pars, shinperio_holes, players, handicaps, photo_data, schedule_id, hole_labels, is_complete')
+    .select('id, date, course_name, pars, shinperio_holes, players, handicaps, schedule_id, hole_labels, is_complete')
     .eq('club_id', clubId)
     .lt('date', date)
     .order('date', { ascending: true })
@@ -1497,6 +1517,22 @@ export async function getRoundLottoEntries(scheduleId: string): Promise<RoundLot
   }))
 }
 
+export async function getRoundLottoEntriesByScheduleIds(scheduleIds: string[]): Promise<RoundLottoEntry[]> {
+  if (scheduleIds.length === 0) return []
+  const { data, error } = await supabase
+    .from('round_lotto_entries')
+    .select('club_id, schedule_id, user_id, selected_holes, updated_at')
+    .in('schedule_id', scheduleIds)
+  if (error) throw error
+  return (data ?? []).map((row) => ({
+    clubId: row.club_id,
+    scheduleId: row.schedule_id,
+    userId: row.user_id,
+    selectedHoles: row.selected_holes ?? { par3: [], par4: [], par5: [] },
+    updatedAt: row.updated_at ?? undefined,
+  }))
+}
+
 export async function saveRoundLottoEntry(input: RoundLottoEntry): Promise<void> {
   const { error } = await supabase
     .from('round_lotto_entries')
@@ -1527,6 +1563,24 @@ export async function getRoundLottoDraw(scheduleId: string): Promise<RoundLottoD
     drawnAt: data.drawn_at ?? null,
     updatedAt: data.updated_at ?? undefined,
   }
+}
+
+export async function getRoundLottoDrawsByScheduleIds(scheduleIds: string[]): Promise<RoundLottoDraw[]> {
+  if (scheduleIds.length === 0) return []
+  const { data, error } = await supabase
+    .from('round_lotto_draws')
+    .select('club_id, schedule_id, drafter_user_id, draw_status, drawn_scores, drawn_at, updated_at')
+    .in('schedule_id', scheduleIds)
+  if (error) throw error
+  return (data ?? []).map((row) => ({
+    clubId: row.club_id,
+    scheduleId: row.schedule_id,
+    drafterUserId: row.drafter_user_id ?? null,
+    drawStatus: row.draw_status ?? 'PENDING',
+    drawnScores: row.drawn_scores ?? null,
+    drawnAt: row.drawn_at ?? null,
+    updatedAt: row.updated_at ?? undefined,
+  }))
 }
 
 export async function saveRoundLottoDrawResult(
