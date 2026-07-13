@@ -441,7 +441,8 @@ function HeroBackSide({
   const menuButtonHeight = isCompact ? 32 : 35;
   const iconSize = isCompact ? 28 : 32;
   const companionText = formatRoundCompanions(round);
-  const courseLine = `${round.teeTime || "--:--"} ${round.courseLine || (round.layoutName ? `${round.layoutName} 코스` : "코스 미정")}`;
+  const courseLabel = stripCourseSuffix(round.courseLine || (round.layoutName ? `${round.layoutName} 코스` : "코스 미정"));
+  const courseLine = `${round.teeTime || "--:--"} ${courseLabel}`;
 
   return (
     <View
@@ -490,6 +491,10 @@ function HeroBackSide({
       </View>
     </View>
   );
+}
+
+function stripCourseSuffix(value: string) {
+  return value.replace(/\s*코스\s*$/u, "").trim();
 }
 
 function formatRoundCompanions(round: any) {
@@ -1113,7 +1118,7 @@ const styles = StyleSheet.create({
   backCard: {
     flex: 1,
     borderRadius: 0,
-    backgroundColor: "rgba(236,246,238,0.94)",
+    backgroundColor: "rgba(206,224,211,0.96)",
     flexDirection: "row",
   },
   backLeftColumn: {
