@@ -110,7 +110,7 @@ async function fetchWeatherForSchedule(schedule: HomeScheduleRow, course: HomeCo
   }
 }
 
-async function fetchWeatherByScheduleId(schedules: HomeScheduleRow[], courses: HomeCourseRow[]) {
+export async function fetchWeatherByScheduleId(schedules: HomeScheduleRow[], courses: HomeCourseRow[]) {
   const courseById = new Map(courses.map((course) => [course.id, course]))
   const entries = await Promise.all(
     schedules.map(async (schedule) => {
@@ -126,7 +126,7 @@ async function fetchWeatherByScheduleId(schedules: HomeScheduleRow[], courses: H
   }, {})
 }
 
-function buildWeatherByCourseId(schedules: HomeScheduleRow[], weatherByScheduleId: Record<string, HomeWeatherSnapshot>) {
+export function buildWeatherByCourseId(schedules: HomeScheduleRow[], weatherByScheduleId: Record<string, HomeWeatherSnapshot>) {
   return schedules.reduce<Record<string, HomeWeatherSnapshot>>((acc, schedule) => {
     const courseId = schedule.course_id
     const weather = weatherByScheduleId[schedule.id]
@@ -215,7 +215,6 @@ export async function getHomeDashboardRawData(clubId: string): Promise<HomeDashb
   if (layoutResult.error) throw layoutResult.error
 
   const courseRows = (courseResult.data ?? []) as HomeCourseRow[]
-  const weatherByScheduleId = await fetchWeatherByScheduleId(scheduleRows, courseRows)
 
   return {
     schedules: scheduleRows,
@@ -225,7 +224,8 @@ export async function getHomeDashboardRawData(clubId: string): Promise<HomeDashb
     courseSeasonImages: (seasonImageResult.data ?? []) as HomeCourseSeasonImageRow[],
     layouts: (layoutResult.data ?? []) as HomeLayoutRow[],
     rounds,
-    weatherByCourseId: buildWeatherByCourseId(scheduleRows, weatherByScheduleId),
-    weatherByScheduleId,
+    // 날씨는 홈 기본 화면을 먼저 표시한 뒤 useHomeDashboard에서 비동기로 보강한다.
+    weatherByCourseId: {},
+    weatherByScheduleId: {},
   }
 }

@@ -1,7 +1,12 @@
 import { createEmptyHomeDashboard, mapHomeDashboard } from '../mappers/homeMapper'
-import type { HomeDashboard } from '../types/home'
+import type { HomeDashboard, HomeHeroRound, HomeUpcomingRound } from '../types/home'
 import { getHomeAICaddiePreview } from '../../caddie/services/caddieService'
-import { getHomeDashboardRawData } from '../api/homeRepository'
+import {
+  buildWeatherByCourseId,
+  fetchWeatherByScheduleId,
+  getHomeDashboardRawData,
+  type HomeDashboardRawData,
+} from '../api/homeRepository'
 import { formatRecommendedDepartureTime, formatTravelMinutes, getDrivingTravelTimeMinutes } from '../../../lib/travelTime'
 
 type HomeCoordinate = {
@@ -9,57 +14,142 @@ type HomeCoordinate = {
   longitude?: number | null
 }
 
-async function applyDrivingTravelTimes(dashboard: HomeDashboard, raw: Awaited<ReturnType<typeof getHomeDashboardRawData>>, home?: HomeCoordinate | null, departureBufferMinutes = 40) {
-  if (typeof home?.latitude !== 'number' || typeof home.longitude !== 'number') return dashboard
+export type HomeDashboardBaseResult = {
+  dashboard: HomeDashboard
+  raw: HomeDashboardRawData | null
+}
 
-  const scheduleById = new Map(raw.schedules.map((schedule) => [schedule.id, schedule]))
-  const courseById = new Map(raw.courses.map((course) => [course.id, course]))
-  const rounds = await Promise.all(
-    dashboard.hero.rounds.map(async (round) => {
-      const schedule = scheduleById.get(round.id)
-      const course = schedule?.course_id ? courseById.get(schedule.course_id) : undefined
-      const minutes = await getDrivingTravelTimeMinutes(home, {
-        latitude: course?.latitude,
-        longitude: course?.longitude,
-      }).catch(() => null)
-      if (!minutes) return round
-      return {
-        ...round,
-        routeTimeText: formatTravelMinutes(minutes),
-        departureTimeText: formatRecommendedDepartureTime(schedule?.round_date, round.teeTime, minutes, departureBufferMinutes),
-      }
-    }),
-  )
+type TravelRoundUpdate = Pick<HomeHeroRound, 'id' | 'routeTimeText' | 'departureTimeText'>
+
+type AiCaddieUpdate = Partial<HomeDashboard['aiCaddie']>
+
+export async function getHomeDashboardBase(
+  clubId?: string | null,
+  userName?: string | null,
+  userId?: string | null,
+): Promise<HomeDashboardBaseResult> {
+  if (!clubId) return { dashboard: createEmptyHomeDashboard(), raw: null }
+
+  const raw = await getHomeDashboardRawData(clubId)
+  return {
+    dashboard: mapHomeDashboard(raw, userName, userId),
+    raw,
+  }
+}
+
+export async function getHomeWeatherDashboard(
+  raw: HomeDashboardRawData,
+  userName?: string | null,
+  userId?: string | null,
+): Promise<HomeDashboard> {
+  const weatherByScheduleId = await fetchWeatherByScheduleId(raw.schedules, raw.courses)
+  const weatherRaw: HomeDashboardRawData = {
+    ...raw,
+    weatherByScheduleId,
+    weatherByCourseId: buildWeatherByCourseId(raw.schedules, weatherByScheduleId),
+  }
+
+  return mapHomeDashboard(weatherRaw, userName, userId)
+}
+
+export function mergeHomeWeather(current: HomeDashboard, weatherDashboard: HomeDashboard): HomeDashboard {
+  const weatherRoundById = new Map(weatherDashboard.hero.rounds.map((round) => [round.id, round]))
+  const rounds = current.hero.rounds.map((round) => {
+    const weatherRound = weatherRoundById.get(round.id)
+    if (!weatherRound) return round
+    return {
+      ...round,
+      weatherText: weatherRound.weatherText,
+      temperature: weatherRound.temperature,
+      windText: weatherRound.windText,
+    }
+  })
 
   const firstRound = rounds[0]
-  const upcomingRound = dashboard.upcomingRound && firstRound?.id === dashboard.upcomingRound.id
-    ? (({ locationLabel: _locationLabel, routeTimeText: _routeTimeText, departureTimeText: _departureTimeText, urgencyTone: _urgencyTone, ...round }) => round)(firstRound)
-    : dashboard.upcomingRound
+  const upcomingRound: HomeUpcomingRound | null = current.upcomingRound && firstRound?.id === current.upcomingRound.id
+    ? {
+        ...current.upcomingRound,
+        weatherText: firstRound.weatherText,
+        temperature: firstRound.temperature,
+        windText: firstRound.windText,
+      }
+    : current.upcomingRound
 
   return {
-    ...dashboard,
+    ...current,
     hero: {
-      ...dashboard.hero,
+      ...current.hero,
+      weatherText: firstRound?.weatherText ?? current.hero.weatherText,
+      temperature: firstRound?.temperature ?? current.hero.temperature,
       rounds,
     },
     upcomingRound,
   }
 }
 
-export async function getHomeDashboard(
-  clubId?: string | null,
-  userName?: string | null,
-  userId?: string | null,
+export async function getHomeTravelUpdates(
+  raw: HomeDashboardRawData,
+  dashboard: HomeDashboard,
   home?: HomeCoordinate | null,
   departureBufferMinutes = 40,
-): Promise<HomeDashboard> {
-  if (!clubId) return createEmptyHomeDashboard()
+): Promise<TravelRoundUpdate[]> {
+  if (typeof home?.latitude !== 'number' || typeof home.longitude !== 'number') return []
 
-  const raw = await getHomeDashboardRawData(clubId)
-  const mappedDashboard = mapHomeDashboard(raw, userName, userId)
-  const dashboard = await applyDrivingTravelTimes(mappedDashboard, raw, home, departureBufferMinutes)
+  const roundById = new Map(dashboard.hero.rounds.map((round) => [round.id, round]))
+  const courseById = new Map(raw.courses.map((course) => [course.id, course]))
+
+  return Promise.all(
+    raw.schedules.map(async (schedule) => {
+      const course = schedule.course_id ? courseById.get(schedule.course_id) : undefined
+      const minutes = await getDrivingTravelTimeMinutes(home, {
+        latitude: course?.latitude,
+        longitude: course?.longitude,
+      }).catch(() => null)
+
+      if (!minutes) {
+        return {
+          id: schedule.id,
+          routeTimeText: '이동시간 준비중',
+          departureTimeText: '출발 추천 준비중',
+        }
+      }
+
+      return {
+        id: schedule.id,
+        routeTimeText: formatTravelMinutes(minutes),
+        departureTimeText: formatRecommendedDepartureTime(
+          schedule.round_date,
+          roundById.get(schedule.id)?.teeTime ?? schedule.tee_time ?? undefined,
+          minutes,
+          departureBufferMinutes,
+        ),
+      }
+    }),
+  )
+}
+
+export function mergeHomeTravel(current: HomeDashboard, updates: TravelRoundUpdate[]): HomeDashboard {
+  if (!updates.length) return current
+  const updateById = new Map(updates.map((update) => [update.id, update]))
+  const rounds = current.hero.rounds.map((round) => {
+    const update = updateById.get(round.id)
+    return update ? { ...round, ...update } : round
+  })
+
+  return {
+    ...current,
+    hero: {
+      ...current.hero,
+      rounds,
+    },
+  }
+}
+
+export async function getHomeAiCaddieUpdate(
+  dashboard: HomeDashboard,
+  userId?: string | null,
+): Promise<AiCaddieUpdate | null> {
   const upcomingRound = dashboard.upcomingRound
-
   const aiPreview = await getHomeAICaddiePreview({
     userId,
     courseId: upcomingRound?.courseId,
@@ -71,19 +161,49 @@ export async function getHomeDashboard(
     fallbackAverageScore: dashboard.stats.averageScore,
   })
 
-  if (!aiPreview) return dashboard
+  if (!aiPreview) return null
 
   return {
-    ...dashboard,
+    title: aiPreview.title,
+    message: aiPreview.message,
+    primaryChip: aiPreview.primaryChip,
+    secondaryChip: aiPreview.secondaryChip,
+    hasLiveAdvice: aiPreview.hasLiveAdvice,
+    recommendedClub: aiPreview.recommendedClub,
+    riskLabel: aiPreview.riskLabel,
+  }
+}
+
+export function mergeHomeAiCaddie(current: HomeDashboard, update: AiCaddieUpdate | null): HomeDashboard {
+  if (!update) return current
+  return {
+    ...current,
     aiCaddie: {
-      ...dashboard.aiCaddie,
-      title: aiPreview.title,
-      message: aiPreview.message,
-      primaryChip: aiPreview.primaryChip,
-      secondaryChip: aiPreview.secondaryChip,
-      hasLiveAdvice: aiPreview.hasLiveAdvice,
-      recommendedClub: aiPreview.recommendedClub,
-      riskLabel: aiPreview.riskLabel,
+      ...current.aiCaddie,
+      ...update,
     },
   }
+}
+
+// 기존 호출부와의 호환성을 유지한다. 신규 홈 hook은 getHomeDashboardBase와 보강 함수를 사용한다.
+export async function getHomeDashboard(
+  clubId?: string | null,
+  userName?: string | null,
+  userId?: string | null,
+  home?: HomeCoordinate | null,
+  departureBufferMinutes = 40,
+): Promise<HomeDashboard> {
+  const { dashboard, raw } = await getHomeDashboardBase(clubId, userName, userId)
+  if (!raw) return dashboard
+
+  const [weatherDashboard, travelUpdates, aiUpdate] = await Promise.all([
+    getHomeWeatherDashboard(raw, userName, userId).catch(() => null),
+    getHomeTravelUpdates(raw, dashboard, home, departureBufferMinutes).catch(() => []),
+    getHomeAiCaddieUpdate(dashboard, userId).catch(() => null),
+  ])
+
+  let nextDashboard = dashboard
+  if (weatherDashboard) nextDashboard = mergeHomeWeather(nextDashboard, weatherDashboard)
+  nextDashboard = mergeHomeTravel(nextDashboard, travelUpdates)
+  return mergeHomeAiCaddie(nextDashboard, aiUpdate)
 }

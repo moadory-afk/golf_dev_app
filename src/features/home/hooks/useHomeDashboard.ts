@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getHomeDashboard } from '../services/homeService'
+import {
+  getHomeAiCaddieUpdate,
+  getHomeDashboardBase,
+  getHomeTravelUpdates,
+  getHomeWeatherDashboard,
+  mergeHomeAiCaddie,
+  mergeHomeTravel,
+  mergeHomeWeather,
+} from '../services/homeService'
 import { createEmptyHomeDashboard } from '../mappers/homeMapper'
 import type { HomeDashboard, HomeDashboardState } from '../types/home'
 import { supabase } from '../../../lib/supabase'
@@ -31,17 +39,45 @@ export function useHomeDashboard({ clubId, userName, userId, homeLatitude, homeL
     setLoading(true)
     setError(null)
 
-    getHomeDashboard(clubId, userName, userId, { latitude: homeLatitude, longitude: homeLongitude }, departureBufferMinutes)
-      .then((nextDashboard) => {
-        if (mounted) setDashboard(nextDashboard)
+    getHomeDashboardBase(clubId, userName, userId)
+      .then(({ dashboard: baseDashboard, raw }) => {
+        if (!mounted) return
+
+        // 일정·기록 등 기본 데이터가 준비되는 즉시 홈을 먼저 표시한다.
+        setDashboard(baseDashboard)
+        setLoading(false)
+
+        if (!raw) return
+
+        // 날씨, 이동시간, AI 캐디는 서로 기다리지 않고 독립적으로 보강한다.
+        void getHomeWeatherDashboard(raw, userName, userId)
+          .then((weatherDashboard) => {
+            if (mounted) setDashboard((current) => mergeHomeWeather(current, weatherDashboard))
+          })
+          .catch(() => undefined)
+
+        void getHomeTravelUpdates(
+          raw,
+          baseDashboard,
+          { latitude: homeLatitude, longitude: homeLongitude },
+          departureBufferMinutes,
+        )
+          .then((updates) => {
+            if (mounted) setDashboard((current) => mergeHomeTravel(current, updates))
+          })
+          .catch(() => undefined)
+
+        void getHomeAiCaddieUpdate(baseDashboard, userId)
+          .then((update) => {
+            if (mounted) setDashboard((current) => mergeHomeAiCaddie(current, update))
+          })
+          .catch(() => undefined)
       })
       .catch((nextError) => {
         if (!mounted) return
         setError(errorMessage(nextError))
         setDashboard(createEmptyHomeDashboard())
-      })
-      .finally(() => {
-        if (mounted) setLoading(false)
+        setLoading(false)
       })
 
     return () => {
