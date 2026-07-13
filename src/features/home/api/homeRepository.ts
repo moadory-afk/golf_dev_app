@@ -1,7 +1,45 @@
 import { supabase } from '../../../lib/supabase'
-import { getRounds, type SavedRound } from '../../../lib/store'
+import type { PlayerScore, SavedRound } from '../../../lib/store'
 import { getOpenWeatherForRound, type RoundWeather } from '../../../lib/weather'
 import type { HomeRoundStatus } from '../types/home'
+
+type HomeRoundSummaryRow = {
+  id: string
+  date: string
+  course_name: string
+  pars?: number[] | null
+  players?: PlayerScore[] | null
+  is_complete?: boolean | null
+}
+
+function mapHomeRoundSummary(row: HomeRoundSummaryRow): SavedRound {
+  return {
+    id: row.id,
+    date: row.date,
+    courseName: row.course_name,
+    pars: row.pars ?? [],
+    shinperioHoles: [],
+    players: row.players ?? [],
+    photoData: [],
+    isComplete: row.is_complete ?? false,
+  }
+}
+
+/**
+ * Home 통계에 필요한 최소 필드만 조회한다.
+ * photo_data, settlement, handicaps, hole_labels 등 상세 화면 전용 대용량 필드는 제외한다.
+ * 라운드 범위는 기존과 동일하게 유지해 평균/베스트/핸디캡 결과가 달라지지 않도록 한다.
+ */
+async function getHomeRoundSummaries(clubId: string): Promise<SavedRound[]> {
+  const { data, error } = await supabase
+    .from('rounds')
+    .select('id, date, course_name, pars, players, is_complete')
+    .eq('club_id', clubId)
+    .order('date', { ascending: false })
+
+  if (error) throw error
+  return ((data ?? []) as HomeRoundSummaryRow[]).map(mapHomeRoundSummary)
+}
 
 export type HomeScheduleRow = {
   id: string
@@ -205,7 +243,7 @@ export async function getHomeDashboardRawData(clubId: string): Promise<HomeDashb
           .select('id, golf_course_id, name')
           .in('id', layoutIds)
       : Promise.resolve({ data: [], error: null }),
-    getRounds(clubId),
+    getHomeRoundSummaries(clubId),
   ])
 
   if (groupResult.error) throw groupResult.error
