@@ -46,6 +46,8 @@ type PremiumHomeHeroSectionProps = {
   onEditRoundPress?: (round: HomeHeroRound) => void;
   heroImageSource?: ImageSourcePropType;
   topInset?: number;
+  activeIndex?: number;
+  onActiveIndexChange?: (index: number) => void;
 };
 
 export function PremiumHomeHeroSection({
@@ -66,9 +68,12 @@ export function PremiumHomeHeroSection({
   onEditRoundPress,
   heroImageSource,
   topInset = 0,
+  activeIndex: controlledActiveIndex,
+  onActiveIndexChange,
 }: PremiumHomeHeroSectionProps) {
   const { palette } = useSkin();
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [internalActiveIndex, setInternalActiveIndex] = useState(0);
+  const activeIndex = controlledActiveIndex ?? internalActiveIndex;
   const [measuredHeroWidth, setMeasuredHeroWidth] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
   const dotsScrollRef = useRef<ScrollView>(null);
@@ -92,7 +97,8 @@ export function PremiumHomeHeroSection({
   const updateActiveIndex = (nextIndex: number) => {
     const clampedIndex = Math.max(0, Math.min(nextIndex, totalCount - 1));
     activeIndexRef.current = clampedIndex;
-    setActiveIndex(clampedIndex);
+    setInternalActiveIndex(clampedIndex);
+    onActiveIndexChange?.(clampedIndex);
     return clampedIndex;
   };
 
@@ -112,6 +118,18 @@ export function PremiumHomeHeroSection({
     const targetX = Math.max(0, activeIndex * dotStep - dotStep * 2);
     dotsScrollRef.current?.scrollTo({ x: targetX, y: 0, animated: true });
   }, [activeIndex, totalCount]);
+
+  useEffect(() => {
+    const nextIndex = Math.max(0, Math.min(activeIndex, totalCount - 1));
+    activeIndexRef.current = nextIndex;
+    if (controlledActiveIndex !== undefined) {
+      scrollRef.current?.scrollTo({
+        x: nextIndex * heroWidth,
+        y: 0,
+        animated: true,
+      });
+    }
+  }, [activeIndex, controlledActiveIndex, heroWidth, totalCount]);
 
   const webDragResponder = useRef(
     PanResponder.create({
@@ -153,7 +171,8 @@ export function PremiumHomeHeroSection({
           Math.min(targetIndex, totalCountRef.current - 1),
         );
         activeIndexRef.current = clampedIndex;
-        setActiveIndex(clampedIndex);
+        setInternalActiveIndex(clampedIndex);
+    onActiveIndexChange?.(clampedIndex);
         scrollRef.current?.scrollTo({
           x: clampedIndex * width,
           y: 0,

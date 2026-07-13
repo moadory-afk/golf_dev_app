@@ -1,5 +1,5 @@
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createShadow, radius, spacing } from '../../../design/tokens'
 import { useSkin } from '../../../skins'
 import type { HomeFeedEvent } from '../engine'
@@ -28,6 +28,7 @@ type PremiumGogoCaddieCardProps = {
   onPress: () => void
   onFeedAction?: (feed: HomeFeedEvent) => void
   actions?: ConciergeAction[]
+  roundLabel?: string | null
 }
 
 function fallbackFeed({
@@ -69,6 +70,7 @@ export function PremiumGogoCaddieCard({
   onPress,
   onFeedAction,
   actions = [],
+  roundLabel,
 }: PremiumGogoCaddieCardProps) {
   const { palette } = useSkin()
   const [page, setPage] = useState(0)
@@ -90,6 +92,10 @@ export function PremiumGogoCaddieCard({
     const source = feeds.length > 0 ? feeds : feed ? [feed] : [fallback]
     return source.length > 0 ? source : [fallback]
   }, [feed, feeds, fallback])
+
+  useEffect(() => {
+    setPage(0)
+  }, [roundLabel, feedItems[0]?.id])
 
   const runFeedAction = (item: HomeFeedEvent) => {
     if (onFeedAction) onFeedAction(item)
@@ -117,6 +123,10 @@ export function PremiumGogoCaddieCard({
         </TouchableOpacity>
 
         <View style={styles.rightColumn} onLayout={(event) => setSlideWidth(event.nativeEvent.layout.width)}>
+          <View style={styles.roundHeader}>
+            <Text style={[styles.roundHeaderTitle, { color: palette.text }]}>🏌️ AI 캐디</Text>
+            {!!roundLabel && <Text style={[styles.roundHeaderMeta, { color: palette.muted }]} numberOfLines={1}>{roundLabel}</Text>}
+          </View>
           <ScrollView
             horizontal
             pagingEnabled
@@ -214,6 +224,9 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  roundHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 2 },
+  roundHeaderTitle: { fontSize: 13, lineHeight: 17, fontWeight: '900' },
+  roundHeaderMeta: { flex: 1, textAlign: 'right', fontSize: 10, lineHeight: 14, fontWeight: '800' },
   slide: {
     flex: 1,
     justifyContent: 'flex-start',

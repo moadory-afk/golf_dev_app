@@ -205,6 +205,7 @@ function resolveFeedNavigation(
   if (actionType === "open_groups" || actionType === "open_lotto")
     return nav.navigate("RoundSchedulePrototype");
   if (actionType === "open_notice") return nav.navigate("NoticePrototype");
+  if (actionType === "open_score_entry") return nav.navigate("ScoreCapture");
   if (actionType === "open_result")
     return nav.navigate("Main", { screen: "History" });
   return nav.navigate("RoundSchedulePrototype", { openCreate: true });
@@ -705,6 +706,7 @@ export default function HomeExperienceScreen() {
     departureBufferMinutes,
   });
   const [selectedHeroKey, setSelectedHeroKey] = useState<string | null>(null);
+  const [activeRoundIndex, setActiveRoundIndex] = useState(0);
   const [roundPopupMode, setRoundPopupMode] = useState<
     "groups" | "lotto" | "award" | null
   >(null);
@@ -799,10 +801,46 @@ export default function HomeExperienceScreen() {
     }, [club?.id, loadRecordCards, refresh]),
   );
 
+  const activeRound = dashboard.hero.rounds[activeRoundIndex] ?? null;
+  const isCreateRoundCardActive =
+    club?.role === "admin" &&
+    dashboard.hero.rounds.length > 0 &&
+    activeRoundIndex === dashboard.hero.rounds.length;
+  const createRoundFeed = useMemo(() => ({
+    id: "admin-create-round",
+    type: "empty" as const,
+    priority: 10,
+    icon: "➕",
+    label: "AI 캐디",
+    title: "🏌️ AI 캐디",
+    message: "새로운 라운드를 등록해 보세요.\n\n일정과 골프장 정보를 입력하면\n캐디가 준비를 시작합니다.",
+    ctaLabel: "라운드 등록",
+    actionType: "create_round" as const,
+    tone: "green" as const,
+  }), []);
+  const activeRoundFeeds = activeRound
+    ? (dashboard.feedEventsByRoundId[activeRound.id] ?? [])
+    : isCreateRoundCardActive
+      ? [createRoundFeed]
+      : dashboard.feedEvents;
+  const activeFeed = activeRoundFeeds[0] ?? dashboard.feed;
+  const activeRoundLabel = activeRound
+    ? `${activeRound.courseName} · ${activeRound.dday} · ${activeRound.teeTime}`
+    : null;
+
+  useEffect(() => {
+    const maxRoundIndex = Math.max(
+      0,
+      dashboard.hero.rounds.length - 1 +
+        (club?.role === "admin" && dashboard.hero.rounds.length > 0 ? 1 : 0),
+    );
+    setActiveRoundIndex((current) => Math.min(current, maxRoundIndex));
+  }, [club?.role, dashboard.hero.rounds.length]);
+
   const activeHeroImageSource = selectedHeroKey
     ? getCourseHeroAssetByKey(selectedHeroKey).source
     : getCourseHeroImageSource(
-        dashboard.hero.rounds[0]?.courseName ?? dashboard.hero.courseName,
+        activeRound?.courseName ?? dashboard.hero.courseName,
       );
 
   const openRoundPopup = useCallback(
@@ -874,19 +912,21 @@ export default function HomeExperienceScreen() {
   );
 
   const handleCaddieFeedAction = useCallback(
-    (actionType: string) => {
-      const round = dashboard.upcomingRound;
-      if (actionType === "open_groups" && round) {
+    (feed: { actionType: string; scheduleId?: string }) => {
+      const round = feed.scheduleId
+        ? dashboard.hero.rounds.find((item) => item.id === feed.scheduleId) ?? activeRound
+        : activeRound;
+      if (feed.actionType === "open_groups" && round) {
         openRoundPopup(round, "groups");
         return;
       }
-      if (actionType === "open_lotto" && round) {
+      if (feed.actionType === "open_lotto" && round) {
         openRoundPopup(round, "lotto");
         return;
       }
-      resolveFeedNavigation(nav, actionType, round);
+      resolveFeedNavigation(nav, feed.actionType, round);
     },
-    [dashboard.upcomingRound, nav, openRoundPopup],
+    [activeRound, dashboard.hero.rounds, nav, openRoundPopup],
   );
 
   const togglePopupLottoHole = useCallback((parKey: keyof LottoSelection, hole: number) => {
@@ -1132,6 +1172,10 @@ export default function HomeExperienceScreen() {
                   }
                   heroImageSource={activeHeroImageSource}
                   topInset={insets.top}
+                  activeIndex={activeRoundIndex}
+                  onActiveIndexChange={(index) => {
+                    setActiveRoundIndex(index);
+                  }}
                 />
               </PremiumHomeMotion>
             ),
@@ -1144,14 +1188,15 @@ export default function HomeExperienceScreen() {
               <PremiumHomeMotion index={2}>
                 <PremiumGogoCaddieCard
                   userName={displayName}
-                  courseName={dashboard.aiCaddie.courseName}
-                  teeTime={dashboard.aiCaddie.teeTime}
+                  courseName={activeRound?.courseName ?? dashboard.aiCaddie.courseName}
+                  teeTime={activeRound?.teeTime ?? dashboard.aiCaddie.teeTime}
                   averageScore={dashboard.aiCaddie.averageScore}
-                  hasUpcomingRound={dashboard.aiCaddie.hasUpcomingRound}
-                  feed={dashboard.feed}
-                  feeds={dashboard.feedEvents}
-                  onFeedAction={(feed) => handleCaddieFeedAction(feed.actionType)}
-                  onPress={() => handleCaddieFeedAction(dashboard.feed.actionType)}
+                  hasUpcomingRound={!!activeRound}
+                  feed={activeFeed}
+                  feeds={activeRoundFeeds}
+                  roundLabel={activeRoundLabel}
+                  onFeedAction={handleCaddieFeedAction}
+                  onPress={() => handleCaddieFeedAction(activeFeed)}
                 />
               </PremiumHomeMotion>
             ),

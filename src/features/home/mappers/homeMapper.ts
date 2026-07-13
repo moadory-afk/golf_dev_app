@@ -1,7 +1,7 @@
 import { computeHandicaps, playerTotal, totalPar, type SavedRound } from '../../../lib/store'
 import type { PremiumRecentStatItem } from '../components'
 import type { HomeCourseRow, HomeDashboardRawData, HomeLayoutRow, HomeScheduleGroupMemberRow, HomeScheduleGroupRow, HomeScheduleRow } from '../api/homeRepository'
-import { buildHomeFeedEvents, selectPrimaryHomeFeedEvent } from '../engine'
+import { buildHomeFeedEvents, buildRoundFeedEvents, selectPrimaryHomeFeedEvent } from '../engine'
 import type { HomeDashboard, HomeHeroRound, HomeRecentRound, HomeRoundStatus, HomeUpcomingRound } from '../types/home'
 
 function formatRoundDate(date?: string) {
@@ -355,6 +355,7 @@ export function createEmptyHomeDashboard(): HomeDashboard {
     },
     feed: selectPrimaryHomeFeedEvent(feedEvents),
     feedEvents,
+    feedEventsByRoundId: {},
     stats,
   }
 }
@@ -365,11 +366,17 @@ export function mapHomeDashboard(raw: HomeDashboardRawData, userName?: string | 
   const stats = mapStats(raw.rounds, userName)
   const firstHeroRound = heroRounds[0]
 
-  const feedEvents = buildHomeFeedEvents({
-    upcomingRound,
-    recentRounds: stats.recentRounds,
-    stats: stats.items,
-  })
+  const feedEventsByRoundId = heroRounds.reduce<Record<string, ReturnType<typeof buildRoundFeedEvents>>>((acc, round) => {
+    acc[round.id] = buildRoundFeedEvents(round)
+    return acc
+  }, {})
+  const feedEvents = upcomingRound
+    ? (feedEventsByRoundId[upcomingRound.id] ?? buildRoundFeedEvents(upcomingRound))
+    : buildHomeFeedEvents({
+        upcomingRound: null,
+        recentRounds: stats.recentRounds,
+        stats: stats.items,
+      })
 
   return {
     hero: {
@@ -393,6 +400,7 @@ export function mapHomeDashboard(raw: HomeDashboardRawData, userName?: string | 
     },
     feed: selectPrimaryHomeFeedEvent(feedEvents),
     feedEvents,
+    feedEventsByRoundId,
     stats,
   }
 }

@@ -236,7 +236,6 @@ export default function RoundSchedulePrototypeScreen() {
 
   const sortedItems = useMemo(
     () => items
-      .filter((item) => item.status !== 'closed')
       .sort((a, b) => `${a.date} ${a.time || '99:99'}`.localeCompare(`${b.date} ${b.time || '99:99'}`)),
     [items]
   )
@@ -280,6 +279,8 @@ export default function RoundSchedulePrototypeScreen() {
     () => draft.groups.find((group) => group.id === scoreGroupId) ?? null,
     [draft.groups, scoreGroupId],
   )
+  const groupingComplete = draft.status === 'closed' || draft.status === 'finished'
+  const scoreComplete = draft.status === 'finished'
 
   function attendanceColor(status: RoundAttendanceLabel) {
     if (status === '참석') return C.green
@@ -821,6 +822,69 @@ export default function RoundSchedulePrototypeScreen() {
     }
   }
 
+  async function saveDraftStatus(nextStatus: RoundScheduleStatus) {
+    if (!club?.id) return
+    if (!draft.date.trim()) return Alert.alert('확인', '라운드 날짜를 입력해 주세요.')
+
+    setSaving(true)
+    try {
+      const next = await upsertRoundSchedule(club.id, {
+        id: draft.id,
+        date: draft.date,
+        courseId: draft.courseId,
+        courseName: draft.courseName?.trim() || undefined,
+        layoutId: draft.layoutId,
+        layoutName: draft.layoutName,
+        status: nextStatus,
+        attendanceMode: draft.attendanceMode,
+        note: draft.note.trim(),
+        moneyGroupIds,
+        moneyConfig: {
+          strokeFee: parseInt(strokeFee, 10) || 3000,
+          birdieBonus,
+          baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
+        },
+        awardConfig: { count: awardCount, items: fillToCount(selectedAwardItems, awardCount) },
+        groups: draft.groups.map((group, index) => ({
+          ...group,
+          name: group.name || `${index + 1}조`,
+          time: group.time.trim(),
+        })),
+      })
+      const savedDraft = draft.id
+        ? next.find((item) => item.id === draft.id)
+        : [...next]
+            .filter((item) => item.date === draft.date && item.status === nextStatus)
+            .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
+      if (savedDraft) {
+        setDraft((current) => ({
+          ...current,
+          id: savedDraft.id,
+          status: savedDraft.status,
+          groups: savedDraft.groups.length > 0 ? savedDraft.groups : current.groups,
+        }))
+      } else {
+        setDraft((current) => ({ ...current, status: nextStatus }))
+      }
+      setItems(next)
+      notifyHomeDashboardChanged(club.id)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleToggleGroupingComplete() {
+    await saveDraftStatus(groupingComplete ? 'planned' : 'closed')
+  }
+
+  async function handleToggleScoreComplete() {
+    if (scoreComplete) {
+      await saveDraftStatus(groupingComplete ? 'closed' : 'planned')
+      return
+    }
+    await handleFinishRound()
+  }
+
   async function handleDelete() {
     if (!club?.id || !draft.id) {
       closeEditor()
@@ -926,43 +990,6 @@ export default function RoundSchedulePrototypeScreen() {
     }
   }
 
-  async function handleConfirmRound() {
-    if (!club?.id) return
-    if (!draft.date.trim()) return Alert.alert('확인', '라운드 날짜를 입력해 주세요.')
-
-    setSaving(true)
-    try {
-      const next = await upsertRoundSchedule(club.id, {
-        id: draft.id,
-        date: draft.date,
-        courseId: draft.courseId,
-        courseName: draft.courseName?.trim() || undefined,
-        layoutId: draft.layoutId,
-        layoutName: draft.layoutName,
-        status: 'closed',
-        attendanceMode: draft.attendanceMode,
-        note: draft.note.trim(),
-        moneyGroupIds,
-        moneyConfig: {
-          strokeFee: parseInt(strokeFee, 10) || 3000,
-          birdieBonus,
-          baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
-        },
-        awardConfig: { count: awardCount, items: fillToCount(selectedAwardItems, awardCount) },
-        groups: draft.groups.map((group, index) => ({
-          ...group,
-          name: group.name || `${index + 1}조`,
-          time: group.time.trim(),
-        })),
-      })
-      setItems(next)
-      notifyHomeDashboardChanged(club.id)
-      closeEditor()
-    } finally {
-      setSaving(false)
-    }
-  }
-
   return (
     <View style={[s.screen, modalOnly && s.modalOnlyScreen]}>
       {!modalOnly ? (
@@ -1016,9 +1043,19 @@ export default function RoundSchedulePrototypeScreen() {
           <View style={s.modalSheet}>
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>{draft.id ? '라운드 일정 수정' : '라운드 일정 등록'}</Text>
-              <TouchableOpacity style={s.closeButton} onPress={closeEditor} activeOpacity={0.8}>
-                <Text style={s.closeButtonText}>닫기</Text>
-              </TouchableOpacity>
+              <View style={s.modalHeaderActions}>
+                {draft.id ? (
+                  <TouchableOpacity style={[s.headerActionButton, s.headerDeleteButton]} onPress={handleDelete} disabled={saving} activeOpacity={0.8}>
+                    <Text style={s.headerDeleteText}>삭제</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity style={[s.headerActionButton, s.headerSaveButton]} onPress={handleSave} disabled={saving} activeOpacity={0.8}>
+                  <Text style={s.headerSaveText}>{saving ? '저장 중' : '저장'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.closeButton} onPress={closeEditor} activeOpacity={0.8}>
+                  <Text style={s.closeButtonText}>닫기</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={s.editorTabRow}>
@@ -1203,65 +1240,81 @@ export default function RoundSchedulePrototypeScreen() {
               </View>
             </ScrollView>
 
-            <View style={s.footer}>
-              {draft.id ? (
-                <TouchableOpacity style={s.deleteButton} onPress={handleDelete} disabled={saving} activeOpacity={0.86}>
-                  <Text style={s.deleteButtonText}>삭제</Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={{ flex: 1 }} />
-              )}
-              <TouchableOpacity style={s.saveButton} onPress={handleSave} disabled={saving} activeOpacity={0.86}>
-                <Text style={s.saveButtonText}>{saving ? '저장 중...' : '저장'}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.finishButton} onPress={handleFinishRound} disabled={saving} activeOpacity={0.86}>
-                <Text style={s.finishButtonText}>라운드 종료</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.confirmButton} onPress={handleConfirmRound} disabled={saving} activeOpacity={0.86}>
-                <Text style={s.confirmButtonText}>확정</Text>
+            <View style={s.statusFooter}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.statusToggleTitle}>조편성 {groupingComplete ? '완료' : '미완료'}</Text>
+                <Text style={s.statusToggleDesc}>홈 캐디카드의 조편성 안내에 반영됩니다.</Text>
+              </View>
+              <TouchableOpacity
+                style={[s.statusToggleButton, groupingComplete && s.statusToggleButtonActive]}
+                onPress={handleToggleGroupingComplete}
+                disabled={saving}
+                activeOpacity={0.86}
+              >
+                <Text style={[s.statusToggleText, groupingComplete && s.statusToggleTextActive]}>
+                  {groupingComplete ? '완료' : '미완료'}
+                </Text>
               </TouchableOpacity>
             </View>
               </>
             ) : editorTab === 'score' ? (
-              <ScrollView contentContainerStyle={s.scoreBody}>
-                {draft.groups.some((group) => group.members.length > 0) ? (
-                  draft.groups.map((group, index) => {
-                    const disabled = group.members.length === 0
-                    return (
-                      <TouchableOpacity
-                        key={group.id}
-                        style={[s.scoreGroupCard, disabled && s.scoreGroupCardDisabled]}
-                        onPress={() => {
-                          if (disabled) return
-                          openScoreUpload(group.id)
-                        }}
-                        disabled={disabled}
-                        activeOpacity={0.86}
-                      >
-                        <View style={s.scoreGroupIcon}>
-                          <Icon name="camera" size={18} color={C.green} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={s.scoreGroupTitle}>{group.name || `${index + 1}조`}</Text>
-                          <Text style={s.scoreGroupMeta}>
-                            {group.time?.trim() ? group.time : '티오프 미정'} · {[group.frontLayoutName ?? '전반 미정', group.backLayoutName ?? '후반 미정', draft.layoutName].filter(Boolean).join(' / ')}
-                          </Text>
-                          <Text style={s.scoreGroupMembers}>
-                            {group.members.length > 0 ? group.members.map((member) => member.name).join(', ') : '배정된 회원 없음'}
-                          </Text>
-                        </View>
-                        <Icon name="chevronRight" size={16} color={disabled ? C.border : C.muted} />
-                      </TouchableOpacity>
-                    )
-                  })
-                ) : (
-                  <View style={s.editorPlaceholder}>
-                    <Icon name="camera" size={28} color={C.green} />
-                    <Text style={s.editorPlaceholderTitle}>조편성 후 입력</Text>
-                    <Text style={s.editorPlaceholderDesc}>조별 멤버를 배정하면 조별 스코어카드 사진 업로드를 시작할 수 있습니다.</Text>
+              <>
+                <ScrollView contentContainerStyle={s.scoreBody}>
+                  {draft.groups.some((group) => group.members.length > 0) ? (
+                    draft.groups.map((group, index) => {
+                      const disabled = group.members.length === 0
+                      return (
+                        <TouchableOpacity
+                          key={group.id}
+                          style={[s.scoreGroupCard, disabled && s.scoreGroupCardDisabled]}
+                          onPress={() => {
+                            if (disabled) return
+                            openScoreUpload(group.id)
+                          }}
+                          disabled={disabled}
+                          activeOpacity={0.86}
+                        >
+                          <View style={s.scoreGroupIcon}>
+                            <Icon name="camera" size={18} color={C.green} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.scoreGroupTitle}>{group.name || `${index + 1}조`}</Text>
+                            <Text style={s.scoreGroupMeta}>
+                              {group.time?.trim() ? group.time : '티오프 미정'} · {[group.frontLayoutName ?? '전반 미정', group.backLayoutName ?? '후반 미정', draft.layoutName].filter(Boolean).join(' / ')}
+                            </Text>
+                            <Text style={s.scoreGroupMembers}>
+                              {group.members.length > 0 ? group.members.map((member) => member.name).join(', ') : '배정된 회원 없음'}
+                            </Text>
+                          </View>
+                          <Icon name="chevronRight" size={16} color={disabled ? C.border : C.muted} />
+                        </TouchableOpacity>
+                      )
+                    })
+                  ) : (
+                    <View style={s.editorPlaceholder}>
+                      <Icon name="camera" size={28} color={C.green} />
+                      <Text style={s.editorPlaceholderTitle}>조편성 후 입력</Text>
+                      <Text style={s.editorPlaceholderDesc}>조별 멤버를 배정하면 조별 스코어카드 사진 업로드를 시작할 수 있습니다.</Text>
+                    </View>
+                  )}
+                </ScrollView>
+                <View style={s.statusFooter}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.statusToggleTitle}>경기기록 {scoreComplete ? '완료' : '미완료'}</Text>
+                    <Text style={s.statusToggleDesc}>홈 캐디카드의 결과 입력 안내에 반영됩니다.</Text>
                   </View>
-                )}
-              </ScrollView>
+                  <TouchableOpacity
+                    style={[s.statusToggleButton, scoreComplete && s.statusToggleButtonActive]}
+                    onPress={handleToggleScoreComplete}
+                    disabled={saving}
+                    activeOpacity={0.86}
+                  >
+                    <Text style={[s.statusToggleText, scoreComplete && s.statusToggleTextActive]}>
+                      {scoreComplete ? '완료' : '미완료'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
             ) : editorTab === 'award' ? (
               <ScrollView contentContainerStyle={s.awardBody}>
                 <Text style={s.fieldLabel}>시상 인원</Text>
@@ -1689,6 +1742,18 @@ const s = StyleSheet.create({
   },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   modalTitle: { fontSize: 24, fontWeight: '900', color: C.text },
+  modalHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  headerActionButton: {
+    minHeight: 34,
+    borderRadius: 17,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerDeleteButton: { backgroundColor: '#f8e9e6' },
+  headerSaveButton: { backgroundColor: C.accent },
+  headerDeleteText: { fontSize: 13, fontWeight: '900', color: '#d65b4a' },
+  headerSaveText: { fontSize: 13, fontWeight: '900', color: C.accentText },
   editorTabRow: {
     flexDirection: 'row',
     gap: 8,
@@ -1790,6 +1855,33 @@ const s = StyleSheet.create({
     marginTop: 12,
   },
   scoreSaveButtonText: { fontSize: 14, fontWeight: '900', color: C.accentText },
+  statusFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: '#f8fbf8',
+    padding: 14,
+  },
+  statusToggleTitle: { fontSize: 15, fontWeight: '900', color: C.text },
+  statusToggleDesc: { fontSize: 12, lineHeight: 18, fontWeight: '700', color: C.muted, marginTop: 3 },
+  statusToggleButton: {
+    minWidth: 82,
+    minHeight: 38,
+    borderRadius: 19,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+  statusToggleButtonActive: { backgroundColor: C.green, borderColor: C.green },
+  statusToggleText: { fontSize: 13, fontWeight: '900', color: C.muted },
+  statusToggleTextActive: { color: '#fff' },
   awardBody: { flexGrow: 1, gap: 14, paddingBottom: 20 },
   awardChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   awardChip: {

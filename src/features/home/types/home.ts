@@ -80,6 +80,7 @@ export type HomeDashboard = {
   aiCaddie: HomeAiCaddie
   feed: HomeFeedEvent
   feedEvents: HomeFeedEvent[]
+  feedEventsByRoundId: Record<string, HomeFeedEvent[]>
   stats: HomeStats
 }
 
