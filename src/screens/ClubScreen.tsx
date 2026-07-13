@@ -830,6 +830,7 @@ export default function ClubScreen() {
       {lottoAwardOpen && club && (
         <LottoAwardConfigModal
           config={lottoAwardConfig ?? DEFAULT_LOTTO_AWARD_CONFIG}
+          carryoverAmount={currentLottoCarryoverAmount}
           onClose={() => setLottoAwardOpen(false)}
           onSave={async (config) => {
             await saveClubLottoAwardConfig(club.id, config);
@@ -1981,10 +1982,12 @@ function LottoAwardGuideModal({
 
 function LottoAwardConfigModal({
   config,
+  carryoverAmount,
   onClose,
   onSave,
 }: {
   config: LottoAwardConfig;
+  carryoverAmount: number;
   onClose: () => void;
   onSave: (config: LottoAwardConfig) => Promise<void>;
 }) {
@@ -2011,7 +2014,7 @@ function LottoAwardConfigModal({
         },
         rollover,
         rolloverIncrement: parseMoney(rolloverIncrement),
-        carryoverAmount: config.carryoverAmount ?? 0,
+        carryoverAmount,
       });
     } catch (error) {
       Alert.alert(
@@ -2038,7 +2041,7 @@ function LottoAwardConfigModal({
             </TouchableOpacity>
           </View>
           <Text style={s.lottoAwardSummary}>
-            현재 누적 당첨금 {formatWon(config.carryoverAmount ?? 0)}
+            현재 누적 당첨금 {formatWon(carryoverAmount)}
           </Text>
           {(
             [

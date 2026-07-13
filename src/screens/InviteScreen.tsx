@@ -1,6 +1,6 @@
 import {
   View, Text, TouchableOpacity, StyleSheet, ActivityIndicator,
-  TextInput, Alert, KeyboardAvoidingView, Platform, ScrollView,
+  TextInput, Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, Share,
 } from 'react-native'
 import { useState, useEffect } from 'react'
 import type { Session } from '@supabase/supabase-js'
@@ -9,6 +9,8 @@ import { joinClub, getClubByInviteCode, ensureProfile } from '../lib/store'
 import { authEmailsForName, nameToAuthEmail } from '../lib/authEmail'
 import { C } from '../theme'
 import { Icon } from '../components/Icon'
+
+const APP_URL = 'https://golf-seven-psi.vercel.app'
 
 interface Props {
   joinCode: string
@@ -27,6 +29,7 @@ export default function InviteScreen({ joinCode, onJoined, onDismiss }: Props) {
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
   const [authLoading, setAuthLoading] = useState(false)
+  const [showInstallGuide, setShowInstallGuide] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
@@ -123,10 +126,31 @@ export default function InviteScreen({ joinCode, onJoined, onDismiss }: Props) {
       if (data.user) {
         try { await ensureProfile(data.user.id, name.trim()) } catch { /* 무시 */ }
       }
+      setShowInstallGuide(true)
     } finally {
       setAuthLoading(false)
     }
   }
+
+  async function shareInstallLink() {
+    const message = [
+      'GogoPar 앱 설치 안내',
+      '',
+      club ? `${club.name} 클럽에 참여하려면 아래 링크를 열어주세요.` : '아래 링크를 열고 홈 화면에 추가해 사용하세요.',
+      APP_URL,
+    ].join('\n')
+    try {
+      await Share.share({ title: 'GogoPar 앱 설치 안내', message })
+    } catch {
+      Alert.alert('공유 실패', message)
+    }
+  }
+
+  const installSteps = Platform.OS === 'ios'
+    ? ['Safari에서 접속', '공유 버튼 선택', '홈 화면에 추가']
+    : Platform.OS === 'android'
+      ? ['Chrome에서 접속', '메뉴 선택', '앱 설치 또는 홈 화면에 추가']
+      : ['모바일 브라우저에서 접속', '브라우저 메뉴 선택', '홈 화면에 추가']
 
   return (
     <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -150,7 +174,35 @@ export default function InviteScreen({ joinCode, onJoined, onDismiss }: Props) {
         </View>
 
         {/* 로그인 상태 → 수락 버튼 */}
-        {session ? (
+        {showInstallGuide ? (
+          <View style={s.section}>
+            <Text style={s.installTitle}>회원가입이 완료되었습니다</Text>
+            <Text style={s.sectionTitle}>홈 화면에 추가하면 앱처럼 사용할 수 있습니다.</Text>
+            {installSteps.map((step, index) => (
+              <View key={step} style={s.stepRow}>
+                <Text style={s.stepNo}>{index + 1}</Text>
+                <Text style={s.stepText}>{step}</Text>
+              </View>
+            ))}
+            <TouchableOpacity
+              style={[s.btnPrimary, joining && { opacity: 0.6 }, { marginTop: 14 }]}
+              onPress={handleJoin}
+              disabled={joining}
+            >
+              {joining
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={s.btnPrimaryText}>클럽 참여 계속하기</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={s.btnSecondaryInstall} onPress={shareInstallLink}>
+              <Text style={s.btnSecondaryInstallText}>설치 링크 공유하기</Text>
+            </TouchableOpacity>
+            {Platform.OS === 'web' ? (
+              <TouchableOpacity style={s.btnGhost} onPress={() => Linking.openURL(APP_URL)}>
+                <Text style={s.btnGhostText}>설치 페이지 열기</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : session ? (
           <View style={s.section}>
             <Text style={s.sectionTitle}>
               {session.user.user_metadata?.name ?? session.user.email}님, 반갑습니다!
@@ -265,4 +317,10 @@ const s = StyleSheet.create({
   googleBtnText: { fontSize: 14, fontWeight: '800', color: C.text },
   kakaoBtn: { minHeight: 44, borderRadius: 12, backgroundColor: '#FEE500', alignItems: 'center', justifyContent: 'center' },
   kakaoBtnText: { fontSize: 14, fontWeight: '900', color: '#181600' },
+  installTitle: { fontSize: 20, lineHeight: 25, fontWeight: '900', color: C.text, textAlign: 'center', marginBottom: 8 },
+  stepRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: C.border },
+  stepNo: { width: 26, height: 26, borderRadius: 13, backgroundColor: C.greenLight, color: C.green, fontWeight: '900', textAlign: 'center', textAlignVertical: 'center' },
+  stepText: { flex: 1, fontSize: 14, fontWeight: '800', color: C.text },
+  btnSecondaryInstall: { borderWidth: 1.5, borderColor: C.green, borderRadius: 50, paddingVertical: 13, alignItems: 'center', marginTop: 10 },
+  btnSecondaryInstallText: { color: C.green, fontWeight: '800', fontSize: 15 },
 })
