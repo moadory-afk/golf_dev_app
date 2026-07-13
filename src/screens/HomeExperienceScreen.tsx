@@ -691,6 +691,7 @@ export default function HomeExperienceScreen() {
   const [recordAwardRows, setRecordAwardRows] = useState<AwardDetailRow[]>([]);
   const [recordCardsReady, setRecordCardsReady] = useState(false);
   const [recordDetailLoading, setRecordDetailLoading] = useState(false);
+  const focusedClubIdRef = useRef<string | null | undefined>(undefined);
 
   const loadRecordCards = useCallback(async () => {
     setRecordCardsReady(false);
@@ -717,8 +718,17 @@ export default function HomeExperienceScreen() {
   useFocusEffect(
     useCallback(() => {
       let mounted = true;
-      refresh();
-      loadRecordCards();
+      const currentClubId = club?.id ?? null;
+
+      // 최초 진입과 클럽 변경 시 데이터 로딩은 각 hook/effect에 맡긴다.
+      // 같은 클럽의 홈으로 다시 돌아온 경우에만 화면 데이터를 새로고침한다.
+      if (focusedClubIdRef.current === currentClubId) {
+        refresh();
+        void loadRecordCards();
+      } else {
+        focusedClubIdRef.current = currentClubId;
+      }
+
       AsyncStorage.getItem(COURSE_HERO_STORAGE_KEY)
         .then((value) => {
           if (mounted) setSelectedHeroKey(value);
@@ -729,7 +739,7 @@ export default function HomeExperienceScreen() {
       return () => {
         mounted = false;
       };
-    }, [loadRecordCards, refresh]),
+    }, [club?.id, loadRecordCards, refresh]),
   );
 
   const activeHeroImageSource = selectedHeroKey
