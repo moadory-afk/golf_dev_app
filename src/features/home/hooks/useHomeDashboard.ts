@@ -13,6 +13,13 @@ import type { HomeDashboard, HomeDashboardState } from "../types/home";
 import { supabase } from "../../../lib/supabase";
 import { subscribeHomeDashboardChanged } from "../../../lib/homeDashboardEvents";
 
+let homeDashboardChannelSequence = 0;
+
+function createHomeDashboardChannelId() {
+  homeDashboardChannelSequence += 1;
+  return `${Date.now().toString(36)}-${homeDashboardChannelSequence.toString(36)}`;
+}
+
 type UseHomeDashboardParams = {
   clubId?: string | null;
   userName?: string | null;
@@ -43,6 +50,11 @@ export function useHomeDashboard({
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const realtimeChannelIdRef = useRef<string | null>(null);
+
+  if (!realtimeChannelIdRef.current) {
+    realtimeChannelIdRef.current = createHomeDashboardChannelId();
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -128,7 +140,7 @@ export function useHomeDashboard({
     // 한 번의 일정 저장 과정에서 일정/조/조원 이벤트가 연속 발생하므로
     // 현재 클럽 이벤트만 구독하고 400ms 동안 하나의 새로고침으로 합친다.
     const channel = supabase
-      .channel(`home-dashboard:${clubId}`)
+      .channel(`home-dashboard:${clubId}:${realtimeChannelIdRef.current}`)
       .on(
         "postgres_changes",
         {
