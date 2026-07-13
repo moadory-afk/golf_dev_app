@@ -4,6 +4,23 @@ import type { HomeCourseRow, HomeDashboardRawData, HomeLayoutRow, HomeScheduleGr
 import { buildHomeFeedEvents, buildRoundFeedEvents, selectPrimaryHomeFeedEvent } from '../engine'
 import type { HomeDashboard, HomeHeroRound, HomeRecentRound, HomeRoundStatus, HomeUpcomingRound } from '../types/home'
 
+
+function normalizeHomeDashboardRawData(raw: HomeDashboardRawData): HomeDashboardRawData {
+  return {
+    ...raw,
+    schedules: Array.isArray(raw.schedules) ? raw.schedules : [],
+    groups: Array.isArray(raw.groups) ? raw.groups : [],
+    members: Array.isArray(raw.members) ? raw.members : [],
+    courses: Array.isArray(raw.courses) ? raw.courses : [],
+    layouts: Array.isArray(raw.layouts) ? raw.layouts : [],
+    courseSeasonImages: Array.isArray(raw.courseSeasonImages) ? raw.courseSeasonImages : [],
+    attendances: Array.isArray(raw.attendances) ? raw.attendances : [],
+    rounds: Array.isArray(raw.rounds) ? raw.rounds : [],
+    weatherByScheduleId: raw.weatherByScheduleId ?? {},
+    weatherByCourseId: raw.weatherByCourseId ?? {},
+  }
+}
+
 function formatRoundDate(date?: string) {
   if (!date) return '일정 미정'
   const normalized = date.includes('T') ? date.slice(0, 10) : date
@@ -216,6 +233,7 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow, 
   const locationParts = [course?.region, layoutName ? `${layoutName} 코스` : undefined].filter(Boolean)
 
   const weather = raw.weatherByScheduleId[schedule.id] ?? (course?.id ? raw.weatherByCourseId[course.id] : undefined)
+  const attendanceStatus = raw.attendances.find((item) => item.scheduleId === schedule.id)?.status ?? "미정"
 
   return {
     id: schedule.id,
@@ -231,6 +249,7 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow, 
     memberCount: countMembers(groups, members),
     groupCount: groups.length,
     memberNames: sameGroupMemberNames(groups, members, userId),
+    attendanceStatus,
     note: schedule.note ?? undefined,
     weatherText: weather?.weatherText ?? '날씨 준비중',
     temperature: weather?.temperature ?? '--°',
@@ -361,9 +380,10 @@ export function createEmptyHomeDashboard(): HomeDashboard {
 }
 
 export function mapHomeDashboard(raw: HomeDashboardRawData, userName?: string | null, userId?: string | null): HomeDashboard {
-  const heroRounds = mapHeroRounds(raw, userId)
-  const upcomingRound = mapUpcomingRound(raw, userId)
-  const stats = mapStats(raw.rounds, userName)
+  const safeRaw = normalizeHomeDashboardRawData(raw)
+  const heroRounds = mapHeroRounds(safeRaw, userId)
+  const upcomingRound = mapUpcomingRound(safeRaw, userId)
+  const stats = mapStats(safeRaw.rounds, userName)
   const firstHeroRound = heroRounds[0]
 
   const feedEventsByRoundId = heroRounds.reduce<Record<string, ReturnType<typeof buildRoundFeedEvents>>>((acc, round) => {

@@ -2,7 +2,7 @@ import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import { useEffect, useMemo, useState } from 'react'
 import { createShadow, radius, spacing } from '../../../design/tokens'
 import { useSkin } from '../../../skins'
-import type { HomeFeedEvent } from '../engine'
+import type { HomeFeedAction, HomeFeedEvent } from '../engine'
 
 const caddieCharacter = require('../../../../assets/caddy.png')
 
@@ -26,7 +26,7 @@ type PremiumGogoCaddieCardProps = {
   feed?: HomeFeedEvent
   feeds?: HomeFeedEvent[]
   onPress: () => void
-  onFeedAction?: (feed: HomeFeedEvent) => void
+  onFeedAction?: (feed: HomeFeedEvent, action?: HomeFeedAction) => void
   actions?: ConciergeAction[]
   roundLabel?: string | null
 }
@@ -97,8 +97,8 @@ export function PremiumGogoCaddieCard({
     setPage(0)
   }, [roundLabel, feedItems[0]?.id])
 
-  const runFeedAction = (item: HomeFeedEvent) => {
-    if (onFeedAction) onFeedAction(item)
+  const runFeedAction = (item: HomeFeedEvent, action?: HomeFeedAction) => {
+    if (onFeedAction) onFeedAction(item, action)
     else onPress()
   }
   const syncPageFromOffset = (offsetX: number) => {
@@ -123,10 +123,6 @@ export function PremiumGogoCaddieCard({
         </TouchableOpacity>
 
         <View style={styles.rightColumn} onLayout={(event) => setSlideWidth(event.nativeEvent.layout.width)}>
-          <View style={styles.roundHeader}>
-            <Text style={[styles.roundHeaderTitle, { color: palette.text }]}>🏌️ AI 캐디</Text>
-            {!!roundLabel && <Text style={[styles.roundHeaderMeta, { color: palette.muted }]} numberOfLines={1}>{roundLabel}</Text>}
-          </View>
           <ScrollView
             horizontal
             pagingEnabled
@@ -142,18 +138,41 @@ export function PremiumGogoCaddieCard({
                 <TouchableOpacity activeOpacity={0.9} onPress={() => runFeedAction(item)} style={styles.content}>
                   <View style={styles.messageRow}>
                     <Text style={styles.messageIcon}>{item.icon}</Text>
-                    <Text style={[styles.message, { color: palette.muted }]} numberOfLines={5}>{item.message}</Text>
+                    <Text style={[styles.message, { color: palette.text }]} numberOfLines={5}>{item.message}</Text>
                   </View>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  activeOpacity={0.86}
-                  onPress={() => runFeedAction(item)}
-                  style={[styles.primaryAction, compact && styles.primaryActionCompact, { backgroundColor: palette.green }]}
-                >
-                  <Text style={styles.primaryActionText}>{item.ctaLabel}</Text>
-                  <Text style={styles.primaryActionArrow}>›</Text>
-                </TouchableOpacity>
+                {item.actions?.length ? (
+                  <View style={styles.choiceActionRow}>
+                    {item.actions.map((action) => (
+                      <TouchableOpacity
+                        key={action.id}
+                        activeOpacity={0.86}
+                        onPress={() => runFeedAction(item, action)}
+                        style={[
+                          styles.choiceAction,
+                          {
+                            backgroundColor: action.attendanceStatus === '참석' ? palette.green : palette.card,
+                            borderColor: action.attendanceStatus === '참석' ? palette.green : palette.border,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.choiceActionText, { color: action.attendanceStatus === '참석' ? '#fff' : palette.text }]}>
+                          {action.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    activeOpacity={0.86}
+                    onPress={() => runFeedAction(item)}
+                    style={[styles.primaryAction, compact && styles.primaryActionCompact, { backgroundColor: palette.green }]}
+                  >
+                    <Text style={styles.primaryActionText}>{item.ctaLabel}</Text>
+                    <Text style={styles.primaryActionArrow}>›</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             ))}
           </ScrollView>
@@ -224,9 +243,6 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  roundHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 2 },
-  roundHeaderTitle: { fontSize: 13, lineHeight: 17, fontWeight: '900' },
-  roundHeaderMeta: { flex: 1, textAlign: 'right', fontSize: 10, lineHeight: 14, fontWeight: '800' },
   slide: {
     flex: 1,
     justifyContent: 'flex-start',
@@ -237,9 +253,12 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   title: { fontSize: 17, lineHeight: 21, fontWeight: '900', letterSpacing: -0.6 },
-  messageRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginTop: 4 },
+  messageRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginTop: 0 },
   messageIcon: { fontSize: 13, lineHeight: 17 },
-  message: { flex: 1, minWidth: 0, fontSize: 12, lineHeight: 17, fontWeight: '800' },
+  message: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 17, fontWeight: '900' },
+  choiceActionRow: { flexDirection: 'row', gap: 6, marginTop: 'auto' },
+  choiceAction: { flex: 1, minHeight: 34, borderWidth: 1, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  choiceActionText: { fontSize: 11, lineHeight: 15, fontWeight: '900' },
   primaryAction: {
     alignSelf: 'flex-end',
     minWidth: 92,

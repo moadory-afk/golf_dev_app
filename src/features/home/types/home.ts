@@ -2,6 +2,7 @@ import type { PremiumRecentStatItem } from '../components'
 import type { HomeFeedEvent } from '../engine'
 
 export type HomeRoundStatus = 'planned' | 'recruiting' | 'closed' | 'finished'
+export type HomeAttendanceStatus = '참석' | '불참' | '미정'
 
 export type HomeUpcomingRound = {
   id: string
@@ -17,6 +18,7 @@ export type HomeUpcomingRound = {
   memberCount: number
   groupCount: number
   memberNames?: string[]
+  attendanceStatus?: HomeAttendanceStatus
   note?: string
   weatherText: string
   temperature: string

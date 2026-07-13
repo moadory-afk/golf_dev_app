@@ -5,7 +5,7 @@ import {
   type RoundWeather,
 } from "../../../lib/weather";
 import { getCachedAsync } from "../../../lib/asyncCache";
-import type { HomeRoundStatus } from "../types/home";
+import type { HomeAttendanceStatus, HomeRoundStatus } from "../types/home";
 
 type HomeRoundSummaryRow = {
   id: string;
@@ -76,6 +76,19 @@ export type HomeScheduleGroupMemberRow = {
   member_name: string;
 };
 
+
+export type HomeAttendanceRow = {
+  schedule_id: string;
+  member_user_id: string;
+  status: string;
+};
+
+function mapAttendanceStatus(status?: string | null): HomeAttendanceStatus {
+  if (status === "attending") return "참석";
+  if (status === "absent") return "불참";
+  return "미정";
+}
+
 export type HomeCourseRow = {
   id: string;
   name: string;
@@ -117,6 +130,7 @@ export type HomeDashboardRawData = {
   schedules: HomeScheduleRow[];
   groups: HomeScheduleGroupRow[];
   members: HomeScheduleGroupMemberRow[];
+  attendances: Array<{ scheduleId: string; status: HomeAttendanceStatus }>;
   courses: HomeCourseRow[];
   courseSeasonImages: HomeCourseSeasonImageRow[];
   layouts: HomeLayoutRow[];
@@ -238,6 +252,7 @@ const HOME_RAW_CACHE_TTL_MS = 60_000;
 
 async function fetchHomeDashboardRawData(
   clubId: string,
+  userId?: string | null,
 ): Promise<HomeDashboardRawData> {
   const today = new Date().toISOString().slice(0, 10);
 
@@ -267,6 +282,7 @@ async function fetchHomeDashboardRawData(
   const [
     groupResult,
     memberResult,
+    attendanceResult,
     courseResult,
     seasonImageResult,
     layoutResult,
@@ -288,6 +304,13 @@ async function fetchHomeDashboardRawData(
           .in("schedule_id", scheduleIds)
           .order("sort_order", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
+    scheduleIds.length && userId
+      ? supabase
+          .from("club_round_attendances")
+          .select("schedule_id, member_user_id, status")
+          .in("schedule_id", scheduleIds)
+          .eq("member_user_id", userId)
+      : Promise.resolve({ data: [], error: null }),
     fetchHomeCourses(courseIds),
     fetchCourseSeasonImages(courseIds),
     layoutIds.length
@@ -301,6 +324,7 @@ async function fetchHomeDashboardRawData(
 
   if (groupResult.error) throw groupResult.error;
   if (memberResult.error) throw memberResult.error;
+  if (attendanceResult.error) throw attendanceResult.error;
   if (courseResult.error) throw courseResult.error;
   if (seasonImageResult.error) throw seasonImageResult.error;
   if (layoutResult.error) throw layoutResult.error;
@@ -311,6 +335,10 @@ async function fetchHomeDashboardRawData(
     schedules: scheduleRows,
     groups: (groupResult.data ?? []) as HomeScheduleGroupRow[],
     members: (memberResult.data ?? []) as HomeScheduleGroupMemberRow[],
+    attendances: ((attendanceResult.data ?? []) as HomeAttendanceRow[]).map((row) => ({
+      scheduleId: row.schedule_id,
+      status: mapAttendanceStatus(row.status),
+    })),
     courses: courseRows,
     courseSeasonImages: (seasonImageResult.data ??
       []) as HomeCourseSeasonImageRow[],
@@ -324,12 +352,13 @@ async function fetchHomeDashboardRawData(
 
 export function getHomeDashboardRawData(
   clubId: string,
+  userId?: string | null,
   options: { forceRefresh?: boolean } = {},
 ): Promise<HomeDashboardRawData> {
   return getCachedAsync(
-    `home-raw:${clubId}`,
+    `home-raw:${clubId}:${userId ?? "anonymous"}`,
     HOME_RAW_CACHE_TTL_MS,
-    () => fetchHomeDashboardRawData(clubId),
+    () => fetchHomeDashboardRawData(clubId, userId),
     { forceRefresh: options.forceRefresh },
   );
 }

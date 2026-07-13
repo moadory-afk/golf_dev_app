@@ -171,6 +171,16 @@ export function useHomeDashboard({
         },
         queueRefresh,
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "club_round_attendances",
+          filter: `club_id=eq.${clubId}`,
+        },
+        queueRefresh,
+      )
       .subscribe();
 
     return () => {

@@ -45,7 +45,7 @@ export async function getHomeDashboardBase(
 ): Promise<HomeDashboardBaseResult> {
   if (!clubId) return { dashboard: createEmptyHomeDashboard(), raw: null };
 
-  const raw = await getHomeDashboardRawData(clubId, options);
+  const raw = await getHomeDashboardRawData(clubId, userId, options);
   return {
     dashboard: mapHomeDashboard(raw, userName, userId),
     raw,

@@ -14,6 +14,7 @@ export type HomeFeedEventType =
   | 'empty'
 
 export type HomeFeedActionType =
+  | 'set_attendance'
   | 'open_caddie_map'
   | 'open_groups'
   | 'open_lotto'
@@ -21,6 +22,13 @@ export type HomeFeedActionType =
   | 'open_result'
   | 'open_notice'
   | 'create_round'
+
+export type HomeFeedAction = {
+  id: string
+  label: string
+  actionType: HomeFeedActionType
+  attendanceStatus?: '참석' | '불참' | '미정'
+}
 
 export type HomeFeedEvent = {
   id: string
@@ -32,6 +40,7 @@ export type HomeFeedEvent = {
   message: string
   ctaLabel: string
   actionType: HomeFeedActionType
+  actions?: HomeFeedAction[]
   tone?: 'green' | 'gold' | 'blue' | 'neutral'
   scheduleId?: string
   courseName?: string
@@ -90,7 +99,7 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound): HomeFeedEvent[] 
   const startsWithinHour = isToday && minutesToStart !== null && minutesToStart >= 0 && minutesToStart <= 60
   const appearsFinished = round.status === 'finished' || (isToday && minutesToStart !== null && minutesToStart < -300)
 
-  if (round.status === 'planned' || round.status === 'recruiting') {
+  if ((round.status === 'planned' || round.status === 'recruiting') && round.attendanceStatus === '미정') {
     events.push(aiFeed(round, {
       id: `attendance-${round.id}`,
       type: 'attendance_request',
@@ -98,8 +107,13 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound): HomeFeedEvent[] 
       message: round.status === 'planned'
         ? '새로운 라운드가 등록되었습니다.\n\n참석 여부를 선택해 주세요.'
         : `현재 ${round.memberCount}명이 참가 예정입니다.\n\n참석 여부를 등록해 주세요.`,
-      ctaLabel: '참석 등록',
-      actionType: 'open_groups',
+      ctaLabel: '참석 여부 선택',
+      actionType: 'set_attendance',
+      actions: [
+        { id: 'attending', label: '참석', actionType: 'set_attendance', attendanceStatus: '참석' },
+        { id: 'absent', label: '불참', actionType: 'set_attendance', attendanceStatus: '불참' },
+        { id: 'pending', label: '미정', actionType: 'set_attendance', attendanceStatus: '미정' },
+      ],
       tone: 'green',
     }))
   }

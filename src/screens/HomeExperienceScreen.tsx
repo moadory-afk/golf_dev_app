@@ -44,7 +44,7 @@ import {
   HomeLayoutRenderer,
   premiumGolfHomeLayout,
 } from "../features/home/layout";
-import { getRoundSchedules, type ScheduledRound } from "../lib/roundSchedule";
+import { getRoundSchedules, updateRoundAttendance, type RoundAttendanceLabel, type ScheduledRound } from "../lib/roundSchedule";
 import {
   DEFAULT_LOTTO_AWARD_CONFIG,
   computeHandicaps,
@@ -76,6 +76,7 @@ import {
 import { AWARD_CATEGORIES, fillToCount } from "../lib/awardConfig";
 import { computeClubAwardResults } from "../lib/awardResults";
 import { subscribeHomeRecordsChanged } from "../lib/homeRecordEvents";
+import type { HomeFeedAction, HomeFeedEvent } from "../features/home/engine";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type LottoSelection = { par3: number[]; par4: number[]; par5: number[] };
@@ -912,21 +913,42 @@ export default function HomeExperienceScreen() {
   );
 
   const handleCaddieFeedAction = useCallback(
-    (feed: { actionType: string; scheduleId?: string }) => {
+    async (feed: HomeFeedEvent, action?: HomeFeedAction) => {
       const round = feed.scheduleId
         ? dashboard.hero.rounds.find((item) => item.id === feed.scheduleId) ?? activeRound
         : activeRound;
-      if (feed.actionType === "open_groups" && round) {
+      const actionType = action?.actionType ?? feed.actionType;
+
+      if (actionType === "set_attendance" && round && action?.attendanceStatus) {
+        if (!club?.id || !userId) {
+          Alert.alert("로그인 확인", "참석 여부를 저장하려면 다시 로그인해 주세요.");
+          return;
+        }
+        try {
+          await updateRoundAttendance(
+            club.id,
+            round.id,
+            userId,
+            action.attendanceStatus as RoundAttendanceLabel,
+          );
+          Alert.alert("참석 여부 저장", `${action.attendanceStatus}으로 저장했습니다.`);
+          refresh();
+        } catch (error) {
+          Alert.alert("저장 실패", error instanceof Error ? error.message : String(error));
+        }
+        return;
+      }
+      if (actionType === "open_groups" && round) {
         openRoundPopup(round, "groups");
         return;
       }
-      if (feed.actionType === "open_lotto" && round) {
+      if (actionType === "open_lotto" && round) {
         openRoundPopup(round, "lotto");
         return;
       }
-      resolveFeedNavigation(nav, feed.actionType, round);
+      resolveFeedNavigation(nav, actionType, round);
     },
-    [activeRound, dashboard.hero.rounds, nav, openRoundPopup],
+    [activeRound, club?.id, dashboard.hero.rounds, nav, openRoundPopup, refresh, userId],
   );
 
   const togglePopupLottoHole = useCallback((parKey: keyof LottoSelection, hole: number) => {
