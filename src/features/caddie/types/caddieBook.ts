@@ -1,5 +1,5 @@
 import type { AICaddieAdvice, AIShotPlanHole, AIShotPlanSummary } from './caddie'
-import type { CaddieDistanceProfileRow, CaddieHoleGuideRow, CaddieUserPreferencesRow } from './caddieData'
+import type { CaddieDistanceProfileRow, CaddieHoleGuideRow, CaddieUserPreferencesRow, UserPreferenceTee } from './caddieData'
 
 export type CaddieBookRouteParams = {
   courseId?: string | null
@@ -41,6 +41,7 @@ export type CaddieBookHole = {
 export type CaddieBookData = {
   courseName: string
   layoutName?: string | null
+  defaultTee: UserPreferenceTee
   holes: CaddieBookHole[]
   primaryHole?: CaddieBookHole
   hasLiveGuide: boolean

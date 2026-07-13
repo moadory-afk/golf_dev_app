@@ -1627,11 +1627,9 @@ function RoundInfoModal({
                   </View>
                 ) : canPurchaseLotto ? (
                   <>
-                    <View style={styles.lottoCounterRow}>
-                      <Text style={[styles.lottoCounter, lottoSelection.par3.length === 1 && { color: palette.green, backgroundColor: "rgba(31,160,92,0.10)" }]}>파3 {lottoSelection.par3.length}/1</Text>
-                      <Text style={[styles.lottoCounter, lottoSelection.par4.length === 3 && { color: palette.green, backgroundColor: "rgba(31,160,92,0.10)" }]}>파4 {lottoSelection.par4.length}/3</Text>
-                      <Text style={[styles.lottoCounter, lottoSelection.par5.length === 2 && { color: palette.green, backgroundColor: "rgba(31,160,92,0.10)" }]}>파5 {lottoSelection.par5.length}/2</Text>
-                    </View>
+                    <Text style={[styles.lottoGuideText, { color: palette.muted }]}>
+                      파3홀 1개, 파4홀 3개, 파5홀 2개를 선택하세요.
+                    </Text>
                     {lottoHoleGroups.map((group) => (
                       <View key={group.key} style={styles.lottoHoleGroup}>
                         <View style={styles.lottoHoleGroupHeader}>
@@ -2050,20 +2048,11 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: "900",
   },
-  lottoCounterRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 7,
+  lottoGuideText: {
     marginBottom: 10,
-  },
-  lottoCounter: {
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    backgroundColor: "rgba(0,0,0,0.05)",
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: "900",
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "800",
   },
   lottoHoleGroup: {
     borderTopWidth: 1,

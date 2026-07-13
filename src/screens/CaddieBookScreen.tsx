@@ -23,6 +23,7 @@ import { useUserProfile } from "../lib/UserProfileContext";
 import { supabase } from "../lib/supabase";
 import type { RootStackParamList } from "../navigation/types";
 import { useCaddieBook, type CaddieBookHole } from "../features/caddie";
+import type { UserPreferenceTee } from "../features/caddie/types/caddieData";
 import { radius, spacing, typography } from "../design/tokens";
 import {
   getPersonalRoundStat,
@@ -179,6 +180,12 @@ function buildShotPlanStages(
   ];
 }
 
+function teeBadgeMeta(tee: UserPreferenceTee = "white") {
+  if (tee === "blue") return { label: "B", color: "#2F73D9" };
+  if (tee === "red") return { label: "R", color: "#DE544B" };
+  return { label: "W", color: "#8B9691" };
+}
+
 function CourseLayoutTabs({
   layouts,
   activeLayoutId,
@@ -240,18 +247,21 @@ function CaddieBookFixedHeader({
   activeLayoutId,
   onSelectLayout,
   hole,
+  defaultTee = "white",
 }: {
   courseName: string;
   layouts: CourseLayoutTab[];
   activeLayoutId?: string | null;
   onSelectLayout: (layout: CourseLayoutTab) => void;
   hole?: CaddieBookHole;
+  defaultTee?: UserPreferenceTee;
 }) {
   const { palette } = useSkin();
-  const whiteDistance =
-    typeof hole?.whiteTeeM === "number" && Number.isFinite(hole.whiteTeeM)
-      ? `${hole.whiteTeeM}`
+  const teeDistance =
+    typeof hole?.teeDistanceM === "number" && Number.isFinite(hole.teeDistanceM)
+      ? `${hole.teeDistanceM}`
       : "-";
+  const teeBadge = teeBadgeMeta(defaultTee);
 
   return (
     <View style={styles.fixedHeaderBlock}>
@@ -279,13 +289,13 @@ function CaddieBookFixedHeader({
           ]}
         >
           <Text style={[styles.fixedHoleText, { color: palette.text }]} numberOfLines={1}>
-            {hole ? `${hole.holeNo}번` : "-"}
+            {hole ? `${hole.holeNo}번 Par${hole.par ?? "-"} ` : "- "}
           </Text>
-          <Text style={[styles.fixedHoleText, { color: palette.muted }]} numberOfLines={1}>
-            Par {hole?.par ?? "-"}
-          </Text>
+          <View style={[styles.teeBadge, { backgroundColor: teeBadge.color }]}>
+            <Text style={styles.teeBadgeText}>{teeBadge.label}</Text>
+          </View>
           <Text style={[styles.fixedDistanceText, { color: palette.green }]} numberOfLines={1}>
-            {whiteDistance}
+            {teeDistance}
           </Text>
         </View>
       </View>
@@ -1206,6 +1216,7 @@ export default function CaddieBookScreen() {
           activeLayoutId={activeLayoutId}
           onSelectLayout={handleLayoutSelect}
           hole={selectedHole}
+          defaultTee={data.defaultTee}
         />
 
         {loading && data.holes.length === 0 ? (
@@ -1313,18 +1324,26 @@ const styles = StyleSheet.create({
   },
   fixedTabsWrap: { flex: 1, minWidth: 0 },
   fixedHoleInfo: {
-    height: 34,
-    minWidth: 112,
+    height: 36,
+    minWidth: 138,
     borderRadius: radius.pill,
     borderWidth: 1,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
     gap: 6,
   },
-  fixedHoleText: { ...typography.bodySm, fontWeight: "900" },
-  fixedDistanceText: { ...typography.bodySm, fontWeight: "900" },
+  fixedHoleText: { ...typography.body, fontWeight: "900" },
+  fixedDistanceText: { ...typography.body, fontWeight: "900" },
+  teeBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  teeBadgeText: { color: "#fff", fontSize: 12, lineHeight: 15, fontWeight: "900" },
   courseInfoBar: {
     minHeight: 42,
     borderWidth: 1,

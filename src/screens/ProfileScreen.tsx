@@ -28,6 +28,7 @@ import { useClub } from "../lib/ClubContext";
 import { C } from "../theme";
 import { useSkin, type SkinId } from "../skins";
 import type { RootStackProps } from "../navigation/types";
+import type { UserPreferenceTee } from "../features/caddie/types/caddieData";
 
 const APP_URL = "https://golf-seven-psi.vercel.app";
 
@@ -462,6 +463,8 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
     DEFAULT_DISTANCE_FORM,
   );
   const [savingDistances, setSavingDistances] = useState(false);
+  const [defaultTee, setDefaultTee] = useState<UserPreferenceTee>("white");
+  const [savingPreferences, setSavingPreferences] = useState(false);
   const [departureBufferInput, setDepartureBufferInput] = useState("40");
 
   useEffect(() => {
@@ -513,6 +516,20 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
               typeof value === "number" ? String(value) : "";
           });
           setDistanceForm(nextForm);
+        }
+
+        const { data: preferences } = await supabase
+          .from("user_preferences")
+          .select("default_tee")
+          .eq("user_id", authUser.id)
+          .maybeSingle();
+        if (
+          alive &&
+          (preferences?.default_tee === "white" ||
+            preferences?.default_tee === "red" ||
+            preferences?.default_tee === "blue")
+        ) {
+          setDefaultTee(preferences.default_tee);
         }
       }
       const displayName = fallbackName || metadataName;
@@ -790,15 +807,44 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
     }
   }
 
+  async function handleSavePreferences(options?: { silent?: boolean }) {
+    if (!user) return false;
+    setSavingPreferences(true);
+    try {
+      const { error } = await supabase.from("user_preferences").upsert(
+        {
+          user_id: user.id,
+          default_tee: defaultTee,
+          distance_unit: "m",
+          show_ai_caddie: true,
+        },
+        { onConflict: "user_id" },
+      );
+      if (error) throw error;
+      if (!options?.silent) Alert.alert("저장 완료", "티샷 위치가 저장되었습니다.");
+      return true;
+    } catch (e: unknown) {
+      Alert.alert(
+        "오류",
+        e instanceof Error ? e.message : "티샷 위치 저장에 실패했습니다.",
+      );
+      return false;
+    } finally {
+      setSavingPreferences(false);
+    }
+  }
+
   async function handleSaveProfileSettings() {
     const savedHome = await handleSaveHome({ silent: true });
     if (!savedHome) return;
+    const savedPreferences = await handleSavePreferences({ silent: true });
+    if (!savedPreferences) return;
     const savedDistances = await handleSaveDistances({ silent: true });
     if (savedDistances) Alert.alert("저장 완료", "프로필 설정이 저장되었습니다.");
   }
 
   useEffect(() => {
-    const savingProfileSettings = savingHome || savingDistances;
+    const savingProfileSettings = savingHome || savingDistances || savingPreferences;
     navigation.setOptions({
       headerRight: () => (
         <View style={p.headerActions}>
@@ -1216,6 +1262,43 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
           </View>
         </View>
 
+        <Text style={p.sectionLabel}>티샷 위치 설정</Text>
+        <View style={p.settingsCard}>
+          <Text style={p.settingHint}>
+            캐디북의 홀 거리와 Shot Plan 계산에 사용할 티박스 기준입니다.
+          </Text>
+          <View style={p.teeRadioRow}>
+            {([
+              { value: "white", label: "화이트", badge: "W", color: "#8B9691" },
+              { value: "red", label: "레드", badge: "R", color: "#DE544B" },
+              { value: "blue", label: "블루", badge: "B", color: "#2F73D9" },
+            ] as const).map((item) => {
+              const active = defaultTee === item.value;
+              return (
+                <TouchableOpacity
+                  key={item.value}
+                  activeOpacity={0.82}
+                  onPress={() => setDefaultTee(item.value)}
+                  style={[
+                    p.teeRadioButton,
+                    active && { borderColor: item.color, backgroundColor: `${item.color}18` },
+                  ]}
+                >
+                  <View style={[p.teeRadioDot, { borderColor: item.color }]}>
+                    {active ? <View style={[p.teeRadioDotInner, { backgroundColor: item.color }]} /> : null}
+                  </View>
+                  <View style={[p.teeRadioBadge, { backgroundColor: item.color }]}>
+                    <Text style={p.teeRadioBadgeText}>{item.badge}</Text>
+                  </View>
+                  <Text style={[p.teeRadioText, active && { color: item.color }]}>
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
         <Text style={p.sectionLabel}>클럽별 평균거리</Text>
         <View style={p.settingsCard}>
           <Text style={p.settingHint}>
@@ -1527,6 +1610,48 @@ const p = StyleSheet.create({
     marginTop: 14,
   },
   homeSaveButtonText: { color: "#fff", fontWeight: "800", fontSize: 14 },
+  teeRadioRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12,
+  },
+  teeRadioButton: {
+    flex: 1,
+    minHeight: 54,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderRadius: 14,
+    backgroundColor: "#fafafa",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingVertical: 8,
+  },
+  teeRadioDot: {
+    position: "absolute",
+    top: 7,
+    right: 7,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  teeRadioDotInner: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  teeRadioBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  teeRadioBadgeText: { color: "#fff", fontSize: 12, fontWeight: "900" },
+  teeRadioText: { fontSize: 12, lineHeight: 16, fontWeight: "900", color: C.text },
   distanceGrid: {
     flexDirection: "row",
     flexWrap: "wrap",

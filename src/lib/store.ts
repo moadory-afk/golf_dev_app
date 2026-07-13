@@ -574,12 +574,16 @@ export async function getClubMembers(clubId: string): Promise<Array<{ userId: st
   const userIds = members.map((m) => m.user_id)
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, name')
+    .select('id, name, nickname')
     .in('id', userIds)
 
   const profileMap = new Map(
-    (profiles ?? []).map((p: { id: string; name: string }) => [p.id, p.name])
+    (profiles ?? []).map((p: { id: string; name?: string | null; nickname?: string | null }) => [
+      p.id,
+      (p.name ?? p.nickname ?? '').trim(),
+    ])
   )
+
   return members.map((m) => ({
     userId: m.user_id,
     name: profileMap.get(m.user_id) ?? '(이름 없음)',

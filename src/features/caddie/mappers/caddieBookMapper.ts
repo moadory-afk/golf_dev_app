@@ -81,6 +81,7 @@ export function mapCaddieBookData(params: {
   return {
     courseName: params.courseName || '캐디북',
     layoutName: params.layoutName,
+    defaultTee: preferences.defaultTee,
     holes,
     primaryHole: holes[0],
     hasLiveGuide: holes.length > 0 && preferences.showAiCaddie,
