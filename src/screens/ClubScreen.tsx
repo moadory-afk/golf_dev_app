@@ -838,6 +838,13 @@ export default function ClubScreen() {
           }}
         />
       )}
+      {showLottoAwardGuide && (
+        <LottoAwardGuideModal
+          config={currentLottoAwardConfig}
+          carryoverAmount={currentLottoCarryoverAmount}
+          onClose={() => setShowLottoAwardGuide(false)}
+        />
+      )}
       {courseImagesOpen && (
         <CourseSeasonImageModal
           compact={isCompactScreen}
@@ -1263,7 +1270,7 @@ export default function ClubScreen() {
                   style={s.cardTitleRow}
                   onPress={() => {
                     if (isManagerView) setLottoAwardOpen(true);
-                    else setShowLottoAwardGuide((value) => !value);
+                    else setShowLottoAwardGuide(true);
                   }}
                   activeOpacity={0.82}
                 >
@@ -1278,26 +1285,6 @@ export default function ClubScreen() {
                   </View>
                   <Text style={s.more}>{summaryCardActionLabel}</Text>
                 </TouchableOpacity>
-                {!isManagerView && showLottoAwardGuide ? (
-                  <View>
-                    {(["3", "4", "5", "6"] as const).map((count) => (
-                      <View key={count} style={s.lottoGuideRow}>
-                        <Text style={s.lottoGuideLabel}>{count}개 적중</Text>
-                        <Text style={s.lottoGuideValue}>
-                          {formatWon(currentLottoAwardConfig.prizes[count])}
-                        </Text>
-                      </View>
-                    ))}
-                    <View style={s.lottoGuideRow}>
-                      <Text style={s.lottoGuideLabel}>미당첨 이월</Text>
-                      <Text style={s.lottoGuideValue}>
-                        {currentLottoAwardConfig.rollover
-                          ? `${formatWon(LOTTO_JACKPOT_STEP)} 증가`
-                          : "미적용"}
-                      </Text>
-                    </View>
-                  </View>
-                ) : null}
               </View>
 
               <TouchableOpacity
@@ -1378,22 +1365,6 @@ export default function ClubScreen() {
             </View>
           )}
 
-          {/* 기록 없음 */}
-          {club && !loading && rounds.length === 0 && (
-            <View style={s.emptyCard}>
-              <Icon name="flag" size={34} color={C.green} strokeWidth={1.6} />
-              <Text
-                style={{
-                  fontSize: 15,
-                  fontWeight: "700",
-                  color: C.text,
-                  marginTop: 10,
-                }}
-              >
-                아직 클럽 기록이 없어요
-              </Text>
-            </View>
-          )}
         </View>
       </ScrollView>
     </View>
@@ -1951,6 +1922,57 @@ function RankingModal({
               ))
             )}
           </ScrollView>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+function LottoAwardGuideModal({
+  config,
+  carryoverAmount,
+  onClose,
+}: {
+  config: LottoAwardConfig;
+  carryoverAmount: number;
+  onClose: () => void;
+}) {
+  const rows = [
+    { label: "3개 적중", value: formatWon(config.prizes["3"]) },
+    { label: "4개 적중", value: formatWon(config.prizes["4"]) },
+    { label: "5개 적중", value: formatWon(config.prizes["5"]) },
+    { label: "6개 적중", value: formatWon(carryoverAmount) },
+    {
+      label: "미당첨 이월",
+      value: config.rollover ? `${formatWon(LOTTO_JACKPOT_STEP)} 증가` : "미적용",
+    },
+  ];
+
+  return (
+    <Modal transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity
+          style={s.modalCard}
+          activeOpacity={1}
+          onPress={() => {}}
+        >
+          <View style={s.modalHeader}>
+            <Text style={s.modalTitle}>Lotto 6/18 당첨금 안내</Text>
+            <TouchableOpacity style={s.closeBtn} onPress={onClose}>
+              <Text style={s.closeBtnText}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={s.lottoAwardSummary}>
+            현재 누적 당첨금 {formatWon(carryoverAmount)}
+          </Text>
+          <View style={s.lottoGuideModalList}>
+            {rows.map((row) => (
+              <View key={row.label} style={s.lottoGuideRow}>
+                <Text style={s.lottoGuideLabel}>{row.label}</Text>
+                <Text style={s.lottoGuideValue}>{row.value}</Text>
+              </View>
+            ))}
+          </View>
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
@@ -2824,6 +2846,7 @@ const s = StyleSheet.create({
     fontWeight: "800",
     color: C.green,
   },
+  lottoGuideModalList: { marginTop: 12 },
   lottoGuideRow: {
     flexDirection: "row",
     alignItems: "center",
