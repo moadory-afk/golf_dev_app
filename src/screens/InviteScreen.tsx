@@ -6,15 +6,9 @@ import { useState, useEffect } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { joinClub, getClubByInviteCode, ensureProfile } from '../lib/store'
+import { authEmailsForName, nameToAuthEmail } from '../lib/authEmail'
 import { C } from '../theme'
 import { Icon } from '../components/Icon'
-
-function nameToEmail(name: string): string {
-  const hex = Array.from(name.trim())
-    .map(c => c.charCodeAt(0).toString(16).padStart(4, '0'))
-    .join('')
-  return `${hex}@gogopar.app`
-}
 
 interface Props {
   joinCode: string
@@ -64,8 +58,17 @@ export default function InviteScreen({ joinCode, onJoined, onDismiss }: Props) {
     if (!name.trim() || !password) { Alert.alert('이름과 비밀번호를 입력하세요.'); return }
     setAuthLoading(true)
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email: nameToEmail(name), password })
-      if (error) Alert.alert('로그인 실패', '이름 또는 비밀번호가 올바르지 않습니다.')
+      let lastError: unknown = null
+      let signedIn = false
+      for (const email of authEmailsForName(name)) {
+        const { error } = await supabase.auth.signInWithPassword({ email, password })
+        lastError = error
+        if (!error) {
+          signedIn = true
+          break
+        }
+      }
+      if (!signedIn && lastError) Alert.alert('로그인 실패', '이름 또는 비밀번호가 올바르지 않습니다.')
     } finally {
       setAuthLoading(false)
     }
@@ -77,7 +80,7 @@ export default function InviteScreen({ joinCode, onJoined, onDismiss }: Props) {
     setAuthLoading(true)
     try {
       const { data, error } = await supabase.auth.signUp({
-        email: nameToEmail(name), password,
+        email: nameToAuthEmail(name), password,
         options: { data: { name: name.trim() } },
       })
       if (error) {

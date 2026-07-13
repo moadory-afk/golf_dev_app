@@ -4,6 +4,7 @@ import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, Te
 import { AntDesign } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { ensureProfile } from '../lib/store';
+import { authEmailsForName } from '../lib/authEmail';
 import { C } from '../theme';
 
 
@@ -14,13 +15,6 @@ function getSocialUserName(user: { email?: string | null; user_metadata?: Record
 
   if (typeof socialName === 'string') return socialName.trim()
   return user.email?.split('@')[0] ?? 'GogoPar 회원'
-}
-
-function nameToEmail(name: string): string {
-  const hex = Array.from(name.trim())
-    .map((char) => char.charCodeAt(0).toString(16).padStart(4, '0'))
-    .join('')
-  return `${hex}@gogopar.app`
 }
 
 export default function LoginScreen({ navigation }: { navigation: any }) {
@@ -115,12 +109,18 @@ export default function LoginScreen({ navigation }: { navigation: any }) {
     }
     setErrorMsg(null)
     setLoading(true)
-    const email = nameToEmail(name)
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    let data: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>['data'] | null = null
+    let error: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>['error'] | null = null
+    for (const email of authEmailsForName(name)) {
+      const result = await supabase.auth.signInWithPassword({ email, password })
+      data = result.data
+      error = result.error
+      if (!result.error) break
+    }
     setLoading(false)
     if (error) {
       setErrorMsg(`로그인 실패: ${error.message}`)
-    } else if (data.user) {
+    } else if (data?.user) {
       try {
         await ensureProfile(data.user.id, name.trim())
       } catch {

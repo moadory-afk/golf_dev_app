@@ -1,22 +1,14 @@
 import { useState } from 'react';
 
-import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Switch } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { ensureProfile } from '../lib/store';
+import { nameToAuthEmail } from '../lib/authEmail';
 import { C } from '../theme';
-
-function nameToEmail(name: string): string {
-  const hex = Array.from(name.trim())
-    .map((char) => char.charCodeAt(0).toString(16).padStart(4, '0'))
-    .join('');
-  return `${hex}@gogopar.app`;
-}
 
 export default function SignUpScreen({ navigation }: { navigation: any }) {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
-  const [gender, setGender] = useState('');
-  const [showRealName, setShowRealName] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -29,7 +21,7 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
     }
     setErrorMsg(null);
     setLoading(true);
-    const email = nameToEmail(name);
+    const email = nameToAuthEmail(name);
     const { data, error } = await supabase.auth.signUp({ email, password });
     setLoading(false);
     if (error) {
@@ -39,11 +31,10 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
     if (data.user) {
       const { error: insertErr } = await supabase
         .from('profiles')
-        .insert({
+        .upsert({
           id: data.user.id,
           name: name.trim(),
-          gender: gender.trim(),
-          show_real_name: showRealName,
+          nickname: name.trim(),
         });
       if (insertErr) {
         setErrorMsg(`프로필 저장 실패: ${insertErr.message}`);
@@ -80,16 +71,6 @@ export default function SignUpScreen({ navigation }: { navigation: any }) {
             placeholder="비밀번호"
             secureTextEntry
           />
-          <TextInput
-            style={[s.input, { marginTop: 12 }]}
-            value={gender}
-            onChangeText={(v) => { setGender(v); clearError(); }}
-            placeholder="성별 (예: 남성)"
-          />
-          <View style={s.switchRow}>
-            <Text style={s.switchLabel}>실명 공개 여부</Text>
-            <Switch value={showRealName} onValueChange={setShowRealName} />
-          </View>
           {errorMsg ? (
             <View style={s.errorBox}>
               <Text style={s.errorText}>{errorMsg}</Text>
@@ -116,6 +97,4 @@ const s = StyleSheet.create({
   errorText: { fontSize: 13, color: '#c0392b', lineHeight: 18 },
   signupBtn: { backgroundColor: C.green, borderRadius: 12, paddingVertical: 10, alignItems: 'center', marginTop: 16 },
   signupBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
-  switchLabel: { fontSize: 14, color: C.text },
 });
