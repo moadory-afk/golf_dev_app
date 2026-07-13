@@ -21,6 +21,7 @@ export type HomeFeedActionType =
   | 'open_score_entry'
   | 'open_result'
   | 'open_notice'
+  | 'open_round_info'
   | 'create_round'
 
 export type HomeFeedAction = {
@@ -99,7 +100,7 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound): HomeFeedEvent[] 
   const startsWithinHour = isToday && minutesToStart !== null && minutesToStart >= 0 && minutesToStart <= 60
   const appearsFinished = round.status === 'finished' || (isToday && minutesToStart !== null && minutesToStart < -300)
 
-  if ((round.status === 'planned' || round.status === 'recruiting') && round.attendanceStatus === '미정') {
+  if (!hasGroups && (round.status === 'planned' || round.status === 'recruiting') && round.attendanceStatus === '미정') {
     events.push(aiFeed(round, {
       id: `attendance-${round.id}`,
       type: 'attendance_request',
@@ -128,7 +129,7 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound): HomeFeedEvent[] 
       priority: 82,
       icon: '👥',
       message: `조편성이 완료되었습니다.\n\n${memberLine}`,
-      ctaLabel: '조편성 보기',
+      ctaLabel: '내 조 확인',
       actionType: 'open_groups',
       tone: 'blue',
     }))
@@ -141,7 +142,7 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound): HomeFeedEvent[] 
       priority: isToday ? 76 : 70,
       icon: '📖',
       message: '코스 공략이 준비되었습니다.\n\n추천 클럽과 홀별 전략을\n미리 확인해 보세요.',
-      ctaLabel: '캐디북 보기',
+      ctaLabel: '코스 공략 보기',
       actionType: 'open_caddie_map',
       tone: 'green',
     }))
@@ -154,8 +155,8 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound): HomeFeedEvent[] 
       priority: 64,
       icon: '🌤️',
       message: `${round.weatherText || '예상 날씨를 확인하고 있습니다.'}\n${round.temperature || '--°'}${round.windText ? ` · ${round.windText}` : ''}\n\n복장과 장비를 준비해 주세요.`,
-      ctaLabel: '캐디북 보기',
-      actionType: 'open_caddie_map',
+      ctaLabel: '날씨 확인',
+      actionType: 'open_round_info',
       tone: 'gold',
     }))
   }
@@ -167,9 +168,25 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound): HomeFeedEvent[] 
       priority: 68,
       icon: '🌙',
       message: '내일은 라운드입니다.\n\n클럽과 골프화, 장갑 등\n준비물을 다시 확인해 보세요.',
-      ctaLabel: '캐디북 보기',
-      actionType: 'open_caddie_map',
+      ctaLabel: '라운드 정보 확인',
+      actionType: 'open_round_info',
       tone: 'neutral',
+    }))
+  }
+
+  if ((isSoon || isToday) && !appearsFinished && round.routeTimeText && !round.routeTimeText.includes('준비중')) {
+    const departureLine = round.departureTimeText && !round.departureTimeText.includes('준비중')
+      ? `\n추천 출발 시간은 ${round.departureTimeText.replace(/^출발 추천\s*/, '')}입니다.`
+      : ''
+    events.push(aiFeed(round, {
+      id: `route-${round.id}`,
+      type: 'weather_route',
+      priority: isToday ? 72 : 58,
+      icon: '🚗',
+      message: `현재 예상 이동시간은 ${round.routeTimeText.replace(/\s*소요$/, '')}입니다.${departureLine}\n\n여유 있게 출발해 주세요.`,
+      ctaLabel: '이동시간 확인',
+      actionType: 'open_round_info',
+      tone: 'blue',
     }))
   }
 
@@ -188,26 +205,13 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound): HomeFeedEvent[] 
 
   if (startsWithinHour) {
     events.push(aiFeed(round, {
-      id: `score-ready-${round.id}`,
+      id: `play-caddiebook-${round.id}`,
       type: 'score_entry',
       priority: 92,
       icon: '⛳',
-      message: '곧 라운드가 시작됩니다.\n\n홀별 티샷과 퍼팅 기록을\n간단히 입력해 주세요.',
-      ctaLabel: '기록 입력 준비',
-      actionType: 'open_score_entry',
-      tone: 'green',
-    }))
-  }
-
-  if (appearsFinished) {
-    events.push(aiFeed(round, {
-      id: `score-entry-${round.id}`,
-      type: 'score_entry',
-      priority: 96,
-      icon: '📝',
-      message: '라운드가 종료되었습니다.\n\n오늘의 개인 기록을\n입력해 주세요.',
-      ctaLabel: '기록 입력',
-      actionType: 'open_score_entry',
+      message: '곧 라운드가 시작됩니다.\n\n캐디북을 열어 공략을 확인하고\n드라이버와 퍼팅 기록을 입력해 주세요.',
+      ctaLabel: '캐디북',
+      actionType: 'open_caddie_map',
       tone: 'green',
     }))
   }
@@ -218,20 +222,6 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound): HomeFeedEvent[] 
 /** 기존 단일 라운드 호출부 호환용 */
 export function buildHomeFeedEvents({ upcomingRound, recentRounds }: BuildHomeFeedInput): HomeFeedEvent[] {
   if (upcomingRound) return buildRoundFeedEvents(upcomingRound)
-
-  const [recentRound] = recentRounds
-  if (recentRound) {
-    return [aiFeed(null, {
-      id: `result-${recentRound.id}`,
-      type: 'round_result',
-      priority: 60,
-      icon: '📈',
-      message: '최근 라운드 기록이 저장되었습니다.\n\n스코어와 분석 결과를\n확인해 보세요.',
-      ctaLabel: '기록 확인',
-      actionType: 'open_result',
-      tone: 'neutral',
-    })]
-  }
 
   return [aiFeed(null, {
     id: 'empty-home-feed',

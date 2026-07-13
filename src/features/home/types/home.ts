@@ -26,6 +26,8 @@ export type HomeUpcomingRound = {
   courseId?: string
   layoutId?: string
   heroImageUrl?: string | null
+  routeTimeText?: string
+  departureTimeText?: string
 }
 
 export type HomeHeroRound = HomeUpcomingRound & {

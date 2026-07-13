@@ -203,7 +203,7 @@ function resolveFeedNavigation(
     if (params) return nav.navigate("CaddieBook", params);
     return nav.navigate("RoundSchedulePrototype", { openCreate: true });
   }
-  if (actionType === "open_groups" || actionType === "open_lotto")
+  if (actionType === "open_groups" || actionType === "open_lotto" || actionType === "open_round_info")
     return nav.navigate("RoundSchedulePrototype");
   if (actionType === "open_notice") return nav.navigate("NoticePrototype");
   if (actionType === "open_score_entry") return nav.navigate("ScoreCapture");
