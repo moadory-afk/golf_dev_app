@@ -1,61 +1,99 @@
+import { getCachedAsync } from "./asyncCache";
+
 type Coordinate = {
-  latitude?: number | null
-  longitude?: number | null
-}
+  latitude?: number | null;
+  longitude?: number | null;
+};
 
 function kakaoRestApiKey() {
-  return String(process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY || '').trim()
+  return String(process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY || "").trim();
 }
 
-function hasCoordinate(point?: Coordinate | null): point is { latitude: number; longitude: number } {
-  return typeof point?.latitude === 'number'
-    && typeof point.longitude === 'number'
-    && Number.isFinite(point.latitude)
-    && Number.isFinite(point.longitude)
+function hasCoordinate(
+  point?: Coordinate | null,
+): point is { latitude: number; longitude: number } {
+  return (
+    typeof point?.latitude === "number" &&
+    typeof point.longitude === "number" &&
+    Number.isFinite(point.latitude) &&
+    Number.isFinite(point.longitude)
+  );
 }
 
 export function formatTravelMinutes(minutes: number) {
-  if (!Number.isFinite(minutes) || minutes <= 0) return '이동시간 준비중'
-  const rounded = Math.max(1, Math.round(minutes))
-  if (rounded < 60) return `${rounded}분 소요`
-  const hours = Math.floor(rounded / 60)
-  const rest = rounded % 60
-  return rest > 0 ? `${hours}시간 ${rest}분 소요` : `${hours}시간 소요`
+  if (!Number.isFinite(minutes) || minutes <= 0) return "이동시간 준비중";
+  const rounded = Math.max(1, Math.round(minutes));
+  if (rounded < 60) return `${rounded}분 소요`;
+  const hours = Math.floor(rounded / 60);
+  const rest = rounded % 60;
+  return rest > 0 ? `${hours}시간 ${rest}분 소요` : `${hours}시간 소요`;
 }
 
-export function formatRecommendedDepartureTime(date?: string | null, time?: string | null, travelMinutes?: number | null, bufferMinutes = 40) {
-  if (!date || !time || !Number.isFinite(travelMinutes ?? NaN)) return '출발 추천 준비중'
-  const normalizedDate = date.includes('T') ? date.slice(0, 10) : date
-  const match = time.match(/(\d{1,2}):(\d{2})/)
-  if (!match) return '출발 추천 준비중'
+export function formatRecommendedDepartureTime(
+  date?: string | null,
+  time?: string | null,
+  travelMinutes?: number | null,
+  bufferMinutes = 40,
+) {
+  if (!date || !time || !Number.isFinite(travelMinutes ?? NaN))
+    return "출발 추천 준비중";
+  const normalizedDate = date.includes("T") ? date.slice(0, 10) : date;
+  const match = time.match(/(\d{1,2}):(\d{2})/);
+  if (!match) return "출발 추천 준비중";
 
-  const departure = new Date(normalizedDate)
-  if (Number.isNaN(departure.getTime())) return '출발 추천 준비중'
-  departure.setHours(Number(match[1]), Number(match[2]), 0, 0)
-  departure.setMinutes(departure.getMinutes() - Math.max(0, Math.round(travelMinutes ?? 0)) - Math.max(0, Math.round(bufferMinutes)))
+  const departure = new Date(normalizedDate);
+  if (Number.isNaN(departure.getTime())) return "출발 추천 준비중";
+  departure.setHours(Number(match[1]), Number(match[2]), 0, 0);
+  departure.setMinutes(
+    departure.getMinutes() -
+      Math.max(0, Math.round(travelMinutes ?? 0)) -
+      Math.max(0, Math.round(bufferMinutes)),
+  );
 
-  const hours = String(departure.getHours()).padStart(2, '0')
-  const minutes = String(departure.getMinutes()).padStart(2, '0')
-  return `출발 추천 ${hours}:${minutes}`
+  const hours = String(departure.getHours()).padStart(2, "0");
+  const minutes = String(departure.getMinutes()).padStart(2, "0");
+  return `출발 추천 ${hours}:${minutes}`;
 }
 
-export async function getDrivingTravelTimeMinutes(origin: Coordinate, destination: Coordinate): Promise<number | null> {
-  const apiKey = kakaoRestApiKey()
-  if (!apiKey || !hasCoordinate(origin) || !hasCoordinate(destination)) return null
+const TRAVEL_CACHE_TTL_MS = 1000 * 60 * 10;
 
-  const params = new URLSearchParams({
-    origin: `${origin.longitude},${origin.latitude}`,
-    destination: `${destination.longitude},${destination.latitude}`,
-    priority: 'RECOMMEND',
-  })
+function coordinateCacheKey(point: { latitude: number; longitude: number }) {
+  return `${point.latitude.toFixed(5)},${point.longitude.toFixed(5)}`;
+}
 
-  const response = await fetch(`https://apis-navi.kakaomobility.com/v1/directions?${params.toString()}`, {
-    headers: { Authorization: `KakaoAK ${apiKey}` },
-  })
-  if (!response.ok) return null
+export async function getDrivingTravelTimeMinutes(
+  origin: Coordinate,
+  destination: Coordinate,
+): Promise<number | null> {
+  const apiKey = kakaoRestApiKey();
+  if (!apiKey || !hasCoordinate(origin) || !hasCoordinate(destination))
+    return null;
 
-  const json = await response.json()
-  const durationSeconds = Number(json?.routes?.[0]?.summary?.duration)
-  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return null
-  return Math.ceil(durationSeconds / 60)
+  const cacheKey = `travel:${coordinateCacheKey(origin)}:${coordinateCacheKey(destination)}`;
+  return getCachedAsync(
+    cacheKey,
+    TRAVEL_CACHE_TTL_MS,
+    async () => {
+      const params = new URLSearchParams({
+        origin: `${origin.longitude},${origin.latitude}`,
+        destination: `${destination.longitude},${destination.latitude}`,
+        priority: "RECOMMEND",
+      });
+
+      const response = await fetch(
+        `https://apis-navi.kakaomobility.com/v1/directions?${params.toString()}`,
+        {
+          headers: { Authorization: `KakaoAK ${apiKey}` },
+        },
+      );
+      if (!response.ok) return null;
+
+      const json = await response.json();
+      const durationSeconds = Number(json?.routes?.[0]?.summary?.duration);
+      if (!Number.isFinite(durationSeconds) || durationSeconds <= 0)
+        return null;
+      return Math.ceil(durationSeconds / 60);
+    },
+    { shouldCache: (value) => value !== null },
+  );
 }
