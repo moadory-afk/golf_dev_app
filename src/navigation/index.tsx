@@ -11,25 +11,26 @@ import { UserProfileProvider } from '../lib/UserProfileContext'
 import HomeScreen from '../screens/HomeExperienceScreen'
 import ClubScreen from '../screens/ClubScreen'
 import HistoryScreen from '../screens/HistoryScreen'
-import ProfileScreen from '../screens/ProfileScreen'
-import HeroLabScreen from '../screens/HeroLabScreen'
-import RoundDetailScreen from '../screens/RoundDetailScreen'
-import ScoreCaptureScreen from '../screens/ScoreCaptureScreen'
-import ScoreReviewScreen from '../screens/ScoreReviewScreen'
-import ResultScreen from '../screens/ResultScreen'
-import MemberScreen from '../screens/MemberScreen'
-import FeePrototypeScreen from '../screens/FeePrototypeScreen'
-import FeeMemberPrototypeScreen from '../screens/FeeMemberPrototypeScreen'
-import SignUpScreen from '../screens/SignUpScreen'
 import LoginScreen from '../screens/LoginScreen'
-import NoticePrototypeScreen from '../screens/NoticePrototypeScreen'
-import TreasuryEntryPrototypeScreen from '../screens/TreasuryEntryPrototypeScreen'
-import TreasuryLedgerPrototypeScreen from '../screens/TreasuryLedgerPrototypeScreen'
-import RoundSetupScreen from '../screens/RoundSetupScreen'
-import RoundSchedulePrototypeScreen from '../screens/RoundSchedulePrototypeScreen'
-import CaddieBookScreen from '../screens/CaddieBookScreen'
-import ScoreEntryScreen from '../screens/ScoreEntryScreen'
 import type { MainTabParamList, RootStackParamList } from './types'
+
+const getProfileScreen = () => require('../screens/ProfileScreen').default
+const getHeroLabScreen = () => require('../screens/HeroLabScreen').default
+const getRoundDetailScreen = () => require('../screens/RoundDetailScreen').default
+const getScoreCaptureScreen = () => require('../screens/ScoreCaptureScreen').default
+const getScoreReviewScreen = () => require('../screens/ScoreReviewScreen').default
+const getResultScreen = () => require('../screens/ResultScreen').default
+const getMemberScreen = () => require('../screens/MemberScreen').default
+const getFeePrototypeScreen = () => require('../screens/FeePrototypeScreen').default
+const getFeeMemberPrototypeScreen = () => require('../screens/FeeMemberPrototypeScreen').default
+const getSignUpScreen = () => require('../screens/SignUpScreen').default
+const getNoticePrototypeScreen = () => require('../screens/NoticePrototypeScreen').default
+const getTreasuryEntryPrototypeScreen = () => require('../screens/TreasuryEntryPrototypeScreen').default
+const getTreasuryLedgerPrototypeScreen = () => require('../screens/TreasuryLedgerPrototypeScreen').default
+const getRoundSetupScreen = () => require('../screens/RoundSetupScreen').default
+const getRoundSchedulePrototypeScreen = () => require('../screens/RoundSchedulePrototypeScreen').default
+const getCaddieBookScreen = () => require('../screens/CaddieBookScreen').default
+const getScoreEntryScreen = () => require('../screens/ScoreEntryScreen').default
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
 const Tab = createBottomTabNavigator<MainTabParamList>()
@@ -329,12 +330,12 @@ function NavigationStack({ session }: { session: import('@supabase/supabase-js')
         }}
       >
           <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="SignUp" component={SignUpScreen} options={{ title: '회원가입' }} />
+          <Stack.Screen name="SignUp" getComponent={getSignUpScreen} options={{ title: '회원가입' }} />
           <Stack.Screen name="Main" component={MainTabs} options={{ headerShown: false }} initialParams={undefined} />
-          <Stack.Screen name="Profile" component={ProfileScreen} options={({ navigation }) => ({ title: '프로필 · 설정', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
-          <Stack.Screen name="HeroLab" component={HeroLabScreen} options={({ navigation }) => ({ title: 'Hero Lab', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
-          <Stack.Screen name="FeePrototype" component={FeePrototypeScreen} options={({ navigation, route }) => ({ title: clubScreenTitle(clubName, '회비 관리'), headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => closeToManageMenu(navigation, route.params?.returnToManageMenu)} /> })} />
-          <Stack.Screen name="RoundSchedulePrototype" component={RoundSchedulePrototypeScreen} options={({ navigation, route }) => {
+          <Stack.Screen name="Profile" getComponent={getProfileScreen} options={({ navigation }) => ({ title: '프로필 · 설정', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="HeroLab" getComponent={getHeroLabScreen} options={({ navigation }) => ({ title: 'Hero Lab', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="FeePrototype" getComponent={getFeePrototypeScreen} options={({ navigation, route }) => ({ title: clubScreenTitle(clubName, '회비 관리'), headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => closeToManageMenu(navigation, route.params?.returnToManageMenu)} /> })} />
+          <Stack.Screen name="RoundSchedulePrototype" getComponent={getRoundSchedulePrototypeScreen} options={({ navigation, route }) => {
             const modalOnly = route.params?.modalOnly
             return {
               title: clubScreenTitle(clubName, '라운드 일정'),
@@ -345,11 +346,11 @@ function NavigationStack({ session }: { session: import('@supabase/supabase-js')
               headerRight: () => <CloseBtn onPress={() => closeToManageMenu(navigation, route.params?.returnToManageMenu)} />,
             }
           }} />
-          <Stack.Screen name="FeeMemberPrototype" component={FeeMemberPrototypeScreen} options={({ navigation }) => ({ title: '회원 회비 상세', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
-          <Stack.Screen name="TreasuryLedgerPrototype" component={TreasuryLedgerPrototypeScreen} options={({ navigation }) => ({ title: '입금 · 지급 내역', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="FeeMemberPrototype" getComponent={getFeeMemberPrototypeScreen} options={({ navigation }) => ({ title: '회원 회비 상세', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="TreasuryLedgerPrototype" getComponent={getTreasuryLedgerPrototypeScreen} options={({ navigation }) => ({ title: '입금 · 지급 내역', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
           <Stack.Screen
             name="TreasuryEntryPrototype"
-            component={TreasuryEntryPrototypeScreen}
+            getComponent={getTreasuryEntryPrototypeScreen}
             options={({ navigation, route }) => ({
               title: route.params.entry
                 ? route.params.kind === 'income'
@@ -362,15 +363,15 @@ function NavigationStack({ session }: { session: import('@supabase/supabase-js')
               headerRight: () => <CloseBtn onPress={() => navigation.goBack()} />,
             })}
           />
-          <Stack.Screen name="NoticePrototype" component={NoticePrototypeScreen} options={({ navigation, route }) => ({ title: clubScreenTitle(clubName, '공지사항'), headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => closeToManageMenu(navigation, route.params?.returnToManageMenu)} /> })} />
-          <Stack.Screen name="Members" component={MemberScreen} options={({ navigation, route }) => ({ title: clubScreenTitle(clubName, '회원 관리'), headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => closeToManageMenu(navigation, route.params?.returnToManageMenu)} /> })} />
-          <Stack.Screen name="RoundDetail" component={RoundDetailScreen} options={({ navigation }) => ({ title: '라운드 상세', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.navigate('Main', { screen: 'History' })} /> })} />
-          <Stack.Screen name="ScoreCapture" component={ScoreCaptureScreen} options={({ navigation }) => ({ title: '스코어 입력', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
-          <Stack.Screen name="ScoreReview" component={ScoreReviewScreen} options={({ navigation }) => ({ title: '스코어 확인 · 보정', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
-          <Stack.Screen name="Result" component={ResultScreen} options={({ navigation }) => ({ title: '라운드 결과', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
-          <Stack.Screen name="RoundSetup" component={RoundSetupScreen} options={({ navigation }) => ({ title: '코스 · 날짜 선택', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
-          <Stack.Screen name="CaddieBook" component={CaddieBookScreen} options={({ navigation }) => ({ title: '똥꾸 캐디의 조언', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
-          <Stack.Screen name="ScoreEntry" component={ScoreEntryScreen} options={({ navigation }) => ({ title: '스코어 입력', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.navigate('Main', { screen: 'History' })} /> })} />
+          <Stack.Screen name="NoticePrototype" getComponent={getNoticePrototypeScreen} options={({ navigation, route }) => ({ title: clubScreenTitle(clubName, '공지사항'), headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => closeToManageMenu(navigation, route.params?.returnToManageMenu)} /> })} />
+          <Stack.Screen name="Members" getComponent={getMemberScreen} options={({ navigation, route }) => ({ title: clubScreenTitle(clubName, '회원 관리'), headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => closeToManageMenu(navigation, route.params?.returnToManageMenu)} /> })} />
+          <Stack.Screen name="RoundDetail" getComponent={getRoundDetailScreen} options={({ navigation }) => ({ title: '라운드 상세', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.navigate('Main', { screen: 'History' })} /> })} />
+          <Stack.Screen name="ScoreCapture" getComponent={getScoreCaptureScreen} options={({ navigation }) => ({ title: '스코어 입력', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="ScoreReview" getComponent={getScoreReviewScreen} options={({ navigation }) => ({ title: '스코어 확인 · 보정', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="Result" getComponent={getResultScreen} options={({ navigation }) => ({ title: '라운드 결과', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="RoundSetup" getComponent={getRoundSetupScreen} options={({ navigation }) => ({ title: '코스 · 날짜 선택', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="CaddieBook" getComponent={getCaddieBookScreen} options={({ navigation }) => ({ title: '똥꾸 캐디의 조언', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.goBack()} /> })} />
+          <Stack.Screen name="ScoreEntry" getComponent={getScoreEntryScreen} options={({ navigation }) => ({ title: '스코어 입력', headerLeft: () => null, headerRight: () => <CloseBtn onPress={() => navigation.navigate('Main', { screen: 'History' })} /> })} />
 
       </Stack.Navigator>
     </NavigationContainer>

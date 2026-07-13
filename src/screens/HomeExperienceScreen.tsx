@@ -1109,48 +1109,52 @@ export default function HomeExperienceScreen() {
         />
       </ScrollView>
 
-      <RoundInfoModal
-        visible={roundPopupMode !== null}
-        mode={roundPopupMode}
-        round={popupRound}
-        loading={popupLoading}
-        members={popupMembers}
-        lottoEntries={popupLottoEntries}
-        lottoPars={popupLottoPars}
-        lottoSelection={popupLottoSelection}
-        lottoDraw={popupLottoDraw}
-        lottoConfig={popupLottoConfig}
-        lottoJackpot={popupLottoJackpot}
-        myLottoStrokes={popupMyLottoStrokes}
-        awardConfig={popupAwardConfig}
-        myUserId={userId}
-        canPurchaseLotto={isAssignedToRound(popupRound, userId, myName)}
-        lottoReady={popupLottoReady}
-        lottoSaving={popupLottoSaving}
-        drawSaving={popupDrawSaving}
-        onToggleLottoHole={togglePopupLottoHole}
-        onSaveLottoEntry={savePopupLottoEntry}
-        onDraw={runPopupLottoDraw}
-        onClose={() => setRoundPopupMode(null)}
-        onManage={() => {
-          const editScheduleId = popupRound?.id;
-          setRoundPopupMode(null);
-          nav.navigate(
-            "RoundSchedulePrototype",
-            editScheduleId ? { editScheduleId, modalOnly: true } : undefined,
-          );
-        }}
-      />
+      {roundPopupMode !== null ? (
+        <RoundInfoModal
+          visible
+          mode={roundPopupMode}
+          round={popupRound}
+          loading={popupLoading}
+          members={popupMembers}
+          lottoEntries={popupLottoEntries}
+          lottoPars={popupLottoPars}
+          lottoSelection={popupLottoSelection}
+          lottoDraw={popupLottoDraw}
+          lottoConfig={popupLottoConfig}
+          lottoJackpot={popupLottoJackpot}
+          myLottoStrokes={popupMyLottoStrokes}
+          awardConfig={popupAwardConfig}
+          myUserId={userId}
+          canPurchaseLotto={isAssignedToRound(popupRound, userId, myName)}
+          lottoReady={popupLottoReady}
+          lottoSaving={popupLottoSaving}
+          drawSaving={popupDrawSaving}
+          onToggleLottoHole={togglePopupLottoHole}
+          onSaveLottoEntry={savePopupLottoEntry}
+          onDraw={runPopupLottoDraw}
+          onClose={() => setRoundPopupMode(null)}
+          onManage={() => {
+            const editScheduleId = popupRound?.id;
+            setRoundPopupMode(null);
+            nav.navigate(
+              "RoundSchedulePrototype",
+              editScheduleId ? { editScheduleId, modalOnly: true } : undefined,
+            );
+          }}
+        />
+      ) : null}
 
-      <HomeRecordDetailModal
-        visible={recordDetailMode !== null}
-        mode={recordDetailMode}
-        rounds={recordDetailRounds}
-        awards={recordAwardRows}
-        userName={myName}
-        loading={recordDetailLoading}
-        onClose={() => setRecordDetailMode(null)}
-      />
+      {recordDetailMode !== null ? (
+        <HomeRecordDetailModal
+          visible
+          mode={recordDetailMode}
+          rounds={recordDetailRounds}
+          awards={recordAwardRows}
+          userName={myName}
+          loading={recordDetailLoading}
+          onClose={() => setRecordDetailMode(null)}
+        />
+      ) : null}
     </View>
   );
 }
