@@ -31,6 +31,12 @@ type Tab = 'byRound' | 'byPlayer' | 'club' | 'hall'
 type RankingType = 'wins' | 'streak' | 'lowestHandicap' | 'birdie' | 'singleBirdie' | 'frontBack' | 'avgImprove' | 'handicapImprove' | 'singlePar' | 'roundsPlayed' | 'lowestScore' | 'highestScore'
 type RoundDetailTab = 'regular' | 'peoria' | 'score' | 'award'
 type HistoryMember = { userId: string; name: string; role: string }
+const HISTORY_TABS: Array<{ value: Tab; label: string; icon: string }> = [
+  { value: 'byPlayer', label: '개인별', icon: 'user' },
+  { value: 'byRound', label: '라운딩 별', icon: 'flag' },
+  { value: 'club', label: '클럽 랭킹', icon: 'chart' },
+  { value: 'hall', label: '기네스 북', icon: 'trophy' },
+]
 
 function formatWon(value: number) {
   return `${Math.max(0, Math.round(value)).toLocaleString('ko-KR')}원`
@@ -50,6 +56,17 @@ function formatWinners(names: string[], value: string): string {
     ? names.map(shortName).join(', ')
     : `${shortName(names[0])} 외 ${names.length - 1}명`
   return `${label} (${value})`
+}
+
+function emptyHallEntry() {
+  return { record: '-', member: '-' }
+}
+
+function splitHallValue(value: string) {
+  if (!value || value === '-') return emptyHallEntry()
+  const match = value.match(/^(.*)\s+\((.*)\)$/)
+  if (!match) return { record: '-', member: value }
+  return { record: match[2], member: match[1] }
 }
 
 
@@ -230,11 +247,12 @@ export default function HistoryScreen() {
         <TopActionButtons />
       </View>
       <View style={s.tabs}>
-        {(['byPlayer', 'byRound', 'club', 'hall'] as Tab[]).map((t) => (
-          <TouchableOpacity key={t} style={[s.tab, tab === t && s.tabActive]} onPress={() => setTab(t)}>
-            <Text style={[s.tabText, tab === t && s.tabTextActive]}>
-              {t === 'byRound' ? '라운딩별' : t === 'byPlayer' ? '개인별' : t === 'club' ? '클럽 전체' : '기네스 북'}
-            </Text>
+        {HISTORY_TABS.map((item) => (
+          <TouchableOpacity key={item.value} style={[s.tab, tab === item.value && s.tabActive]} onPress={() => setTab(item.value)}>
+            <View style={s.tabContent}>
+              <Icon name={item.icon as any} size={13} color={tab === item.value ? C.green : C.muted} strokeWidth={2} />
+              <Text style={[s.tabText, tab === item.value && s.tabTextActive]}>{item.label}</Text>
+            </View>
           </TouchableOpacity>
         ))}
       </View>
@@ -456,19 +474,11 @@ function EmptyHallOfFame() {
   ]
   return (
     <View style={s.card}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
-        <Icon name="trophy" size={16} color={C.text} />
-        <Text style={[s.cardTitle, { marginBottom: 0 }]}>기네스 북</Text>
-      </View>
       {sections.map((section) => (
         <View key={section.title} style={s.hallSection}>
           <Text style={s.hallSectionTitle}>{section.title}</Text>
           {section.items.map((label) => (
-            <View key={label} style={s.hallRow}>
-              <View style={s.hallIconWrap}><Icon name="trophy" size={15} color={C.green} /></View>
-              <Text style={s.hallLabel}>{label}</Text>
-              <Text style={s.hallValue}>-</Text>
-            </View>
+            <HallRecordRow key={label} icon="🏆" label={label} value="-" />
           ))}
         </View>
       ))}
@@ -2063,7 +2073,7 @@ function HallOfFame({ rounds, handicapBasis }: { rounds: SavedRound[]; handicapB
       items: [
         { icon: '🏆', label: '최저타', value: lowestScoreText, type: 'lowestScore' as RankingType },
         { icon: '📈', label: '최고타', value: highestScoreText, type: 'highestScore' as RankingType },
-        { icon: '🐦', label: '버디왕 (전체)', value: topBirdieText, type: 'birdie' as RankingType },
+        { icon: '○', label: '버디왕 (전체)', value: topBirdieText, type: 'birdie' as RankingType },
         { icon: '⛳', label: '버디왕 (1경기)', value: topSingleBirdieText, type: 'singleBirdie' as RankingType },
         { icon: '◎', label: '파왕 (1경기)', value: topSingleParText, type: 'singlePar' as RankingType },
       ],
@@ -2074,7 +2084,7 @@ function HallOfFame({ rounds, handicapBasis }: { rounds: SavedRound[]; handicapB
         { icon: '📉', label: '최저 핸디', value: lowestHandiText, type: 'lowestHandicap' as RankingType },
         { icon: '↘️', label: '전후반 개선', value: topFrontBackText, type: 'frontBack' as RankingType },
         { icon: '📊', label: '평균타 개선', value: topAvgImproveText, type: 'avgImprove' as RankingType },
-        { icon: '🪄', label: '핸디 개선', value: topHandicapImproveText, type: 'handicapImprove' as RankingType },
+        { icon: '▾', label: '핸디 개선', value: topHandicapImproveText, type: 'handicapImprove' as RankingType },
       ],
     },
     {
@@ -2089,27 +2099,39 @@ function HallOfFame({ rounds, handicapBasis }: { rounds: SavedRound[]; handicapB
     <>
       {rankingType && <RankingModal config={rankingConfig[rankingType]} onClose={() => setRankingType(null)} />}
       <View style={s.card}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
-          <Icon name="trophy" size={16} color={C.text} />
-          <Text style={[s.cardTitle, { marginBottom: 0 }]}>기네스 북</Text>
-        </View>
         {highlightSections.map((section) => (
           <View key={section.title} style={s.hallSection}>
             <Text style={s.hallSectionTitle}>{section.title}</Text>
             {section.items.map(({ icon, label, value, type }) => (
-              <TouchableOpacity key={label} style={s.hallRow} onPress={() => setRankingType(type)}>
-                <View style={s.hallIconWrap}><EmojiIcon char={icon} size={15} color={C.green} /></View>
-                <Text style={s.hallLabel}>{label}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Text style={s.hallValue}>{value}</Text>
-                  <Text style={{ color: C.muted, fontSize: 16 }}>›</Text>
-                </View>
-              </TouchableOpacity>
+              <HallRecordRow
+                key={label}
+                icon={icon}
+                label={label}
+                value={value}
+                onPress={() => setRankingType(type)}
+              />
             ))}
           </View>
         ))}
       </View>
     </>
+  )
+}
+
+function HallRecordRow({ icon, label, value, onPress }: { icon: string; label: string; value: string; onPress?: () => void }) {
+  const { record, member } = splitHallValue(value)
+  const content = (
+    <>
+      <View style={s.hallIconWrap}><EmojiIcon char={icon} size={15} color={C.green} /></View>
+      <Text style={s.hallLabel}>{label}</Text>
+      <Text style={s.hallRecord}>{record}</Text>
+      <Text style={s.hallMember}>{member}</Text>
+    </>
+  )
+  return onPress ? (
+    <TouchableOpacity style={s.hallRow} onPress={onPress}>{content}</TouchableOpacity>
+  ) : (
+    <View style={s.hallRow}>{content}</View>
   )
 }
 
@@ -2228,7 +2250,8 @@ const s = StyleSheet.create({
   tabs: { flexDirection: 'row', backgroundColor: C.greenLight, marginHorizontal: 12, marginTop: 12, marginBottom: 0, borderRadius: 50, padding: 3 },
   tab: { flex: 1, paddingVertical: 5, alignItems: 'center', borderRadius: 50 },
   tabActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5, elevation: 2 },
-  tabText: { fontSize: 15, color: C.muted, fontWeight: '700' },
+  tabContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  tabText: { fontSize: 13, color: C.muted, fontWeight: '700' },
   tabTextActive: { color: C.green, fontWeight: '900' },
   card: {
     backgroundColor: C.card, borderRadius: 20, padding: 18, marginBottom: 14,
@@ -2576,7 +2599,9 @@ roundCarouselContent: {
   hallSectionTitle: { fontSize: 12, fontWeight: '900', color: C.text, marginBottom: 4 },
   hallRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border, gap: 10 },
   hallIconWrap: { width: 32, height: 32, borderRadius: 16, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
-  hallLabel: { flex: 1, fontSize: 13, color: C.muted },
+  hallLabel: { flex: 1.45, fontSize: 13, color: C.muted, textAlign: 'left' },
+  hallRecord: { flex: 0.8, fontSize: 13, fontWeight: '900', color: C.text, textAlign: 'center' },
+  hallMember: { flex: 1.1, fontSize: 13, fontWeight: '900', color: C.text, textAlign: 'right' },
   hallValue: { fontSize: 13, fontWeight: '600', color: C.text, textAlign: 'right', flexShrink: 1 },
   smallBtn: { backgroundColor: C.green, borderRadius: 20, paddingVertical: 6, paddingHorizontal: 14 },
   smallBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
