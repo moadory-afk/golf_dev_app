@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import { colorLayers, radius, spacing } from "../../../design/tokens";
 import { getCourseHeroImageSource } from "../../../data/courseHeroImages";
@@ -20,6 +20,7 @@ import { useSkin } from "../../../skins";
 import { TopActionButtons } from "../../../components/TopActionButtons";
 import type { HomeHeroRound } from "../types/home";
 import { isCompactWidth } from "../../../lib/responsive";
+import { getOptimizedRemoteImageUrl } from "../../../lib/imageOptimization";
 
 const HERO_DISPLAY_HEIGHT_RATIO = 0.7;
 const HERO_MIN_WIDTH = 280;
@@ -199,13 +200,14 @@ export function PremiumHomeHeroSection({
             style={styles.carousel}
           >
             {hasRounds ? (
-              rounds.map((round) => (
+              rounds.map((round, index) => (
                 <HeroRoundCard
                   key={round.id}
                   width={heroWidth}
                   height={heroHeight}
                   topInset={topInset}
                   round={round}
+                  shouldLoadImage={Math.abs(index - activeIndex) <= 1}
                   isAdmin={isAdmin}
                   onCaddieBookPress={onCaddieBookPress}
                   onGroupsPress={onGroupsPress}
@@ -274,11 +276,12 @@ export function PremiumHomeHeroSection({
   );
 }
 
-function HeroRoundCard({
+const HeroRoundCard = memo(function HeroRoundCard({
   width,
   height,
   topInset,
   round,
+  shouldLoadImage,
   isAdmin,
   onCaddieBookPress,
   onGroupsPress,
@@ -290,6 +293,7 @@ function HeroRoundCard({
   height: number;
   topInset: number;
   round: HomeHeroRound;
+  shouldLoadImage: boolean;
   isAdmin: boolean;
   onCaddieBookPress?: (round: HomeHeroRound) => void;
   onGroupsPress?: (round: HomeHeroRound) => void;
@@ -297,8 +301,19 @@ function HeroRoundCard({
   onAwardPress?: (round: HomeHeroRound) => void;
   onEditRoundPress?: (round: HomeHeroRound) => void;
 }) {
+  const optimizedHeroImageUrl = useMemo(
+    () =>
+      getOptimizedRemoteImageUrl(round.heroImageUrl, {
+        width: Math.max(width, 800),
+        height: Math.max(height, 560),
+        quality: 78,
+      }),
+    [height, round.heroImageUrl, width],
+  );
   const roundHeroImageSource = round.heroImageUrl
-    ? { uri: round.heroImageUrl }
+    ? optimizedHeroImageUrl
+      ? { uri: optimizedHeroImageUrl }
+      : null
     : getCourseHeroImageSource(round.courseName);
   const [flipped, setFlipped] = useState(false);
   const flip = useRef(new Animated.Value(0)).current;
@@ -334,11 +349,16 @@ function HeroRoundCard({
           onPress={() => setFlipped(true)}
           style={styles.flipTouchable}
         >
-          <Image
-            source={roundHeroImageSource}
-            style={styles.slideBackgroundImage}
-            resizeMode="cover"
-          />
+          {shouldLoadImage && roundHeroImageSource ? (
+            <Image
+              source={roundHeroImageSource}
+              style={styles.slideBackgroundImage}
+              resizeMode="cover"
+              fadeDuration={160}
+            />
+          ) : (
+            <View style={styles.slideBackgroundPlaceholder} />
+          )}
           <View style={styles.scrim} />
           <View style={[styles.frontSummaryWrap, { paddingHorizontal: isCompactWidth(width) ? 10 : 14, paddingBottom: isCompactWidth(width) ? 18 : 22 }]}>
             <HeroBottomSummary
@@ -383,7 +403,7 @@ function HeroRoundCard({
       </Animated.View>
     </View>
   );
-}
+});
 
 function HeroBackSide({
   width,
@@ -890,6 +910,10 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     width: "100%",
     height: "100%",
+  },
+  slideBackgroundPlaceholder: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#10261B",
   },
   scrim: {
     ...StyleSheet.absoluteFillObject,
