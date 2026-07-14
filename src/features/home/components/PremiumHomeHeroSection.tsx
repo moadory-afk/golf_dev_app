@@ -184,14 +184,17 @@ export function PremiumHomeHeroSection({
                     height={heroHeight}
                     topInset={topInset}
                     round={item.round}
-                    shouldLoadImage={Math.abs(index - activeIndex) <= 1}
+                    shouldLoadImage={true}
                     isAdmin={isAdmin}
                     onCaddieBookPress={onCaddieBookPress}
                     onGroupsPress={onGroupsPress}
                     onLottoPress={onLottoPress}
                     onAwardPress={onAwardPress}
                     onEditRoundPress={onEditRoundPress}
-                  />
+                    extraData={activeIndex}
+            initialNumToRender={carouselItems.length}
+            windowSize={5}
+          />
                 );
               }
               if (item.kind === "create") {
