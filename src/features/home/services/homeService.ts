@@ -14,6 +14,7 @@ import {
   getHomeDashboardRawData,
   type HomeDashboardRawData,
 } from "../api/homeRepository";
+import { buildRoundFeedEvents, selectPrimaryHomeFeedEvent } from "../engine/homeFeedEngine";
 import {
   formatRecommendedDepartureTime,
   formatTravelMinutes,
@@ -88,6 +89,8 @@ export function mergeHomeWeather(
       weatherText: weatherRound.weatherText,
       temperature: weatherRound.temperature,
       windText: weatherRound.windText,
+      fiveHourWeatherSummary: weatherRound.fiveHourWeatherSummary,
+      fiveHourWeatherDetail: weatherRound.fiveHourWeatherDetail,
     };
   });
 
@@ -99,8 +102,18 @@ export function mergeHomeWeather(
           weatherText: firstRound.weatherText,
           temperature: firstRound.temperature,
           windText: firstRound.windText,
+          fiveHourWeatherSummary: firstRound.fiveHourWeatherSummary,
+          fiveHourWeatherDetail: firstRound.fiveHourWeatherDetail,
         }
       : current.upcomingRound;
+
+  const feedEventsByRoundId = rounds.reduce<Record<string, ReturnType<typeof buildRoundFeedEvents>>>((acc, round) => {
+    acc[round.id] = buildRoundFeedEvents(round, current.stats.recentRounds);
+    return acc;
+  }, {});
+  const feedEvents = upcomingRound
+    ? (feedEventsByRoundId[upcomingRound.id] ?? buildRoundFeedEvents(upcomingRound, current.stats.recentRounds))
+    : current.feedEvents;
 
   return {
     ...current,
@@ -111,6 +124,9 @@ export function mergeHomeWeather(
       rounds,
     },
     upcomingRound,
+    feedEventsByRoundId,
+    feedEvents,
+    feed: selectPrimaryHomeFeedEvent(feedEvents),
   };
 }
 

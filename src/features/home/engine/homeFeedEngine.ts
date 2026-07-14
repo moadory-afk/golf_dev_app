@@ -63,7 +63,7 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound, recentRounds: Hom
   const dday = normalizeDday(round.dday)
   const isToday = dday === 0
   const isTomorrow = dday === 1
-  const isSoon = typeof dday === 'number' && dday >= 1 && dday <= 3
+  const isSoon = typeof dday === 'number' && dday >= 0 && dday <= 3
   const groupingComplete = round.status === 'closed' || round.status === 'finished'
   const startAt = roundStartTime(round)
   const minutesToStart = startAt ? Math.round((startAt.getTime() - Date.now()) / 60000) : null
@@ -208,7 +208,15 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound, recentRounds: Hom
   if (isSoon && !appearsFinished) {
     events.push(aiFeed(round, {
       id: `weather-${round.id}`, type: 'weather_route', priority: 55, icon: '🌤️',
-      message: `${round.weatherText || '예상 날씨를 확인하고 있습니다.'}\n${round.temperature || '--°'}${round.windText ? ` · ${round.windText}` : ''}\n\n복장과 출발시간을 확인해 주세요.`,
+      message: round.fiveHourWeatherSummary
+        ? `${round.fiveHourWeatherSummary}
+
+${round.fiveHourWeatherDetail || `${round.temperature || '--°'}${round.windText ? ` · ${round.windText}` : ''}`}
+티오프부터 5시간 예보입니다.`
+        : `티오프 시간대 날씨를 확인하고 있습니다.
+
+예보가 준비되면 라운드 5시간 동안의
+기온·비·바람 변화를 알려드릴게요.`,
       ctaLabel: '라운드 정보', actionType: 'open_round_info', tone: 'neutral',
     }))
   }

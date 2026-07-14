@@ -235,7 +235,14 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow, 
   const weather = raw.weatherByScheduleId[schedule.id] ?? (course?.id ? raw.weatherByCourseId[course.id] : undefined)
   const scheduleAttendances = raw.attendances.filter((item) => item.scheduleId === schedule.id)
   const attendanceStatus = scheduleAttendances.find((item) => item.userId === raw.currentUserId)?.status ?? "미정"
-  const attendingCount = scheduleAttendances.filter((item) => item.status === "참석").length
+  const attendingIds = scheduleAttendances
+    .filter((item) => item.status === "참석")
+    .map((item) => item.userId)
+    .filter(Boolean)
+  const assignedIds = members
+    .map((member) => member.member_user_id || member.member_name)
+    .filter(Boolean)
+  const attendingCount = new Set([...attendingIds, ...assignedIds]).size
   const assignedCount = countMembers(groups, members)
   const memberCount = schedule.status === 'closed' || schedule.status === 'finished'
     ? assignedCount
@@ -265,6 +272,8 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow, 
     weatherText: weather?.weatherText ?? '날씨 준비중',
     temperature: weather?.temperature ?? '--°',
     windText: weather?.windText ?? '풍속 준비중',
+    fiveHourWeatherSummary: weather?.fiveHourSummary,
+    fiveHourWeatherDetail: weather?.fiveHourDetail,
     courseId: schedule.course_id ?? course?.id,
     layoutId: schedule.layout_id ?? layout?.id,
     heroImageUrl: resolveHeroImageUrl(raw, course, schedule.round_date),

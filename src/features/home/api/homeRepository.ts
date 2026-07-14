@@ -120,6 +120,8 @@ export type HomeWeatherSnapshot = {
   temperature: string;
   weatherText: string;
   windText: string;
+  fiveHourSummary?: string;
+  fiveHourDetail?: string;
   fetchedAt?: string;
 };
 
@@ -157,6 +159,8 @@ function weatherSnapshotFromRoundWeather(
       typeof weather.windMs === "number"
         ? `${Math.round(weather.windMs)}m/s`
         : "풍속 준비중",
+    fiveHourSummary: weather.fiveHourSummary,
+    fiveHourDetail: weather.fiveHourDetail,
     fetchedAt: weather.fetchedAt,
   };
 }

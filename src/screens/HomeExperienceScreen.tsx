@@ -1237,6 +1237,7 @@ export default function HomeExperienceScreen() {
                   onActiveIndexChange={(index) => {
                     setActiveRoundIndex(index);
                   }}
+                  departureBufferMinutes={departureBufferMinutes}
                 />
               </PremiumHomeMotion>
             ),

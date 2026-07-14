@@ -52,6 +52,7 @@ type PremiumHomeHeroSectionProps = {
   topInset?: number;
   activeIndex?: number;
   onActiveIndexChange?: (index: number) => void;
+  departureBufferMinutes?: number;
 };
 
 export function PremiumHomeHeroSection({
@@ -74,6 +75,7 @@ export function PremiumHomeHeroSection({
   topInset = 0,
   activeIndex: controlledActiveIndex,
   onActiveIndexChange,
+  departureBufferMinutes = 40,
 }: PremiumHomeHeroSectionProps) {
   const { palette } = useSkin();
   const [internalActiveIndex, setInternalActiveIndex] = useState(0);
@@ -198,6 +200,7 @@ export function PremiumHomeHeroSection({
                     onLottoPress={onLottoPress}
                     onAwardPress={onAwardPress}
                     onEditRoundPress={onEditRoundPress}
+                    departureBufferMinutes={departureBufferMinutes}
                     extraData={activeIndex}
             initialNumToRender={carouselItems.length}
             windowSize={5}
@@ -229,6 +232,7 @@ export function PremiumHomeHeroSection({
                   isAdmin={isAdmin}
                   onCreateRound={onCreateRound}
                   heroImageSource={heroImageSource}
+                  departureBufferMinutes={departureBufferMinutes}
                 />
               );
             }}
@@ -278,6 +282,7 @@ const HeroRoundCard = memo(function HeroRoundCard({
   onLottoPress,
   onAwardPress,
   onEditRoundPress,
+  departureBufferMinutes,
 }: {
   width: number;
   height: number;
@@ -290,6 +295,7 @@ const HeroRoundCard = memo(function HeroRoundCard({
   onLottoPress?: (round: HomeHeroRound) => void;
   onAwardPress?: (round: HomeHeroRound) => void;
   onEditRoundPress?: (round: HomeHeroRound) => void;
+  departureBufferMinutes: number;
 }) {
   const optimizedHeroImageUrl = useMemo(
     () =>
@@ -362,6 +368,7 @@ const HeroRoundCard = memo(function HeroRoundCard({
               groupCount={round.groupCount}
               routeTimeText={round.routeTimeText}
               departureTimeText={round.departureTimeText}
+              departureBufferMinutes={departureBufferMinutes}
             />
           </View>
         </TouchableOpacity>
@@ -568,6 +575,7 @@ function HeroEmptyCard({
   onCreateRound,
   topInset,
   heroImageSource,
+  departureBufferMinutes,
 }: {
   width: number;
   height: number;
@@ -587,6 +595,7 @@ function HeroEmptyCard({
   onAwardPress?: (round: HomeHeroRound) => void;
   onEditRoundPress?: (round: HomeHeroRound) => void;
   heroImageSource?: ImageSourcePropType;
+  departureBufferMinutes: number;
 }) {
   const { palette } = useSkin();
   void address;
@@ -610,6 +619,7 @@ function HeroEmptyCard({
         dday={dday}
         dateLabel={roundDate}
         teeTime={teeTime}
+        departureBufferMinutes={departureBufferMinutes}
       />
 
       {isAdmin && (
@@ -668,6 +678,7 @@ function HeroBottomSummary({
   groupCount,
   routeTimeText,
   departureTimeText,
+  departureBufferMinutes,
 }: {
   width: number;
   courseName: string;
@@ -679,6 +690,7 @@ function HeroBottomSummary({
   groupCount?: number;
   routeTimeText?: string;
   departureTimeText?: string;
+  departureBufferMinutes: number;
 }) {
   const isCompact = isCompactWidth(width);
   const scheduleLine = teeTime ? `Tee Off ${teeTime}` : "Tee Off --:--";
@@ -809,7 +821,7 @@ function HeroBottomSummary({
             ]}
             numberOfLines={1}
           >
-            40분 여유 가정
+            {`${Math.max(0, Math.round(departureBufferMinutes))}분 여유 가정`}
           </Text>
         </View>
       </View>

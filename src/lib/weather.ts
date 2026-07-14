@@ -1,6 +1,15 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getCachedAsync } from "./asyncCache";
 
+export type RoundWeatherHour = {
+  time: string;
+  tempC: number;
+  condition: string;
+  icon: string;
+  windMs?: number;
+  pop?: number;
+};
+
 export type RoundWeather = {
   tempC: number;
   icon: string;
@@ -8,6 +17,9 @@ export type RoundWeather = {
   windMs?: number;
   windDeg?: number;
   pop?: number;
+  fiveHourSummary?: string;
+  fiveHourDetail?: string;
+  hourlyForecast?: RoundWeatherHour[];
   fetchedAt: string;
 };
 
@@ -59,6 +71,52 @@ function pickForecast(list: ForecastItem[], date: string, time?: string) {
   return [...list].sort(
     (a, b) => Math.abs(a.dt - target) - Math.abs(b.dt - target),
   )[0];
+}
+
+function formatHour(timestamp: number) {
+  return new Date(timestamp * 1000).toLocaleTimeString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function pickFiveHourForecast(list: ForecastItem[], date: string, time?: string): RoundWeatherHour[] {
+  const start = targetTimestamp(date, time);
+  return Array.from({ length: 5 }, (_, index) => {
+    const target = start + index * 60 * 60;
+    const picked = [...list].sort((a, b) => Math.abs(a.dt - target) - Math.abs(b.dt - target))[0];
+    const weather = picked?.weather?.[0];
+    return {
+      time: formatHour(target),
+      tempC: Math.round(picked?.main?.temp ?? 0),
+      condition: weather?.description ?? weather?.main ?? "날씨",
+      icon: weatherEmoji(weather?.icon, weather?.main),
+      windMs: typeof picked?.wind?.speed === "number" ? Math.round(picked.wind.speed * 10) / 10 : undefined,
+      pop: typeof picked?.pop === "number" ? Math.round(picked.pop * 100) : undefined,
+    };
+  });
+}
+
+function summarizeFiveHourForecast(hours: RoundWeatherHour[]) {
+  if (!hours.length) return { summary: undefined, detail: undefined };
+  const temps = hours.map((item) => item.tempC);
+  const minTemp = Math.min(...temps);
+  const maxTemp = Math.max(...temps);
+  const maxPop = Math.max(...hours.map((item) => item.pop ?? 0));
+  const maxWind = Math.max(...hours.map((item) => item.windMs ?? 0));
+  const rainStart = hours.find((item) => (item.pop ?? 0) >= 50 || /비|소나기|rain/i.test(item.condition));
+
+  let summary = "라운드 동안 날씨 변화가 크지 않겠습니다.";
+  if (rainStart) summary = `${rainStart.time} 전후 비가 예상됩니다.`;
+  else if (maxWind >= 7) summary = "라운드 중 강한 바람이 예상됩니다.";
+  else if (maxTemp >= 33) summary = "라운드 동안 무더운 날씨가 이어지겠습니다.";
+  else if (minTemp <= 5) summary = "라운드 동안 쌀쌀한 날씨가 예상됩니다.";
+
+  const temperatureText = minTemp === maxTemp ? `${maxTemp}°C` : `${minTemp}~${maxTemp}°C`;
+  const detailParts = [temperatureText, `강수확률 최고 ${maxPop}%`, `바람 최고 ${Math.round(maxWind * 10) / 10}m/s`];
+  return { summary, detail: detailParts.join(" · ") };
 }
 
 async function readCache(key: string): Promise<RoundWeather | null> {
@@ -150,9 +208,12 @@ export async function getOpenWeatherForRound(params: {
       const res = await fetch(url);
       if (!res.ok) return null;
       const data = (await res.json()) as ForecastResponse;
-      const picked = pickForecast(data.list ?? [], params.date, params.time);
+      const forecastList = data.list ?? [];
+      const picked = pickForecast(forecastList, params.date, params.time);
       if (!picked) return null;
 
+      const hourlyForecast = pickFiveHourForecast(forecastList, params.date, params.time);
+      const fiveHour = summarizeFiveHourForecast(hourlyForecast);
       const weather = picked.weather?.[0];
       const result: RoundWeather = {
         tempC: Math.round(picked.main?.temp ?? 0),
@@ -167,6 +228,9 @@ export async function getOpenWeatherForRound(params: {
           typeof picked.pop === "number"
             ? Math.round(picked.pop * 100)
             : undefined,
+        fiveHourSummary: fiveHour.summary,
+        fiveHourDetail: fiveHour.detail,
+        hourlyForecast,
         fetchedAt: new Date().toISOString(),
       };
       await writeCache(cacheKey, result);

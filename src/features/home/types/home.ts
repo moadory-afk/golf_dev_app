@@ -23,6 +23,8 @@ export type HomeUpcomingRound = {
   weatherText: string
   temperature: string
   windText?: string
+  fiveHourWeatherSummary?: string
+  fiveHourWeatherDetail?: string
   courseId?: string
   layoutId?: string
   heroImageUrl?: string | null
