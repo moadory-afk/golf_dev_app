@@ -537,6 +537,7 @@ function ScheduledRoundCard({ schedule, index, totalCount, width, height }: { sc
 
 function ByRound({ rounds, schedules = [], handicapBasis = 5, members = [] }: { rounds: SavedRound[]; schedules?: ScheduledRound[]; handicapBasis?: number; members?: HistoryMember[] }) {
   const [containerWidth, setContainerWidth] = useState(0)
+  const roundListRef = useRef<FlatList<RoundCarouselItem>>(null)
   const roundScheduleIds = new Set(rounds.map((round) => round.scheduleId).filter((id): id is string => !!id))
   const items: RoundCarouselItem[] = [
     ...rounds.map((round): RoundCarouselItem => ({ kind: 'round', key: `round-${round.id}`, date: round.date, round })),
@@ -548,6 +549,14 @@ function ByRound({ rounds, schedules = [], handicapBasis = 5, members = [] }: { 
   if (items.length === 0) return <EmptyByRound members={members} />
 
   const cardWidth = containerWidth > 0 ? Math.min(Math.max(containerWidth - 36, 292), 442) : 0
+  const cardGap = 8
+  const snapInterval = cardWidth + cardGap
+  const snapOffsets = items.map((_, index) => index * snapInterval)
+  const snapToNearestCard = (offsetX: number) => {
+    if (cardWidth <= 0) return
+    const index = Math.max(0, Math.min(items.length - 1, Math.round(offsetX / snapInterval)))
+    roundListRef.current?.scrollToOffset({ offset: index * snapInterval, animated: true })
+  }
   const cardHeight = Math.max(500, Math.min(590, Dimensions.get('window').height - 220))
 
   return (
@@ -557,14 +566,17 @@ function ByRound({ rounds, schedules = [], handicapBasis = 5, members = [] }: { 
     }}>
       {cardWidth > 0 ? (
         <FlatList
+          ref={roundListRef}
           horizontal
           data={items}
           keyExtractor={(item) => item.key}
           decelerationRate="fast"
           snapToAlignment="start"
-          snapToInterval={cardWidth + 8}
+          snapToOffsets={snapOffsets}
           disableIntervalMomentum
-          getItemLayout={(_, index) => ({ length: cardWidth + 8, offset: (cardWidth + 8) * index, index })}
+          onMomentumScrollEnd={(event) => snapToNearestCard(event.nativeEvent.contentOffset.x)}
+          onScrollEndDrag={(event) => snapToNearestCard(event.nativeEvent.contentOffset.x)}
+          getItemLayout={(_, index) => ({ length: snapInterval, offset: snapInterval * index, index })}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.roundCarouselContent}
           initialNumToRender={2}
@@ -2367,7 +2379,7 @@ roundCarouselContent: {
     gap: 8,
   },
   roundSwipeHint: { textAlign: 'center', marginTop: 10, fontSize: 11, fontWeight: '700', color: C.muted },
-  roundCardShell: { marginHorizontal: 0 },
+  roundCardShell: { marginHorizontal: 0, flexShrink: 0 },
   flipCardScene: { position: 'relative' },
   flipFace: { position: 'absolute', width: '100%', height: '100%', backfaceVisibility: 'hidden' },
   flipBackFace: { backfaceVisibility: 'hidden' },
