@@ -133,12 +133,21 @@ export function PremiumGogoCaddieCard({
             onScrollEndDrag={(event) => syncPageFromOffset(event.nativeEvent.contentOffset.x)}
             onMomentumScrollEnd={(event) => syncPageFromOffset(event.nativeEvent.contentOffset.x)}
           >
-            {feedItems.map((item) => (
+            {feedItems.map((item) => {
+              const [messageTitle, ...messageBodyParts] = item.message.split(/\n\s*\n/)
+              const messageBody = messageBodyParts.join('\n\n')
+
+              return (
               <View key={item.id} style={[styles.slide, slideWidth > 0 ? { width: slideWidth } : null]}>
                 <TouchableOpacity activeOpacity={0.9} onPress={() => runFeedAction(item)} style={styles.content}>
                   <View style={styles.messageRow}>
                     <Text style={styles.messageIcon}>{item.icon}</Text>
-                    <Text style={[styles.message, { color: palette.text }]} numberOfLines={5}>{item.message}</Text>
+                    <View style={styles.messageTextColumn}>
+                      <Text style={[styles.title, { color: palette.text }]} numberOfLines={2}>{messageTitle}</Text>
+                      {!!messageBody && (
+                        <Text style={[styles.message, { color: palette.text }]} numberOfLines={4}>{messageBody}</Text>
+                      )}
+                    </View>
                   </View>
                 </TouchableOpacity>
 
@@ -174,7 +183,8 @@ export function PremiumGogoCaddieCard({
                   </TouchableOpacity>
                 )}
               </View>
-            ))}
+              )
+            })}
           </ScrollView>
 
           {feedItems.length > 1 && (
@@ -252,10 +262,11 @@ const styles = StyleSheet.create({
     minWidth: 0,
     paddingTop: 2,
   },
-  title: { fontSize: 17, lineHeight: 21, fontWeight: '900', letterSpacing: -0.6 },
-  messageRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginTop: 0 },
-  messageIcon: { fontSize: 13, lineHeight: 17 },
-  message: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 17, fontWeight: '900' },
+  title: { fontSize: 18, lineHeight: 23, fontWeight: '900', letterSpacing: -0.65 },
+  messageRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 0 },
+  messageTextColumn: { flex: 1, minWidth: 0, gap: 7 },
+  messageIcon: { fontSize: 15, lineHeight: 20 },
+  message: { minWidth: 0, fontSize: 15, lineHeight: 21, fontWeight: '800' },
   choiceActionRow: { flexDirection: 'row', gap: 6, marginTop: 'auto' },
   choiceAction: { flex: 1, minHeight: 34, borderWidth: 1, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   choiceActionText: { fontSize: 11, lineHeight: 15, fontWeight: '900' },

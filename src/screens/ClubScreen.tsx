@@ -814,14 +814,9 @@ export default function ClubScreen() {
       {clubInfoOpen && club && (
         <ClubInfoModal
           club={club}
-          clubs={myClubs}
           memberCount={members.length}
           admins={adminMembers}
           onClose={() => setClubInfoOpen(false)}
-          onSelectClub={(nextClub) => {
-            setActiveClub(nextClub);
-            setRefreshKey((k) => k + 1);
-          }}
           onSaveClub={handleSaveClubInfo}
           handicapBasis={handicapBasis}
           onChangeHandicapBasis={handleChangeHandicapBasis}
@@ -1500,11 +1495,9 @@ function CreateClubModal({
 
 function ClubInfoModal({
   club,
-  clubs,
   memberCount,
   admins,
   onClose,
-  onSelectClub,
   onSaveClub,
   handicapBasis,
   onChangeHandicapBasis,
@@ -1513,11 +1506,9 @@ function ClubInfoModal({
   onLeaveClub,
 }: {
   club: ClubInfo;
-  clubs: ClubInfo[];
   memberCount: number;
   admins: Array<{ userId: string; name: string; role: string }>;
   onClose: () => void;
-  onSelectClub: (club: ClubInfo) => void;
   onSaveClub: (
     name: string,
     subtitle: string,
@@ -1696,6 +1687,12 @@ function ClubInfoModal({
           activeOpacity={1}
           onPress={() => {}}
         >
+          <ScrollView
+            style={s.clubInfoModalScroll}
+            contentContainerStyle={s.clubInfoModalScrollContent}
+            showsVerticalScrollIndicator
+            keyboardShouldPersistTaps="handled"
+          >
           <View style={s.modalHeader}>
             <View style={{ flex: 1 }}>
               {editing ? (
@@ -1753,68 +1750,37 @@ function ClubInfoModal({
                 </>
               )}
             </View>
-            <TouchableOpacity style={s.closeBtn} onPress={onClose}>
-              <Text style={s.closeBtnText}>닫기</Text>
-            </TouchableOpacity>
+            <View style={s.clubInfoHeaderActions}>
+              {isAdmin ? (
+                <TouchableOpacity
+                  style={[s.clubInfoHeaderSaveBtn, saving && { opacity: 0.6 }]}
+                  onPress={handleSave}
+                  disabled={saving}
+                  activeOpacity={0.82}
+                >
+                  {saving ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={s.clubInfoHeaderSaveText}>저장</Text>
+                  )}
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity style={s.closeBtn} onPress={onClose}>
+                <Text style={s.closeBtnText}>닫기</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-
-          {clubs.length > 1 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={s.clubSwitchScroll}
-              contentContainerStyle={s.clubSwitchRow}
-            >
-              {clubs.map((item) => {
-                const selected = item.id === club.id;
-                return (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={[
-                      s.clubSwitchChip,
-                      selected && s.clubSwitchChipActive,
-                    ]}
-                    onPress={() => onSelectClub(item)}
-                    activeOpacity={0.82}
-                  >
-                    <Text
-                      style={[
-                        s.clubSwitchText,
-                        selected && s.clubSwitchTextActive,
-                      ]}
-                    >
-                      {item.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          )}
 
           {isAdmin && (
             <View style={s.clubEditRow}>
               {editing ? (
-                <>
-                  <TouchableOpacity
-                    style={[s.clubEditBtn, saving && { opacity: 0.6 }]}
-                    onPress={handleSave}
-                    disabled={saving}
-                    activeOpacity={0.82}
-                  >
-                    {saving ? (
-                      <ActivityIndicator color={C.green} size="small" />
-                    ) : (
-                      <Text style={s.clubEditText}>저장</Text>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={s.clubEditBtn}
-                    onPress={() => setEditing(false)}
-                    activeOpacity={0.82}
-                  >
-                    <Text style={s.clubEditText}>취소</Text>
-                  </TouchableOpacity>
-                </>
+                <TouchableOpacity
+                  style={s.clubEditBtn}
+                  onPress={() => setEditing(false)}
+                  activeOpacity={0.82}
+                >
+                  <Text style={s.clubEditText}>수정 취소</Text>
+                </TouchableOpacity>
               ) : (
                 <TouchableOpacity
                   style={s.clubEditBtn}
@@ -1962,6 +1928,7 @@ function ClubInfoModal({
               )}
             </TouchableOpacity>
           </View>
+          </ScrollView>
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
@@ -3174,8 +3141,34 @@ const s = StyleSheet.create({
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     marginBottom: 14,
+  },
+  clubInfoModalScroll: {
+    flexShrink: 1,
+  },
+  clubInfoModalScrollContent: {
+    paddingBottom: 8,
+  },
+  clubInfoHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginLeft: 10,
+  },
+  clubInfoHeaderSaveBtn: {
+    minWidth: 64,
+    minHeight: 42,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: C.green,
+  },
+  clubInfoHeaderSaveText: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#fff",
   },
   modalTitle: {
     fontSize: 15,

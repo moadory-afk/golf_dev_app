@@ -243,10 +243,10 @@ export function PremiumHomeHeroSection({
                     {
                       backgroundColor:
                         index === activeIndex
-                          ? palette.text
+                          ? "#fff"
                           : "rgba(255,255,255,0.48)",
-                      width: index === activeIndex ? 9 : 7,
-                      height: index === activeIndex ? 9 : 7,
+                      width: index === activeIndex ? 16 : 6,
+                      height: 6,
                     },
                   ]}
                 />
@@ -1251,7 +1251,7 @@ const styles = StyleSheet.create({
   dotsViewport: {
     position: "absolute",
     alignSelf: "center",
-    bottom: 7,
+    bottom: 10,
     width: 112,
     overflow: "hidden",
   },
@@ -1260,7 +1260,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: spacing.xs,
+    gap: 6,
     paddingHorizontal: spacing.xs,
   },
   dot: { borderRadius: radius.pill },
