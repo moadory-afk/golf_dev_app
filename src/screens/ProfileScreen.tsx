@@ -18,6 +18,7 @@ import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import type { User } from "@supabase/supabase-js";
 import { EmojiIcon } from "../components/EmojiIcon";
+import { PwaInstallGuide } from "../components/PwaInstallGuide";
 import {
   ImageCropModal,
   type ImageCropRect,
@@ -452,6 +453,7 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
   const [confirmPw, setConfirmPw] = useState("");
   const [savingPw, setSavingPw] = useState(false);
   const [signupGuideOpen, setSignupGuideOpen] = useState(false);
+  const [installGuideOpen, setInstallGuideOpen] = useState(false);
   const [signupGuidePhone, setSignupGuidePhone] = useState("");
   const [homeAddress, setHomeAddress] = useState("");
   const [selectedHomePoint, setSelectedHomePoint] = useState<GeoPoint | null>(
@@ -1144,6 +1146,8 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
         </Modal>
       )}
 
+      <PwaInstallGuide visible={installGuideOpen} onClose={() => setInstallGuideOpen(false)} />
+
       <KakaoAddressSearchModal
         visible={showAddressSearch}
         initialQuery={homeAddress}
@@ -1390,6 +1394,12 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
           >
             <Text style={p.menuIcon}>🔑</Text>
             <Text style={p.menuText}>비밀번호 변경</Text>
+            <Text style={p.menuArrow}>›</Text>
+          </TouchableOpacity>
+          <View style={p.menuDivider} />
+          <TouchableOpacity style={p.menuRow} onPress={() => setInstallGuideOpen(true)}>
+            <Text style={p.menuIcon}>📱</Text>
+            <Text style={p.menuText}>홈 화면에 앱 설치</Text>
             <Text style={p.menuArrow}>›</Text>
           </TouchableOpacity>
           <View style={p.menuDivider} />

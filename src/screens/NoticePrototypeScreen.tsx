@@ -3,6 +3,7 @@ import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useNavigation } from '@react-navigation/native'
 import { Icon } from '../components/Icon'
+import { PwaInstallGuide } from '../components/PwaInstallGuide'
 import { useClub } from '../lib/ClubContext'
 import { useUserProfile } from '../lib/UserProfileContext'
 import { createClubNotice, deleteClubNotice, getClubNotices, updateClubNotice, type ClubNotice } from '../lib/store'
@@ -32,6 +33,7 @@ export default function NoticePrototypeScreen() {
   const [isPublished, setIsPublished] = useState(true)
   const [isImportant, setIsImportant] = useState(false)
   const [deletingNoticeId, setDeletingNoticeId] = useState<string | null>(null)
+  const [installGuideOpen, setInstallGuideOpen] = useState(false)
 
   useLayoutEffect(() => {
     nav.setOptions({ title: `${activeClub?.name ?? '클럽'} 공지사항` })
@@ -125,6 +127,18 @@ export default function NoticePrototypeScreen() {
             </TouchableOpacity>
           )}
         </View>
+        <TouchableOpacity style={s.installNotice} onPress={() => setInstallGuideOpen(true)} activeOpacity={0.84}>
+          <View style={s.installNoticeIcon}><Text style={s.installNoticeEmoji}>📱</Text></View>
+          <View style={{ flex: 1 }}>
+            <View style={s.noticeTitleRow}>
+              <Text style={s.pinnedBadge}>상단 고정</Text>
+              <Text style={s.installNoticeTitle}>GogoPar 홈 화면에 설치하기</Text>
+            </View>
+            <Text style={s.noticeBody} numberOfLines={2}>아이폰·안드로이드·PC 기종별 설치 방법을 확인하세요.</Text>
+            <Text style={s.installNoticeMeta}>항상 확인 가능</Text>
+          </View>
+          <Text style={s.installArrow}>›</Text>
+        </TouchableOpacity>
         {loading ? (
           <Text style={s.body}>불러오는 중...</Text>
         ) : notices.length === 0 ? (
@@ -165,6 +179,8 @@ export default function NoticePrototypeScreen() {
           )
         })}
       </View>
+
+      <PwaInstallGuide visible={installGuideOpen} onClose={() => setInstallGuideOpen(false)} />
 
       <Modal transparent visible={!!selectedNotice} animationType="fade" onRequestClose={() => setSelectedNotice(null)}>
         <View style={s.overlay}>
@@ -223,6 +239,13 @@ const s = StyleSheet.create({
   heroSub: { color: 'rgba(255,255,255,0.72)', fontSize: 12, marginTop: 8, lineHeight: 18 },
   card: { backgroundColor: C.card, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: C.border },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  installNotice: { flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderColor: '#B9DDC8', backgroundColor: '#F0F8F3', borderRadius: 16, padding: 13, marginBottom: 10 },
+  installNoticeIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#DCEFE4', alignItems: 'center', justifyContent: 'center' },
+  installNoticeEmoji: { fontSize: 20 },
+  installNoticeTitle: { flex: 1, color: C.text, fontSize: 14, fontWeight: '900' },
+  installNoticeMeta: { color: C.greenDark, fontSize: 11, fontWeight: '800', marginTop: 5 },
+  installArrow: { color: C.greenDark, fontSize: 24, fontWeight: '500' },
+  pinnedBadge: { color: '#fff', backgroundColor: C.greenDark, borderRadius: 7, overflow: 'hidden', paddingHorizontal: 6, paddingVertical: 2, fontSize: 10, fontWeight: '900' },
   sectionTitle: { fontSize: 15, fontWeight: '900', color: C.text },
   sectionAction: { fontSize: 12, fontWeight: '900', color: C.green },
   body: { fontSize: 13, color: C.muted, lineHeight: 20, marginTop: 8 },
