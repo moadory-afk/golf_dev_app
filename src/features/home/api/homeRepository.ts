@@ -14,6 +14,7 @@ type HomeRoundSummaryRow = {
   pars?: number[] | null;
   players?: PlayerScore[] | null;
   is_complete?: boolean | null;
+  schedule_id?: string | null;
 };
 
 function mapHomeRoundSummary(row: HomeRoundSummaryRow): SavedRound {
@@ -26,6 +27,7 @@ function mapHomeRoundSummary(row: HomeRoundSummaryRow): SavedRound {
     players: row.players ?? [],
     photoData: [],
     isComplete: row.is_complete ?? false,
+    scheduleId: row.schedule_id ?? undefined,
   };
 }
 
@@ -37,7 +39,7 @@ function mapHomeRoundSummary(row: HomeRoundSummaryRow): SavedRound {
 async function getHomeRoundSummaries(clubId: string): Promise<SavedRound[]> {
   const { data, error } = await supabase
     .from("rounds")
-    .select("id, date, course_name, pars, players, is_complete")
+    .select("id, date, course_name, pars, players, is_complete, schedule_id")
     .eq("club_id", clubId)
     .order("date", { ascending: false });
 
@@ -57,6 +59,7 @@ export type HomeScheduleRow = {
   status?: HomeRoundStatus | null;
   created_at?: string | null;
   updated_at?: string | null;
+  award_config?: { count?: number; items?: string[] } | null;
 };
 
 export type HomeScheduleGroupRow = {
@@ -137,6 +140,9 @@ export type HomeDashboardRawData = {
   rounds: SavedRound[];
   weatherByCourseId: Record<string, HomeWeatherSnapshot>;
   weatherByScheduleId: Record<string, HomeWeatherSnapshot>;
+  lottoEntries: Array<{ scheduleId: string; userId: string }>;
+  lottoDraws: Array<{ scheduleId: string; drafterUserId: string | null; drawStatus: 'PENDING' | 'COMPLETED' }>;
+  currentUserId?: string | null;
 };
 
 function weatherSnapshotFromRoundWeather(
@@ -259,7 +265,7 @@ async function fetchHomeDashboardRawData(
   const { data: schedules, error: scheduleError } = await supabase
     .from("club_round_schedules")
     .select(
-      "id, round_date, course_id, course_name, layout_id, layout_name, tee_time, note, status, created_at, updated_at",
+      "id, round_date, course_id, course_name, layout_id, layout_name, tee_time, note, status, award_config, created_at, updated_at",
     )
     .eq("club_id", clubId)
     .gte("round_date", today)
@@ -287,6 +293,8 @@ async function fetchHomeDashboardRawData(
     seasonImageResult,
     layoutResult,
     rounds,
+    lottoEntryResult,
+    lottoDrawResult,
   ] = await Promise.all([
     scheduleIds.length
       ? supabase
@@ -320,6 +328,12 @@ async function fetchHomeDashboardRawData(
           .in("id", layoutIds)
       : Promise.resolve({ data: [], error: null }),
     getHomeRoundSummaries(clubId),
+    scheduleIds.length && userId
+      ? supabase.from("round_lotto_entries").select("schedule_id, user_id").in("schedule_id", scheduleIds).eq("user_id", userId)
+      : Promise.resolve({ data: [], error: null }),
+    scheduleIds.length
+      ? supabase.from("round_lotto_draws").select("schedule_id, drafter_user_id, draw_status").in("schedule_id", scheduleIds)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   if (groupResult.error) throw groupResult.error;
@@ -328,6 +342,8 @@ async function fetchHomeDashboardRawData(
   if (courseResult.error) throw courseResult.error;
   if (seasonImageResult.error) throw seasonImageResult.error;
   if (layoutResult.error) throw layoutResult.error;
+  if (lottoEntryResult.error) throw lottoEntryResult.error;
+  if (lottoDrawResult.error) throw lottoDrawResult.error;
 
   const courseRows = (courseResult.data ?? []) as HomeCourseRow[];
 
@@ -347,6 +363,9 @@ async function fetchHomeDashboardRawData(
     // 날씨는 홈 기본 화면을 먼저 표시한 뒤 useHomeDashboard에서 비동기로 보강한다.
     weatherByCourseId: {},
     weatherByScheduleId: {},
+    lottoEntries: ((lottoEntryResult.data ?? []) as Array<{ schedule_id: string; user_id: string }>).map((row) => ({ scheduleId: row.schedule_id, userId: row.user_id })),
+    lottoDraws: ((lottoDrawResult.data ?? []) as Array<{ schedule_id: string; drafter_user_id?: string | null; draw_status?: string | null }>).map((row) => ({ scheduleId: row.schedule_id, drafterUserId: row.drafter_user_id ?? null, drawStatus: row.draw_status === "COMPLETED" ? "COMPLETED" : "PENDING" })),
+    currentUserId: userId ?? null,
   };
 }
 

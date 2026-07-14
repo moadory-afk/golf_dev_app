@@ -203,6 +203,12 @@ function resolveFeedNavigation(
     if (params) return nav.navigate("CaddieBook", params);
     return nav.navigate("RoundSchedulePrototype", { openCreate: true });
   }
+  if (actionType === "open_attendance" && round)
+    return nav.navigate("RoundSchedulePrototype", { editScheduleId: round.id, modalOnly: true });
+  if (actionType === "open_award" && round)
+    return nav.navigate("RoundSchedulePrototype", { editScheduleId: round.id, modalOnly: true });
+  if (actionType === "open_analysis")
+    return nav.navigate("Main", { screen: "History" });
   if (actionType === "open_groups" || actionType === "open_lotto" || actionType === "open_round_info")
     return nav.navigate("RoundSchedulePrototype");
   if (actionType === "open_notice") return nav.navigate("NoticePrototype");
@@ -938,8 +944,16 @@ export default function HomeExperienceScreen() {
         }
         return;
       }
+      if (actionType === "open_attendance" && round) {
+        nav.navigate("RoundSchedulePrototype", { editScheduleId: round.id, modalOnly: true });
+        return;
+      }
       if (actionType === "open_groups" && round) {
         openRoundPopup(round, "groups");
+        return;
+      }
+      if (actionType === "open_award" && round) {
+        openRoundPopup(round, "award");
         return;
       }
       if (actionType === "open_lotto" && round) {
@@ -1217,6 +1231,7 @@ export default function HomeExperienceScreen() {
                   feed={activeFeed}
                   feeds={activeRoundFeeds}
                   roundLabel={activeRoundLabel}
+                  userId={userId}
                   onFeedAction={handleCaddieFeedAction}
                   onPress={() => handleCaddieFeedAction(activeFeed)}
                 />

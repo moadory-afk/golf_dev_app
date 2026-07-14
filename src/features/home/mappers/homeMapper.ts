@@ -234,6 +234,11 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow, 
 
   const weather = raw.weatherByScheduleId[schedule.id] ?? (course?.id ? raw.weatherByCourseId[course.id] : undefined)
   const attendanceStatus = raw.attendances.find((item) => item.scheduleId === schedule.id)?.status ?? "미정"
+  const lottoPurchased = raw.lottoEntries.some((item) => item.scheduleId === schedule.id)
+  const lottoDraw = raw.lottoDraws.find((item) => item.scheduleId === schedule.id)
+  const savedRound = raw.rounds.find((item) => item.scheduleId === schedule.id)
+  const awardItems = schedule.award_config?.items ?? []
+  const awardPlanReady = Number(schedule.award_config?.count ?? 0) > 0 || awardItems.some((item) => !!item?.trim())
 
   return {
     id: schedule.id,
@@ -260,6 +265,13 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow, 
     locationLabel: locationParts.join(' · ') || '골프장 위치 준비중',
     routeTimeText: routeTimeText(),
     departureTimeText: departureTimeText(),
+    awardPlanReady,
+    lottoPurchased,
+    lottoDrawStatus: lottoDraw?.drawStatus ?? null,
+    lottoDrafterUserId: lottoDraw?.drafterUserId ?? null,
+    isLottoDrafter: !!raw.currentUserId && lottoDraw?.drafterUserId === raw.currentUserId,
+    resultSaved: !!savedRound,
+    resultComplete: !!savedRound?.isComplete,
     urgencyTone: urgencyTone(schedule.round_date),
   }
 }
@@ -284,6 +296,7 @@ function mapRecentRounds(rounds: SavedRound[], userName?: string | null): HomeRe
       id: round.id,
       courseName: round.courseName,
       dateLabel: formatRoundDate(round.date),
+      date: round.date,
       total,
       diff,
     }
@@ -387,11 +400,11 @@ export function mapHomeDashboard(raw: HomeDashboardRawData, userName?: string | 
   const firstHeroRound = heroRounds[0]
 
   const feedEventsByRoundId = heroRounds.reduce<Record<string, ReturnType<typeof buildRoundFeedEvents>>>((acc, round) => {
-    acc[round.id] = buildRoundFeedEvents(round)
+    acc[round.id] = buildRoundFeedEvents(round, stats.recentRounds)
     return acc
   }, {})
   const feedEvents = upcomingRound
-    ? (feedEventsByRoundId[upcomingRound.id] ?? buildRoundFeedEvents(upcomingRound))
+    ? (feedEventsByRoundId[upcomingRound.id] ?? buildRoundFeedEvents(upcomingRound, stats.recentRounds))
     : buildHomeFeedEvents({
         upcomingRound: null,
         recentRounds: stats.recentRounds,

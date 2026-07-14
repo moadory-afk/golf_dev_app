@@ -28,6 +28,13 @@ export type HomeUpcomingRound = {
   heroImageUrl?: string | null
   routeTimeText?: string
   departureTimeText?: string
+  awardPlanReady?: boolean
+  lottoPurchased?: boolean
+  lottoDrawStatus?: 'PENDING' | 'COMPLETED' | null
+  lottoDrafterUserId?: string | null
+  isLottoDrafter?: boolean
+  resultSaved?: boolean
+  resultComplete?: boolean
 }
 
 export type HomeHeroRound = HomeUpcomingRound & {
@@ -68,6 +75,7 @@ export type HomeRecentRound = {
   id: string
   courseName: string
   dateLabel: string
+  date?: string
   total: number | null
   diff: string
 }

@@ -1,5 +1,6 @@
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useEffect, useMemo, useState } from 'react'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createShadow, radius, spacing } from '../../../design/tokens'
 import { useSkin } from '../../../skins'
 import type { HomeFeedAction, HomeFeedEvent } from '../engine'
@@ -29,6 +30,7 @@ type PremiumGogoCaddieCardProps = {
   onFeedAction?: (feed: HomeFeedEvent, action?: HomeFeedAction) => void
   actions?: ConciergeAction[]
   roundLabel?: string | null
+  userId?: string | null
 }
 
 function fallbackFeed({
@@ -71,11 +73,13 @@ export function PremiumGogoCaddieCard({
   onFeedAction,
   actions = [],
   roundLabel,
+  userId,
 }: PremiumGogoCaddieCardProps) {
   const { palette } = useSkin()
   const [page, setPage] = useState(0)
   const [slideWidth, setSlideWidth] = useState(0)
   const [cardWidth, setCardWidth] = useState(0)
+  const [readIds, setReadIds] = useState<Set<string>>(new Set())
   const compact = cardWidth > 0 && cardWidth < 350
 
   const fallback = useMemo(() => fallbackFeed({
@@ -96,6 +100,36 @@ export function PremiumGogoCaddieCard({
   useEffect(() => {
     setPage(0)
   }, [roundLabel, feedItems[0]?.id])
+
+
+  const readStorageKey = `@gogopar_caddie_read:${userId ?? 'guest'}`
+
+  useEffect(() => {
+    let mounted = true
+    AsyncStorage.getItem(readStorageKey)
+      .then((value) => {
+        if (!mounted) return
+        const ids = value ? JSON.parse(value) : []
+        setReadIds(new Set(Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : []))
+      })
+      .catch(() => { if (mounted) setReadIds(new Set()) })
+    return () => { mounted = false }
+  }, [readStorageKey])
+
+  useEffect(() => {
+    const current = feedItems[page]
+    if (!current || readIds.has(current.id)) return
+    const timer = setTimeout(() => {
+      setReadIds((previous) => {
+        if (previous.has(current.id)) return previous
+        const next = new Set(previous)
+        next.add(current.id)
+        AsyncStorage.setItem(readStorageKey, JSON.stringify(Array.from(next))).catch(() => undefined)
+        return next
+      })
+    }, 1200)
+    return () => clearTimeout(timer)
+  }, [feedItems, page, readIds, readStorageKey])
 
   const runFeedAction = (item: HomeFeedEvent, action?: HomeFeedAction) => {
     if (onFeedAction) onFeedAction(item, action)
@@ -143,6 +177,9 @@ export function PremiumGogoCaddieCard({
                   <View style={styles.messageRow}>
                     <Text style={styles.messageIcon}>{item.icon}</Text>
                     <View style={styles.messageTextColumn}>
+                      {!readIds.has(item.id) && (
+                        <View style={styles.newBadge}><Text style={styles.newBadgeText}>NEW</Text></View>
+                      )}
                       <Text style={[styles.title, { color: palette.text }]} numberOfLines={2}>{messageTitle}</Text>
                       {!!messageBody && (
                         <Text style={[styles.message, { color: palette.text }]} numberOfLines={4}>{messageBody}</Text>
@@ -152,23 +189,31 @@ export function PremiumGogoCaddieCard({
                 </TouchableOpacity>
 
                 {item.actions?.length ? (
-                  <View style={styles.choiceActionRow}>
-                    {item.actions.map((action) => (
-                      <TouchableOpacity
-                        key={action.id}
-                        activeOpacity={0.86}
-                        onPress={() => runFeedAction(item, action)}
-                        style={[
-                          styles.choiceAction,
-                          {
-                            backgroundColor: action.attendanceStatus === '참석' ? palette.green : palette.card,
-                            borderColor: action.attendanceStatus === '참석' ? palette.green : palette.border,
-                          },
-                        ]}
-                      >
-                        <Text style={[styles.choiceActionText, { color: action.attendanceStatus === '참석' ? '#fff' : palette.text }]}>
-                          {action.label}
-                        </Text>
+                  <View style={styles.actionStack}>
+                    <View style={styles.choiceActionRow}>
+                      {item.actions.filter((action) => !action.secondary).map((action) => (
+                        <TouchableOpacity
+                          key={action.id}
+                          activeOpacity={0.86}
+                          onPress={() => runFeedAction(item, action)}
+                          style={[
+                            styles.choiceAction,
+                            {
+                              backgroundColor: action.selected ? palette.green : palette.card,
+                              borderColor: action.selected ? palette.green : palette.border,
+                            },
+                          ]}
+                        >
+                          <Text style={[styles.choiceActionText, { color: action.selected ? '#fff' : palette.text }]}>
+                            {action.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    {item.actions.filter((action) => action.secondary).map((action) => (
+                      <TouchableOpacity key={action.id} activeOpacity={0.86} onPress={() => runFeedAction(item, action)} style={[styles.secondaryAction, { borderColor: palette.green }]}>
+                        <Text style={[styles.secondaryActionText, { color: palette.green }]}>{action.label}</Text>
+                        <Text style={[styles.secondaryActionArrow, { color: palette.green }]}>›</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -265,11 +310,17 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, lineHeight: 23, fontWeight: '900', letterSpacing: -0.65 },
   messageRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 0 },
   messageTextColumn: { flex: 1, minWidth: 0, gap: 7 },
+  newBadge: { alignSelf: 'flex-start', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, backgroundColor: '#EF4444' },
+  newBadgeText: { color: '#fff', fontSize: 9, lineHeight: 12, fontWeight: '900', letterSpacing: 0.4 },
   messageIcon: { fontSize: 15, lineHeight: 20 },
   message: { minWidth: 0, fontSize: 15, lineHeight: 21, fontWeight: '800' },
-  choiceActionRow: { flexDirection: 'row', gap: 6, marginTop: 'auto' },
+  actionStack: { gap: 6, marginTop: 'auto' },
+  choiceActionRow: { flexDirection: 'row', gap: 6 },
   choiceAction: { flex: 1, minHeight: 34, borderWidth: 1, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   choiceActionText: { fontSize: 11, lineHeight: 15, fontWeight: '900' },
+  secondaryAction: { minHeight: 32, borderWidth: 1, borderRadius: radius.lg, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  secondaryActionText: { fontSize: 11, lineHeight: 15, fontWeight: '900' },
+  secondaryActionArrow: { fontSize: 18, lineHeight: 20, fontWeight: '700' },
   primaryAction: {
     alignSelf: 'flex-end',
     minWidth: 92,
