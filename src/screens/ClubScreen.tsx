@@ -61,6 +61,7 @@ import {
 } from "../lib/handicapBasis";
 import { C } from "../theme";
 import { TopActionButtons } from "../components/TopActionButtons";
+import { PwaInstallGuide } from "../components/PwaInstallGuide";
 import { Icon } from "../components/Icon";
 import { EmojiIcon } from "../components/EmojiIcon";
 import {
@@ -280,6 +281,8 @@ export default function ClubScreen() {
     () => calculateLottoCarryoverAmount(rounds, members),
     [refreshKey, club?.id, rounds.length, members.length],
   );
+  // 설치 안내 1건을 항상 첫 번째로 표시하므로, 일반 공지는 최신 1건만 노출합니다.
+  // 클럽 메뉴 공지 영역의 전체 노출 수는 최대 2건입니다.
   const recentNotices = (clubNotices ?? [])
     .filter((notice) => notice.isPublished)
     .slice(0, 1);
@@ -288,6 +291,7 @@ export default function ClubScreen() {
   const [rankingType, setRankingType] = useState<RankingType | null>(null);
   const [clubInfoOpen, setClubInfoOpen] = useState(false);
   const [selectedNotice, setSelectedNotice] = useState<ClubNotice | null>(null);
+  const [installGuideOpen, setInstallGuideOpen] = useState(false);
   const [showLottoAwardGuide, setShowLottoAwardGuide] = useState(false);
   const [showHallCriteria, setShowHallCriteria] = useState(false);
   const [manageMenuOpen, setManageMenuOpen] = useState(false);
@@ -932,6 +936,11 @@ export default function ClubScreen() {
           </TouchableOpacity>
         </Modal>
       )}
+      <PwaInstallGuide
+        visible={installGuideOpen}
+        onClose={() => setInstallGuideOpen(false)}
+      />
+
       {selectedNotice && (
         <Modal
           transparent
@@ -1218,8 +1227,8 @@ export default function ClubScreen() {
                 </View>
               </View>
 
-              <View style={[s.card, s.summaryCard]}>
-                <View style={s.cardTitleRow}>
+              <View style={[s.card, s.summaryCard, s.noticeSummaryCard]}>
+                <View style={[s.cardTitleRow, s.noticeCardTitleRow]}>
                   <Text style={[s.cardTitle, { marginBottom: 0 }]}>
                     공지사항
                   </Text>
@@ -1230,25 +1239,31 @@ export default function ClubScreen() {
                     <Text style={s.more}>{summaryCardActionLabel}</Text>
                   </TouchableOpacity>
                 </View>
-                {recentNotices.length === 0 ? (
-                  <Text style={s.noticeEmpty}>등록된 공지사항이 없습니다.</Text>
-                ) : (
-                  recentNotices.map((notice) => (
-                    <TouchableOpacity
-                      key={notice.id}
-                      style={s.noticeRow}
-                      onPress={() => setSelectedNotice(notice)}
-                      activeOpacity={0.82}
-                    >
-                      <Text style={s.noticeTitle} numberOfLines={1}>
-                        {notice.title}
-                      </Text>
-                      <Text style={s.noticeMeta}>
-                        {formatNoticeDate(notice.createdAt)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))
-                )}
+                <TouchableOpacity
+                  style={s.noticeRow}
+                  onPress={() => setInstallGuideOpen(true)}
+                  activeOpacity={0.82}
+                >
+                  <Text style={s.noticeTitle} numberOfLines={1}>
+                    📱 GogoPar 홈 화면에 설치하기
+                  </Text>
+                  <Text style={s.noticeMeta}>설치안내</Text>
+                </TouchableOpacity>
+                {recentNotices.map((notice) => (
+                  <TouchableOpacity
+                    key={notice.id}
+                    style={s.noticeRow}
+                    onPress={() => setSelectedNotice(notice)}
+                    activeOpacity={0.82}
+                  >
+                    <Text style={s.noticeTitle} numberOfLines={1}>
+                      {notice.title}
+                    </Text>
+                    <Text style={s.noticeMeta}>
+                      {formatNoticeDate(notice.createdAt)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
 
               <View style={[s.card, s.summaryCard]}>
@@ -2885,11 +2900,18 @@ const s = StyleSheet.create({
   summaryCard: {
     height: 96,
   },
+  noticeSummaryCard: {
+    height: 118,
+    paddingBottom: 20,
+  },
   cardTitleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 14,
+  },
+  noticeCardTitleRow: {
+    marginBottom: 7,
   },
   cardTitle: {
     fontSize: 15,

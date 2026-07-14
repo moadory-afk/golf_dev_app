@@ -230,8 +230,13 @@ export default function HistoryScreen() {
     () => (activeClub ? getClubMembers(activeClub.id) : Promise.resolve([])),
     [activeClub?.id],
   )
+  const { data: scheduleData } = useAsync(
+    () => (activeClub ? getRoundSchedules(activeClub.id) : Promise.resolve([])),
+    [refreshKey, activeClub?.id],
+  )
   const rounds = data ?? []
   const members = memberData ?? []
+  const schedules = scheduleData ?? []
   const onRefresh = useCallback(() => setRefreshKey((k) => k + 1), [])
 
   // 화면 포커스 복귀 시 자동 새로고침 (삭제/저장 후 즉시 반영)
@@ -265,7 +270,7 @@ export default function HistoryScreen() {
           <Text style={s.muted}>데이터를 불러오는 중입니다.</Text>
         ) : (
           <>
-            {tab === 'byRound' && <ByRound rounds={rounds} handicapBasis={handicapBasis} members={members} />}
+            {tab === 'byRound' && <ByRound rounds={rounds} schedules={schedules} handicapBasis={handicapBasis} members={members} />}
             {tab === 'byPlayer' && <ByPlayer rounds={rounds} handicapBasis={handicapBasis} myName={myName} myUserId={myUserId} />}
             {tab === 'club' && <Club rounds={rounds} handicapBasis={handicapBasis} members={members} />}
             {tab === 'hall' && <HallOfFame rounds={rounds} handicapBasis={handicapBasis} />}
@@ -352,45 +357,50 @@ function EmptyByRound({ members }: { members: HistoryMember[] }) {
 }
 
 function EmptyByPlayer() {
+  const [selectedCard, setSelectedCard] = useState<{ title: string; rows: Array<{ label: string; value: string }> } | null>(null)
   const emptyReportCards = [
-    { key: 'target', icon: '🎯', title: '목표 설정', subtitle: '100타 목표 관리' },
-    { key: 'trend', icon: '📈', title: '스코어 추이', subtitle: '기록 대기' },
-    { key: 'shot', icon: '🏌️', title: '샷·퍼팅', subtitle: '기록 대기' },
-    { key: 'hole', icon: '⛳', title: '홀 유형', subtitle: '기록 대기' },
-    { key: 'score', icon: '📊', title: '스코어 분포', subtitle: '기록 대기' },
+    { key: 'target', icon: '🎯', title: '목표 설정', subtitle: '', rows: [{ label: '목표 타수', value: '' }, { label: '현재 평균', value: '' }] },
+    { key: 'trend', icon: '📈', title: '스코어 추이', subtitle: '', rows: [{ label: '최근 평균', value: '' }, { label: '최저 타수', value: '' }] },
+    { key: 'shot', icon: '🏌️', title: '샷·퍼팅', subtitle: '', rows: [{ label: 'FIR', value: '' }, { label: '평균 퍼팅', value: '' }] },
+    { key: 'hole', icon: '⛳', title: '홀 유형', subtitle: '', rows: [{ label: 'Par 3', value: '' }, { label: 'Par 4', value: '' }, { label: 'Par 5', value: '' }] },
+    { key: 'score', icon: '📊', title: '스코어 분포', subtitle: '', rows: [{ label: '버디', value: '' }, { label: '파', value: '' }, { label: '보기', value: '' }] },
   ]
   return (
     <>
+      {selectedCard && (
+        <Modal transparent animationType="fade" onRequestClose={() => setSelectedCard(null)}>
+          <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setSelectedCard(null)}>
+            <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+              <View style={s.modalHeader}>
+                <Text style={s.modalTitle}>{selectedCard.title}</Text>
+                <TouchableOpacity style={s.closeBtn} onPress={() => setSelectedCard(null)}><Text style={s.closeBtnText}>닫기</Text></TouchableOpacity>
+              </View>
+              {selectedCard.rows.map((row) => (
+                <View key={row.label} style={s.analysisRow}>
+                  <Text style={s.analysisLabel}>{row.label}</Text>
+                  <Text style={s.analysisValue}>{row.value}</Text>
+                </View>
+              ))}
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+      )}
       <View style={s.aiCaddieCard}>
         <View style={s.aiCaddieHeader}>
-          <View style={s.aiCaddieIconWrap}>
-            <Text style={s.aiCaddieIcon}>🤖</Text>
-          </View>
+          <View style={s.aiCaddieIconWrap}><Text style={s.aiCaddieIcon}>🤖</Text></View>
           <View style={s.aiCaddieTitleBlock}>
             <Text style={s.aiCaddieEyebrow}>AI Caddie</Text>
             <Text style={s.aiCaddieTitle}>개인 기록 분석</Text>
           </View>
         </View>
-
         <View style={s.aiCaddieInsightBox}>
-          <Text style={s.aiCaddieLead}>아직 분석할 라운드 기록이 없습니다.</Text>
-          {[
-            '라운드 결과가 등록되면 최근 흐름을 분석합니다.',
-            '전후반 차이와 홀 유형별 강약점을 확인할 수 있습니다.',
-            '더블 이상, OB, 퍼팅 기록을 바탕으로 개선 포인트를 제안합니다.',
-          ].map((comment) => (
-            <View key={comment} style={s.aiCaddieBulletRow}>
-              <Text style={s.aiCaddieBulletDot}>•</Text>
-              <Text style={s.aiCaddieBulletText}>{comment}</Text>
-            </View>
-          ))}
+          <Text style={s.aiCaddieLead}></Text>
+          <View style={s.aiCaddieBulletRow}><Text style={s.aiCaddieBulletText}></Text></View>
+          <View style={s.aiCaddieBulletRow}><Text style={s.aiCaddieBulletText}></Text></View>
         </View>
-
         <View style={s.aiCaddieRecommendRow}>
           <Text style={s.aiCaddieRecommendLabel}>추천</Text>
-          <Text style={s.aiCaddieRecommendText} numberOfLines={2}>
-            라운드 결과를 입력하면 개인 맞춤 리포트가 자동으로 생성됩니다.
-          </Text>
+          <Text style={s.aiCaddieRecommendText}></Text>
         </View>
       </View>
 
@@ -402,23 +412,14 @@ function EmptyByPlayer() {
           </View>
           <Text style={s.personalReportHint}>좌우로 넘겨보기</Text>
         </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          decelerationRate="fast"
-          snapToInterval={280}
-          contentContainerStyle={s.personalReportCarousel}
-        >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} decelerationRate="fast" snapToInterval={280} contentContainerStyle={s.personalReportCarousel}>
           {emptyReportCards.map((card) => (
-            <View key={card.key} style={[s.personalReportCard, { width: 270 }]}>
-              <View style={s.personalReportIconWrap}>
-                <Text style={s.personalReportIcon}>{card.icon}</Text>
-              </View>
+            <TouchableOpacity key={card.key} activeOpacity={0.86} onPress={() => setSelectedCard({ title: card.title, rows: card.rows })} style={[s.personalReportCard, { width: 270 }]}>
+              <View style={s.personalReportIconWrap}><Text style={s.personalReportIcon}>{card.icon}</Text></View>
               <Text style={s.personalReportCardTitle}>{card.title}</Text>
               <Text style={s.personalReportCardSubtitle} numberOfLines={2}>{card.subtitle}</Text>
               <Text style={s.personalReportCardAction}>자세히 보기 ›</Text>
-            </View>
+            </TouchableOpacity>
           ))}
         </ScrollView>
       </View>
@@ -486,32 +487,80 @@ function EmptyHallOfFame() {
   )
 }
 
-function ByRound({ rounds, handicapBasis = 5, members = [] }: { rounds: SavedRound[]; handicapBasis?: number; members?: HistoryMember[] }) {
-  const [containerWidth, setContainerWidth] = useState(0)
-  if (rounds.length === 0) return <EmptyByRound members={members} />
+type RoundCarouselItem =
+  | { kind: 'round'; key: string; date: string; round: SavedRound }
+  | { kind: 'schedule'; key: string; date: string; schedule: ScheduledRound }
 
-  const filtered = [...rounds].sort((a, b) => {
-    if (!a.isComplete && b.isComplete) return -1
-    if (a.isComplete && !b.isComplete) return 1
-    return b.date.localeCompare(a.date)
-  })
+function scheduleParticipantCount(schedule: ScheduledRound) {
+  return new Set(schedule.groups.flatMap((group) => group.members.map((member) => member.userId || member.name))).size
+}
+
+function ScheduledRoundCard({ schedule, index, totalCount, width, height }: { schedule: ScheduledRound; index: number; totalCount: number; width: number; height: number }) {
+  const participantCount = scheduleParticipantCount(schedule)
+  const courseName = schedule.courseName || schedule.course || ''
+  const layoutName = schedule.layoutName || ''
+  return (
+    <View style={[s.roundCardShell, { width, height }]}>
+      <View style={s.roundHero}>
+        <ImageBackground source={getCourseHeroImageSource(courseName)} style={s.roundPhotoHeader} imageStyle={s.roundHeroImage}>
+          <View style={s.roundHeroShade} />
+          <View style={s.roundHeroTopRow}>
+            <View style={s.roundCounter}><Text style={s.roundCounterText}>{index + 1} / {totalCount}</Text></View>
+            <View style={s.heroProgressBadge}><Text style={s.heroStatusText}>기록 대기</Text></View>
+          </View>
+          <View style={s.heroCourseBlock}>
+            <Text style={s.heroDate}>{schedule.date ? schedule.date.replace(/-/g, '.') : ''}{schedule.time ? `  ${schedule.time}` : ''}</Text>
+            <Text style={s.heroCourseName} numberOfLines={2}>{[courseName, layoutName].filter(Boolean).join(' · ')}</Text>
+          </View>
+        </ImageBackground>
+        <View style={s.roundSummaryBody}>
+          <View style={s.heroSummaryPanel}>
+            <View style={s.summaryCell}><Text style={s.summaryLabel}>우승</Text><Text style={s.summaryValue}></Text></View>
+            <View style={s.summaryCell}><Text style={s.summaryLabel}>스코어</Text><Text style={s.summaryValue}></Text></View>
+            <View style={[s.summaryCell, { borderRightWidth: 0 }]}><Text style={s.summaryLabel}>참가</Text><Text style={s.summaryValue}>{participantCount > 0 ? `${participantCount}명` : ''}</Text></View>
+          </View>
+          <View style={s.heroInfoPanel}>
+            <Text style={s.heroSectionTitle}>기네스 북 갱신 현황</Text>
+            <Text style={s.muted}></Text>
+          </View>
+          <View style={s.highlightRow}>
+            <View style={s.highlightCard}><Text style={s.highlightLabel}>정규</Text><Text style={s.highlightValue}></Text></View>
+            <View style={s.highlightCard}><Text style={s.highlightLabel}>신페리오</Text><Text style={s.highlightValue}></Text></View>
+            <View style={s.highlightCard}><Text style={s.highlightLabel}>시상</Text><Text style={s.highlightValue}></Text></View>
+          </View>
+          <Text style={s.flipHint}></Text>
+        </View>
+      </View>
+    </View>
+  )
+}
+
+function ByRound({ rounds, schedules = [], handicapBasis = 5, members = [] }: { rounds: SavedRound[]; schedules?: ScheduledRound[]; handicapBasis?: number; members?: HistoryMember[] }) {
+  const [containerWidth, setContainerWidth] = useState(0)
+  const roundScheduleIds = new Set(rounds.map((round) => round.scheduleId).filter((id): id is string => !!id))
+  const items: RoundCarouselItem[] = [
+    ...rounds.map((round): RoundCarouselItem => ({ kind: 'round', key: `round-${round.id}`, date: round.date, round })),
+    ...schedules
+      .filter((schedule) => !roundScheduleIds.has(schedule.id))
+      .map((schedule): RoundCarouselItem => ({ kind: 'schedule', key: `schedule-${schedule.id}`, date: schedule.date, schedule })),
+  ].sort((a, b) => b.date.localeCompare(a.date))
+
+  if (items.length === 0) return <EmptyByRound members={members} />
+
   const cardWidth = containerWidth > 0 ? Math.min(Math.max(containerWidth - 32, 280), 430) : 0
   const cardHeight = Math.max(500, Math.min(590, Dimensions.get('window').height - 220))
 
   return (
-    <View
-      style={s.roundCarouselWrap}
-      onLayout={(event) => {
-        const nextWidth = Math.round(event.nativeEvent.layout.width)
-        if (nextWidth > 0 && nextWidth !== containerWidth) setContainerWidth(nextWidth)
-      }}
-    >
+    <View style={s.roundCarouselWrap} onLayout={(event) => {
+      const nextWidth = Math.round(event.nativeEvent.layout.width)
+      if (nextWidth > 0 && nextWidth !== containerWidth) setContainerWidth(nextWidth)
+    }}>
       {cardWidth > 0 ? (
         <FlatList
           horizontal
           pagingEnabled
-          data={filtered}
-          keyExtractor={(round) => round.id}
+          data={items}
+          keyExtractor={(item) => item.key}
           decelerationRate="fast"
           snapToInterval={cardWidth + 12}
           getItemLayout={(_, index) => ({ length: cardWidth + 12, offset: (cardWidth + 12) * index, index })}
@@ -521,16 +570,10 @@ function ByRound({ rounds, handicapBasis = 5, members = [] }: { rounds: SavedRou
           maxToRenderPerBatch={2}
           windowSize={3}
           removeClippedSubviews
-          renderItem={({ item: round, index }) => (
-            <RoundFlipCard
-              round={round}
-              rounds={rounds}
-              handicapBasis={handicapBasis}
-              index={index}
-              totalCount={filtered.length}
-              width={cardWidth}
-              height={cardHeight}
-            />
+          renderItem={({ item, index }) => item.kind === 'round' ? (
+            <RoundFlipCard round={item.round} rounds={rounds} handicapBasis={handicapBasis} index={index} totalCount={items.length} width={cardWidth} height={cardHeight} />
+          ) : (
+            <ScheduledRoundCard schedule={item.schedule} index={index} totalCount={items.length} width={cardWidth} height={cardHeight} />
           )}
         />
       ) : <View style={[s.roundCarouselPlaceholder, { height: cardHeight }]} />}
