@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   useWindowDimensions,
   PanResponder,
+  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -36,6 +37,7 @@ import {
   getRoundLottoEntriesByScheduleIds,
   getRoundSummaries,
   playerTotal,
+  leaveClub,
   totalPar,
   computeHandicaps,
   saveClubLottoAwardConfig,
@@ -129,9 +131,12 @@ function isLottoScoreHit(
   par: number | undefined,
   drawScore: RoundLottoDrawScore | null,
 ) {
-  if (typeof myScore !== "number" || typeof par !== "number" || !drawScore) return false;
+  if (typeof myScore !== "number" || typeof par !== "number" || !drawScore)
+    return false;
   const myLabel = compactLottoScoreLabel(formatLottoScore(myScore, par));
-  const drawLabel = compactLottoScoreLabel(drawScore.label ?? formatLottoScore(drawScore.score, drawScore.par ?? par));
+  const drawLabel = compactLottoScoreLabel(
+    drawScore.label ?? formatLottoScore(drawScore.score, drawScore.par ?? par),
+  );
   return myLabel === drawLabel;
 }
 
@@ -139,21 +144,32 @@ async function calculateLottoCarryoverAmount(
   rounds: SavedRound[],
   members: Array<{ userId: string; name: string; role: string }>,
 ) {
-  const memberNameById = new Map(members.map((member) => [member.userId, member.name]));
-  const scheduleIds = rounds.map((round) => round.scheduleId).filter((id): id is string => !!id);
+  const memberNameById = new Map(
+    members.map((member) => [member.userId, member.name]),
+  );
+  const scheduleIds = rounds
+    .map((round) => round.scheduleId)
+    .filter((id): id is string => !!id);
   const [draws, entries] = await Promise.all([
     getRoundLottoDrawsByScheduleIds(scheduleIds).catch(() => []),
     getRoundLottoEntriesByScheduleIds(scheduleIds).catch(() => []),
   ]);
-  const drawByScheduleId = new Map(draws.map((draw) => [draw.scheduleId, draw]));
-  const entriesByScheduleId = entries.reduce<Record<string, typeof entries>>((acc, entry) => {
-    if (!acc[entry.scheduleId]) acc[entry.scheduleId] = [];
-    acc[entry.scheduleId].push(entry);
-    return acc;
-  }, {});
+  const drawByScheduleId = new Map(
+    draws.map((draw) => [draw.scheduleId, draw]),
+  );
+  const entriesByScheduleId = entries.reduce<Record<string, typeof entries>>(
+    (acc, entry) => {
+      if (!acc[entry.scheduleId]) acc[entry.scheduleId] = [];
+      acc[entry.scheduleId].push(entry);
+      return acc;
+    },
+    {},
+  );
   const completedLottoRounds = rounds
     .filter((round) => {
-      const draw = round.scheduleId ? drawByScheduleId.get(round.scheduleId) : null;
+      const draw = round.scheduleId
+        ? drawByScheduleId.get(round.scheduleId)
+        : null;
       return !!draw && draw.drawStatus === "COMPLETED" && !!draw.drawnScores;
     })
     .map((round) => ({
@@ -166,7 +182,9 @@ async function calculateLottoCarryoverAmount(
   return completedLottoRounds.reduce((amount, item) => {
     const hasFirstPrizeWinner = item.entries.some((entry) => {
       const playerName = memberNameById.get(entry.userId);
-      const player = item.round.players.find((roundPlayer) => roundPlayer.name === playerName);
+      const player = item.round.players.find(
+        (roundPlayer) => roundPlayer.name === playerName,
+      );
       if (!player) return false;
       const selectedHoles = [
         ...entry.selectedHoles.par3,
@@ -183,7 +201,9 @@ async function calculateLottoCarryoverAmount(
       return hits >= 6;
     });
 
-    return hasFirstPrizeWinner ? LOTTO_JACKPOT_BASE : amount + LOTTO_JACKPOT_STEP;
+    return hasFirstPrizeWinner
+      ? LOTTO_JACKPOT_BASE
+      : amount + LOTTO_JACKPOT_STEP;
   }, LOTTO_JACKPOT_BASE);
 }
 
@@ -269,12 +289,13 @@ export default function ClubScreen() {
   const [createClubOpen, setCreateClubOpen] = useState(false);
   const [courseImagesOpen, setCourseImagesOpen] = useState(false);
   const [lottoAwardOpen, setLottoAwardOpen] = useState(false);
-  const { name: myName } = useUserProfile();
+  const { name: myName, userId: myUserId } = useUserProfile();
 
   const [handicapBasis, setHandicapBasis] = useState<HandicapBasis>(5);
   const currentLottoAwardConfig =
     lottoAwardConfig ?? DEFAULT_LOTTO_AWARD_CONFIG;
-  const currentLottoCarryoverAmount = lottoCarryoverAmount ?? LOTTO_JACKPOT_BASE;
+  const currentLottoCarryoverAmount =
+    lottoCarryoverAmount ?? LOTTO_JACKPOT_BASE;
 
   useEffect(() => {
     loadHandicapBasis(club?.id).then(setHandicapBasis);
@@ -364,12 +385,7 @@ export default function ClubScreen() {
           moveClubHeroToIndex(clubHeroDragStartIndexRef.current);
         },
       }),
-    [
-      clubHeroIndex,
-      clubHeroPageCount,
-      clubHeroWidth,
-      moveClubHeroToIndex,
-    ],
+    [clubHeroIndex, clubHeroPageCount, clubHeroWidth, moveClubHeroToIndex],
   );
 
   async function handleInviteMember() {
@@ -787,6 +803,22 @@ export default function ClubScreen() {
       ]
     : [];
 
+  const handleLeaveClub = useCallback(async () => {
+    if (!club?.id) {
+      throw new Error("클럽 정보를 확인할 수 없습니다.");
+    }
+
+    const leavingClubName = club.name;
+    await leaveClub(club.id);
+    await refreshClubs();
+    notifyHomeDashboardChanged();
+    setClubInfoOpen(false);
+    setRefreshKey((key) => key + 1);
+
+    Alert.alert("탈퇴 완료", `${leavingClubName}에서 탈퇴했습니다.`);
+    nav.dispatch(CommonActions.navigate({ name: "Home" }));
+  }, [club?.id, club?.name, nav, refreshClubs]);
+
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       {rankingType && (
@@ -814,6 +846,7 @@ export default function ClubScreen() {
             nav.navigate("Members", { clubId: club.id });
           }}
           onInvite={handleInviteMember}
+          onLeaveClub={handleLeaveClub}
         />
       )}
       {createClubOpen && (
@@ -1098,15 +1131,20 @@ export default function ClubScreen() {
                       0,
                       Math.min(
                         clubHeroPageCount - 1,
-                        Math.round(event.nativeEvent.contentOffset.x / clubHeroWidth),
+                        Math.round(
+                          event.nativeEvent.contentOffset.x / clubHeroWidth,
+                        ),
                       ),
                     );
-                    if (nextIndex !== clubHeroIndex) setClubHeroIndex(nextIndex);
+                    if (nextIndex !== clubHeroIndex)
+                      setClubHeroIndex(nextIndex);
                   }}
                   onScrollEndDrag={(event) => {
                     const velocityX = event.nativeEvent.velocity?.x ?? 0;
                     if (Math.abs(velocityX) < 0.05) {
-                      handleClubHeroScrollEnd(event.nativeEvent.contentOffset.x);
+                      handleClubHeroScrollEnd(
+                        event.nativeEvent.contentOffset.x,
+                      );
                     }
                   }}
                   onMomentumScrollEnd={(event) =>
@@ -1280,8 +1318,7 @@ export default function ClubScreen() {
                       Lotto 6/18 당첨금 안내
                     </Text>
                     <Text style={s.lottoGuideSummary}>
-                      현재 누적 당첨금{" "}
-                      {formatWon(currentLottoCarryoverAmount)}
+                      현재 누적 당첨금 {formatWon(currentLottoCarryoverAmount)}
                     </Text>
                   </View>
                   <Text style={s.more}>{summaryCardActionLabel}</Text>
@@ -1365,7 +1402,6 @@ export default function ClubScreen() {
               </TouchableOpacity>
             </View>
           )}
-
         </View>
       </ScrollView>
     </View>
@@ -1480,6 +1516,7 @@ function ClubInfoModal({
   onChangeHandicapBasis,
   onMembers,
   onInvite,
+  onLeaveClub,
 }: {
   club: ClubInfo;
   clubs: ClubInfo[];
@@ -1496,6 +1533,7 @@ function ClubInfoModal({
   onChangeHandicapBasis: (value: 3 | 5 | 10) => void | Promise<void>;
   onMembers: () => void;
   onInvite: () => void;
+  onLeaveClub: () => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(club.name);
@@ -1509,7 +1547,10 @@ function ClubInfoModal({
     height: number;
   } | null>(null);
   const [showHandicapDrop, setShowHandicapDrop] = useState(false);
+  const [leavingClub, setLeavingClub] = useState(false);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
   const isAdmin = club.role === "admin";
+  const isSoleAdmin = isAdmin && admins.length <= 1;
   const subtitle = club.subtitle?.trim()
     ? club.subtitle
     : "골프의 모든 경험을 하나로.";
@@ -1520,6 +1561,7 @@ function ClubInfoModal({
     setEditName(club.name);
     setEditSubtitle(club.subtitle);
     setEditCoverImage(club.coverImage);
+    setLeaveError(null);
   }, [club.id, club.name, club.subtitle, club.coverImage]);
 
   async function handleSave() {
@@ -1536,6 +1578,62 @@ function ClubInfoModal({
     } finally {
       setSaving(false);
     }
+  }
+
+  async function executeLeaveClub() {
+    if (leavingClub) return;
+
+    setLeaveError(null);
+    setLeavingClub(true);
+    try {
+      await onLeaveClub();
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "클럽 탈퇴 중 오류가 발생했습니다.";
+      setLeaveError(message);
+      if (Platform.OS !== "web") {
+        Alert.alert("탈퇴 실패", message);
+      }
+    } finally {
+      setLeavingClub(false);
+    }
+  }
+
+  function handleLeavePress() {
+    if (isSoleAdmin) {
+      Alert.alert(
+        "클럽 탈퇴 불가",
+        "현재 이 클럽의 유일한 관리자입니다. 다른 회원을 관리자로 지정한 후 탈퇴해 주세요.",
+        [{ text: "확인" }],
+      );
+      return;
+    }
+
+    const message = `${club.name}에서 탈퇴하시겠습니까?\n\n탈퇴 후에는 클럽 공지, 일정, 멤버 정보를 볼 수 없습니다. 과거 라운드 기록은 유지됩니다.`;
+
+    if (Platform.OS === "web") {
+      const confirmed =
+        typeof globalThis.confirm === "function"
+          ? globalThis.confirm(message)
+          : false;
+      if (confirmed) {
+        void executeLeaveClub();
+      }
+      return;
+    }
+
+    Alert.alert("클럽 탈퇴", message, [
+      { text: "취소", style: "cancel" },
+      {
+        text: "탈퇴",
+        style: "destructive",
+        onPress: () => {
+          void executeLeaveClub();
+        },
+      },
+    ]);
   }
 
   async function handlePickCoverImage() {
@@ -1829,6 +1927,47 @@ function ClubInfoModal({
               <Text style={s.infoActionText}>회칙 보기</Text>
             </TouchableOpacity>
           </View>
+
+          <View style={[s.infoSection, s.dangerSection]}>
+            <Text style={s.dangerSectionTitle}>위험 작업</Text>
+            <View style={[s.infoDivider, s.dangerDivider]} />
+            <Text style={s.dangerTitle}>클럽 탈퇴</Text>
+            <Text style={s.dangerDesc}>
+              이 클럽의 공지, 일정과 멤버 정보에 더 이상 접근할 수 없습니다.
+              과거 라운드 기록은 유지됩니다.
+            </Text>
+            {isSoleAdmin ? (
+              <Text style={s.dangerWarning}>
+                유일한 관리자는 탈퇴할 수 없습니다. 다른 회원을 관리자로 지정해
+                주세요.
+              </Text>
+            ) : null}
+            {leaveError ? (
+              <Text style={s.dangerError}>{leaveError}</Text>
+            ) : null}
+            <TouchableOpacity
+              style={[
+                s.leaveClubBtn,
+                (leavingClub || isSoleAdmin) && s.leaveClubBtnDisabled,
+              ]}
+              onPress={handleLeavePress}
+              disabled={leavingClub || isSoleAdmin}
+              activeOpacity={0.82}
+            >
+              {leavingClub ? (
+                <ActivityIndicator color="#c93636" size="small" />
+              ) : (
+                <Text
+                  style={[
+                    s.leaveClubBtnText,
+                    isSoleAdmin && s.leaveClubBtnTextDisabled,
+                  ]}
+                >
+                  클럽 탈퇴
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
@@ -1945,7 +2084,9 @@ function LottoAwardGuideModal({
     { label: "6개 적중", value: formatWon(carryoverAmount) },
     {
       label: "미당첨 이월",
-      value: config.rollover ? `${formatWon(LOTTO_JACKPOT_STEP)} 증가` : "미적용",
+      value: config.rollover
+        ? `${formatWon(LOTTO_JACKPOT_STEP)} 증가`
+        : "미적용",
     },
   ];
 
@@ -3201,6 +3342,59 @@ const s = StyleSheet.create({
   },
   handicapMenuTextActive: { color: C.green },
   ruleDesc: { fontSize: 13, color: C.text, lineHeight: 20, marginBottom: 8 },
+  dangerSection: {
+    marginTop: 18,
+    paddingTop: 14,
+    paddingBottom: 4,
+  },
+  dangerSectionTitle: { fontSize: 15, fontWeight: "900", color: "#b82e2e" },
+  dangerDivider: { backgroundColor: "#f0caca" },
+  dangerTitle: { fontSize: 14, fontWeight: "900", color: C.text },
+  dangerDesc: {
+    marginTop: 6,
+    fontSize: 12,
+    lineHeight: 18,
+    color: C.muted,
+  },
+  dangerWarning: {
+    marginTop: 8,
+    borderRadius: 10,
+    backgroundColor: "#fff1f1",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 11,
+    lineHeight: 17,
+    fontWeight: "800",
+    color: "#b82e2e",
+  },
+  dangerError: {
+    marginTop: 8,
+    borderRadius: 10,
+    backgroundColor: "#fff1f1",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 11,
+    lineHeight: 17,
+    fontWeight: "700",
+    color: "#b82e2e",
+  },
+  leaveClubBtn: {
+    minHeight: 44,
+    marginTop: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#d94a4a",
+    backgroundColor: "#fff7f7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  leaveClubBtnDisabled: {
+    borderColor: "#e3d4d4",
+    backgroundColor: "#f6f3f3",
+    opacity: 0.7,
+  },
+  leaveClubBtnText: { fontSize: 13, fontWeight: "900", color: "#c93636" },
+  leaveClubBtnTextDisabled: { color: "#9f8d8d" },
   lottoAwardSummary: {
     fontSize: 14,
     fontWeight: "900",

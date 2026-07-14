@@ -592,12 +592,71 @@ export async function getClubMembers(clubId: string): Promise<Array<{ userId: st
 }
 
 export async function removeMember(clubId: string, userId: string): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('club_members')
     .delete()
     .eq('club_id', clubId)
     .eq('user_id', userId)
-  if (error) throw error
+    .select('club_id')
+
+  if (error) throw new Error(error.message)
+  if (!data || data.length === 0) {
+    throw new Error('클럽 탈퇴 권한이 없거나 이미 탈퇴 처리된 회원입니다.')
+  }
+}
+
+
+export async function leaveClub(clubId: string): Promise<void> {
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError) throw new Error(userError.message)
+  if (!user) throw new Error('로그인 정보를 확인할 수 없습니다.')
+
+  const { data: deletedRows, error: deleteError } = await supabase
+    .from('club_members')
+    .delete()
+    .eq('club_id', clubId)
+    .eq('user_id', user.id)
+    .select('club_id')
+
+  if (deleteError) {
+    if (deleteError.code === '42501') {
+      throw new Error('클럽 탈퇴 권한이 없습니다. Supabase의 club_members 본인 삭제 정책을 확인해 주세요.')
+    }
+    throw new Error(deleteError.message)
+  }
+
+  if (!deletedRows || deletedRows.length === 0) {
+    const { data: membership, error: membershipError } = await supabase
+      .from('club_members')
+      .select('club_id')
+      .eq('club_id', clubId)
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    if (membershipError) throw new Error(membershipError.message)
+    if (membership) {
+      throw new Error('클럽 탈퇴가 DB에 반영되지 않았습니다. club_members 본인 삭제 RLS 정책을 적용해 주세요.')
+    }
+
+    // 이미 탈퇴된 상태라면 성공으로 처리한다.
+    return
+  }
+
+  const { data: remaining, error: verifyError } = await supabase
+    .from('club_members')
+    .select('club_id')
+    .eq('club_id', clubId)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (verifyError) throw new Error(verifyError.message)
+  if (remaining) {
+    throw new Error('클럽 탈퇴가 DB에 반영되지 않았습니다. 잠시 후 다시 시도해 주세요.')
+  }
 }
 
 export async function updateMemberRole(clubId: string, userId: string, role: 'admin' | 'member'): Promise<void> {
