@@ -2,10 +2,9 @@ import {
   Animated,
   Image,
   ImageSourcePropType,
+  FlatList,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  PanResponder,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -24,6 +23,11 @@ import { getOptimizedRemoteImageUrl } from "../../../lib/imageOptimization";
 
 const HERO_DISPLAY_HEIGHT_RATIO = 0.7;
 const HERO_MIN_WIDTH = 280;
+
+type HomeHeroCarouselItem =
+  | { kind: "round"; round: HomeHeroRound }
+  | { kind: "empty" }
+  | { kind: "create" };
 
 type PremiumHomeHeroSectionProps = {
   greeting: string;
@@ -75,12 +79,9 @@ export function PremiumHomeHeroSection({
   const [internalActiveIndex, setInternalActiveIndex] = useState(0);
   const activeIndex = controlledActiveIndex ?? internalActiveIndex;
   const [measuredHeroWidth, setMeasuredHeroWidth] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<FlatList<HomeHeroCarouselItem>>(null);
   const dotsScrollRef = useRef<ScrollView>(null);
   const activeIndexRef = useRef(0);
-  const dragStartOffsetRef = useRef(0);
-  const heroWidthRef = useRef(HERO_MIN_WIDTH);
-  const totalCountRef = useRef(1);
   const fallbackHeroWidth = HERO_MIN_WIDTH;
   const heroWidth = measuredHeroWidth || fallbackHeroWidth;
   const heroHeight = Math.round(
@@ -91,8 +92,15 @@ export function PremiumHomeHeroSection({
     ? rounds.length + (isAdmin ? 1 : 0)
     : 1;
   const dots = Array.from({ length: totalCount });
-  heroWidthRef.current = heroWidth;
-  totalCountRef.current = totalCount;
+  const carouselItems = useMemo<HomeHeroCarouselItem[]>(() => {
+    if (!hasRounds) return [{ kind: "empty" }];
+    const items: HomeHeroCarouselItem[] = rounds.map((round) => ({
+      kind: "round",
+      round,
+    }));
+    if (isAdmin) items.push({ kind: "create" });
+    return items;
+  }, [hasRounds, isAdmin, rounds]);
 
   const updateActiveIndex = (nextIndex: number) => {
     const clampedIndex = Math.max(0, Math.min(nextIndex, totalCount - 1));
@@ -100,12 +108,6 @@ export function PremiumHomeHeroSection({
     setInternalActiveIndex(clampedIndex);
     onActiveIndexChange?.(clampedIndex);
     return clampedIndex;
-  };
-
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (heroWidth <= 0) return;
-    const index = Math.round(event.nativeEvent.contentOffset.x / heroWidth);
-    if (index !== activeIndexRef.current) updateActiveIndex(index);
   };
 
   const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -121,74 +123,19 @@ export function PremiumHomeHeroSection({
 
   useEffect(() => {
     const nextIndex = Math.max(0, Math.min(activeIndex, totalCount - 1));
-    activeIndexRef.current = nextIndex;
-    if (controlledActiveIndex !== undefined) {
-      scrollRef.current?.scrollTo({
-        x: nextIndex * heroWidth,
-        y: 0,
+    if (
+      controlledActiveIndex !== undefined &&
+      activeIndexRef.current !== nextIndex
+    ) {
+      activeIndexRef.current = nextIndex;
+      scrollRef.current?.scrollToOffset({
+        offset: nextIndex * heroWidth,
         animated: true,
       });
     }
   }, [activeIndex, controlledActiveIndex, heroWidth, totalCount]);
 
-  const webDragResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) =>
-        Platform.OS === "web" &&
-        Math.abs(gestureState.dx) > 8 &&
-        Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
-      onMoveShouldSetPanResponderCapture: (_, gestureState) =>
-        Platform.OS === "web" &&
-        Math.abs(gestureState.dx) > 8 &&
-        Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
-      onPanResponderGrant: () => {
-        dragStartOffsetRef.current =
-          activeIndexRef.current * heroWidthRef.current;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        const width = heroWidthRef.current;
-        const maxOffset = Math.max(
-          0,
-          (totalCountRef.current - 1) * width,
-        );
-        const nextOffset = Math.max(
-          0,
-          Math.min(maxOffset, dragStartOffsetRef.current - gestureState.dx),
-        );
-        scrollRef.current?.scrollTo({ x: nextOffset, y: 0, animated: false });
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        const width = heroWidthRef.current;
-        const movedFarEnough = Math.abs(gestureState.dx) > width * 0.16;
-        const movedFastEnough = Math.abs(gestureState.vx) > 0.35;
-        const direction = gestureState.dx < 0 ? 1 : -1;
-        const targetIndex =
-          movedFarEnough || movedFastEnough
-            ? activeIndexRef.current + direction
-            : activeIndexRef.current;
-        const clampedIndex = Math.max(
-          0,
-          Math.min(targetIndex, totalCountRef.current - 1),
-        );
-        activeIndexRef.current = clampedIndex;
-        setInternalActiveIndex(clampedIndex);
-    onActiveIndexChange?.(clampedIndex);
-        scrollRef.current?.scrollTo({
-          x: clampedIndex * width,
-          y: 0,
-          animated: true,
-        });
-      },
-      onPanResponderTerminate: () => {
-        scrollRef.current?.scrollTo({
-          x: activeIndexRef.current * heroWidthRef.current,
-          y: 0,
-          animated: true,
-        });
-      },
-      onPanResponderTerminationRequest: () => false,
-    }),
-  ).current;
+
 
   return (
     <View style={styles.shell}>
@@ -199,69 +146,83 @@ export function PremiumHomeHeroSection({
             setMeasuredHeroWidth(nextWidth);
         }}
         style={[styles.heroCard, { height: heroHeight }]}
-        {...(Platform.OS === "web" ? webDragResponder.panHandlers : {})}
       >
         <View style={styles.heroImage}>
           <TopActionButtons topInset={topInset} floating />
-          <ScrollView
+          <FlatList
             ref={scrollRef}
             horizontal
             pagingEnabled
-            snapToInterval={heroWidth}
-            snapToAlignment="start"
-            disableIntervalMomentum
+            data={carouselItems}
+            keyExtractor={(item, index) =>
+              item.kind === "round" ? item.round.id : `${item.kind}-${index}`
+            }
             decelerationRate="fast"
+            snapToInterval={heroWidth}
+            getItemLayout={(_, index) => ({
+              length: heroWidth,
+              offset: heroWidth * index,
+              index,
+            })}
             showsHorizontalScrollIndicator={false}
-            onScroll={handleScroll}
-            scrollEventThrottle={16}
-            onScrollEndDrag={handleScrollEnd}
             onMomentumScrollEnd={handleScrollEnd}
+            onScrollEndDrag={(event) => {
+              const velocityX = event.nativeEvent.velocity?.x ?? 0;
+              if (Math.abs(velocityX) < 0.05) handleScrollEnd(event);
+            }}
+            scrollEventThrottle={16}
+            initialNumToRender={2}
+            maxToRenderPerBatch={2}
+            windowSize={3}
+            removeClippedSubviews
             style={styles.carousel}
-          >
-            {hasRounds ? (
-              rounds.map((round, index) => (
-                <HeroRoundCard
-                  key={round.id}
+            renderItem={({ item, index }) => {
+              if (item.kind === "round") {
+                return (
+                  <HeroRoundCard
+                    width={heroWidth}
+                    height={heroHeight}
+                    topInset={topInset}
+                    round={item.round}
+                    shouldLoadImage={Math.abs(index - activeIndex) <= 1}
+                    isAdmin={isAdmin}
+                    onCaddieBookPress={onCaddieBookPress}
+                    onGroupsPress={onGroupsPress}
+                    onLottoPress={onLottoPress}
+                    onAwardPress={onAwardPress}
+                    onEditRoundPress={onEditRoundPress}
+                  />
+                );
+              }
+              if (item.kind === "create") {
+                return (
+                  <HeroCreateRoundCard
+                    width={heroWidth}
+                    height={heroHeight}
+                    topInset={topInset}
+                    onCreateRound={onCreateRound}
+                  />
+                );
+              }
+              return (
+                <HeroEmptyCard
                   width={heroWidth}
                   height={heroHeight}
                   topInset={topInset}
-                  round={round}
-                  shouldLoadImage={Math.abs(index - activeIndex) <= 1}
+                  courseName={fallbackCourseName}
+                  address={fallbackAddress}
+                  weatherText={fallbackWeatherText}
+                  temperature={fallbackTemperature}
+                  dday={fallbackDday}
+                  roundDate={fallbackRoundDate}
+                  teeTime={fallbackTeeTime}
                   isAdmin={isAdmin}
-                  onCaddieBookPress={onCaddieBookPress}
-                  onGroupsPress={onGroupsPress}
-                  onLottoPress={onLottoPress}
-                  onAwardPress={onAwardPress}
-                  onEditRoundPress={onEditRoundPress}
+                  onCreateRound={onCreateRound}
+                  heroImageSource={heroImageSource}
                 />
-              ))
-            ) : (
-              <HeroEmptyCard
-                width={heroWidth}
-                height={heroHeight}
-                topInset={topInset}
-                courseName={fallbackCourseName}
-                address={fallbackAddress}
-                weatherText={fallbackWeatherText}
-                temperature={fallbackTemperature}
-                dday={fallbackDday}
-                roundDate={fallbackRoundDate}
-                teeTime={fallbackTeeTime}
-                isAdmin={isAdmin}
-                onCreateRound={onCreateRound}
-                heroImageSource={heroImageSource}
-              />
-            )}
-
-            {isAdmin && hasRounds && (
-              <HeroCreateRoundCard
-                width={heroWidth}
-                height={heroHeight}
-                topInset={topInset}
-                onCreateRound={onCreateRound}
-              />
-            )}
-          </ScrollView>
+              );
+            }}
+          />
 
           <View style={styles.dotsViewport} pointerEvents="none">
             <ScrollView

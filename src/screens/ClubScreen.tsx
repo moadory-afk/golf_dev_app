@@ -1,5 +1,6 @@
 import {
   ScrollView,
+  FlatList,
   View,
   Text,
   TouchableOpacity,
@@ -12,7 +13,6 @@ import {
   TextInput,
   ActivityIndicator,
   useWindowDimensions,
-  PanResponder,
   Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -23,7 +23,7 @@ import {
 } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import {
@@ -73,6 +73,9 @@ import { notifyHomeDashboardChanged } from "../lib/homeDashboardEvents";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type ClubRoute = RouteProp<MainTabParamList, "Club">;
+type ClubHeroItem =
+  | { kind: "club"; club: ClubInfo }
+  | { kind: "create" };
 type RankingType =
   | "recentMedal"
   | "recentWins"
@@ -237,9 +240,7 @@ export default function ClubScreen() {
   const route = useRoute<ClubRoute>();
   const [refreshKey, setRefreshKey] = useState(0);
   const [measuredClubHeroWidth, setMeasuredClubHeroWidth] = useState(0);
-  const clubHeroScrollRef = useRef<ScrollView>(null);
-  const clubHeroDragStartXRef = useRef(0);
-  const clubHeroDragStartIndexRef = useRef(0);
+  const clubHeroScrollRef = useRef<FlatList<ClubHeroItem>>(null);
   const [clubHeroIndex, setClubHeroIndex] = useState(0);
   const isCompactScreen = isCompactWidth(windowWidth);
   const clubHeroWidth = measuredClubHeroWidth || CLUB_HERO_MIN_WIDTH;
@@ -249,6 +250,10 @@ export default function ClubScreen() {
   const { activeClub: club, myClubs, setActiveClub, refreshClubs } = useClub();
 
   const clubHeroPageCount = myClubs.length + 1;
+  const clubHeroItems: ClubHeroItem[] = [
+    ...myClubs.map((heroClub) => ({ kind: "club" as const, club: heroClub })),
+    { kind: "create" as const },
+  ];
   const clubHeroClubIds = myClubs.map((item) => item.id).join("|");
   const { data, loading } = useAsync(
     () => (club ? getRoundSummaries(club.id) : Promise.resolve([])),
@@ -307,8 +312,8 @@ export default function ClubScreen() {
     if (nextIndex < 0) return;
     setClubHeroIndex(nextIndex);
     requestAnimationFrame(() => {
-      clubHeroScrollRef.current?.scrollTo({
-        x: nextIndex * clubHeroWidth,
+      clubHeroScrollRef.current?.scrollToOffset({
+        offset: nextIndex * clubHeroWidth,
         animated: false,
       });
     });
@@ -331,62 +336,7 @@ export default function ClubScreen() {
     [club?.id, clubHeroPageCount, clubHeroWidth, myClubs, setActiveClub],
   );
 
-  const moveClubHeroToIndex = useCallback(
-    (index: number, animated = true) => {
-      if (clubHeroWidth <= 0) return;
-      const nextIndex = Math.max(0, Math.min(clubHeroPageCount - 1, index));
-      clubHeroScrollRef.current?.scrollTo({
-        x: nextIndex * clubHeroWidth,
-        animated,
-      });
-      handleClubHeroScrollEnd(nextIndex * clubHeroWidth);
-    },
-    [clubHeroPageCount, clubHeroWidth, handleClubHeroScrollEnd],
-  );
 
-  // RN Web의 일반 마우스 드래그까지 지원하고, 모바일에서는
-  // 세로 스크롤보다 좌우 이동이 명확할 때만 Hero 제스처를 가져옵니다.
-  const clubHeroPanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponderCapture: (_event, gesture) =>
-          Math.abs(gesture.dx) > 8 &&
-          Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.15,
-        onPanResponderGrant: () => {
-          clubHeroDragStartIndexRef.current = clubHeroIndex;
-          clubHeroDragStartXRef.current = clubHeroIndex * clubHeroWidth;
-        },
-        onPanResponderMove: (_event, gesture) => {
-          const maxX = Math.max(0, (clubHeroPageCount - 1) * clubHeroWidth);
-          const nextX = Math.max(
-            0,
-            Math.min(maxX, clubHeroDragStartXRef.current - gesture.dx),
-          );
-          clubHeroScrollRef.current?.scrollTo({ x: nextX, animated: false });
-          setClubHeroIndex(
-            Math.max(
-              0,
-              Math.min(
-                clubHeroPageCount - 1,
-                Math.round(nextX / Math.max(1, clubHeroWidth)),
-              ),
-            ),
-          );
-        },
-        onPanResponderRelease: (_event, gesture) => {
-          const startIndex = clubHeroDragStartIndexRef.current;
-          const shouldMove =
-            Math.abs(gesture.dx) > clubHeroWidth * 0.16 ||
-            Math.abs(gesture.vx) > 0.35;
-          const direction = gesture.dx < 0 ? 1 : -1;
-          moveClubHeroToIndex(shouldMove ? startIndex + direction : startIndex);
-        },
-        onPanResponderTerminate: () => {
-          moveClubHeroToIndex(clubHeroDragStartIndexRef.current);
-        },
-      }),
-    [clubHeroIndex, clubHeroPageCount, clubHeroWidth, moveClubHeroToIndex],
-  );
 
   async function handleInviteMember() {
     if (!club) return;
@@ -1096,7 +1046,6 @@ export default function ClubScreen() {
           {club && (
             <>
               <View
-                {...clubHeroPanResponder.panHandlers}
                 onLayout={(event) => {
                   const nextWidth = Math.round(event.nativeEvent.layout.width);
                   if (nextWidth > 0 && nextWidth !== measuredClubHeroWidth) {
@@ -1112,150 +1061,148 @@ export default function ClubScreen() {
                   },
                 ]}
               >
-                <ScrollView
+                <FlatList
                   ref={clubHeroScrollRef}
                   horizontal
                   pagingEnabled
-                  nestedScrollEnabled
-                  directionalLockEnabled
-                  snapToInterval={clubHeroWidth}
-                  snapToAlignment="start"
+                  data={clubHeroItems}
+                  keyExtractor={(item, index) =>
+                    item.kind === "club" ? item.club.id : `create-${index}`
+                  }
                   decelerationRate="fast"
-                  disableIntervalMomentum
+                  snapToInterval={clubHeroWidth}
+                  getItemLayout={(_, index) => ({
+                    length: clubHeroWidth,
+                    offset: clubHeroWidth * index,
+                    index,
+                  })}
                   showsHorizontalScrollIndicator={false}
                   bounces={false}
                   scrollEventThrottle={16}
-                  onScroll={(event) => {
-                    if (clubHeroWidth <= 0) return;
-                    const nextIndex = Math.max(
-                      0,
-                      Math.min(
-                        clubHeroPageCount - 1,
-                        Math.round(
-                          event.nativeEvent.contentOffset.x / clubHeroWidth,
-                        ),
-                      ),
-                    );
-                    if (nextIndex !== clubHeroIndex)
-                      setClubHeroIndex(nextIndex);
-                  }}
-                  onScrollEndDrag={(event) => {
-                    const velocityX = event.nativeEvent.velocity?.x ?? 0;
-                    if (Math.abs(velocityX) < 0.05) {
-                      handleClubHeroScrollEnd(
-                        event.nativeEvent.contentOffset.x,
-                      );
-                    }
-                  }}
+                  initialNumToRender={2}
+                  maxToRenderPerBatch={2}
+                  windowSize={3}
+                  removeClippedSubviews
                   onMomentumScrollEnd={(event) =>
                     handleClubHeroScrollEnd(event.nativeEvent.contentOffset.x)
                   }
-                >
-                  {myClubs.map((heroClub) => (
-                    <View
-                      key={heroClub.id}
-                      style={[
-                        s.clubHeroCard,
-                        { width: clubHeroWidth, height: clubHeroHeight },
-                      ]}
-                    >
-                      <Image
-                        source={{ uri: heroClub.coverImage || CLUB_HERO_IMAGE }}
-                        style={s.clubHeroImage}
-                        resizeMode="cover"
-                      />
-                      <View style={s.clubHeroScrim} />
+                  onScrollEndDrag={(event) => {
+                    const velocityX = event.nativeEvent.velocity?.x ?? 0;
+                    if (Math.abs(velocityX) < 0.05) {
+                      handleClubHeroScrollEnd(event.nativeEvent.contentOffset.x);
+                    }
+                  }}
+                  renderItem={({ item }) => {
+                    if (item.kind === "create") {
+                      return (
+                        <View
+                          style={[
+                            s.clubHeroCard,
+                            s.createClubHeroCard,
+                            { width: clubHeroWidth, height: clubHeroHeight },
+                          ]}
+                        >
+                          <View style={s.createClubHeroContent}>
+                            <View style={s.createClubHeroIcon}>
+                              <Text style={s.createClubHeroPlus}>＋</Text>
+                            </View>
+                            <Text style={s.createClubHeroTitle}>
+                              새 동호회 만들기
+                            </Text>
+                            <Text style={s.createClubHeroDescription}>
+                              새로운 골프 동호회를 만들고 회원을 초대해 보세요.
+                            </Text>
+                            <TouchableOpacity
+                              style={s.createClubHeroButton}
+                              onPress={() => setCreateClubOpen(true)}
+                              activeOpacity={0.86}
+                            >
+                              <Text style={s.createClubHeroButtonText}>
+                                동호회 만들기
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                    }
+
+                    const heroClub = item.club;
+                    return (
                       <View
                         style={[
-                          s.clubHeroBody,
-                          {
-                            left: isCompactScreen ? 16 : 20,
-                            right: isCompactScreen ? 16 : 20,
-                            bottom: isCompactScreen ? 28 : 32,
-                            gap: isCompactScreen ? 8 : 12,
-                          },
+                          s.clubHeroCard,
+                          { width: clubHeroWidth, height: clubHeroHeight },
                         ]}
                       >
-                        <View style={{ flex: 1 }}>
-                          <Text style={s.clubHeroLabel}>MY CLUB</Text>
-                          <Text
-                            style={[
-                              s.clubHeroName,
-                              { fontSize: isCompactScreen ? 22 : 26 },
-                            ]}
-                            numberOfLines={1}
-                            adjustsFontSizeToFit
-                            minimumFontScale={0.82}
-                          >
-                            {heroClub.name}
-                          </Text>
-                          <Text
-                            style={[
-                              s.clubHeroMeta,
-                              {
-                                fontSize: isCompactScreen ? 12 : 13,
-                                lineHeight: isCompactScreen ? 17 : 19,
-                              },
-                            ]}
-                            numberOfLines={2}
-                          >
-                            {heroClub.subtitle?.trim()
-                              ? heroClub.subtitle
-                              : "운영 중인 골프 클럽"}
-                          </Text>
-                        </View>
-                        <TouchableOpacity
+                        <Image
+                          source={{ uri: heroClub.coverImage || CLUB_HERO_IMAGE }}
+                          style={s.clubHeroImage}
+                          resizeMode="cover"
+                        />
+                        <View style={s.clubHeroScrim} />
+                        <View
                           style={[
-                            s.clubInfoBtn,
+                            s.clubHeroBody,
                             {
-                              paddingHorizontal: isCompactScreen ? 12 : 15,
-                              paddingVertical: isCompactScreen ? 8 : 10,
+                              left: isCompactScreen ? 16 : 20,
+                              right: isCompactScreen ? 16 : 20,
+                              bottom: isCompactScreen ? 28 : 32,
+                              gap: isCompactScreen ? 8 : 12,
                             },
                           ]}
-                          onPress={() => {
-                            if (heroClub.id !== club?.id) {
-                              setActiveClub(heroClub);
-                              setRefreshKey((key) => key + 1);
-                            }
-                            setClubInfoOpen(true);
-                          }}
-                          activeOpacity={0.84}
                         >
-                          <Text style={s.clubInfoBtnText}>클럽 정보</Text>
-                        </TouchableOpacity>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.clubHeroLabel}>MY CLUB</Text>
+                            <Text
+                              style={[
+                                s.clubHeroName,
+                                { fontSize: isCompactScreen ? 22 : 26 },
+                              ]}
+                              numberOfLines={1}
+                              adjustsFontSizeToFit
+                              minimumFontScale={0.82}
+                            >
+                              {heroClub.name}
+                            </Text>
+                            <Text
+                              style={[
+                                s.clubHeroMeta,
+                                {
+                                  fontSize: isCompactScreen ? 12 : 13,
+                                  lineHeight: isCompactScreen ? 17 : 19,
+                                },
+                              ]}
+                              numberOfLines={2}
+                            >
+                              {heroClub.subtitle?.trim()
+                                ? heroClub.subtitle
+                                : "운영 중인 골프 클럽"}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            style={[
+                              s.clubInfoBtn,
+                              {
+                                paddingHorizontal: isCompactScreen ? 12 : 15,
+                                paddingVertical: isCompactScreen ? 8 : 10,
+                              },
+                            ]}
+                            onPress={() => {
+                              if (heroClub.id !== club?.id) {
+                                setActiveClub(heroClub);
+                                setRefreshKey((key) => key + 1);
+                              }
+                              setClubInfoOpen(true);
+                            }}
+                            activeOpacity={0.84}
+                          >
+                            <Text style={s.clubInfoBtnText}>클럽 정보</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
-                    </View>
-                  ))}
-
-                  <View
-                    style={[
-                      s.clubHeroCard,
-                      s.createClubHeroCard,
-                      { width: clubHeroWidth, height: clubHeroHeight },
-                    ]}
-                  >
-                    <View style={s.createClubHeroContent}>
-                      <View style={s.createClubHeroIcon}>
-                        <Text style={s.createClubHeroPlus}>＋</Text>
-                      </View>
-                      <Text style={s.createClubHeroTitle}>
-                        새 동호회 만들기
-                      </Text>
-                      <Text style={s.createClubHeroDescription}>
-                        새로운 골프 동호회를 만들고 회원을 초대해 보세요.
-                      </Text>
-                      <TouchableOpacity
-                        style={s.createClubHeroButton}
-                        onPress={() => setCreateClubOpen(true)}
-                        activeOpacity={0.86}
-                      >
-                        <Text style={s.createClubHeroButtonText}>
-                          동호회 만들기
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </ScrollView>
+                    );
+                  }}
+                />
 
                 <TopActionButtons topInset={insets.top} floating />
                 <View style={s.clubHeroPagination} pointerEvents="none">
