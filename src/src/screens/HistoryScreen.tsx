@@ -498,89 +498,41 @@ function scheduleParticipantCount(schedule: ScheduledRound) {
 }
 
 function ScheduledRoundCard({ schedule, index, totalCount, width, height }: { schedule: ScheduledRound; index: number; totalCount: number; width: number; height: number }) {
-  const [flipped, setFlipped] = useState(false)
-  const [detailTab, setDetailTab] = useState<RoundDetailTab>('regular')
-  const flip = useRef(new Animated.Value(0)).current
   const participantCount = scheduleParticipantCount(schedule)
   const courseName = schedule.courseName || schedule.course || ''
   const layoutName = schedule.layoutName || ''
-  const courseLabel = [courseName, layoutName].filter(Boolean).join(' · ')
-  const toggleFlip = () => {
-    const next = !flipped
-    Animated.spring(flip, { toValue: next ? 1 : 0, friction: 8, tension: 72, useNativeDriver: true }).start()
-    setFlipped(next)
-  }
-  const frontRotate = flip.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] })
-  const backRotate = flip.interpolate({ inputRange: [0, 1], outputRange: ['180deg', '360deg'] })
-  const frontOpacity = flip.interpolate({ inputRange: [0, 0.49, 0.5, 1], outputRange: [1, 1, 0, 0] })
-  const backOpacity = flip.interpolate({ inputRange: [0, 0.49, 0.5, 1], outputRange: [0, 0, 1, 1] })
-  const detailTabs: { key: RoundDetailTab; label: string }[] = [
-    { key: 'regular', label: '정규' },
-    { key: 'peoria', label: '신페리오' },
-    { key: 'award', label: '시상' },
-  ]
   return (
-    <View style={[s.flipCardScene, { width, height }]}>
-      <Animated.View pointerEvents={flipped ? 'none' : 'auto'} style={[s.flipFace, { opacity: frontOpacity, transform: [{ perspective: 1200 }, { rotateY: frontRotate }] }]}>
-        <TouchableOpacity activeOpacity={0.96} style={s.flipTouch} onPress={toggleFlip}>
-          <View style={s.roundHero}>
-            <ImageBackground source={schedule.heroImageUrl ? { uri: schedule.heroImageUrl } : getCourseHeroImageSource(courseName)} style={s.roundPhotoHeader} imageStyle={s.roundHeroImage}>
-              <View style={s.roundHeroShade} />
-              <View style={s.roundHeroTopRow}>
-                <View style={s.roundCounter}><Text style={s.roundCounterText}>{index + 1} / {totalCount}</Text></View>
-                <View style={s.heroProgressBadge}><Text style={s.heroStatusText}>기록 대기</Text></View>
-              </View>
-              <View style={s.heroCourseBlock}>
-                <Text style={s.heroDate}>{schedule.date ? schedule.date.replace(/-/g, '.') : ''}{schedule.time ? `  ${schedule.time}` : ''}</Text>
-                <Text style={s.heroCourseName} numberOfLines={2}>{courseLabel}</Text>
-              </View>
-            </ImageBackground>
-            <View style={s.roundSummaryBody}>
-              <View style={s.heroSummaryPanel}>
-                <View style={s.summaryCell}><Text style={s.summaryLabel}>우승</Text><Text style={s.summaryValue}></Text></View>
-                <View style={s.summaryCell}><Text style={s.summaryLabel}>스코어</Text><Text style={s.summaryValue}></Text></View>
-                <View style={[s.summaryCell, { borderRightWidth: 0 }]}><Text style={s.summaryLabel}>참가</Text><Text style={s.summaryValue}>{participantCount > 0 ? `${participantCount}명` : ''}</Text></View>
-              </View>
-              <View style={s.heroInfoPanel}>
-                <Text style={s.heroSectionTitle}>기네스 북 갱신 현황</Text>
-                <Text style={s.muted}></Text>
-              </View>
-              <View style={s.highlightRow}>
-                <View style={s.highlightCard}><Text style={s.highlightLabel}>정규</Text><Text style={s.highlightValue}></Text></View>
-                <View style={s.highlightCard}><Text style={s.highlightLabel}>신페리오</Text><Text style={s.highlightValue}></Text></View>
-                <View style={s.highlightCard}><Text style={s.highlightLabel}>시상</Text><Text style={s.highlightValue}></Text></View>
-              </View>
-              <Text style={s.flipHint}>탭하면 라운드 상세 보기 ↻</Text>
-            </View>
+    <View style={[s.roundCardShell, { width, height }]}>
+      <View style={s.roundHero}>
+        <ImageBackground source={schedule.heroImageUrl ? { uri: schedule.heroImageUrl } : getCourseHeroImageSource(courseName)} style={s.roundPhotoHeader} imageStyle={s.roundHeroImage}>
+          <View style={s.roundHeroShade} />
+          <View style={s.roundHeroTopRow}>
+            <View style={s.roundCounter}><Text style={s.roundCounterText}>{index + 1} / {totalCount}</Text></View>
+            <View style={s.heroProgressBadge}><Text style={s.heroStatusText}>기록 대기</Text></View>
           </View>
-        </TouchableOpacity>
-      </Animated.View>
-
-      <Animated.View pointerEvents={flipped ? 'auto' : 'none'} style={[s.flipFace, s.flipBackFace, { opacity: backOpacity, transform: [{ perspective: 1200 }, { rotateY: backRotate }] }]}>
-        <TouchableOpacity activeOpacity={1} style={s.backCard} onPress={toggleFlip}>
-          <View style={s.backHeader}>
-            <TouchableOpacity onPress={toggleFlip} style={s.backIconBtn}><Text style={s.backIconText}>↻</Text></TouchableOpacity>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={s.backCourseName} numberOfLines={1}>{courseName}</Text>
-              <Text style={s.backDate}>{schedule.date ? schedule.date.replace(/-/g, '.') : ''}{schedule.time ? ` · ${schedule.time}` : ''}{participantCount > 0 ? ` · 참가 ${participantCount}명` : ''}</Text>
-            </View>
+          <View style={s.heroCourseBlock}>
+            <Text style={s.heroDate}>{schedule.date ? schedule.date.replace(/-/g, '.') : ''}{schedule.time ? `  ${schedule.time}` : ''}</Text>
+            <Text style={s.heroCourseName} numberOfLines={2}>{[courseName, layoutName].filter(Boolean).join(' · ')}</Text>
           </View>
-          <View style={s.backTabs}>
-            {detailTabs.map((item) => (
-              <TouchableOpacity key={item.key} style={[s.backTab, detailTab === item.key && s.backTabActive]} onPress={() => setDetailTab(item.key)}>
-                <Text style={[s.backTabText, detailTab === item.key && s.backTabTextActive]}>{item.label}</Text>
-              </TouchableOpacity>
-            ))}
+        </ImageBackground>
+        <View style={s.roundSummaryBody}>
+          <View style={s.heroSummaryPanel}>
+            <View style={s.summaryCell}><Text style={s.summaryLabel}>우승</Text><Text style={s.summaryValue}></Text></View>
+            <View style={s.summaryCell}><Text style={s.summaryLabel}>스코어</Text><Text style={s.summaryValue}></Text></View>
+            <View style={[s.summaryCell, { borderRightWidth: 0 }]}><Text style={s.summaryLabel}>참가</Text><Text style={s.summaryValue}>{participantCount > 0 ? `${participantCount}명` : ''}</Text></View>
           </View>
-          <View style={s.backBody}>
-            <View style={s.detailPanel}>
-              <Text style={s.detailPanelTitle}>{detailTab === 'regular' ? '정규 순위' : detailTab === 'peoria' ? '신페리오 순위' : '시상'}</Text>
-              <Text style={s.detailLoadingText}>경기 결과 등록 후 표시됩니다.</Text>
-            </View>
+          <View style={s.heroInfoPanel}>
+            <Text style={s.heroSectionTitle}>기네스 북 갱신 현황</Text>
+            <Text style={s.muted}></Text>
           </View>
-          <TouchableOpacity style={s.flipBackHint} onPress={toggleFlip}><Text style={s.flipBackHintText}>↻ 앞면 요약으로 돌아가기</Text></TouchableOpacity>
-        </TouchableOpacity>
-      </Animated.View>
+          <View style={s.highlightRow}>
+            <View style={s.highlightCard}><Text style={s.highlightLabel}>정규</Text><Text style={s.highlightValue}></Text></View>
+            <View style={s.highlightCard}><Text style={s.highlightLabel}>신페리오</Text><Text style={s.highlightValue}></Text></View>
+            <View style={s.highlightCard}><Text style={s.highlightLabel}>시상</Text><Text style={s.highlightValue}></Text></View>
+          </View>
+          <Text style={s.flipHint}></Text>
+        </View>
+      </View>
     </View>
   )
 }
