@@ -42,6 +42,7 @@ export type ScheduledRound = {
   moneyConfig?: ScheduleMoneyConfig | null
   awardConfig?: ScheduleAwardConfig | null
   groups: ScheduledRoundGroup[]
+  heroImageUrl?: string
 }
 
 type ScheduleRow = {
@@ -103,7 +104,7 @@ function attendanceFromDb(status?: string | null): RoundAttendanceLabel {
   return '미정'
 }
 
-function normalizeSchedule(row: ScheduleRow, groups: ScheduledRoundGroup[]): ScheduledRound {
+function normalizeSchedule(row: ScheduleRow, groups: ScheduledRoundGroup[], heroImageUrl?: string | null): ScheduledRound {
   return {
     id: row.id,
     date: row.round_date,
@@ -122,7 +123,27 @@ function normalizeSchedule(row: ScheduleRow, groups: ScheduledRoundGroup[]): Sch
     moneyConfig: row.money_config ?? null,
     awardConfig: row.award_config ?? null,
     groups,
+    heroImageUrl: heroImageUrl ?? undefined,
   }
+}
+
+type CourseImageRow = {
+  id: string
+  hero_image_url?: string | null
+}
+
+type CourseSeasonImageRow = {
+  golf_course_id: string
+  season: 'spring' | 'summer' | 'autumn' | 'winter'
+  image_url: string
+}
+
+function seasonForDate(value?: string | null): CourseSeasonImageRow['season'] {
+  const month = Number(String(value ?? '').slice(5, 7)) || new Date().getMonth() + 1
+  if (month >= 3 && month <= 5) return 'spring'
+  if (month >= 6 && month <= 8) return 'summer'
+  if (month >= 9 && month <= 11) return 'autumn'
+  return 'winter'
 }
 
 export async function getRoundSchedules(clubId: string): Promise<ScheduledRound[]> {
@@ -135,7 +156,15 @@ export async function getRoundSchedules(clubId: string): Promise<ScheduledRound[
   if (!schedules?.length) return []
 
   const scheduleIds = schedules.map((item) => item.id)
-  const [{ data: groups, error: groupError }, { data: members, error: memberError }] = await Promise.all([
+  const courseIds = Array.from(new Set((schedules as ScheduleRow[])
+    .map((item) => item.course_id)
+    .filter((id): id is string => Boolean(id))))
+  const [
+    { data: groups, error: groupError },
+    { data: members, error: memberError },
+    courseResult,
+    seasonImageResult,
+  ] = await Promise.all([
     supabase
       .from('club_round_groups')
       .select('id, schedule_id, group_no, group_name, tee_time, front_layout_id, front_layout_name, back_layout_id, back_layout_name')
@@ -146,9 +175,24 @@ export async function getRoundSchedules(clubId: string): Promise<ScheduledRound[
       .select('group_id, member_user_id, member_name')
       .in('schedule_id', scheduleIds)
       .order('sort_order', { ascending: true }),
+    courseIds.length
+      ? supabase.from('golf_courses').select('id, hero_image_url').in('id', courseIds)
+      : Promise.resolve({ data: [] as CourseImageRow[], error: null }),
+    courseIds.length
+      ? supabase
+          .from('golf_course_season_images')
+          .select('golf_course_id, season, image_url')
+          .in('golf_course_id', courseIds)
+          .eq('is_active', true)
+      : Promise.resolve({ data: [] as CourseSeasonImageRow[], error: null }),
   ])
   if (groupError) throw groupError
   if (memberError) throw memberError
+
+  // 이미지 테이블/컬럼이 아직 없는 환경에서는 기존 로컬 이미지 fallback을 사용한다.
+  const courseImages = (courseResult.error ? [] : (courseResult.data ?? [])) as CourseImageRow[]
+  const seasonImages = (seasonImageResult.error ? [] : (seasonImageResult.data ?? [])) as CourseSeasonImageRow[]
+  const courseImageById = new Map(courseImages.map((item) => [item.id, item.hero_image_url ?? null]))
 
   const membersByGroup = new Map<string, ScheduledRoundGroupMember[]>()
   for (const member of (members ?? []) as GroupMemberRow[]) {
@@ -174,7 +218,13 @@ export async function getRoundSchedules(clubId: string): Promise<ScheduledRound[
   }
 
   return (schedules as ScheduleRow[])
-    .map((row) => normalizeSchedule(row, groupsBySchedule.get(row.id) ?? []))
+    .map((row) => {
+      const seasonalImage = row.course_id
+        ? seasonImages.find((item) => item.golf_course_id === row.course_id && item.season === seasonForDate(row.round_date))?.image_url
+        : undefined
+      const heroImageUrl = seasonalImage ?? (row.course_id ? courseImageById.get(row.course_id) : null)
+      return normalizeSchedule(row, groupsBySchedule.get(row.id) ?? [], heroImageUrl)
+    })
     .sort((a, b) => `${a.date} ${a.time || '99:99'}`.localeCompare(`${b.date} ${b.time || '99:99'}`))
 }
 

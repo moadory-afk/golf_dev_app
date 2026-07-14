@@ -309,7 +309,7 @@ function memberPlaceholders(members: HistoryMember[]) {
 
 function EmptyByRound({ members }: { members: HistoryMember[] }) {
   const [containerWidth, setContainerWidth] = useState(0)
-  const cardWidth = containerWidth > 0 ? Math.min(Math.max(containerWidth - 32, 280), 430) : 0
+  const cardWidth = containerWidth > 0 ? Math.min(Math.max(containerWidth - 48, 280), 430) : 0
   const cardHeight = Math.max(500, Math.min(590, Dimensions.get('window').height - 220))
   return (
     <View
@@ -502,7 +502,7 @@ function ScheduledRoundCard({ schedule, index, totalCount, width, height }: { sc
   return (
     <View style={[s.roundCardShell, { width, height }]}>
       <View style={s.roundHero}>
-        <ImageBackground source={getCourseHeroImageSource(courseName)} style={s.roundPhotoHeader} imageStyle={s.roundHeroImage}>
+        <ImageBackground source={schedule.heroImageUrl ? { uri: schedule.heroImageUrl } : getCourseHeroImageSource(courseName)} style={s.roundPhotoHeader} imageStyle={s.roundHeroImage}>
           <View style={s.roundHeroShade} />
           <View style={s.roundHeroTopRow}>
             <View style={s.roundCounter}><Text style={s.roundCounterText}>{index + 1} / {totalCount}</Text></View>
@@ -547,7 +547,7 @@ function ByRound({ rounds, schedules = [], handicapBasis = 5, members = [] }: { 
 
   if (items.length === 0) return <EmptyByRound members={members} />
 
-  const cardWidth = containerWidth > 0 ? Math.min(Math.max(containerWidth - 32, 280), 430) : 0
+  const cardWidth = containerWidth > 0 ? Math.min(Math.max(containerWidth - 48, 280), 430) : 0
   const cardHeight = Math.max(500, Math.min(590, Dimensions.get('window').height - 220))
 
   return (
@@ -558,12 +558,11 @@ function ByRound({ rounds, schedules = [], handicapBasis = 5, members = [] }: { 
       {cardWidth > 0 ? (
         <FlatList
           horizontal
-          pagingEnabled
           data={items}
           keyExtractor={(item) => item.key}
           decelerationRate="fast"
-          snapToInterval={cardWidth + 12}
-          getItemLayout={(_, index) => ({ length: cardWidth + 12, offset: (cardWidth + 12) * index, index })}
+          snapToInterval={cardWidth + 8}
+          getItemLayout={(_, index) => ({ length: cardWidth + 8, offset: (cardWidth + 8) * index, index })}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.roundCarouselContent}
           initialNumToRender={2}
@@ -571,7 +570,7 @@ function ByRound({ rounds, schedules = [], handicapBasis = 5, members = [] }: { 
           windowSize={3}
           removeClippedSubviews
           renderItem={({ item, index }) => item.kind === 'round' ? (
-            <RoundFlipCard round={item.round} rounds={rounds} handicapBasis={handicapBasis} index={index} totalCount={items.length} width={cardWidth} height={cardHeight} />
+            <RoundFlipCard round={item.round} rounds={rounds} schedules={schedules} handicapBasis={handicapBasis} index={index} totalCount={items.length} width={cardWidth} height={cardHeight} />
           ) : (
             <ScheduledRoundCard schedule={item.schedule} index={index} totalCount={items.length} width={cardWidth} height={cardHeight} />
           )}
@@ -583,10 +582,11 @@ function ByRound({ rounds, schedules = [], handicapBasis = 5, members = [] }: { 
 }
 
 function RoundFlipCard({
-  round, rounds, handicapBasis, index, totalCount, width, height,
+  round, rounds, schedules, handicapBasis, index, totalCount, width, height,
 }: {
   round: SavedRound
   rounds: SavedRound[]
+  schedules: ScheduledRound[]
   handicapBasis: number
   index: number
   totalCount: number
@@ -613,6 +613,9 @@ function RoundFlipCard({
   const flip = useRef(new Animated.Value(0)).current
   const effectiveRound = detailRound ?? round
   const coverPhoto = photoData[0]
+  const scheduleHeroImageUrl = round.scheduleId
+    ? schedules.find((item) => item.id === round.scheduleId)?.heroImageUrl
+    : undefined
   const par = totalPar(round.pars)
   const totals = round.players.map((p) => playerTotal(p.strokes))
   const best = Math.min(...totals)
@@ -888,7 +891,7 @@ function RoundFlipCard({
       <Animated.View pointerEvents={flipped ? 'none' : 'auto'} style={[s.flipFace, { opacity: frontOpacity, transform: [{ perspective: 1200 }, { rotateY: frontRotate }] }]}>
         <TouchableOpacity activeOpacity={0.96} style={s.flipTouch} onPress={toggleFlip}>
           <View style={s.roundHero}>
-            <ImageBackground source={coverPhoto ? { uri: coverPhoto } : getCourseHeroImageSource(round.courseName)} style={s.roundPhotoHeader} imageStyle={s.roundHeroImage}>
+            <ImageBackground source={coverPhoto ? { uri: coverPhoto } : scheduleHeroImageUrl ? { uri: scheduleHeroImageUrl } : getCourseHeroImageSource(round.courseName)} style={s.roundPhotoHeader} imageStyle={s.roundHeroImage}>
               <View style={s.roundHeroShade} />
               <View style={s.roundHeroTopRow}>
                 <View style={s.roundCounter}><Text style={s.roundCounterText}>{index + 1} / {totalCount}</Text></View>
@@ -2357,12 +2360,12 @@ const s = StyleSheet.create({
   roundCarouselWrap: { marginHorizontal: 0 },
   roundCarouselPlaceholder: { marginHorizontal: 24, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.42)' },
 roundCarouselContent: {
-  paddingLeft:24,
-  paddingRight: 16,
-  gap: 12,
+    paddingLeft: 24,
+    paddingRight: 24,
+    gap: 8,
   },
   roundSwipeHint: { textAlign: 'center', marginTop: 10, fontSize: 11, fontWeight: '700', color: C.muted },
-  roundCardShell: { marginHorizontal: 16 },
+  roundCardShell: { marginHorizontal: 0 },
   flipCardScene: { position: 'relative' },
   flipFace: { position: 'absolute', width: '100%', height: '100%', backfaceVisibility: 'hidden' },
   flipBackFace: { backfaceVisibility: 'hidden' },
