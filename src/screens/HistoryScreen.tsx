@@ -556,10 +556,11 @@ function ByRound({ rounds, schedules = [], handicapBasis = 5, members = [] }: { 
     ? Math.min(Math.max(containerWidth - cardGap - nextCardPeek, 292), 442)
     : 0
   const snapInterval = cardWidth + cardGap
+  const snapOffsets = items.map((_, index) => index * snapInterval)
   const snapToNearestCard = (offsetX: number) => {
     if (cardWidth <= 0) return
     const index = Math.max(0, Math.min(items.length - 1, Math.round(offsetX / snapInterval)))
-    roundListRef.current?.scrollToOffset({ offset: index * snapInterval, animated: true })
+    roundListRef.current?.scrollToOffset({ offset: snapOffsets[index], animated: true })
   }
   const cardHeight = Math.max(500, Math.min(590, Dimensions.get('window').height - 220))
 
@@ -576,8 +577,9 @@ function ByRound({ rounds, schedules = [], handicapBasis = 5, members = [] }: { 
           keyExtractor={(item) => item.key}
           decelerationRate="fast"
           snapToAlignment="start"
-          snapToInterval={snapInterval}
+          snapToOffsets={snapOffsets}
           disableIntervalMomentum
+          onScrollEndDrag={(event) => snapToNearestCard(event.nativeEvent.contentOffset.x)}
           onMomentumScrollEnd={(event) => snapToNearestCard(event.nativeEvent.contentOffset.x)}
           getItemLayout={(_, index) => ({ length: snapInterval, offset: snapInterval * index, index })}
           showsHorizontalScrollIndicator={false}
