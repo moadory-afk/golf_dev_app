@@ -547,7 +547,7 @@ function ByRound({ rounds, schedules = [], handicapBasis = 5, members = [] }: { 
 
   if (items.length === 0) return <EmptyByRound members={members} />
 
-  const cardWidth = containerWidth > 0 ? Math.min(Math.max(containerWidth - 48, 280), 430) : 0
+  const cardWidth = containerWidth > 0 ? Math.min(Math.max(containerWidth - 36, 292), 442) : 0
   const cardHeight = Math.max(500, Math.min(590, Dimensions.get('window').height - 220))
 
   return (
@@ -561,7 +561,9 @@ function ByRound({ rounds, schedules = [], handicapBasis = 5, members = [] }: { 
           data={items}
           keyExtractor={(item) => item.key}
           decelerationRate="fast"
+          snapToAlignment="start"
           snapToInterval={cardWidth + 8}
+          disableIntervalMomentum
           getItemLayout={(_, index) => ({ length: cardWidth + 8, offset: (cardWidth + 8) * index, index })}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.roundCarouselContent}
@@ -2360,8 +2362,8 @@ const s = StyleSheet.create({
   roundCarouselWrap: { marginHorizontal: 0 },
   roundCarouselPlaceholder: { marginHorizontal: 24, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.42)' },
 roundCarouselContent: {
-    paddingLeft: 24,
-    paddingRight: 24,
+    paddingLeft: 8,
+    paddingRight: 16,
     gap: 8,
   },
   roundSwipeHint: { textAlign: 'center', marginTop: 10, fontSize: 11, fontWeight: '700', color: C.muted },
