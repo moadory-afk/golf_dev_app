@@ -165,6 +165,13 @@ export function PremiumHomeHeroSection({
               index,
             })}
             showsHorizontalScrollIndicator={false}
+
+            onScroll={(event) => {
+              const index = Math.round(event.nativeEvent.contentOffset.x / heroWidth);
+              if (index !== activeIndexRef.current) {
+                updateActiveIndex(index);
+              }
+            }}
             onMomentumScrollEnd={handleScrollEnd}
             onScrollEndDrag={(event) => {
               const velocityX = event.nativeEvent.velocity?.x ?? 0;
