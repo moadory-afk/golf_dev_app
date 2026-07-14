@@ -1471,7 +1471,7 @@ const p = StyleSheet.create({
     color: "rgba(255,255,255,0.6)",
     marginTop: 4,
   },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 8, marginRight: 16 },
   headerSaveButton: {
     minWidth: 54,
     minHeight: 32,
@@ -1852,7 +1852,7 @@ const p = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 13,
     paddingVertical: 10,
-    fontSize: 14,
+    fontSize: 16,
     color: C.text,
     backgroundColor: "#fafafa",
   },

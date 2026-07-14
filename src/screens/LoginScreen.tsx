@@ -217,7 +217,7 @@ const s = StyleSheet.create({
   appIcon: { width: 96, height: 96, marginBottom: 12 },
   sub: { fontSize: 14, color: C.muted, marginTop: 6 },
   form: { backgroundColor: C.card, borderRadius: 16, padding: 20, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
-  input: { borderWidth: 1.5, borderColor: C.border, borderRadius: 10, padding: 10, fontSize: 14, color: C.text, backgroundColor: C.bg, marginBottom: 4 },
+  input: { borderWidth: 1.5, borderColor: C.border, borderRadius: 10, padding: 10, fontSize: 16, color: C.text, backgroundColor: C.bg, marginBottom: 4 },
   errorBox: { backgroundColor: '#fff0f0', borderRadius: 8, padding: 10, marginTop: 8, borderWidth: 1, borderColor: '#ffcccc' },
   errorText: { fontSize: 13, color: '#c0392b', lineHeight: 18 },
   btn: { marginTop: 16, backgroundColor: C.green, borderRadius: 50, paddingVertical: 14, alignItems: 'center' },
