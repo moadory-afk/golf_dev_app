@@ -537,7 +537,6 @@ function ScheduledRoundCard({ schedule, index, totalCount, width, height }: { sc
 
 function ByRound({ rounds, schedules = [], handicapBasis = 5, members = [] }: { rounds: SavedRound[]; schedules?: ScheduledRound[]; handicapBasis?: number; members?: HistoryMember[] }) {
   const [containerWidth, setContainerWidth] = useState(0)
-  const roundListRef = useRef<FlatList<RoundCarouselItem>>(null)
   const roundScheduleIds = new Set(rounds.map((round) => round.scheduleId).filter((id): id is string => !!id))
   const items: RoundCarouselItem[] = [
     ...rounds.map((round): RoundCarouselItem => ({ kind: 'round', key: `round-${round.id}`, date: round.date, round })),
@@ -556,12 +555,6 @@ function ByRound({ rounds, schedules = [], handicapBasis = 5, members = [] }: { 
     ? Math.min(Math.max(containerWidth - cardGap - nextCardPeek, 292), 442)
     : 0
   const snapInterval = cardWidth + cardGap
-  const snapOffsets = items.map((_, index) => index * snapInterval)
-  const snapToNearestCard = (offsetX: number) => {
-    if (cardWidth <= 0) return
-    const index = Math.max(0, Math.min(items.length - 1, Math.round(offsetX / snapInterval)))
-    roundListRef.current?.scrollToOffset({ offset: snapOffsets[index], animated: true })
-  }
   const cardHeight = Math.max(500, Math.min(590, Dimensions.get('window').height - 220))
 
   return (
@@ -571,16 +564,13 @@ function ByRound({ rounds, schedules = [], handicapBasis = 5, members = [] }: { 
     }}>
       {cardWidth > 0 ? (
         <FlatList
-          ref={roundListRef}
           horizontal
           data={items}
           keyExtractor={(item) => item.key}
           decelerationRate="fast"
+          snapToInterval={snapInterval}
           snapToAlignment="start"
-          snapToOffsets={snapOffsets}
           disableIntervalMomentum
-          onScrollEndDrag={(event) => snapToNearestCard(event.nativeEvent.contentOffset.x)}
-          onMomentumScrollEnd={(event) => snapToNearestCard(event.nativeEvent.contentOffset.x)}
           getItemLayout={(_, index) => ({ length: snapInterval, offset: snapInterval * index, index })}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.roundCarouselContent}
