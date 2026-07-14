@@ -340,6 +340,25 @@ export default function ClubScreen() {
     [club?.id, clubHeroPageCount, clubHeroWidth, myClubs, setActiveClub],
   );
 
+  const handleClubHeroViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: Array<{ item: ClubHeroItem; index: number | null; isViewable: boolean }> }) => {
+      const visibleItem = viewableItems.find(
+        (entry) => entry.isViewable && entry.index !== null,
+      );
+      if (!visibleItem || visibleItem.index === null) return;
+
+      setClubHeroIndex(visibleItem.index);
+      if (visibleItem.item.kind !== "club") return;
+
+      const nextClub = visibleItem.item.club;
+      if (nextClub.id !== club?.id) {
+        setActiveClub(nextClub);
+        setRefreshKey((key) => key + 1);
+      }
+    },
+    [club?.id, setActiveClub],
+  );
+
 
 
   async function handleInviteMember() {
@@ -1092,6 +1111,8 @@ export default function ClubScreen() {
                   maxToRenderPerBatch={2}
                   windowSize={3}
                   removeClippedSubviews
+                  viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
+                  onViewableItemsChanged={handleClubHeroViewableItemsChanged}
                   onMomentumScrollEnd={(event) =>
                     handleClubHeroScrollEnd(event.nativeEvent.contentOffset.x)
                   }
