@@ -94,13 +94,15 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound): HomeFeedEvent[] 
   const isToday = dday === 0
   const isSoon = typeof dday === 'number' && dday >= 1 && dday <= 3
   const isTomorrow = dday === 1
-  const hasGroups = round.groupCount > 0
+  // 조편성 완료 여부는 조/회원 배정 데이터가 아니라
+  // 라운드 일정 수정 모달에서 저장한 일정 상태(closed/finished)를 기준으로 판단한다.
+  const groupingComplete = round.status === 'closed' || round.status === 'finished'
   const startAt = roundStartTime(round)
   const minutesToStart = startAt ? Math.round((startAt.getTime() - Date.now()) / 60000) : null
   const startsWithinHour = isToday && minutesToStart !== null && minutesToStart >= 0 && minutesToStart <= 60
   const appearsFinished = round.status === 'finished' || (isToday && minutesToStart !== null && minutesToStart < -300)
 
-  if (!hasGroups && (round.status === 'planned' || round.status === 'recruiting') && round.attendanceStatus === '미정') {
+  if (!groupingComplete && (round.status === 'planned' || round.status === 'recruiting') && round.attendanceStatus === '미정') {
     events.push(aiFeed(round, {
       id: `attendance-${round.id}`,
       type: 'attendance_request',
@@ -119,7 +121,7 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound): HomeFeedEvent[] 
     }))
   }
 
-  if (hasGroups) {
+  if (groupingComplete) {
     const memberLine = round.memberNames?.length
       ? `함께 플레이할 팀원은\n${round.memberNames.slice(0, 4).join(' · ')}입니다.`
       : '함께 플레이할 팀원과\nTee-Off 시간을 확인해 보세요.'
