@@ -44,7 +44,7 @@ import {
   HomeLayoutRenderer,
   premiumGolfHomeLayout,
 } from "../features/home/layout";
-import { getRoundSchedules, updateRoundAttendance, type RoundAttendanceLabel, type ScheduledRound } from "../lib/roundSchedule";
+import { getRoundAttendanceMap, getRoundSchedules, updateRoundAttendance, type RoundAttendanceLabel, type ScheduledRound } from "../lib/roundSchedule";
 import {
   DEFAULT_LOTTO_AWARD_CONFIG,
   computeHandicaps,
@@ -730,6 +730,10 @@ export default function HomeExperienceScreen() {
   const [popupLottoSaving, setPopupLottoSaving] = useState(false);
   const [popupDrawSaving, setPopupDrawSaving] = useState(false);
   const [popupAwardConfig, setPopupAwardConfig] = useState<ClubAwardConfig | null>(null);
+  const [attendanceOverviewVisible, setAttendanceOverviewVisible] = useState(false);
+  const [attendanceOverviewLoading, setAttendanceOverviewLoading] = useState(false);
+  const [attendanceOverviewRows, setAttendanceOverviewRows] = useState<Array<{ userId: string; name: string; status: RoundAttendanceLabel }>>([]);
+  const [attendanceOverviewRound, setAttendanceOverviewRound] = useState<HomeUpcomingRound | null>(null);
   const [recordDetailMode, setRecordDetailMode] = useState<HomeRecordDetailMode | null>(null);
   const [recordDetailRounds, setRecordDetailRounds] = useState<SavedRound[]>([]);
   const [recordAwardRows, setRecordAwardRows] = useState<AwardDetailRow[]>([]);
@@ -945,7 +949,28 @@ export default function HomeExperienceScreen() {
         return;
       }
       if (actionType === "open_attendance" && round) {
-        nav.navigate("RoundSchedulePrototype", { editScheduleId: round.id, modalOnly: true });
+        if (!club?.id) return;
+        setAttendanceOverviewVisible(true);
+        setAttendanceOverviewLoading(true);
+        setAttendanceOverviewRound(round);
+        try {
+          const [members, attendanceMap] = await Promise.all([
+            getClubMembers(club.id),
+            getRoundAttendanceMap(club.id, round.id),
+          ]);
+          setAttendanceOverviewRows(
+            members.map((member) => ({
+              userId: member.userId,
+              name: member.name,
+              status: attendanceMap[member.userId] ?? "미정",
+            })),
+          );
+        } catch (error) {
+          setAttendanceOverviewRows([]);
+          Alert.alert("조회 실패", error instanceof Error ? error.message : String(error));
+        } finally {
+          setAttendanceOverviewLoading(false);
+        }
         return;
       }
       if (actionType === "open_groups" && round) {
@@ -1251,6 +1276,14 @@ export default function HomeExperienceScreen() {
         />
       </ScrollView>
 
+      <AttendanceOverviewModal
+        visible={attendanceOverviewVisible}
+        loading={attendanceOverviewLoading}
+        round={attendanceOverviewRound}
+        rows={attendanceOverviewRows}
+        onClose={() => setAttendanceOverviewVisible(false)}
+      />
+
       {roundPopupMode !== null ? (
         <RoundInfoModal
           visible
@@ -1482,6 +1515,64 @@ function HomeRecordDetailModal({
           <ScrollView showsVerticalScrollIndicator={false}>
             {content()}
           </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function AttendanceOverviewModal({
+  visible,
+  loading,
+  round,
+  rows,
+  onClose,
+}: {
+  visible: boolean;
+  loading: boolean;
+  round: HomeUpcomingRound | null;
+  rows: Array<{ userId: string; name: string; status: RoundAttendanceLabel }>;
+  onClose: () => void;
+}) {
+  const { palette } = useSkin();
+  const groups: Array<{ title: string; status: RoundAttendanceLabel }> = [
+    { title: "참가자", status: "참석" },
+    { title: "미참가자", status: "불참" },
+    { title: "미정", status: "미정" },
+  ];
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.modalBackdrop}>
+        <View style={[styles.modalCard, { backgroundColor: palette.card }]}>
+          <View style={styles.modalHeader}>
+            <Text style={[styles.modalTitle, { color: palette.text }]}>참가자 현황</Text>
+            <TouchableOpacity onPress={onClose} style={styles.modalClose} activeOpacity={0.8}>
+              <Text style={styles.modalCloseText}>×</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={[styles.modalSubTitle, { color: palette.muted }]} numberOfLines={2}>
+            {round ? `${round.courseName} · ${round.dateLabel}` : "라운드 참석 현황"}
+          </Text>
+          {loading ? (
+            <ActivityIndicator color={palette.green} style={{ marginVertical: 28 }} />
+          ) : (
+            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+              {groups.map((group) => {
+                const names = rows.filter((row) => row.status === group.status).map((row) => row.name);
+                return (
+                  <View key={group.status} style={[styles.popupSection, { borderColor: palette.border }]}>
+                    <Text style={[styles.popupSectionTitle, { color: palette.text }]}>
+                      {group.title} : {names.length}명
+                    </Text>
+                    <Text style={[styles.groupMembers, { color: names.length ? palette.text : palette.muted }]}>
+                      {names.length ? names.join(" · ") : "해당 회원이 없습니다."}
+                    </Text>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          )}
         </View>
       </View>
     </Modal>

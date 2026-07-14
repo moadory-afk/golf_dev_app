@@ -116,22 +116,21 @@ export function PremiumGogoCaddieCard({
     return () => { mounted = false }
   }, [readStorageKey])
 
-  useEffect(() => {
-    const current = feedItems[page]
-    if (!current || readIds.has(current.id)) return
-    const timer = setTimeout(() => {
-      setReadIds((previous) => {
-        if (previous.has(current.id)) return previous
-        const next = new Set(previous)
-        next.add(current.id)
-        AsyncStorage.setItem(readStorageKey, JSON.stringify(Array.from(next))).catch(() => undefined)
-        return next
-      })
-    }, 1200)
-    return () => clearTimeout(timer)
-  }, [feedItems, page, readIds, readStorageKey])
+
+
+  const markAsRead = (itemId: string) => {
+    setReadIds((previous) => {
+      if (previous.has(itemId)) return previous
+      const next = new Set(previous)
+      next.add(itemId)
+      AsyncStorage.setItem(readStorageKey, JSON.stringify(Array.from(next))).catch(() => undefined)
+      return next
+    })
+  }
 
   const runFeedAction = (item: HomeFeedEvent, action?: HomeFeedAction) => {
+    // NEW 배지는 카드가 보였을 때가 아니라 사용자가 실제로 클릭했을 때만 제거한다.
+    markAsRead(item.id)
     if (onFeedAction) onFeedAction(item, action)
     else onPress()
   }
@@ -158,6 +157,7 @@ export function PremiumGogoCaddieCard({
 
         <View style={styles.rightColumn} onLayout={(event) => setSlideWidth(event.nativeEvent.layout.width)}>
           <ScrollView
+            style={styles.feedPager}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
@@ -169,7 +169,7 @@ export function PremiumGogoCaddieCard({
           >
             {feedItems.map((item) => {
               const [messageTitle, ...messageBodyParts] = item.message.split(/\n\s*\n/)
-              const messageBody = messageBodyParts.join('\n\n')
+              const messageBody = messageBodyParts.join(' ').replace(/\s+/g, ' ').trim()
 
               return (
               <View key={item.id} style={[styles.slide, slideWidth > 0 ? { width: slideWidth } : null]}>
@@ -177,43 +177,43 @@ export function PremiumGogoCaddieCard({
                   <View style={styles.messageRow}>
                     <Text style={styles.messageIcon}>{item.icon}</Text>
                     <View style={styles.messageTextColumn}>
-                      {!readIds.has(item.id) && (
-                        <View style={styles.newBadge}><Text style={styles.newBadgeText}>NEW</Text></View>
-                      )}
-                      <Text style={[styles.title, { color: palette.text }]} numberOfLines={2}>{messageTitle}</Text>
+                      <View style={styles.titleRow}>
+                        <Text style={[styles.title, { color: palette.text }]} numberOfLines={1}>{messageTitle}</Text>
+                        {!readIds.has(item.id) && (
+                          <View style={styles.newBadge}><Text style={styles.newBadgeText}>NEW</Text></View>
+                        )}
+                      </View>
                       {!!messageBody && (
-                        <Text style={[styles.message, { color: palette.text }]} numberOfLines={4}>{messageBody}</Text>
+                        <Text style={[styles.message, { color: palette.text }]} numberOfLines={2}>{messageBody}</Text>
                       )}
                     </View>
                   </View>
                 </TouchableOpacity>
 
                 {item.actions?.length ? (
-                  <View style={styles.actionStack}>
-                    <View style={styles.choiceActionRow}>
-                      {item.actions.filter((action) => !action.secondary).map((action) => (
-                        <TouchableOpacity
-                          key={action.id}
-                          activeOpacity={0.86}
-                          onPress={() => runFeedAction(item, action)}
-                          style={[
-                            styles.choiceAction,
-                            {
-                              backgroundColor: action.selected ? palette.green : palette.card,
-                              borderColor: action.selected ? palette.green : palette.border,
-                            },
-                          ]}
+                  <View style={styles.choiceActionRow}>
+                    {item.actions.map((action) => (
+                      <TouchableOpacity
+                        key={action.id}
+                        activeOpacity={0.86}
+                        onPress={() => runFeedAction(item, action)}
+                        style={[
+                          styles.choiceAction,
+                          action.secondary && styles.choiceActionSecondary,
+                          {
+                            backgroundColor: action.selected ? palette.green : palette.card,
+                            borderColor: action.selected || action.secondary ? palette.green : palette.border,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[styles.choiceActionText, { color: action.selected ? '#fff' : action.secondary ? palette.green : palette.text }]}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          minimumFontScale={0.82}
                         >
-                          <Text style={[styles.choiceActionText, { color: action.selected ? '#fff' : palette.text }]}>
-                            {action.label}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                    {item.actions.filter((action) => action.secondary).map((action) => (
-                      <TouchableOpacity key={action.id} activeOpacity={0.86} onPress={() => runFeedAction(item, action)} style={[styles.secondaryAction, { borderColor: palette.green }]}>
-                        <Text style={[styles.secondaryActionText, { color: palette.green }]}>{action.label}</Text>
-                        <Text style={[styles.secondaryActionArrow, { color: palette.green }]}>›</Text>
+                          {action.label}
+                        </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -224,7 +224,6 @@ export function PremiumGogoCaddieCard({
                     style={[styles.primaryAction, compact && styles.primaryActionCompact, { backgroundColor: palette.green }]}
                   >
                     <Text style={styles.primaryActionText}>{item.ctaLabel}</Text>
-                    <Text style={styles.primaryActionArrow}>›</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -256,16 +255,19 @@ export function PremiumGogoCaddieCard({
 
 const styles = StyleSheet.create({
   card: {
+    height: 150,
     borderWidth: 1,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+    paddingTop: 6,
+    paddingBottom: 6,
     overflow: 'hidden',
   },
   cardCompact: {
+    height: 148,
     paddingHorizontal: spacing.sm,
   },
   cardBody: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'stretch',
     gap: spacing.md,
@@ -275,7 +277,7 @@ const styles = StyleSheet.create({
   },
   characterStage: {
     width: 112,
-    minHeight: 146,
+    height: '100%',
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'flex-end',
@@ -285,63 +287,66 @@ const styles = StyleSheet.create({
     width: 96,
   },
   characterImage: {
-    width: 132,
-    height: 160,
-    marginBottom: -14,
+    width: 136,
+    height: 165,
+    marginBottom: -26,
   },
   characterImageCompact: {
-    width: 116,
-    height: 141,
-    marginBottom: -8,
+    width: 122,
+    height: 148,
+    marginBottom: -23,
   },
   rightColumn: {
     flex: 1,
     minWidth: 0,
+    position: 'relative',
   },
+  feedPager: { flex: 1 },
   slide: {
     flex: 1,
+    height: '100%',
     justifyContent: 'flex-start',
     paddingRight: 1,
+    paddingBottom: 11,
   },
   content: {
     minWidth: 0,
-    paddingTop: 2,
+    paddingTop: 0,
+    flexShrink: 1,
+    marginBottom: 14,
   },
-  title: { fontSize: 18, lineHeight: 23, fontWeight: '900', letterSpacing: -0.65 },
+  title: { flex: 1, minWidth: 0, fontSize: 17, lineHeight: 21, fontWeight: '900', letterSpacing: -0.65 },
+  titleRow: { minHeight: 21, flexDirection: 'row', alignItems: 'center', gap: 7 },
   messageRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 0 },
-  messageTextColumn: { flex: 1, minWidth: 0, gap: 7 },
-  newBadge: { alignSelf: 'flex-start', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, backgroundColor: '#EF4444' },
+  messageTextColumn: { flex: 1, minWidth: 0, gap: 3, maxHeight: 60 },
+  newBadge: { flexShrink: 0, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, backgroundColor: '#EF4444' },
   newBadgeText: { color: '#fff', fontSize: 9, lineHeight: 12, fontWeight: '900', letterSpacing: 0.4 },
   messageIcon: { fontSize: 15, lineHeight: 20 },
-  message: { minWidth: 0, fontSize: 15, lineHeight: 21, fontWeight: '800' },
-  actionStack: { gap: 6, marginTop: 'auto' },
-  choiceActionRow: { flexDirection: 'row', gap: 6 },
-  choiceAction: { flex: 1, minHeight: 34, borderWidth: 1, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  choiceActionText: { fontSize: 11, lineHeight: 15, fontWeight: '900' },
-  secondaryAction: { minHeight: 32, borderWidth: 1, borderRadius: radius.lg, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  secondaryActionText: { fontSize: 11, lineHeight: 15, fontWeight: '900' },
-  secondaryActionArrow: { fontSize: 18, lineHeight: 20, fontWeight: '700' },
+  message: { minWidth: 0, fontSize: 14, lineHeight: 19, fontWeight: '800' },
+  choiceActionRow: { height: 32, flexDirection: 'row', gap: 6, alignItems: 'stretch', marginTop: 14 },
+  choiceAction: { flex: 1, minWidth: 0, borderWidth: 1, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 0, flexDirection: 'row' },
+  choiceActionSecondary: { flex: 1, paddingHorizontal: 0, justifyContent: 'center' },
+  choiceActionText: { fontSize: 12, lineHeight: 16, fontWeight: '900', textAlign: 'center' },
   primaryAction: {
     alignSelf: 'flex-end',
     minWidth: 92,
     width: '47%',
-    minHeight: 34,
+    height: 32,
     borderRadius: radius.lg,
-    paddingHorizontal: 13,
-    marginTop: 'auto',
+    paddingHorizontal: 0,
+    marginTop: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
   },
   primaryActionCompact: {
     width: '54%',
     minWidth: 84,
-    paddingHorizontal: 10,
+    paddingHorizontal: 0,
   },
-  primaryActionText: { color: '#fff', fontSize: 12, fontWeight: '900' },
-  primaryActionArrow: { color: '#fff', fontSize: 20, lineHeight: 22, fontWeight: '700' },
-  paginationRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 6 },
+  primaryActionText: { color: '#fff', fontSize: 12, lineHeight: 16, fontWeight: '900', textAlign: 'center' },
+  paginationRow: { position: 'absolute', left: 0, right: 0, bottom: -1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
   paginationDot: { width: 5, height: 5, borderRadius: 3 },
   paginationDotActive: { width: 16 },
-  pageText: { fontSize: 9, lineHeight: 12, fontWeight: '800', marginLeft: 3 },
+  pageText: { fontSize: 11, lineHeight: 13, fontWeight: '900', marginLeft: 3 },
 })

@@ -82,9 +82,13 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound, recentRounds: Hom
       message: `현재 참석 ${round.memberCount}명입니다.\n\n참석 여부를 선택하고\n참가자 현황도 확인해 보세요.`,
       ctaLabel: '참가자 현황', actionType: 'open_attendance', tone: 'green',
       actions: [
-        { id: 'attending', label: '참석', actionType: 'set_attendance', attendanceStatus: '참석', selected: current === '참석' },
-        { id: 'absent', label: '불참', actionType: 'set_attendance', attendanceStatus: '불참', selected: current === '불참' },
-        { id: 'pending', label: '미정', actionType: 'set_attendance', attendanceStatus: '미정', selected: current === '미정' },
+        {
+          id: 'attendance-toggle',
+          label: `참석여부 : ${current}`,
+          actionType: 'set_attendance',
+          attendanceStatus: current === '참석' ? '불참' : current === '불참' ? '미정' : '참석',
+          selected: current === '참석',
+        },
         { id: 'attendance-overview', label: '참가자 현황', actionType: 'open_attendance', secondary: true },
       ],
     }))
@@ -118,7 +122,7 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound, recentRounds: Hom
   }
 
   // 6. 로또 구매 전/후 통합 카드
-  if (lottoSaleOpen && !appearsFinished) {
+  if (lottoSaleOpen && groupingComplete && round.attendanceStatus === '참석' && !appearsFinished) {
     events.push(aiFeed(round, {
       id: `stage-06-lotto-${round.id}-${round.lottoPurchased ? 'purchased' : 'open'}`,
       type: 'lotto', priority: round.lottoPurchased ? 63 : 78, icon: '🎲',
@@ -130,7 +134,7 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound, recentRounds: Hom
   }
 
   // 7. 티오프 1시간 전부터 30분 전까지 미구매 재안내
-  if (lottoReminderWindow && !round.lottoPurchased && !appearsFinished) {
+  if (lottoReminderWindow && groupingComplete && round.attendanceStatus === '참석' && !round.lottoPurchased && !appearsFinished) {
     events.push(aiFeed(round, {
       id: `stage-07-lotto-reminder-${round.id}`, type: 'lotto', priority: 96, icon: '⏰',
       message: '아직 Lotto 6/18을 구매하지 않았습니다.\n\n라운드 시작 30분 전까지\n번호를 선택해 주세요.',
@@ -143,7 +147,7 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound, recentRounds: Hom
     events.push(aiFeed(round, {
       id: `stage-08-play-${round.id}`, type: 'score_entry', priority: 92, icon: '⛳',
       message: '오늘의 라운드를 즐겨보세요.\n\n드라이버 거리와 퍼팅 수를 입력하면\n더욱 상세한 스코어 분석을 할 수 있어요.',
-      ctaLabel: '오늘 기록 시작', actionType: 'open_score_entry', tone: 'green',
+      ctaLabel: '캐디북 보기', actionType: 'open_caddie_map', tone: 'green',
     }))
   }
 
@@ -209,7 +213,7 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound, recentRounds: Hom
   return events.sort((a, b) => b.priority - a.priority)
 }
 
-export function buildHomeFeedEvents({ upcomingRound }: BuildHomeFeedInput): HomeFeedEvent[] {
+export function buildHomeFeedEvents({ upcomingRound, recentRounds }: BuildHomeFeedInput): HomeFeedEvent[] {
   if (upcomingRound) return buildRoundFeedEvents(upcomingRound, recentRounds)
   return [aiFeed(null, {
     id: 'stage-01-empty-home-feed', type: 'empty', priority: 10, icon: '⛳',
