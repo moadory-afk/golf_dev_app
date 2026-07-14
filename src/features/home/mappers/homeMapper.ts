@@ -202,7 +202,7 @@ function resolveCourseLine(groups: HomeScheduleGroupRow[], fallbackLayoutName?: 
 
 function countMembers(groups: HomeScheduleGroupRow[], members: HomeScheduleGroupMemberRow[]) {
   if (members.length > 0) return members.length
-  return groups.length > 0 ? groups.length * 4 : 0
+  return 0
 }
 
 function sameGroupMemberNames(groups: HomeScheduleGroupRow[], members: HomeScheduleGroupMemberRow[], userId?: string | null) {
@@ -233,7 +233,13 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow, 
   const locationParts = [course?.region, layoutName ? `${layoutName} 코스` : undefined].filter(Boolean)
 
   const weather = raw.weatherByScheduleId[schedule.id] ?? (course?.id ? raw.weatherByCourseId[course.id] : undefined)
-  const attendanceStatus = raw.attendances.find((item) => item.scheduleId === schedule.id)?.status ?? "미정"
+  const scheduleAttendances = raw.attendances.filter((item) => item.scheduleId === schedule.id)
+  const attendanceStatus = scheduleAttendances.find((item) => item.userId === raw.currentUserId)?.status ?? "미정"
+  const attendingCount = scheduleAttendances.filter((item) => item.status === "참석").length
+  const assignedCount = countMembers(groups, members)
+  const memberCount = schedule.status === 'closed' || schedule.status === 'finished'
+    ? assignedCount
+    : attendingCount
   const lottoPurchased = raw.lottoEntries.some((item) => item.scheduleId === schedule.id)
   const lottoDraw = raw.lottoDraws.find((item) => item.scheduleId === schedule.id)
   const savedRound = raw.rounds.find((item) => item.scheduleId === schedule.id)
@@ -251,7 +257,7 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow, 
     dday: formatDday(schedule.round_date) || 'D-DAY',
     status: schedule.status ?? 'planned',
     statusLabel: statusLabel(schedule.status),
-    memberCount: countMembers(groups, members),
+    memberCount,
     groupCount: groups.length,
     memberNames: sameGroupMemberNames(groups, members, userId),
     attendanceStatus,

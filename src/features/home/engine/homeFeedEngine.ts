@@ -76,10 +76,13 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound, recentRounds: Hom
   // 2. 참석/불참/미정 토글 + 참가자 현황 버튼 (조편성 완료 전까지 수정 가능)
   if (!groupingComplete && !appearsFinished) {
     const current = round.attendanceStatus ?? '미정'
+    const attendanceLine = round.memberCount > 0
+      ? `현재 참석 ${round.memberCount}명입니다.`
+      : '참석 확인 중입니다.'
     events.push(aiFeed(round, {
       id: `stage-02-attendance-${round.id}`,
       type: 'attendance_request', priority: 100,
-      message: `현재 참석 ${round.memberCount}명입니다.\n\n참석 여부를 선택하고\n참가자 현황도 확인해 보세요.`,
+      message: `${attendanceLine}\n\n참석 여부를 선택하고\n참가자 현황도 확인해 보세요.`,
       ctaLabel: '참가자 현황', actionType: 'open_attendance', tone: 'green',
       actions: [
         {

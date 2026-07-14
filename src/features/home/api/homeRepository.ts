@@ -133,7 +133,7 @@ export type HomeDashboardRawData = {
   schedules: HomeScheduleRow[];
   groups: HomeScheduleGroupRow[];
   members: HomeScheduleGroupMemberRow[];
-  attendances: Array<{ scheduleId: string; status: HomeAttendanceStatus }>;
+  attendances: Array<{ scheduleId: string; userId: string; status: HomeAttendanceStatus }>;
   courses: HomeCourseRow[];
   courseSeasonImages: HomeCourseSeasonImageRow[];
   layouts: HomeLayoutRow[];
@@ -312,12 +312,11 @@ async function fetchHomeDashboardRawData(
           .in("schedule_id", scheduleIds)
           .order("sort_order", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
-    scheduleIds.length && userId
+    scheduleIds.length
       ? supabase
           .from("club_round_attendances")
           .select("schedule_id, member_user_id, status")
           .in("schedule_id", scheduleIds)
-          .eq("member_user_id", userId)
       : Promise.resolve({ data: [], error: null }),
     fetchHomeCourses(courseIds),
     fetchCourseSeasonImages(courseIds),
@@ -353,6 +352,7 @@ async function fetchHomeDashboardRawData(
     members: (memberResult.data ?? []) as HomeScheduleGroupMemberRow[],
     attendances: ((attendanceResult.data ?? []) as HomeAttendanceRow[]).map((row) => ({
       scheduleId: row.schedule_id,
+      userId: row.member_user_id,
       status: mapAttendanceStatus(row.status),
     })),
     courses: courseRows,
