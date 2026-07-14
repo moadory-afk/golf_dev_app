@@ -548,10 +548,14 @@ function ByRound({ rounds, schedules = [], handicapBasis = 5, members = [] }: { 
 
   if (items.length === 0) return <EmptyByRound members={members} />
 
-  const cardWidth = containerWidth > 0 ? Math.min(Math.max(containerWidth - 36, 292), 442) : 0
+  // 바깥 ScrollView의 좌우 padding(각 16px)을 제외한 캐러셀 실측 폭을 기준으로 계산한다.
+  // 현재 카드 1장과 오른쪽 다음 카드의 일부(약 20px)만 보이도록 유지한다.
   const cardGap = 8
+  const nextCardPeek = 20
+  const cardWidth = containerWidth > 0
+    ? Math.min(Math.max(containerWidth - cardGap - nextCardPeek, 292), 442)
+    : 0
   const snapInterval = cardWidth + cardGap
-  const snapOffsets = items.map((_, index) => index * snapInterval)
   const snapToNearestCard = (offsetX: number) => {
     if (cardWidth <= 0) return
     const index = Math.max(0, Math.min(items.length - 1, Math.round(offsetX / snapInterval)))
@@ -572,13 +576,13 @@ function ByRound({ rounds, schedules = [], handicapBasis = 5, members = [] }: { 
           keyExtractor={(item) => item.key}
           decelerationRate="fast"
           snapToAlignment="start"
-          snapToOffsets={snapOffsets}
+          snapToInterval={snapInterval}
           disableIntervalMomentum
           onMomentumScrollEnd={(event) => snapToNearestCard(event.nativeEvent.contentOffset.x)}
-          onScrollEndDrag={(event) => snapToNearestCard(event.nativeEvent.contentOffset.x)}
           getItemLayout={(_, index) => ({ length: snapInterval, offset: snapInterval * index, index })}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.roundCarouselContent}
+          ItemSeparatorComponent={() => <View style={{ width: cardGap }} />}
           initialNumToRender={2}
           maxToRenderPerBatch={2}
           windowSize={3}
@@ -2371,12 +2375,11 @@ const s = StyleSheet.create({
     color: C.green,
   },
   aiCaddieRecommendText: { flex: 1, fontSize: 12, lineHeight: 18, fontWeight: '800', color: C.text },
-  roundCarouselWrap: { marginHorizontal: 0 },
+  roundCarouselWrap: { width: '100%', alignSelf: 'stretch', marginHorizontal: 0, overflow: 'hidden' },
   roundCarouselPlaceholder: { marginHorizontal: 24, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.42)' },
-roundCarouselContent: {
-    paddingLeft: 8,
-    paddingRight: 16,
-    gap: 8,
+  roundCarouselContent: {
+    paddingLeft: 0,
+    paddingRight: 20,
   },
   roundSwipeHint: { textAlign: 'center', marginTop: 10, fontSize: 11, fontWeight: '700', color: C.muted },
   roundCardShell: { marginHorizontal: 0, flexShrink: 0 },
