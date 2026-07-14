@@ -31,6 +31,7 @@ type Tab = 'byRound' | 'byPlayer' | 'club' | 'hall'
 type RankingType = 'wins' | 'streak' | 'lowestHandicap' | 'birdie' | 'singleBirdie' | 'frontBack' | 'avgImprove' | 'handicapImprove' | 'singlePar' | 'roundsPlayed' | 'lowestScore' | 'highestScore'
 type RoundDetailTab = 'regular' | 'peoria' | 'score' | 'award'
 type HistoryMember = { userId: string; name: string; role: string }
+type HistoryRoundCard = SavedRound & { isScheduleOnly?: boolean }
 const HISTORY_TABS: Array<{ value: Tab; label: string; icon: string }> = [
   { value: 'byPlayer', label: '개인별', icon: 'user' },
   { value: 'byRound', label: '라운딩 별', icon: 'flag' },
@@ -622,14 +623,16 @@ function RoundFlipCard({
   const [photoCropSource, setPhotoCropSource] = useState<{ uri: string; width: number; height: number } | null>(null)
   const flip = useRef(new Animated.Value(0)).current
   const effectiveRound = detailRound ?? round
+  const isScheduleOnly = false
+  const hasResults = !isScheduleOnly && round.players.length > 0 && round.pars.length > 0
   const coverPhoto = photoData[0]
   const scheduleHeroImageUrl = round.scheduleId
     ? schedules.find((item) => item.id === round.scheduleId)?.heroImageUrl
     : undefined
-  const par = totalPar(round.pars)
-  const totals = round.players.map((p) => playerTotal(p.strokes))
-  const best = Math.min(...totals)
-  const avg = Math.ceil(totals.reduce((a, b) => a + b, 0) / Math.max(totals.length, 1))
+  const par = hasResults ? totalPar(round.pars) : 0
+  const totals = hasResults ? round.players.map((p) => playerTotal(p.strokes)) : []
+  const best = totals.length > 0 ? Math.min(...totals) : 0
+  const avg = totals.length > 0 ? Math.ceil(totals.reduce((a, b) => a + b, 0) / totals.length) : 0
   const bestPlayer = round.players.find((p) => playerTotal(p.strokes) === best)
   const roundHandicaps = getHandicapsForRound(round, rounds, handicapBasis)
   const regularRank = round.players
@@ -667,20 +670,24 @@ function RoundFlipCard({
   if ((birdieTop?.birdie ?? 0) > 0 && birdieTop!.birdie > priorBirdie) clubRecordRows.push({ icon: '🟡', label: '버디왕 갱신', value: `${shortName(birdieTop!.name)} ${birdieTop!.birdie}개` })
   const priorPar = priorRounds.length ? Math.max(0, ...priorRounds.flatMap((r) => r.players.map((p) => holeStats(p.strokes, r.pars).par))) : 0
   if ((parTop?.par ?? 0) > 0 && parTop!.par > priorPar) clubRecordRows.push({ icon: '⛳', label: '파왕 갱신', value: `${shortName(parTop!.name)} ${parTop!.par}개` })
-  const records = clubRecordRows.length > 0
-    ? clubRecordRows
-    : [{ icon: '—', label: '기록 갱신 없음', value: '다음 라운드 도전' }]
-  const frontHighlights = [
-    (birdieTop?.birdie ?? 0) > 0 ? { icon: '🐦', label: '버디왕 후보', value: `${shortName(birdieTop!.name)} ${birdieTop!.birdie}개` } : null,
-    (parTop?.par ?? 0) > 0 ? { icon: '⛳', label: '파왕 후보', value: `${shortName(parTop!.name)} ${parTop!.par}개` } : null,
-    frontBackTop ? { icon: '📈', label: '후반 반등', value: `${shortName(frontBackTop.name)} ${frontBackTop.improvement}타` } : null,
-    { icon: '✨', label: '기록 후보', value: '다음 갱신 도전' },
-  ].filter(Boolean).slice(0, 3) as { icon: string; label: string; value: string }[]
+  const records = isScheduleOnly
+    ? Array.from({ length: 3 }, () => ({ icon: '', label: '', value: '' }))
+    : clubRecordRows.length > 0
+      ? clubRecordRows
+      : [{ icon: '—', label: '기록 갱신 없음', value: '다음 라운드 도전' }]
+  const frontHighlights = isScheduleOnly
+    ? Array.from({ length: 3 }, () => ({ icon: '', label: '', value: '' }))
+    : [
+        (birdieTop?.birdie ?? 0) > 0 ? { icon: '🐦', label: '버디왕 후보', value: `${shortName(birdieTop!.name)} ${birdieTop!.birdie}개` } : null,
+        (parTop?.par ?? 0) > 0 ? { icon: '⛳', label: '파왕 후보', value: `${shortName(parTop!.name)} ${parTop!.par}개` } : null,
+        frontBackTop ? { icon: '📈', label: '후반 반등', value: `${shortName(frontBackTop.name)} ${frontBackTop.improvement}타` } : null,
+        { icon: '✨', label: '기록 후보', value: '다음 갱신 도전' },
+      ].filter(Boolean).slice(0, 3) as { icon: string; label: string; value: string }[]
 
 
   const toggleFlip = async () => {
     const next = !flipped
-    if (next && !detailRound) {
+    if (next && !detailRound && !isScheduleOnly) {
       const [full, snapshots, entries, draw, members, lottoConfig, schedules, awardConfig] = await Promise.all([
         getRound(round.id),
         getClubAwardSnapshots(round.id).catch(() => []),
@@ -713,6 +720,7 @@ function RoundFlipCard({
   }, [round.id, round.photoData])
 
   const handlePickRoundPhoto = async () => {
+    if (isScheduleOnly) return
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (!permission.granted) {
       Alert.alert('권한 필요', '사진 접근 권한이 필요합니다.')
@@ -761,6 +769,7 @@ function RoundFlipCard({
   }
 
   const openRound = async () => {
+    if (isScheduleOnly) return
     if (!round.isComplete) {
       const full = await getRound(round.id)
       if (full) nav.navigate('ScoreEntry', { date: full.date, courseName: full.courseName, pars: full.pars, golfCourseId: full.golfCourseId, players: full.players, editId: full.id, settlement: full.settlement })
@@ -769,7 +778,7 @@ function RoundFlipCard({
     nav.navigate('RoundDetail', { id: round.id })
   }
 
-  const detailPar = totalPar(effectiveRound.pars)
+  const detailPar = effectiveRound.pars.length > 0 ? totalPar(effectiveRound.pars) : 0
   const detailHandicaps = getHandicapsForRound(effectiveRound, rounds, handicapBasis)
   const actualRegularRank = effectiveRound.players
     .map((p) => {
@@ -906,12 +915,12 @@ function RoundFlipCard({
               <View style={s.roundHeroTopRow}>
                 <View style={s.roundCounter}><Text style={s.roundCounterText}>{index + 1} / {totalCount}</Text></View>
                 <View style={{ alignItems: 'flex-end', gap: 7 }}>
-                  <View style={round.isComplete ? s.heroCompleteBadge : s.heroProgressBadge}><Text style={s.heroStatusText}>{round.isComplete ? '라운드 완료' : '라운드 중'}</Text></View>
+                  <View style={round.isComplete ? s.heroCompleteBadge : s.heroProgressBadge}><Text style={s.heroStatusText}>{round.isComplete ? '라운드 완료' : isScheduleOnly ? '기록 대기' : '라운드 중'}</Text></View>
                 </View>
               </View>
               <TouchableOpacity
                 activeOpacity={0.84}
-                disabled={photoSaving}
+                disabled={photoSaving || isScheduleOnly}
                 onPress={(event) => {
                   event.stopPropagation()
                   handlePickRoundPhoto()
@@ -927,10 +936,10 @@ function RoundFlipCard({
             </ImageBackground>
             <View style={s.roundSummaryBody}>
               <View style={s.heroSummaryPanel}>
-                <SummaryCell icon="🏆" label={shortName(bestPlayer?.name ?? '메달')} value={String(best)} />
-                <SummaryCell icon="🥇" label={shortName(winner?.name ?? '우승')} value={winner ? diffText(winner.net - par) : '-'} accent />
-                <SummaryCell icon="🥈" label={shortName(runnerUp?.name ?? '준우승')} value={runnerUp ? diffText(runnerUp.net - par) : '-'} />
-                <SummaryCell label="평균" value={String(avg)} />
+                <SummaryCell icon={isScheduleOnly ? '' : '🏆'} label={isScheduleOnly ? '' : shortName(bestPlayer?.name ?? '메달')} value={isScheduleOnly ? '' : String(best)} />
+                <SummaryCell icon={isScheduleOnly ? '' : '🥇'} label={isScheduleOnly ? '' : shortName(winner?.name ?? '우승')} value={isScheduleOnly ? '' : winner ? diffText(winner.net - par) : '-'} accent />
+                <SummaryCell icon={isScheduleOnly ? '' : '🥈'} label={isScheduleOnly ? '' : shortName(runnerUp?.name ?? '준우승')} value={isScheduleOnly ? '' : runnerUp ? diffText(runnerUp.net - par) : '-'} />
+                <SummaryCell label={isScheduleOnly ? '' : '평균'} value={isScheduleOnly ? '' : String(avg)} />
               </View>
               <View style={s.heroInfoPanel}>
                 <Text style={s.heroSectionTitle}>👑 기네스 북 갱신 현황</Text>
@@ -956,14 +965,14 @@ function RoundFlipCard({
             <TouchableOpacity onPress={toggleFlip} style={s.backIconBtn}><Text style={s.backIconText}>↻</Text></TouchableOpacity>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={s.backCourseName} numberOfLines={1}>{round.courseName}</Text>
-              <Text style={s.backDate}>{round.date.replace(/-/g, '.')} · PAR {par} · 참가 {round.players.length}명</Text>
+              <Text style={s.backDate}>{round.date.replace(/-/g, '.')}{isScheduleOnly ? '' : ` · PAR ${par} · 참가 ${round.players.length}명`}</Text>
             </View>
             <TouchableOpacity onPress={openRound} style={s.detailOpenBtn}><Text style={s.detailOpenText}>전체 상세</Text></TouchableOpacity>
           </View>
           <View style={s.backTabs}>
             {detailTabs.map((item) => <TouchableOpacity key={item.key} style={[s.backTab, detailTab === item.key && s.backTabActive]} onPress={() => setDetailTab(item.key)}><Text style={[s.backTabText, detailTab === item.key && s.backTabTextActive]}>{item.label}</Text></TouchableOpacity>)}
           </View>
-          <View style={s.backBody}>{!detailRound && <Text style={s.detailLoadingText}>라운드 상세 데이터를 불러오는 중입니다.</Text>}
+          <View style={s.backBody}>{!detailRound && !isScheduleOnly && <Text style={s.detailLoadingText}>라운드 상세 데이터를 불러오는 중입니다.</Text>}
             {detailTab === 'regular' && <View style={s.detailPanel}>
               <View style={s.detailPanelTopRow}>
                 <Text style={[s.detailPanelTitle, s.detailPanelTitleInline]}>{regularBasis === 'score' ? '정규 순위' : '핸디 기준 순위'}</Text>

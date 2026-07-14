@@ -340,7 +340,19 @@ export default function ClubScreen() {
     [club?.id, clubHeroPageCount, clubHeroWidth, myClubs, setActiveClub],
   );
 
-  const handleClubHeroViewableItemsChanged = useCallback(
+  const activeClubIdRef = useRef<string | null>(club?.id ?? null);
+  const setActiveClubRef = useRef(setActiveClub);
+  const clubHeroViewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
+
+  useEffect(() => {
+    activeClubIdRef.current = club?.id ?? null;
+  }, [club?.id]);
+
+  useEffect(() => {
+    setActiveClubRef.current = setActiveClub;
+  }, [setActiveClub]);
+
+  const handleClubHeroViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: Array<{ item: ClubHeroItem; index: number | null; isViewable: boolean }> }) => {
       const visibleItem = viewableItems.find(
         (entry) => entry.isViewable && entry.index !== null,
@@ -351,13 +363,12 @@ export default function ClubScreen() {
       if (visibleItem.item.kind !== "club") return;
 
       const nextClub = visibleItem.item.club;
-      if (nextClub.id !== club?.id) {
-        setActiveClub(nextClub);
+      if (nextClub.id !== activeClubIdRef.current) {
+        setActiveClubRef.current(nextClub);
         setRefreshKey((key) => key + 1);
       }
     },
-    [club?.id, setActiveClub],
-  );
+  ).current;
 
 
 
@@ -1111,7 +1122,7 @@ export default function ClubScreen() {
                   maxToRenderPerBatch={2}
                   windowSize={3}
                   removeClippedSubviews
-                  viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
+                  viewabilityConfig={clubHeroViewabilityConfig}
                   onViewableItemsChanged={handleClubHeroViewableItemsChanged}
                   onMomentumScrollEnd={(event) =>
                     handleClubHeroScrollEnd(event.nativeEvent.contentOffset.x)
