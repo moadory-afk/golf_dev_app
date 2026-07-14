@@ -91,6 +91,7 @@ export function mergeHomeWeather(
       windText: weatherRound.windText,
       fiveHourWeatherSummary: weatherRound.fiveHourWeatherSummary,
       fiveHourWeatherDetail: weatherRound.fiveHourWeatherDetail,
+      fiveHourWeatherHours: weatherRound.fiveHourWeatherHours,
     };
   });
 
@@ -104,6 +105,7 @@ export function mergeHomeWeather(
           windText: firstRound.windText,
           fiveHourWeatherSummary: firstRound.fiveHourWeatherSummary,
           fiveHourWeatherDetail: firstRound.fiveHourWeatherDetail,
+          fiveHourWeatherHours: firstRound.fiveHourWeatherHours,
         }
       : current.upcomingRound;
 

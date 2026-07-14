@@ -5,7 +5,7 @@ import {
   type RoundWeather,
 } from "../../../lib/weather";
 import { getCachedAsync } from "../../../lib/asyncCache";
-import type { HomeAttendanceStatus, HomeRoundStatus } from "../types/home";
+import type { HomeAttendanceStatus, HomeRoundStatus, HomeWeatherHour } from "../types/home";
 
 type HomeRoundSummaryRow = {
   id: string;
@@ -122,6 +122,7 @@ export type HomeWeatherSnapshot = {
   windText: string;
   fiveHourSummary?: string;
   fiveHourDetail?: string;
+  fiveHourHours?: HomeWeatherHour[];
   fetchedAt?: string;
 };
 
@@ -161,6 +162,14 @@ function weatherSnapshotFromRoundWeather(
         : "풍속 준비중",
     fiveHourSummary: weather.fiveHourSummary,
     fiveHourDetail: weather.fiveHourDetail,
+    fiveHourHours: weather.hourlyForecast?.map((item) => ({
+      time: item.time,
+      icon: item.icon,
+      condition: item.condition,
+      tempC: item.tempC,
+      pop: item.pop,
+      windMs: item.windMs,
+    })),
     fetchedAt: weather.fetchedAt,
   };
 }

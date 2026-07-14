@@ -1,4 +1,4 @@
-import type { HomeUpcomingRound, HomeRecentRound } from '../types/home'
+import type { HomeUpcomingRound, HomeRecentRound, HomeWeatherHour } from '../types/home'
 import type { PremiumRecentStatItem } from '../components'
 
 export type HomeFeedEventType =
@@ -9,7 +9,7 @@ export type HomeFeedEventType =
 export type HomeFeedActionType =
   | 'set_attendance' | 'open_attendance' | 'open_caddie_map' | 'open_groups'
   | 'open_award' | 'open_lotto' | 'open_score_entry' | 'open_result'
-  | 'open_analysis' | 'open_notice' | 'open_round_info' | 'create_round'
+  | 'open_analysis' | 'open_notice' | 'open_round_info' | 'open_weather_detail' | 'create_round'
 
 export type HomeFeedAction = {
   id: string
@@ -35,6 +35,7 @@ export type HomeFeedEvent = {
   scheduleId?: string
   courseName?: string
   dday?: string
+  weatherHours?: HomeWeatherHour[]
 }
 
 type BuildHomeFeedInput = { upcomingRound: HomeUpcomingRound | null; recentRounds: HomeRecentRound[]; stats: PremiumRecentStatItem[] }
@@ -217,7 +218,8 @@ ${round.fiveHourWeatherDetail || `${round.temperature || '--°'}${round.windText
 
 예보가 준비되면 라운드 5시간 동안의
 기온·비·바람 변화를 알려드릴게요.`,
-      ctaLabel: '라운드 정보', actionType: 'open_round_info', tone: 'neutral',
+      ctaLabel: '상세 정보', actionType: 'open_weather_detail', tone: 'neutral',
+      weatherHours: round.fiveHourWeatherHours,
     }))
   }
 

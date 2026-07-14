@@ -4,6 +4,15 @@ import type { HomeFeedEvent } from '../engine'
 export type HomeRoundStatus = 'planned' | 'recruiting' | 'closed' | 'finished'
 export type HomeAttendanceStatus = '참석' | '불참' | '미정'
 
+export type HomeWeatherHour = {
+  time: string
+  icon: string
+  condition: string
+  tempC: number
+  pop?: number
+  windMs?: number
+}
+
 export type HomeUpcomingRound = {
   id: string
   courseName: string
@@ -25,6 +34,7 @@ export type HomeUpcomingRound = {
   windText?: string
   fiveHourWeatherSummary?: string
   fiveHourWeatherDetail?: string
+  fiveHourWeatherHours?: HomeWeatherHour[]
   courseId?: string
   layoutId?: string
   heroImageUrl?: string | null

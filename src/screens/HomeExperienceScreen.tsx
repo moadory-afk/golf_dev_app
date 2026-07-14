@@ -33,6 +33,7 @@ import { useHomeDashboard } from "../features/home/hooks/useHomeDashboard";
 import type {
   HomeHeroRound,
   HomeUpcomingRound,
+  HomeWeatherHour,
 } from "../features/home/types/home";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
@@ -734,6 +735,8 @@ export default function HomeExperienceScreen() {
   const [attendanceOverviewLoading, setAttendanceOverviewLoading] = useState(false);
   const [attendanceOverviewRows, setAttendanceOverviewRows] = useState<Array<{ userId: string; name: string; status: RoundAttendanceLabel }>>([]);
   const [attendanceOverviewRound, setAttendanceOverviewRound] = useState<HomeUpcomingRound | null>(null);
+  const [weatherDetailRound, setWeatherDetailRound] = useState<HomeUpcomingRound | null>(null);
+  const [weatherDetailHours, setWeatherDetailHours] = useState<HomeWeatherHour[]>([]);
   const [recordDetailMode, setRecordDetailMode] = useState<HomeRecordDetailMode | null>(null);
   const [recordDetailRounds, setRecordDetailRounds] = useState<SavedRound[]>([]);
   const [recordAwardRows, setRecordAwardRows] = useState<AwardDetailRow[]>([]);
@@ -983,6 +986,11 @@ export default function HomeExperienceScreen() {
       }
       if (actionType === "open_lotto" && round) {
         openRoundPopup(round, "lotto");
+        return;
+      }
+      if (actionType === "open_weather_detail" && round) {
+        setWeatherDetailRound(round);
+        setWeatherDetailHours(feed.weatherHours ?? round.fiveHourWeatherHours ?? []);
         return;
       }
       resolveFeedNavigation(nav, actionType, round);
@@ -1277,6 +1285,17 @@ export default function HomeExperienceScreen() {
         />
       </ScrollView>
 
+
+      <WeatherDetailModal
+        visible={weatherDetailRound !== null}
+        round={weatherDetailRound}
+        hours={weatherDetailHours}
+        onClose={() => {
+          setWeatherDetailRound(null);
+          setWeatherDetailHours([]);
+        }}
+      />
+
       <AttendanceOverviewModal
         visible={attendanceOverviewVisible}
         loading={attendanceOverviewLoading}
@@ -1333,6 +1352,57 @@ export default function HomeExperienceScreen() {
         />
       ) : null}
     </View>
+  );
+}
+
+
+function WeatherDetailModal({
+  visible,
+  round,
+  hours,
+  onClose,
+}: {
+  visible: boolean;
+  round: HomeUpcomingRound | null;
+  hours: HomeWeatherHour[];
+  onClose: () => void;
+}) {
+  const { palette } = useSkin();
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.weatherModalBackdrop}>
+        <View style={[styles.weatherModalCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+          <View style={styles.weatherModalHeader}>
+            <View style={styles.weatherModalHeaderText}>
+              <Text style={[styles.weatherModalTitle, { color: palette.text }]}>티오프부터 5시간 예보</Text>
+              <Text style={[styles.weatherModalSubtitle, { color: palette.muted }]} numberOfLines={1}>
+                {round ? `${round.courseName} · ${round.teeTime}` : '라운드 날씨 상세 정보'}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={[styles.weatherModalClose, { borderColor: palette.border }]}>
+              <Text style={[styles.weatherModalCloseText, { color: palette.text }]}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weatherHourList}>
+            {hours.length > 0 ? hours.map((hour, index) => (
+              <View key={`${hour.time}-${index}`} style={[styles.weatherHourCard, { borderColor: palette.border, backgroundColor: palette.background }]}>
+                <Text style={[styles.weatherHourTime, { color: palette.text }]}>{hour.time.replace(':00', '시')}</Text>
+                <Text style={styles.weatherHourIcon}>{hour.icon}</Text>
+                <Text style={[styles.weatherHourCondition, { color: palette.text }]} numberOfLines={1}>{hour.condition}</Text>
+                <Text style={[styles.weatherHourTemp, { color: palette.text }]}>{hour.tempC}°C</Text>
+                <Text style={[styles.weatherHourMeta, { color: palette.muted }]}>비 {hour.pop ?? 0}%</Text>
+                <Text style={[styles.weatherHourMeta, { color: palette.muted }]}>바람 {typeof hour.windMs === 'number' ? `${hour.windMs}m/s` : '-'}</Text>
+              </View>
+            )) : (
+              <View style={styles.weatherEmptyBox}>
+                <Text style={[styles.weatherEmptyText, { color: palette.muted }]}>시간대별 예보를 불러오지 못했습니다.</Text>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -2704,6 +2774,35 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginTop: 4,
   },
+  weatherModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    paddingHorizontal: 18,
+  },
+  weatherModalCard: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 16,
+    maxWidth: 620,
+    width: "100%",
+    alignSelf: "center",
+  },
+  weatherModalHeader: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
+  weatherModalHeaderText: { flex: 1, minWidth: 0 },
+  weatherModalTitle: { fontSize: 18, lineHeight: 24, fontWeight: "900" },
+  weatherModalSubtitle: { marginTop: 3, fontSize: 12, lineHeight: 17, fontWeight: "700" },
+  weatherModalClose: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
+  weatherModalCloseText: { fontSize: 12, lineHeight: 16, fontWeight: "900" },
+  weatherHourList: { gap: 10, paddingRight: 4 },
+  weatherHourCard: { width: 104, borderWidth: 1, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 10, alignItems: "center" },
+  weatherHourTime: { fontSize: 13, lineHeight: 18, fontWeight: "900" },
+  weatherHourIcon: { fontSize: 26, lineHeight: 34, marginTop: 4 },
+  weatherHourCondition: { width: "100%", textAlign: "center", fontSize: 11, lineHeight: 16, fontWeight: "800" },
+  weatherHourTemp: { fontSize: 17, lineHeight: 23, fontWeight: "900", marginTop: 4 },
+  weatherHourMeta: { fontSize: 10, lineHeight: 15, fontWeight: "700", marginTop: 2 },
+  weatherEmptyBox: { width: 280, minHeight: 120, justifyContent: "center", alignItems: "center" },
+  weatherEmptyText: { fontSize: 13, lineHeight: 18, fontWeight: "800", textAlign: "center" },
   errorCard: { alignItems: "center", padding: 18, marginBottom: 4 },
   errorIcon: { fontSize: 28, marginBottom: 8 },
   errorTitle: {
