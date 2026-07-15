@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -11,12 +13,30 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "../../lib/supabase";
 import { C } from "../../theme";
 
 type InquiryKind = "general" | "bug" | "feature";
 type InquiryStatus = "pending" | "reviewing" | "answered" | "closed";
+
+type SupportAttachment = {
+  id: string;
+  storage_path: string;
+  file_name: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  signed_url?: string;
+};
+
+type PendingAttachment = {
+  id: string;
+  uri: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes?: number;
+};
 
 type SupportInquiry = {
   id: string;
@@ -30,6 +50,7 @@ type SupportInquiry = {
   device_info: string | null;
   created_at: string;
   updated_at: string;
+  support_inquiry_attachments?: SupportAttachment[];
   support_inquiry_replies?: Array<{
     id: string;
     content: string;
@@ -38,6 +59,15 @@ type SupportInquiry = {
 };
 
 type SupportView = "home" | "list" | "faq" | "guide";
+
+type SupportNotification = {
+  id: string;
+  inquiry_id: string | null;
+  title: string;
+  message: string | null;
+  is_read: boolean;
+  created_at: string;
+};
 
 const KIND_META: Record<InquiryKind, { title: string; icon: string; categories: string[] }> = {
   general: {
@@ -127,6 +157,8 @@ export function SupportCenter({ user }: { user: User | null }) {
   const [inquiries, setInquiries] = useState<SupportInquiry[]>([]);
   const [selectedInquiry, setSelectedInquiry] = useState<SupportInquiry | null>(null);
   const [openFaq, setOpenFaq] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  const [notifications, setNotifications] = useState<SupportNotification[]>([]);
 
   const formMeta = formKind ? KIND_META[formKind] : null;
 
@@ -135,6 +167,7 @@ export function SupportCenter({ user }: { user: User | null }) {
     setCategory("");
     setTitle("");
     setContent("");
+    setAttachments([]);
   }, []);
 
   const loadInquiries = useCallback(async () => {
@@ -145,7 +178,7 @@ export function SupportCenter({ user }: { user: User | null }) {
     setLoading(true);
     const { data, error } = await supabase
       .from("support_inquiries")
-      .select("id,user_id,kind,category,title,content,status,app_version,device_info,created_at,updated_at,support_inquiry_replies(id,content,created_at)")
+      .select("id,user_id,kind,category,title,content,status,app_version,device_info,created_at,updated_at,support_inquiry_replies(id,content,created_at),support_inquiry_attachments(id,storage_path,file_name,mime_type,size_bytes)")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
     setLoading(false);
@@ -159,6 +192,103 @@ export function SupportCenter({ user }: { user: User | null }) {
   useEffect(() => {
     if (view === "list") void loadInquiries();
   }, [loadInquiries, view]);
+
+
+  const loadNotifications = useCallback(async () => {
+    if (!user) {
+      setNotifications([]);
+      return;
+    }
+    const { data, error } = await supabase
+      .from("app_notifications")
+      .select("id,inquiry_id,title,message,is_read,created_at")
+      .eq("user_id", user.id)
+      .eq("type", "support_answered")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (!error) setNotifications((data || []) as SupportNotification[]);
+  }, [user]);
+
+  useEffect(() => {
+    void loadNotifications();
+    if (!user) return;
+    const channel = supabase
+      .channel(`support-notifications:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "app_notifications", filter: `user_id=eq.${user.id}` },
+        () => void loadNotifications(),
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [loadNotifications, user]);
+
+  const unreadNotificationCount = notifications.filter((item) => !item.is_read).length;
+
+  const openNotification = useCallback(async (notification: SupportNotification) => {
+    if (!notification.is_read) {
+      await supabase.from("app_notifications").update({ is_read: true, read_at: new Date().toISOString() }).eq("id", notification.id);
+      setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, is_read: true } : item));
+    }
+    setView("list");
+    if (notification.inquiry_id) {
+      const { data } = await supabase
+        .from("support_inquiries")
+        .select("id,user_id,kind,category,title,content,status,app_version,device_info,created_at,updated_at,support_inquiry_replies(id,content,created_at),support_inquiry_attachments(id,storage_path,file_name,mime_type,size_bytes)")
+        .eq("id", notification.inquiry_id)
+        .maybeSingle();
+      if (data) setSelectedInquiry(data as SupportInquiry);
+    }
+    await loadInquiries();
+  }, [loadInquiries]);
+
+  const addAttachments = async () => {
+    if (attachments.length >= 3) {
+      Alert.alert("이미지 첨부", "이미지는 최대 3장까지 첨부할 수 있습니다.");
+      return;
+    }
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("권한 필요", "이미지를 첨부하려면 사진 접근 권한이 필요합니다.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsMultipleSelection: true,
+      selectionLimit: 3 - attachments.length,
+      quality: 0.8,
+    });
+    if (result.canceled) return;
+    const next = result.assets.slice(0, 3 - attachments.length).map((asset, index) => ({
+      id: `${Date.now()}-${index}`,
+      uri: asset.uri,
+      fileName: asset.fileName || `support-${Date.now()}-${index}.jpg`,
+      mimeType: asset.mimeType || "image/jpeg",
+      sizeBytes: asset.fileSize,
+    }));
+    setAttachments((current) => [...current, ...next].slice(0, 3));
+  };
+
+  const openAttachment = async (attachment: SupportAttachment) => {
+    let url = attachment.signed_url;
+    if (!url) {
+      const { data, error } = await supabase.storage
+        .from("support-attachments")
+        .createSignedUrl(attachment.storage_path, 60 * 10);
+      if (error || !data?.signedUrl) {
+        Alert.alert("이미지 열기 실패", "첨부 이미지를 불러오지 못했습니다.");
+        return;
+      }
+      url = data.signedUrl;
+    }
+    if (Platform.OS === "web") {
+      await Linking.openURL(url);
+    } else {
+      await Linking.openURL(url);
+    }
+  };
 
   const submitInquiry = async () => {
     if (!user) {
@@ -189,9 +319,35 @@ export function SupportCenter({ user }: { user: User | null }) {
       Alert.alert("등록 실패", "문의를 등록하지 못했습니다. 고객문의 DB 설정을 확인해주세요.");
       return;
     }
+    let uploadFailed = 0;
+    if (data?.id && attachments.length) {
+      for (const attachment of attachments) {
+        try {
+          const extension = (attachment.fileName.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "").toLowerCase() || "jpg";
+          const storagePath = `${user.id}/${data.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
+          const response = await fetch(attachment.uri);
+          const fileBody = await response.arrayBuffer();
+          const { error: uploadError } = await supabase.storage
+            .from("support-attachments")
+            .upload(storagePath, fileBody, { contentType: attachment.mimeType, upsert: false });
+          if (uploadError) throw uploadError;
+          const { error: rowError } = await supabase.from("support_inquiry_attachments").insert({
+            inquiry_id: data.id,
+            user_id: user.id,
+            storage_path: storagePath,
+            file_name: attachment.fileName,
+            mime_type: attachment.mimeType,
+            size_bytes: attachment.sizeBytes || fileBody.byteLength,
+          });
+          if (rowError) throw rowError;
+        } catch {
+          uploadFailed += 1;
+        }
+      }
+    }
     const inquiryNo = `GP-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${String(data?.id || "").slice(0, 6).toUpperCase()}`;
     resetForm();
-    Alert.alert("접수 완료", `문의번호 ${inquiryNo}\n답변이 등록되면 문의 내역에서 확인할 수 있습니다.`, [
+    Alert.alert("접수 완료", `문의번호 ${inquiryNo}\n답변이 등록되면 문의 내역에서 확인할 수 있습니다.${uploadFailed ? `\n첨부 이미지 ${uploadFailed}장은 업로드하지 못했습니다.` : ""}`, [
       { text: "확인", onPress: () => setView("list") },
     ]);
   };
@@ -215,6 +371,24 @@ export function SupportCenter({ user }: { user: User | null }) {
       {header}
       {view === "home" && (
         <View style={s.homeWrap}>
+          {unreadNotificationCount > 0 && (
+            <View style={s.notificationCard}>
+              <View style={s.notificationHeader}>
+                <Text style={s.notificationTitle}>🔔 새 답변 {unreadNotificationCount}건</Text>
+                <Text style={s.notificationHint}>눌러서 확인하세요</Text>
+              </View>
+              {notifications.filter((item) => !item.is_read).slice(0, 3).map((item) => (
+                <TouchableOpacity key={item.id} style={s.notificationRow} onPress={() => void openNotification(item)}>
+                  <View style={s.notificationDot} />
+                  <View style={s.notificationTextArea}>
+                    <Text style={s.notificationMessage} numberOfLines={1}>{item.message || item.title}</Text>
+                    <Text style={s.notificationDate}>{formatDate(item.created_at)}</Text>
+                  </View>
+                  <Text style={s.notificationArrow}>›</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
           <View style={s.heroCard}>
             <Text style={s.heroIcon}>💬</Text>
             <View style={s.heroTextArea}>
@@ -229,7 +403,7 @@ export function SupportCenter({ user }: { user: User | null }) {
           </TouchableOpacity>
 
           <View style={s.menuCard}>
-            <MenuRow icon="📋" label="내 문의 내역" onPress={() => setView("list")} />
+            <MenuRow icon="📋" label="내 문의 내역" badge={unreadNotificationCount} onPress={() => setView("list")} />
             <Divider />
             <MenuRow icon="🐞" label="버그 신고" onPress={() => setFormKind("bug")} />
             <Divider />
@@ -337,6 +511,24 @@ export function SupportCenter({ user }: { user: User | null }) {
                 textAlignVertical="top"
                 maxLength={2000}
               />
+              <Text style={s.fieldLabel}>이미지 첨부</Text>
+              <View style={s.attachmentRow}>
+                {attachments.map((item) => (
+                  <View key={item.id} style={s.pendingAttachment}>
+                    <Image source={{ uri: item.uri }} style={s.attachmentImage} />
+                    <TouchableOpacity style={s.removeAttachment} onPress={() => setAttachments((current) => current.filter((value) => value.id !== item.id))}>
+                      <Text style={s.removeAttachmentText}>×</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                {attachments.length < 3 && (
+                  <TouchableOpacity style={s.addAttachment} onPress={() => void addAttachments()}>
+                    <Text style={s.addAttachmentIcon}>＋</Text>
+                    <Text style={s.addAttachmentText}>사진</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <Text style={s.attachmentHint}>오류 화면이나 참고 이미지를 최대 3장까지 첨부할 수 있습니다.</Text>
               <Text style={s.deviceHint}>앱 버전과 기기 정보는 문의 등록 시 자동으로 함께 저장됩니다.</Text>
               <TouchableOpacity style={[s.submitButton, saving && s.disabledButton]} disabled={saving} onPress={submitInquiry}>
                 {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.submitButtonText}>문의 등록</Text>}
@@ -360,6 +552,18 @@ export function SupportCenter({ user }: { user: User | null }) {
                   <Text style={s.detailTitle}>{selectedInquiry.title}</Text>
                   <Text style={s.detailDate}>{formatDate(selectedInquiry.created_at)}</Text>
                   <View style={s.detailBox}><Text style={s.detailContent}>{selectedInquiry.content}</Text></View>
+                  {!!selectedInquiry.support_inquiry_attachments?.length && (
+                    <>
+                      <Text style={s.replySectionTitle}>첨부 이미지</Text>
+                      <View style={s.detailAttachmentRow}>
+                        {selectedInquiry.support_inquiry_attachments.map((attachment) => (
+                          <TouchableOpacity key={attachment.id} onPress={() => void openAttachment(attachment)}>
+                            <View style={s.detailAttachmentBox}><Text style={s.detailAttachmentIcon}>🖼️</Text><Text style={s.detailAttachmentName} numberOfLines={1}>{attachment.file_name}</Text></View>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </>
+                  )}
                   <Text style={s.replySectionTitle}>운영자 답변</Text>
                   {selectedInquiry.support_inquiry_replies?.length ? (
                     selectedInquiry.support_inquiry_replies.map((reply) => (
@@ -381,11 +585,12 @@ export function SupportCenter({ user }: { user: User | null }) {
   );
 }
 
-function MenuRow({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
+function MenuRow({ icon, label, badge = 0, onPress }: { icon: string; label: string; badge?: number; onPress: () => void }) {
   return (
     <TouchableOpacity style={s.menuRow} onPress={onPress}>
       <Text style={s.menuIcon}>{icon}</Text>
       <Text style={s.menuText}>{label}</Text>
+      {badge > 0 && <View style={s.menuBadge}><Text style={s.menuBadgeText}>{badge > 99 ? "99+" : badge}</Text></View>}
       <Text style={s.menuArrow}>›</Text>
     </TouchableOpacity>
   );
@@ -395,6 +600,16 @@ function Divider() { return <View style={s.divider} />; }
 
 const s = StyleSheet.create({
   homeWrap: { paddingHorizontal: 16, paddingBottom: 12 },
+  notificationCard: { backgroundColor: "#FFF8E7", borderWidth: 1, borderColor: "#F4D58A", borderRadius: 16, padding: 13, marginBottom: 12 },
+  notificationHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
+  notificationTitle: { color: C.text, fontSize: 14, fontWeight: "900" },
+  notificationHint: { color: C.muted, fontSize: 10, fontWeight: "700" },
+  notificationRow: { minHeight: 45, flexDirection: "row", alignItems: "center", borderTopWidth: 1, borderTopColor: "rgba(165,106,0,.14)", gap: 9 },
+  notificationDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#E15B3E" },
+  notificationTextArea: { flex: 1 },
+  notificationMessage: { color: C.text, fontSize: 12, fontWeight: "800" },
+  notificationDate: { color: C.muted, fontSize: 10, marginTop: 2 },
+  notificationArrow: { color: C.muted, fontSize: 19 },
   contentWrap: { paddingHorizontal: 16, paddingBottom: 12 },
   heroCard: { backgroundColor: C.greenLight, borderRadius: 18, padding: 17, flexDirection: "row", alignItems: "center", gap: 13, marginBottom: 12 },
   heroIcon: { fontSize: 30 },
@@ -408,6 +623,8 @@ const s = StyleSheet.create({
   menuRow: { minHeight: 54, flexDirection: "row", alignItems: "center", paddingHorizontal: 16, gap: 11 },
   menuIcon: { width: 26, textAlign: "center", fontSize: 18 },
   menuText: { flex: 1, color: C.text, fontSize: 15, fontWeight: "700" },
+  menuBadge: { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 5, backgroundColor: "#E15B3E", alignItems: "center", justifyContent: "center" },
+  menuBadgeText: { color: "#fff", fontSize: 10, fontWeight: "900" },
   menuArrow: { color: C.muted, fontSize: 20 },
   divider: { height: 1, backgroundColor: C.border, marginLeft: 53 },
   subHeader: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, marginBottom: 8 },
@@ -467,4 +684,17 @@ const s = StyleSheet.create({
   replyDate: { color: C.muted, fontSize: 10, marginTop: 8, textAlign: "right" },
   waitingReply: { borderWidth: 1, borderColor: C.border, borderStyle: "dashed", borderRadius: 13, padding: 18, alignItems: "center" },
   waitingReplyText: { color: C.muted, fontSize: 12, fontWeight: "700" },
+  attachmentRow: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginBottom: 7 },
+  pendingAttachment: { width: 72, height: 72, borderRadius: 12, overflow: "hidden", position: "relative", backgroundColor: "#EEF2F0" },
+  attachmentImage: { width: "100%", height: "100%" },
+  removeAttachment: { position: "absolute", right: 4, top: 4, width: 22, height: 22, borderRadius: 11, backgroundColor: "rgba(0,0,0,.68)", alignItems: "center", justifyContent: "center" },
+  removeAttachmentText: { color: "#fff", fontSize: 17, lineHeight: 19, fontWeight: "900" },
+  addAttachment: { width: 72, height: 72, borderRadius: 12, borderWidth: 1.3, borderStyle: "dashed", borderColor: C.border, alignItems: "center", justifyContent: "center", backgroundColor: "#FAFBFA" },
+  addAttachmentIcon: { color: C.green, fontSize: 23, lineHeight: 25 },
+  addAttachmentText: { color: C.muted, fontSize: 11, fontWeight: "800" },
+  attachmentHint: { color: C.muted, fontSize: 10, marginBottom: 9 },
+  detailAttachmentRow: { gap: 7, marginBottom: 15 },
+  detailAttachmentBox: { minHeight: 45, borderWidth: 1, borderColor: C.border, borderRadius: 11, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 9 },
+  detailAttachmentIcon: { fontSize: 18 },
+  detailAttachmentName: { flex: 1, color: C.text, fontSize: 12, fontWeight: "700" },
 });

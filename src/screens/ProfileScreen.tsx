@@ -1554,6 +1554,14 @@ export default function ProfileScreen({
               </>
             )}
           </View>
+
+          <TouchableOpacity
+            style={p.headerLogoutButton}
+            onPress={handleLogout}
+            activeOpacity={0.82}
+          >
+            <Text style={p.headerLogoutText}>로그아웃</Text>
+          </TouchableOpacity>
         </View>
 
         <ScrollView
@@ -2072,6 +2080,8 @@ const p = StyleSheet.create({
     paddingBottom: 28,
   },
   avatarWrap: { position: "relative" },
+  headerLogoutButton: { marginLeft: "auto", alignSelf: "center", paddingHorizontal: 13, paddingVertical: 8, borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.42)" },
+  headerLogoutText: { color: "#fff", fontSize: 12, fontWeight: "900" },
   avatar: {
     width: 64,
     height: 64,
