@@ -30,6 +30,7 @@ import { C } from "../theme";
 import { useSkin, type SkinId } from "../skins";
 import type { RootStackProps } from "../navigation/types";
 import type { UserPreferenceTee } from "../features/caddie/types/caddieData";
+import { requestTutorialOpen } from "../lib/tutorial";
 
 const APP_URL = "https://golf-seven-psi.vercel.app";
 
@@ -1406,6 +1407,12 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
           <TouchableOpacity style={p.menuRow} onPress={() => setSignupGuideOpen(true)}>
             <Text style={p.menuIcon}>📝</Text>
             <Text style={p.menuText}>어플 회원가입 안내</Text>
+            <Text style={p.menuArrow}>›</Text>
+          </TouchableOpacity>
+          <View style={p.menuDivider} />
+          <TouchableOpacity style={p.menuRow} onPress={requestTutorialOpen}>
+            <Text style={p.menuIcon}>💡</Text>
+            <Text style={p.menuText}>튜토리얼 다시 보기</Text>
             <Text style={p.menuArrow}>›</Text>
           </TouchableOpacity>
           <View style={p.menuDivider} />

@@ -6,6 +6,7 @@ import { Animated, Easing, PanResponder, StyleSheet, Text, TouchableOpacity, Vie
 import { SkinProvider, useSkin } from '../skins'
 import { Icon, type IconName } from '../components/Icon'
 import { FirstVisitInstallGuide } from '../components/PwaInstallGuide'
+import { FirstUseTutorial } from '../components/FirstUseTutorial'
 import { colorLayers, radius, spacing, typography } from '../design/tokens'
 import { ClubProvider, useClub } from '../lib/ClubContext'
 import { UserProfileProvider } from '../lib/UserProfileContext'
@@ -386,6 +387,7 @@ export default function Navigation({ session }: { session: import('@supabase/sup
         <ClubProvider>
           <NavigationStack session={session} />
           <FirstVisitInstallGuide />
+          <FirstUseTutorial session={session} />
         </ClubProvider>
       </UserProfileProvider>
     </SkinProvider>
