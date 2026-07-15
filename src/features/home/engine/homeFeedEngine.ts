@@ -65,16 +65,17 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound, recentRounds: Hom
   const isToday = dday === 0
   const isTomorrow = dday === 1
   const isSoon = typeof dday === 'number' && dday >= 0 && dday <= 3
-  const groupingComplete = round.status === 'closed' || round.status === 'finished'
+  const groupingComplete = round.groupingComplete ?? (round.status === 'closed' || round.status === 'finished')
   const startAt = roundStartTime(round)
   const minutesToStart = startAt ? Math.round((startAt.getTime() - Date.now()) / 60000) : null
   const withinOneHour = isToday && minutesToStart !== null && minutesToStart >= 0 && minutesToStart <= 60
   const lottoReminderWindow = withinOneHour && minutesToStart! >= 30
   const lottoSaleOpen = (isTomorrow || isToday) && (minutesToStart === null || minutesToStart >= 30)
   const appearsFinished = round.status === 'finished' || round.resultSaved || (isToday && minutesToStart !== null && minutesToStart < -300)
-  const courseRegistered = !!round.courseId && !!round.layoutId
+  const courseRegistered = round.courseRegistered ?? (!!round.courseId && !!round.layoutId)
   const beforeTeeOffThirtyMinutes = !isToday || minutesToStart === null || minutesToStart >= 30
   const resultPublished = !!round.resultComplete
+  const isParticipating = round.attendanceStatus === '참석' || !!round.assignedParticipant
 
   // 2. 참석/불참/미정 토글 + 참가자 현황 버튼 (조편성 완료 전까지 수정 가능)
   if (!groupingComplete && !appearsFinished) {
@@ -128,7 +129,7 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound, recentRounds: Hom
   }
 
   // 6. 로또 구매 전/후 통합 카드
-  if (lottoSaleOpen && groupingComplete && round.attendanceStatus === '참석' && !appearsFinished) {
+  if (lottoSaleOpen && groupingComplete && isParticipating && !appearsFinished) {
     events.push(aiFeed(round, {
       id: `stage-06-lotto-${round.id}-${round.lottoPurchased ? 'purchased' : 'open'}`,
       type: 'lotto', priority: round.lottoPurchased ? 63 : 78, icon: '🎲',
@@ -140,7 +141,7 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound, recentRounds: Hom
   }
 
   // 7. 티오프 1시간 전부터 30분 전까지 미구매 재안내
-  if (lottoReminderWindow && groupingComplete && round.attendanceStatus === '참석' && !round.lottoPurchased && !appearsFinished) {
+  if (lottoReminderWindow && groupingComplete && isParticipating && !round.lottoPurchased && !appearsFinished) {
     events.push(aiFeed(round, {
       id: `stage-07-lotto-reminder-${round.id}`, type: 'lotto', priority: 96, icon: '⏰',
       message: '아직 Lotto 6/18을 구매하지 않았습니다.\n\n라운드 시작 30분 전까지\n번호를 선택해 주세요.',

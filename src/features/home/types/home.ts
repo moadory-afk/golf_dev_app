@@ -28,6 +28,9 @@ export type HomeUpcomingRound = {
   groupCount: number
   memberNames?: string[]
   attendanceStatus?: HomeAttendanceStatus
+  groupingComplete?: boolean
+  courseRegistered?: boolean
+  assignedParticipant?: boolean
   note?: string
   weatherText: string
   temperature: string

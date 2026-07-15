@@ -234,7 +234,10 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow, 
 
   const weather = raw.weatherByScheduleId[schedule.id] ?? (course?.id ? raw.weatherByCourseId[course.id] : undefined)
   const scheduleAttendances = raw.attendances.filter((item) => item.scheduleId === schedule.id)
-  const attendanceStatus = scheduleAttendances.find((item) => item.userId === raw.currentUserId)?.status ?? "미정"
+  const assignedParticipant = !!raw.currentUserId && members.some((member) => member.member_user_id === raw.currentUserId)
+  const savedAttendanceStatus = scheduleAttendances.find((item) => item.userId === raw.currentUserId)?.status
+  // 조편성에 실제 배정된 회원은 별도 참석 응답이 누락되어도 참가자로 판단한다.
+  const attendanceStatus = savedAttendanceStatus ?? (assignedParticipant ? "참석" : "미정")
   const attendingIds = scheduleAttendances
     .filter((item) => item.status === "참석")
     .map((item) => item.userId)
@@ -244,9 +247,13 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow, 
     .filter(Boolean)
   const attendingCount = new Set([...attendingIds, ...assignedIds]).size
   const assignedCount = countMembers(groups, members)
-  const memberCount = schedule.status === 'closed' || schedule.status === 'finished'
-    ? assignedCount
-    : attendingCount
+  const groupingComplete = schedule.status === 'closed' || schedule.status === 'finished'
+  // 기본 layout_id가 비어 있어도 조별 전반/후반 코스가 저장되어 있으면 코스 등록 완료로 본다.
+  const hasGroupLayout = groups.some((group) =>
+    !!group.front_layout_name?.trim() || !!group.back_layout_name?.trim()
+  )
+  const courseRegistered = !!(schedule.course_id ?? course?.id) && !!((schedule.layout_id ?? layout?.id) || hasGroupLayout)
+  const memberCount = groupingComplete ? assignedCount : attendingCount
   const lottoPurchased = raw.lottoEntries.some((item) => item.scheduleId === schedule.id)
   const lottoDraw = raw.lottoDraws.find((item) => item.scheduleId === schedule.id)
   const savedRound = raw.rounds.find((item) => item.scheduleId === schedule.id)
@@ -268,6 +275,9 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow, 
     groupCount: groups.length,
     memberNames: sameGroupMemberNames(groups, members, userId),
     attendanceStatus,
+    groupingComplete,
+    courseRegistered,
+    assignedParticipant,
     note: schedule.note ?? undefined,
     weatherText: weather?.weatherText ?? '날씨 준비중',
     temperature: weather?.temperature ?? '--°',
