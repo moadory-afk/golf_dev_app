@@ -1,6 +1,7 @@
 export const AWARD_CONFIG_KEY = '@gogopar_award_config'
 
-export type AwardItemDef = { id: string; icon: string; label: string; desc: string; detail: string }
+export type AwardSelectionType = 'automatic' | 'manual'
+export type AwardItemDef = { id: string; icon: string; label: string; desc: string; detail: string; selectionType?: AwardSelectionType }
 
 // ranked 항목의 다음 순위 체인 (count 보완에 사용)
 const RANK_NEXT: Record<string, string> = {
@@ -10,25 +11,11 @@ const RANK_NEXT: Record<string, string> = {
 }
 
 /**
- * items를 count 수만큼 자동 보완하여 반환.
- * shin1→shin2, regular1→regular2→regular3 순으로 하위 순위를 자동 추가.
- * items.length > count 이면 앞에서 count개만 반환.
+ * 선택한 시상 항목만 저장한다.
+ * count는 강제 충원 수가 아니라 선택 가능한 최대 수로만 사용한다.
  */
 export function fillToCount(items: string[], count: number): string[] {
-  const res = [...items]
-  let changed = true
-  while (changed && res.length < count) {
-    changed = false
-    for (let i = 0; i < res.length && res.length < count; i++) {
-      const next = RANK_NEXT[res[i]]
-      if (next && !res.includes(next)) {
-        res.splice(i + 1, 0, next)
-        changed = true
-        i++
-      }
-    }
-  }
-  return res.slice(0, count)
+  return items.slice(0, Math.max(0, count))
 }
 
 export const AWARD_CATEGORIES: { label: string; items: AwardItemDef[] }[] = [
@@ -51,8 +38,8 @@ export const AWARD_CATEGORIES: { label: string; items: AwardItemDef[] }[] = [
       { id: 'parKing',    icon: '⛳', label: '파왕',     desc: '최다 파', detail: '파(기준타)를 가장 많이 기록한 플레이어.\n안정적이고 꾸준한 플레이의 상징!' },
       { id: 'bogeyKing',  icon: '🎳', label: '보기왕',   desc: '최다 보기', detail: '보기(파+1)를 가장 많이 기록한 플레이어.\n유머 시상 🙂 격려의 의미로 수여.' },
       { id: 'doublePlus', icon: '💥', label: '더블+왕',  desc: '더블이상 최다', detail: '더블보기(파+2) 이상을 가장 많이 기록한 플레이어.\n유머 시상 😅 다음엔 더 잘할 수 있어!' },
-      { id: 'longDrive',  icon: '🏌️', label: '롱기스트',  desc: '최장 드라이브', detail: '지정된 롱기스트 홀에서 티샷을 가장 멀리 보낸 플레이어.\n현장에서 결과를 확인해 기록합니다.' },
-      { id: 'nearPin',    icon: '📍', label: '니어리스트', desc: '핀 근접 기록',   detail: '지정된 니어리스트 홀에서 티샷을 핀에 가장 가깝게 붙인 플레이어.\n현장에서 결과를 확인해 기록합니다.' },
+      { id: 'longDrive', selectionType: 'manual',  icon: '🏌️', label: '롱기스트',  desc: '최장 드라이브', detail: '지정된 롱기스트 홀에서 티샷을 가장 멀리 보낸 플레이어.\n현장에서 결과를 확인해 기록합니다.' },
+      { id: 'nearPin', selectionType: 'manual',    icon: '📍', label: '니어리스트', desc: '핀 근접 기록',   detail: '지정된 니어리스트 홀에서 티샷을 핀에 가장 가깝게 붙인 플레이어.\n현장에서 결과를 확인해 기록합니다.' },
     ],
   },
   {
@@ -62,8 +49,8 @@ export const AWARD_CATEGORIES: { label: string; items: AwardItemDef[] }[] = [
       { id: 'fighter',     icon: '💪', label: '파이팅상',   desc: '꼴찌인데 버디',    detail: '최하위 타수임에도 버디를 기록한 플레이어.\n꼴찌이지만 포기하지 않는 투지를 기림!' },
       { id: 'effort',      icon: '🎪', label: '감투상',     desc: '파이하 홀 최다',   detail: '파 이하(버디·파)를 가장 많이 기록한 플레이어.\n꾸준하고 성실한 플레이어에게 수여.' },
       { id: 'lucky',       icon: '🍀', label: '럭키상',     desc: '랜덤 추첨',        detail: '참가자 중 랜덤으로 1명을 추첨.\n실력과 무관한 행운의 주인공!' },
-      { id: 'bestDresser', icon: '🌈', label: '베스트드레서', desc: '멋진 골프 패션', detail: '가장 멋진 골프 패션을 선보인 플레이어에게 수여합니다.\n회원 투표 또는 현장 선정으로 결정할 수 있습니다.' },
-      { id: 'friendship',  icon: '🤝', label: '우정상',       desc: '참가상',          detail: '라운드에 함께한 즐거움을 기념하는 참가상입니다.\n참가상으로 생각하면 됩니다.' },
+      { id: 'bestDresser', selectionType: 'manual', icon: '🌈', label: '베스트드레서', desc: '멋진 골프 패션', detail: '가장 멋진 골프 패션을 선보인 플레이어에게 수여합니다.\n회원 투표 또는 현장 선정으로 결정할 수 있습니다.' },
+      { id: 'friendship', selectionType: 'manual',  icon: '🤝', label: '우정상',       desc: '참가상',          detail: '라운드에 함께한 즐거움을 기념하는 참가상입니다.\n참가상으로 생각하면 됩니다.' },
     ],
   },
 ]

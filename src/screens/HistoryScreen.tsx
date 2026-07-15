@@ -239,6 +239,9 @@ export default function HistoryScreen() {
   const rounds = data ?? []
   const members = memberData ?? []
   const schedules = scheduleData ?? []
+  const hiddenScheduleIds = new Set(schedules.filter((schedule) => schedule.isPublished === false).map((schedule) => schedule.id))
+  const visibleSchedules = schedules.filter((schedule) => schedule.isPublished !== false)
+  const visibleRounds = rounds.filter((round) => !round.scheduleId || !hiddenScheduleIds.has(round.scheduleId))
   const onRefresh = useCallback(() => setRefreshKey((k) => k + 1), [])
 
   // 화면 포커스 복귀 시 자동 새로고침 (삭제/저장 후 즉시 반영)
@@ -272,10 +275,10 @@ export default function HistoryScreen() {
           <Text style={s.muted}>데이터를 불러오는 중입니다.</Text>
         ) : (
           <>
-            {tab === 'byRound' && <ByRound rounds={rounds} schedules={schedules} handicapBasis={handicapBasis} members={members} />}
-            {tab === 'byPlayer' && <ByPlayer rounds={rounds} handicapBasis={handicapBasis} myName={myName} myUserId={myUserId} />}
-            {tab === 'club' && <Club rounds={rounds} handicapBasis={handicapBasis} members={members} />}
-            {tab === 'hall' && <HallOfFame rounds={rounds} handicapBasis={handicapBasis} />}
+            {tab === 'byRound' && <ByRound rounds={visibleRounds} schedules={visibleSchedules} handicapBasis={handicapBasis} members={members} />}
+            {tab === 'byPlayer' && <ByPlayer rounds={visibleRounds} handicapBasis={handicapBasis} myName={myName} myUserId={myUserId} />}
+            {tab === 'club' && <Club rounds={visibleRounds} handicapBasis={handicapBasis} members={members} />}
+            {tab === 'hall' && <HallOfFame rounds={visibleRounds} handicapBasis={handicapBasis} />}
           </>
         )}
       </ScrollView>

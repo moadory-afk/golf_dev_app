@@ -22,6 +22,8 @@ export interface SettlementConfig {
 export interface ClubAwardConfig {
   count: number
   items: string[]
+  winnerCounts?: Record<string, number>
+  manualWinners?: Record<string, string[]>
 }
 
 export interface LottoAwardConfig {

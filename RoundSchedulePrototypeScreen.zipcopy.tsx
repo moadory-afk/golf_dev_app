@@ -56,7 +56,6 @@ type Draft = {
   note: string
   moneyConfig?: ScheduledRound['moneyConfig']
   awardConfig?: ScheduledRound['awardConfig']
-  isPublished?: boolean
   groups: ScheduledRoundGroup[]
 }
 
@@ -89,7 +88,6 @@ function createEmptyDraft(): Draft {
     note: '',
     moneyConfig: null,
     awardConfig: null,
-    isPublished: true,
     groups: [createGroup(1)],
   }
 }
@@ -166,7 +164,6 @@ export default function RoundSchedulePrototypeScreen() {
   const [scoreOcrBusy, setScoreOcrBusy] = useState(false)
   const [scoreSaveBusy, setScoreSaveBusy] = useState(false)
   const [scoreOcrResult, setScoreOcrResult] = useState<RecognizedScorecard | null>(null)
-  const [scoreOcrMemberMap, setScoreOcrMemberMap] = useState<Record<number, string>>({})
   const [scoreOcrError, setScoreOcrError] = useState('')
   const [savedScoreGroupIds, setSavedScoreGroupIds] = useState<string[]>([])
   const [scoreGroupSummaries, setScoreGroupSummaries] = useState<Record<string, ScoreGroupSummary>>({})
@@ -525,7 +522,6 @@ export default function RoundSchedulePrototypeScreen() {
       note: item.note,
       moneyConfig: item.moneyConfig ?? null,
       awardConfig: item.awardConfig ?? null,
-      isPublished: item.isPublished ?? true,
       groups: item.groups.length > 0 ? item.groups : [createGroup(1)],
     })
     setMoneyGroupIds(item.groups
@@ -586,7 +582,6 @@ export default function RoundSchedulePrototypeScreen() {
           moneyGroupIds,
           moneyConfig: draft.moneyConfig ?? currentSchedule?.moneyConfig ?? null,
           awardConfig,
-          isPublished: draft.isPublished ?? currentSchedule?.isPublished ?? true,
           groups: draft.groups.map((group, index) => ({
             ...group,
             name: group.name || `${index + 1}조`,
@@ -633,7 +628,6 @@ export default function RoundSchedulePrototypeScreen() {
           moneyGroupIds,
           moneyConfig,
           awardConfig: draft.awardConfig ?? currentSchedule?.awardConfig ?? null,
-          isPublished: draft.isPublished ?? currentSchedule?.isPublished ?? true,
           groups: draft.groups.map((group, index) => ({
             ...group,
             name: group.name || `${index + 1}조`,
@@ -676,7 +670,6 @@ export default function RoundSchedulePrototypeScreen() {
     setScoreGroupId(groupId)
     setScorePhotoUris([])
     setScoreOcrResult(null)
-    setScoreOcrMemberMap({})
     setScoreOcrError('')
   }
 
@@ -684,7 +677,6 @@ export default function RoundSchedulePrototypeScreen() {
     setScoreGroupId(null)
     setScorePhotoUris([])
     setScoreOcrResult(null)
-    setScoreOcrMemberMap({})
     setScoreOcrError('')
   }
 
@@ -706,7 +698,6 @@ export default function RoundSchedulePrototypeScreen() {
     if (!result.canceled && result.assets.length > 0) {
       setScorePhotoUris((current) => [...current, ...result.assets.map((asset) => asset.uri)])
       setScoreOcrResult(null)
-      setScoreOcrMemberMap({})
       setScoreOcrError('')
     }
   }
@@ -725,7 +716,6 @@ export default function RoundSchedulePrototypeScreen() {
     if (!result.canceled && result.assets.length > 0) {
       setScorePhotoUris((current) => [...current, ...result.assets.map((asset) => asset.uri)])
       setScoreOcrResult(null)
-      setScoreOcrMemberMap({})
       setScoreOcrError('')
     }
   }
@@ -734,13 +724,10 @@ export default function RoundSchedulePrototypeScreen() {
     if (scorePhotoUris.length === 0) return
     setScoreOcrBusy(true)
     setScoreOcrResult(null)
-    setScoreOcrMemberMap({})
     setScoreOcrError('')
     try {
       const cards = await Promise.all(scorePhotoUris.map((uri) => recognizeScorecard(uri)))
-      const merged = mergeScorecards(cards, selectedScoreGroup?.frontLayoutName, selectedScoreGroup?.backLayoutName)
-      setScoreOcrResult(merged)
-      if (selectedScoreGroup) setScoreOcrMemberMap(buildAutoScoreOcrMemberMap(selectedScoreGroup, merged))
+      setScoreOcrResult(mergeScorecards(cards, selectedScoreGroup?.frontLayoutName, selectedScoreGroup?.backLayoutName))
     } catch (error) {
       setScoreOcrError(`인식 오류: ${String(error)}`)
     } finally {
@@ -764,45 +751,12 @@ export default function RoundSchedulePrototypeScreen() {
     return labels.length === 18 ? labels : undefined
   }
 
-  function buildAutoScoreOcrMemberMap(group: ScheduledRoundGroup, result: RecognizedScorecard) {
-    const ocrNames = result.players.map((player) => player.name)
-    const used = new Set<number>()
-    const next: Record<number, string> = {}
-    group.members.forEach((member) => {
-      const idx = findBestOcrMatch(member.name, ocrNames, used)
-      if (idx < 0) return
-      used.add(idx)
-      next[idx] = member.userId
-    })
-    return next
-  }
-
-  function toggleScoreOcrMember(ocrIndex: number, member: ScheduledRoundGroupMember) {
-    setScoreOcrMemberMap((current) => {
-      const next = Object.fromEntries(
-        Object.entries(current).filter(([index, userId]) => Number(index) !== ocrIndex && userId !== member.userId)
-      ) as Record<number, string>
-      if (current[ocrIndex] === member.userId) return next
-      next[ocrIndex] = member.userId
-      return next
-    })
-  }
-
   function scorePlayersForGroup(group: ScheduledRoundGroup, result: RecognizedScorecard) {
     const pars = scoreParsForGroup(group)
     const ocrNames = result.players.map((player) => player.name)
-    const manualByUser = new Map<string, number>()
-    Object.entries(scoreOcrMemberMap).forEach(([index, userId]) => {
-      manualByUser.set(userId, Number(index))
-    })
-    const manualIndices = new Set(manualByUser.values())
     const used = new Set<number>()
     return group.members.flatMap((member) => {
-      const mappedIdx = manualByUser.get(member.userId) ?? -1
-      const autoUsed = new Set([...used, ...[...manualIndices].filter((index) => index !== mappedIdx)])
-      const idx = mappedIdx >= 0 && result.players[mappedIdx] && !used.has(mappedIdx)
-        ? mappedIdx
-        : findBestOcrMatch(member.name, ocrNames, autoUsed)
+      const idx = findBestOcrMatch(member.name, ocrNames, used)
       if (idx < 0) return []
       used.add(idx)
       return [{
@@ -1060,7 +1014,6 @@ export default function RoundSchedulePrototypeScreen() {
         moneyGroupIds,
         moneyConfig,
         awardConfig,
-        isPublished: draft.isPublished ?? true,
         groups: draft.groups.map((group, index) => ({
           ...group,
           name: `${index + 1}조`,
@@ -1087,16 +1040,14 @@ export default function RoundSchedulePrototypeScreen() {
           note: savedSchedule.note,
           moneyConfig,
           awardConfig,
-          isPublished: savedSchedule.isPublished ?? draft.isPublished ?? true,
           groups: savedSchedule.groups,
         })
         await saveRoundLottoDrafter(club.id, savedSchedule.id, lottoDrafterUserId)
       }
       notifyHomeDashboardChanged(club.id)
-      notifyHomeRecordsChanged(club.id)
       const savedAt = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
       setLastSavedAt(savedAt)
-      closeEditor()
+      Alert.alert('저장 완료', '라운드 일정, 시상룰, 머니게임, 로또 추첨자를 저장했습니다.')
     } catch (error) {
       Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
     } finally {
@@ -1127,7 +1078,6 @@ export default function RoundSchedulePrototypeScreen() {
           baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
         },
         awardConfig: { count: awardCount, items: fillToCount(selectedAwardItems, awardCount) },
-        isPublished: draft.isPublished ?? true,
         groups: draft.groups.map((group, index) => ({
           ...group,
           name: group.name || `${index + 1}조`,
@@ -1144,7 +1094,6 @@ export default function RoundSchedulePrototypeScreen() {
           ...current,
           id: savedDraft.id,
           status: savedDraft.status,
-          isPublished: savedDraft.isPublished ?? current.isPublished ?? true,
           groups: savedDraft.groups.length > 0 ? savedDraft.groups : current.groups,
         }))
       } else {
@@ -1159,10 +1108,6 @@ export default function RoundSchedulePrototypeScreen() {
 
   async function handleToggleGroupingComplete() {
     await saveDraftStatus(groupingComplete ? 'planned' : 'closed')
-  }
-
-  function handleTogglePublished() {
-    setDraft((current) => ({ ...current, isPublished: !(current.isPublished ?? true) }))
   }
 
   async function handleToggleScoreComplete() {
@@ -1214,7 +1159,6 @@ export default function RoundSchedulePrototypeScreen() {
           baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
         },
         awardConfig: { count: awardCount, items: fillToCount(selectedAwardItems, awardCount) },
-        isPublished: draft.isPublished ?? true,
         groups: draft.groups.map((group, index) => ({
           ...group,
           name: group.name || `${index + 1}조`,
@@ -1329,18 +1273,11 @@ export default function RoundSchedulePrototypeScreen() {
                     <Text style={s.headerDeleteText}>삭제</Text>
                   </TouchableOpacity>
                 ) : null}
-                <TouchableOpacity
-                  style={[s.headerActionButton, draft.isPublished === false ? s.headerPrivateButton : s.headerPublishButton]}
-                  onPress={handleTogglePublished}
-                  disabled={saving}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[s.headerPublishText, draft.isPublished === false && s.headerPrivateText]}>
-                    {draft.isPublished === false ? '비공개' : '공개'}
-                  </Text>
-                </TouchableOpacity>
                 <TouchableOpacity style={[s.headerActionButton, s.headerSaveButton]} onPress={handleSave} disabled={saving || scoreSaveBusy} activeOpacity={0.8}>
-                  <Text style={s.headerSaveText}>{saving ? '저장 중' : '저장'}</Text>
+                  <Text style={s.headerSaveText}>{saving ? '전체 저장 중' : '전체 저장'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.closeButton} onPress={closeEditor} activeOpacity={0.8}>
+                  <Text style={s.closeButtonText}>닫기</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1624,6 +1561,22 @@ export default function RoundSchedulePrototypeScreen() {
                     </View>
                   )}
                 </ScrollView>
+                <View style={s.statusFooter}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.statusToggleTitle}>경기기록 {scoreComplete ? '완료' : '미완료'}</Text>
+                    <Text style={s.statusToggleDesc}>홈 캐디카드의 결과 입력 안내에 반영됩니다.</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[s.statusToggleButton, scoreComplete && s.statusToggleButtonActive]}
+                    onPress={handleToggleScoreComplete}
+                    disabled={saving}
+                    activeOpacity={0.86}
+                  >
+                    <Text style={[s.statusToggleText, scoreComplete && s.statusToggleTextActive]}>
+                      {scoreComplete ? '완료' : '미완료'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </>
             ) : editorTab === 'award' ? (
               <ScrollView contentContainerStyle={s.awardBody}>
@@ -1862,7 +1815,6 @@ export default function RoundSchedulePrototypeScreen() {
                         onPress={() => {
                           setScorePhotoUris((current) => current.filter((_, photoIndex) => photoIndex !== index))
                           setScoreOcrResult(null)
-                          setScoreOcrMemberMap({})
                           setScoreOcrError('')
                         }}
                         activeOpacity={0.84}
@@ -1885,45 +1837,15 @@ export default function RoundSchedulePrototypeScreen() {
               {scoreOcrResult && (
                 <View style={s.scoreOcrResult}>
                   <Text style={s.scoreOcrResultTitle}>인식 결과 · 저장 전</Text>
-                  <Text style={s.scoreOcrMatchHelp}>OCR 이름이 실제 조 멤버와 다르면 아래에서 실제 회원을 선택해 주세요.</Text>
                   {scoreOcrResult.players.map((player, index) => {
                     const total = player.diffs.reduce<number>((sum, diff, holeIndex) => sum + ((scoreOcrResult.pars[holeIndex] ?? 4) + (diff ?? 0)), 0)
-                    const selectedUserId = scoreOcrMemberMap[index]
                     return (
                       <View key={`${player.name}-${index}`} style={s.scoreOcrRow}>
-                        <View style={s.scoreOcrInfo}>
-                          <View style={s.scoreOcrNameRow}>
-                            <Text style={s.scoreOcrName}>OCR: {player.name || `플레이어 ${index + 1}`}</Text>
-                            <Text style={s.scoreOcrTotal}>{total}타</Text>
-                          </View>
-                          {selectedScoreGroup ? (
-                            <View style={s.scoreOcrMemberRow}>
-                              {selectedScoreGroup.members.map((member) => {
-                                const selected = selectedUserId === member.userId
-                                return (
-                                  <TouchableOpacity
-                                    key={`${index}-${member.userId}`}
-                                    style={[s.scoreOcrMemberChip, selected && s.scoreOcrMemberChipActive]}
-                                    onPress={() => toggleScoreOcrMember(index, member)}
-                                    activeOpacity={0.84}
-                                  >
-                                    <Text style={[s.scoreOcrMemberChipText, selected && s.scoreOcrMemberChipTextActive]}>
-                                      {member.name}
-                                    </Text>
-                                  </TouchableOpacity>
-                                )
-                              })}
-                            </View>
-                          ) : null}
-                        </View>
+                        <Text style={s.scoreOcrName}>{player.name || `플레이어 ${index + 1}`}</Text>
+                        <Text style={s.scoreOcrTotal}>{total}타</Text>
                       </View>
                     )
                   })}
-                  {selectedScoreGroup ? (
-                    <Text style={s.scoreOcrMatchStatus}>
-                      매칭 {Object.values(scoreOcrMemberMap).filter((userId) => selectedScoreGroup.members.some((member) => member.userId === userId)).length} / {selectedScoreGroup.members.length}명
-                    </Text>
-                  ) : null}
                   <TouchableOpacity
                     style={[s.scoreSaveButton, scoreSaveBusy && { opacity: 0.6 }]}
                     onPress={saveScoreResult}
@@ -2100,12 +2022,8 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   headerDeleteButton: { backgroundColor: '#f8e9e6' },
-  headerPublishButton: { backgroundColor: '#e8f6ee', borderWidth: 1, borderColor: C.green },
-  headerPrivateButton: { backgroundColor: '#f2f3f2', borderWidth: 1, borderColor: C.border },
   headerSaveButton: { backgroundColor: C.accent },
   headerDeleteText: { fontSize: 13, fontWeight: '900', color: '#d65b4a' },
-  headerPublishText: { fontSize: 13, fontWeight: '900', color: C.green },
-  headerPrivateText: { color: C.muted },
   headerSaveText: { fontSize: 13, fontWeight: '900', color: C.accentText },
   editorTabRow: {
     flexDirection: 'row',
@@ -2212,25 +2130,9 @@ const s = StyleSheet.create({
     padding: 14,
   },
   scoreOcrResultTitle: { fontSize: 13, fontWeight: '900', color: C.muted, marginBottom: 8 },
-  scoreOcrMatchHelp: { fontSize: 12, fontWeight: '700', color: C.muted, lineHeight: 18, marginBottom: 8 },
-  scoreOcrRow: { paddingVertical: 8, borderTopWidth: 1, borderTopColor: C.border },
-  scoreOcrInfo: { gap: 8 },
-  scoreOcrNameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  scoreOcrRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderTopWidth: 1, borderTopColor: C.border },
   scoreOcrName: { fontSize: 14, fontWeight: '800', color: C.text },
   scoreOcrTotal: { fontSize: 14, fontWeight: '900', color: C.green },
-  scoreOcrMemberRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  scoreOcrMemberChip: {
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 999,
-    backgroundColor: '#fff',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  scoreOcrMemberChipActive: { backgroundColor: C.green, borderColor: C.green },
-  scoreOcrMemberChipText: { fontSize: 12, fontWeight: '900', color: C.text },
-  scoreOcrMemberChipTextActive: { color: '#fff' },
-  scoreOcrMatchStatus: { marginTop: 8, fontSize: 12, fontWeight: '900', color: C.green },
   scoreSaveButton: {
     borderRadius: 14,
     backgroundColor: C.accent,
