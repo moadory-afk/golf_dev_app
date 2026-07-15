@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   },
   label: { fontSize: 11, lineHeight: 14, fontWeight: '900', letterSpacing: -0.3, marginBottom: 3 },
   value: { fontSize: 22, lineHeight: 27, fontWeight: '900', letterSpacing: -0.9 },
-  caption: { fontSize: 9, lineHeight: 12, fontWeight: '800', marginTop: 3, maxWidth: '100%' },
+  caption: { fontSize: 11, lineHeight: 14, fontWeight: '800', marginTop: 3, maxWidth: '100%' },
   trendRow: {
     width: '80%',
     flexDirection: 'row',

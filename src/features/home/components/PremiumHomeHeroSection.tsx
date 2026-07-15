@@ -1010,8 +1010,8 @@ const styles = StyleSheet.create({
   clubText: {
     flex: 1,
     color: "#fff",
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 13,
+    lineHeight: 16,
     fontWeight: "900",
     letterSpacing: -0.3,
   },

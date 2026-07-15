@@ -1165,7 +1165,7 @@ export default function HomeExperienceScreen() {
       {
         key: "matchup",
         title: "상대 전적",
-        subtitle: matchupDiffSum === null ? "기록 없음" : `핸디차 합 ${diffText(matchupDiffSum)}`,
+        subtitle: matchupDiffSum === null ? "기록 없음" : `핸디캡 차 ${diffText(matchupDiffSum)}`,
         icon: "⚔️",
         onPress: () => openRecordDetail("matchup"),
       },
