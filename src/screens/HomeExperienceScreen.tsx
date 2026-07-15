@@ -18,6 +18,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { GPButton, GPCard } from "../design";
 import { TutorialCoachModal, type CoachStep } from "../components/TutorialCoachModal";
+import { FeatureFirstUseModal } from "../components/FeatureFirstUseModal";
 import { useSkin } from "../skins";
 import { useClub } from "../lib/ClubContext";
 import { useUserProfile } from "../lib/UserProfileContext";
@@ -79,6 +80,7 @@ import { AWARD_CATEGORIES, fillToCount } from "../lib/awardConfig";
 import { computeClubAwardResults } from "../lib/awardResults";
 import { subscribeHomeRecordsChanged } from "../lib/homeRecordEvents";
 import { hasCompletedHomeTutorial, markHomeTutorialCompleted, requestProfileTutorialOpen, subscribeHomeTutorialOpen } from "../lib/tutorial";
+import { hasCompletedFeatureTutorial, markFeatureTutorialCompleted, type FeatureTutorialKey } from "../lib/featureTutorial";
 import type { HomeFeedAction, HomeFeedEvent } from "../features/home/engine";
 
 
@@ -738,6 +740,7 @@ export default function HomeExperienceScreen() {
   const [selectedHeroKey, setSelectedHeroKey] = useState<string | null>(null);
   const [homeTutorialVisible, setHomeTutorialVisible] = useState(false);
   const [homeTutorialStep, setHomeTutorialStep] = useState(0);
+  const [featureTutorial, setFeatureTutorial] = useState<FeatureTutorialKey | null>(null);
   const [activeRoundIndex, setActiveRoundIndex] = useState(0);
   const [roundPopupMode, setRoundPopupMode] = useState<
     "groups" | "lotto" | "award" | null
@@ -912,6 +915,11 @@ export default function HomeExperienceScreen() {
   const openRoundPopup = useCallback(
     async (round: HomeUpcomingRound, mode: "groups" | "lotto" | "award") => {
       setRoundPopupMode(mode);
+      if (mode === 'lotto' || mode === 'award') {
+        const feature: FeatureTutorialKey = mode;
+        const completed = await hasCompletedFeatureTutorial(feature, userId);
+        if (!completed) setFeatureTutorial(feature);
+      }
       setPopupRound(null);
       setPopupMembers([]);
       setPopupLottoPars([]);
@@ -1268,6 +1276,17 @@ export default function HomeExperienceScreen() {
           : setHomeTutorialStep((value) => value + 1)}
         onSkip={() => finishHomeTutorial(false)}
         nextLabel={homeTutorialStep === HOME_TUTORIAL_STEPS.length - 1 ? "프로필 설정하기" : "다음"}
+      />
+      <FeatureFirstUseModal
+        visible={featureTutorial !== null}
+        emoji={featureTutorial === 'lotto' ? '🎟️' : '🏆'}
+        title={featureTutorial === 'lotto' ? '라운드 전에 로또 번호를 구매하세요' : '시상 결과와 특별상을 확인하세요'}
+        description={featureTutorial === 'lotto' ? '경기 종료 후 실제 스코어를 기준으로 자동 추첨 결과를 확인할 수 있습니다.' : '자동 시상은 경기 기록을 기준으로 선정되며, 특별상은 관리자가 수상자를 직접 추가할 수 있습니다.'}
+        onClose={async () => {
+          const feature = featureTutorial;
+          setFeatureTutorial(null);
+          if (feature) await markFeatureTutorialCompleted(feature, userId);
+        }}
       />
       <StatusBar
         barStyle="light-content"

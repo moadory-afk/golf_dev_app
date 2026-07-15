@@ -31,6 +31,7 @@ import { useSkin, type SkinId } from "../skins";
 import type { RootStackProps } from "../navigation/types";
 import type { UserPreferenceTee } from "../features/caddie/types/caddieData";
 import { hasCompletedProfileTutorial, markProfileTutorialCompleted, requestHomeTutorialOpen, requestTutorialOpen, subscribeProfileTutorialOpen } from "../lib/tutorial";
+import { resetFeatureTutorials } from "../lib/featureTutorial";
 import { TutorialCoachModal, type CoachStep } from "../components/TutorialCoachModal";
 
 const APP_URL = "https://golf-seven-psi.vercel.app";
@@ -1463,7 +1464,7 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
             <Text style={p.menuArrow}>›</Text>
           </TouchableOpacity>
           <View style={p.menuDivider} />
-          <TouchableOpacity style={p.menuRow} onPress={requestTutorialOpen}>
+          <TouchableOpacity style={p.menuRow} onPress={async () => { await resetFeatureTutorials(user?.id); requestTutorialOpen(); }}>
             <Text style={p.menuIcon}>💡</Text>
             <Text style={p.menuText}>튜토리얼 다시 보기</Text>
             <Text style={p.menuArrow}>›</Text>
