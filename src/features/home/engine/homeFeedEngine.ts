@@ -73,6 +73,8 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound, recentRounds: Hom
   const lottoSaleOpen = (isTomorrow || isToday) && (minutesToStart === null || minutesToStart >= 30)
   const appearsFinished = round.status === 'finished' || round.resultSaved || (isToday && minutesToStart !== null && minutesToStart < -300)
   const courseRegistered = !!round.courseId && !!round.layoutId
+  const beforeTeeOffThirtyMinutes = !isToday || minutesToStart === null || minutesToStart >= 30
+  const resultPublished = !!round.resultComplete
 
   // 2. 참석/불참/미정 토글 + 참가자 현황 버튼 (조편성 완료 전까지 수정 가능)
   if (!groupingComplete && !appearsFinished) {
@@ -107,8 +109,8 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound, recentRounds: Hom
     }))
   }
 
-  // 4. 코스 등록 완료 시 캐디북
-  if (courseRegistered && !appearsFinished) {
+  // 4. 조편성·코스 등록 완료 후 D-3부터 티오프 30분 전까지 캐디북
+  if (groupingComplete && courseRegistered && isSoon && beforeTeeOffThirtyMinutes && !appearsFinished) {
     events.push(aiFeed(round, {
       id: `stage-04-caddiebook-${round.id}`, type: 'round_preparation', priority: 72, icon: '📖',
       message: '똥꾸 캐디가 준비한 캐디북을 확인해 보세요.\n\n홀별 추천 클럽과 공략 전략을\n미리 확인할 수 있어요.',
@@ -116,11 +118,11 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound, recentRounds: Hom
     }))
   }
 
-  // 5. 라운딩 전날 시상계획
-  if (isTomorrow && round.awardPlanReady && !appearsFinished) {
+  // 5. D-3부터 경기 결과 공지 전까지 시상계획
+  if (isSoon && round.awardPlanReady && !resultPublished) {
     events.push(aiFeed(round, {
       id: `stage-05-award-${round.id}`, type: 'award', priority: 84, icon: '🏆',
-      message: '내일 라운드의 시상계획이 준비되었습니다.\n\n시상 항목과 선정 기준을\n확인해 보세요.',
+      message: '이번 라운드의 시상계획이 준비되었습니다.\n\n시상 항목과 선정 기준을\n미리 확인해 보세요.',
       ctaLabel: '시상계획 보기', actionType: 'open_award', tone: 'gold',
     }))
   }
@@ -155,12 +157,12 @@ export function buildRoundFeedEvents(round: HomeUpcomingRound, recentRounds: Hom
     }))
   }
 
-  // 9. 결과 저장 완료
-  if (round.resultSaved) {
+  // 9. 경기 결과 공지 완료
+  if (resultPublished) {
     events.push(aiFeed(round, {
-      id: `stage-09-result-${round.id}-${round.resultComplete ? 'complete' : 'saved'}`,
+      id: `stage-09-result-published-${round.id}`,
       type: 'round_result', priority: 90, icon: '✅',
-      message: '라운드 결과가 저장되었습니다.\n\n기록과 시상 결과를\n확인해 보세요.',
+      message: '라운드 결과가 공지되었습니다.\n\n기록과 시상 결과를\n확인해 보세요.',
       ctaLabel: '라운드 결과 보기', actionType: 'open_result', tone: 'blue',
     }))
   }
