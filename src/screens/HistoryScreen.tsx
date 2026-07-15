@@ -39,10 +39,10 @@ const MULTI_SPECIAL_AWARD_KEYS = new Set(
     .map((item) => item.id),
 )
 const HISTORY_TABS: Array<{ value: Tab; label: string; icon: string }> = [
-  { value: 'byPlayer', label: '개인별', icon: 'user' },
-  { value: 'byRound', label: '라운딩 별', icon: 'flag' },
-  { value: 'club', label: '클럽 랭킹', icon: 'chart' },
-  { value: 'hall', label: '기네스 북', icon: 'trophy' },
+  { value: 'byPlayer', label: '개인', icon: 'user' },
+  { value: 'byRound', label: '라운딩', icon: 'flag' },
+  { value: 'club', label: '클럽랭킹', icon: 'chart' },
+  { value: 'hall', label: '기네스북', icon: 'trophy' },
 ]
 
 function formatWon(value: number) {
@@ -2591,7 +2591,7 @@ const s = StyleSheet.create({
   tab: { flex: 1, paddingVertical: 5, alignItems: 'center', borderRadius: 50 },
   tabActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5, elevation: 2 },
   tabContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
-  tabText: { fontSize: 13, color: C.muted, fontWeight: '700' },
+  tabText: { fontSize: 15, color: C.muted, fontWeight: '700' },
   tabTextActive: { color: C.green, fontWeight: '900' },
   card: {
     backgroundColor: C.card, borderRadius: 20, padding: 18, marginBottom: 14,
