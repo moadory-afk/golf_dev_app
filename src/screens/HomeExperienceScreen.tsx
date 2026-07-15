@@ -962,12 +962,29 @@ export default function HomeExperienceScreen() {
             getClubMembers(club.id),
             getRoundAttendanceMap(club.id, round.id),
           ]);
-          setAttendanceOverviewRows(
-            members.map((member) => ({
-              userId: member.userId,
+          const schedules = await getRoundSchedules(club.id).catch(() => []);
+          const schedule = schedules.find((item) => item.id === round.id);
+          const assignedMembers = schedule?.groups.flatMap((group) => group.members) ?? [];
+          const assignedUserIds = new Set(assignedMembers.map((member) => member.userId).filter(Boolean));
+          const assignedNames = new Set(assignedMembers.map((member) => member.name.trim()).filter(Boolean));
+          const baseRows = members.map((member) => ({
+            userId: member.userId,
+            name: member.name,
+            status: assignedUserIds.has(member.userId) || assignedNames.has(member.name.trim())
+              ? "참석" as RoundAttendanceLabel
+              : attendanceMap[member.userId] ?? "미정",
+          }));
+          const baseKeys = new Set(baseRows.map((row) => row.userId || row.name));
+          const assignedOnlyRows = assignedMembers
+            .filter((member) => member.name.trim())
+            .filter((member) => !baseKeys.has(member.userId || member.name))
+            .map((member) => ({
+              userId: member.userId || member.name,
               name: member.name,
-              status: attendanceMap[member.userId] ?? "미정",
-            })),
+              status: "참석" as RoundAttendanceLabel,
+            }));
+          setAttendanceOverviewRows(
+            [...baseRows, ...assignedOnlyRows],
           );
         } catch (error) {
           setAttendanceOverviewRows([]);
@@ -2013,19 +2030,20 @@ function RoundInfoModal({
           ) : isAward ? (
             <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
               {awardItems.length > 0 ? (
-                awardItems.map((item) => (
-                  <View key={item.id} style={[styles.awardPlanRow, { borderColor: palette.border }]}>
-                    <Text style={styles.awardPlanIcon}>{item.icon}</Text>
-                    <View style={styles.awardPlanTextWrap}>
-                      <Text style={[styles.awardPlanTitle, { color: palette.text }]}>
-                        {item.label}
-                      </Text>
-                      <Text style={[styles.awardPlanDesc, { color: palette.muted }]} numberOfLines={2}>
-                        {item.desc}
-                      </Text>
+                awardItems.map((item) => {
+                  const winnerCount = awardConfig?.winnerCounts?.[item.id] ?? 1;
+                  const title = winnerCount > 1 ? `${item.label} ${winnerCount}명` : item.label;
+                  return (
+                    <View key={item.id} style={[styles.awardPlanRow, { borderColor: palette.border }]}>
+                      <Text style={styles.awardPlanIcon}>{item.icon}</Text>
+                      <View style={styles.awardPlanTextWrap}>
+                        <Text style={[styles.awardPlanTitle, { color: palette.text }]}>
+                          {title}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-                ))
+                  );
+                })
               ) : (
                 <Text style={[styles.modalEmpty, { color: palette.muted }]}>
                   이 라운드에 등록된 시상계획이 없습니다.
@@ -2561,7 +2579,8 @@ const styles = StyleSheet.create({
     gap: 10,
     borderWidth: 1,
     borderRadius: 16,
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
     marginTop: 10,
   },
   awardPlanIcon: {

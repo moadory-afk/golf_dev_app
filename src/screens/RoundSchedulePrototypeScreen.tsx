@@ -20,7 +20,7 @@ import {
   type ScheduledRoundGroup,
   type ScheduledRoundGroupMember,
 } from '../lib/roundSchedule'
-import { completeRound, deleteRoundsBySchedule, getClubAwardConfig, getClubMembers, getClubSettlement, getCourseLayouts, getGolfCourses, getRoundLottoDraw, getRoundSummaries, saveClubAwardConfig, saveClubAwardSnapshots, saveClubSettlement, saveRound, saveRoundLottoDrafter, totalPar, type CourseLayout, type GolfCourse } from '../lib/store'
+import { completeRound, deleteRoundsBySchedule, getClubAwardConfig, getClubAwardSnapshots, getClubMembers, getClubSettlement, getCourseLayouts, getGolfCourses, getRoundLottoDraw, getRoundSummaries, saveClubAwardConfig, saveClubAwardSnapshots, saveClubSettlement, saveRound, saveRoundLottoDrafter, totalPar, type CourseLayout, type GolfCourse } from '../lib/store'
 import { AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
 import { notifyHomeDashboardChanged } from '../lib/homeDashboardEvents'
 import { notifyHomeRecordsChanged } from '../lib/homeRecordEvents'
@@ -128,6 +128,19 @@ type ScoreGroupSummary = {
   average: number
 }
 
+type AwardResultRow = {
+  awardKey: string
+  icon: string
+  label: string
+  winner: string
+  detail: string
+}
+
+type AwardWinnerPickerState = {
+  awardKey: string
+  multiple: boolean
+} | null
+
 export default function RoundSchedulePrototypeScreen() {
   const nav = useNavigation<Nav>()
   const route = useRoute<Route>()
@@ -146,6 +159,11 @@ export default function RoundSchedulePrototypeScreen() {
   const [awardCount, setAwardCount] = useState(2)
   const [awardCountPickerOpen, setAwardCountPickerOpen] = useState(false)
   const [selectedAwardItems, setSelectedAwardItems] = useState<string[]>(['medal', 'birdieKing', 'last'])
+  const [awardWinnerCounts, setAwardWinnerCounts] = useState<Record<string, number>>({})
+  const [awardResultRows, setAwardResultRows] = useState<AwardResultRow[]>([])
+  const [awardResultRoundId, setAwardResultRoundId] = useState<string | null>(null)
+  const [awardResultLoading, setAwardResultLoading] = useState(false)
+  const [awardWinnerPicker, setAwardWinnerPicker] = useState<AwardWinnerPickerState>(null)
   const [awardSaving, setAwardSaving] = useState(false)
   const [strokeFee, setStrokeFee] = useState('3000')
   const [birdieBonus, setBirdieBonus] = useState<5000 | 10000>(5000)
@@ -191,6 +209,7 @@ export default function RoundSchedulePrototypeScreen() {
       if (!config) return
       if (typeof config.count === 'number') setAwardCount(config.count)
       if (Array.isArray(config.items)) setSelectedAwardItems(config.items)
+      setAwardWinnerCounts(config.winnerCounts ?? {})
     }).catch(() => {})
   }, [club?.id])
 
@@ -235,7 +254,9 @@ export default function RoundSchedulePrototypeScreen() {
   useEffect(() => {
     if (groupedParticipantCount <= 0 || awardCount <= groupedParticipantCount) return
     setAwardCount(groupedParticipantCount)
-    setSelectedAwardItems((current) => current.slice(0, groupedParticipantCount))
+    const normalized = normalizeAwardSelection(selectedAwardItems, awardWinnerCounts, groupedParticipantCount)
+    setSelectedAwardItems(normalized.items)
+    setAwardWinnerCounts(normalized.counts)
   }, [awardCount, groupedParticipantCount])
 
 
@@ -472,9 +493,14 @@ export default function RoundSchedulePrototypeScreen() {
 
   function openCreate() {
     setDraft(createEmptyDraft())
+    setAwardResultRows([])
+    setAwardResultRoundId(null)
+    setAwardResultLoading(false)
+    setAwardWinnerPicker(null)
     setMoneyGroupIds([])
     setAwardCount(2)
     setSelectedAwardItems(['medal', 'birdieKing', 'last'])
+    setAwardWinnerCounts({})
     setStrokeFee('3000')
     setBirdieBonus(5000)
     setBaepanOn(true)
@@ -509,9 +535,11 @@ export default function RoundSchedulePrototypeScreen() {
     if (item.awardConfig) {
       setAwardCount(item.awardConfig.count)
       setSelectedAwardItems(item.awardConfig.items)
+      setAwardWinnerCounts(item.awardConfig.winnerCounts ?? {})
     } else {
       setAwardCount(2)
       setSelectedAwardItems(['medal', 'birdieKing', 'last'])
+      setAwardWinnerCounts({})
     }
     setDraft({
       id: item.id,
@@ -538,6 +566,7 @@ export default function RoundSchedulePrototypeScreen() {
     getRoundLottoDraw(item.id)
       .then((draw) => setLottoDrafterUserId(draw?.drafterUserId ?? null))
       .catch(() => setLottoDrafterUserId(null))
+    loadAwardResults(item.id, item.awardConfig?.items ?? selectedAwardItems, item.awardConfig?.count ?? awardCount, item.awardConfig?.manualWinners)
     setEditorTab('basic')
     setEditorOpen(true)
   }
@@ -554,9 +583,52 @@ export default function RoundSchedulePrototypeScreen() {
   function toggleAwardItem(id: string) {
     setSelectedAwardItems((current) => {
       if (current.includes(id)) return current.filter((item) => item !== id)
-      if (current.length >= awardCount) return [...current.slice(1), id]
-      return [...current, id]
+      return normalizeAwardSelection([...current, id], awardWinnerCounts, awardCount, id).items
     })
+  }
+
+  function selectSpecialAwardItem(id: string) {
+    if (selectedAwardItems.includes(id)) {
+      removeSpecialAwardItem(id)
+      return
+    }
+    const nextCounts = { ...awardWinnerCounts, [id]: Math.max(1, awardWinnerCounts[id] ?? 1) }
+    const normalized = normalizeAwardSelection(selectedAwardItems.includes(id) ? selectedAwardItems : [...selectedAwardItems, id], nextCounts, awardCount, id)
+    setAwardWinnerCounts(normalized.counts)
+    setSelectedAwardItems(normalized.items)
+    setAwardResultRows((current) => current.filter((row) => normalized.items.includes(row.awardKey)))
+  }
+
+  function removeSpecialAwardItem(id: string) {
+    setSelectedAwardItems((current) => current.filter((item) => item !== id))
+    setAwardWinnerCounts((current) => {
+      const next = { ...current }
+      delete next[id]
+      return next
+    })
+  }
+
+  async function setSpecialAwardWinnerCount(id: string, count: number) {
+    const nextCount = Math.max(1, Math.min(count, Math.max(1, awardCount), Math.max(1, groupedParticipantCount || awardCount)))
+    const nextCounts = { ...awardWinnerCounts, [id]: nextCount }
+    const normalized = normalizeAwardSelection(
+      selectedAwardItems.includes(id) ? selectedAwardItems : [...selectedAwardItems, id],
+      nextCounts,
+      awardCount,
+      id,
+    )
+    setSelectedAwardItems(normalized.items)
+    setAwardWinnerCounts(normalized.counts)
+    if (awardResultRows.some((row) => row.awardKey === id)) {
+      const nextRows = awardResultRows.filter((row) => normalized.items.includes(row.awardKey)).map((row) => {
+        if (row.awardKey !== id) return row
+        const names = awardWinnerNames(row.winner).slice(0, nextCount)
+        return { ...row, winner: names.length > 0 ? names.join(', ') : '미입력' }
+      })
+      await saveAwardResultRows(nextRows)
+    } else {
+      setAwardResultRows((current) => current.filter((row) => normalized.items.includes(row.awardKey)))
+    }
   }
 
   function randomizeAwardItems() {
@@ -565,12 +637,230 @@ export default function RoundSchedulePrototypeScreen() {
     setSelectedAwardItems(shuffled.slice(0, awardCount).map((item) => item.id))
   }
 
+  function buildAwardConfig(items = selectedAwardItems, count = awardCount) {
+    const normalized = normalizeAwardSelection(items, awardWinnerCounts, count)
+    const awardItems = normalized.items
+    const winnerCounts = Object.fromEntries(
+      Object.entries(normalized.counts)
+        .filter(([key, value]) => awardItems.includes(key) && multiWinnerSpecialAwardKeys.has(key) && value > 1)
+        .map(([key, value]) => [key, value])
+    )
+    return {
+      count,
+      items: awardItems,
+      ...(Object.keys(winnerCounts).length > 0 ? { winnerCounts } : {}),
+    }
+  }
+
+  function toAwardResultRows(rows: Array<{ awardKey: string; icon: string; label: string; winner: string; detail: string }>): AwardResultRow[] {
+    return rows.map((row) => ({
+      awardKey: row.awardKey,
+      icon: row.icon,
+      label: row.label,
+      winner: row.winner,
+      detail: row.detail,
+    }))
+  }
+
+  const specialAwardKeys = useMemo(() => new Set(
+    AWARD_CATEGORIES.find((category) => category.label === '특별상')?.items.map((item) => item.id) ?? []
+  ), [])
+  const multiWinnerSpecialAwardKeys = useMemo(() => new Set(
+    (AWARD_CATEGORIES.find((category) => category.label === '특별상')?.items ?? [])
+      .filter((item) => item.id !== 'last')
+      .map((item) => item.id)
+  ), [])
+
+  function isEditableAwardResult(row: AwardResultRow) {
+    if (row.awardKey === 'last') return false
+    return row.winner === '미입력' || row.detail === '추첨' || specialAwardKeys.has(row.awardKey)
+  }
+
+  function awardWinnerLimit(awardKey: string) {
+    if (awardKey === 'last') return 1
+    return Math.max(1, awardWinnerCounts[awardKey] ?? 1)
+  }
+
+  function awardWinnerSlotCount(id: string, counts = awardWinnerCounts) {
+    return multiWinnerSpecialAwardKeys.has(id) ? Math.max(1, counts[id] ?? 1) : 1
+  }
+
+  function awardWinnerSlotTotal(items: string[], counts = awardWinnerCounts) {
+    return items.reduce((sum, id) => sum + awardWinnerSlotCount(id, counts), 0)
+  }
+
+  function normalizeAwardSelection(items: string[], counts: Record<string, number>, limit = awardCount, keepId?: string) {
+    const uniqueItems = Array.from(new Set(items))
+    const nextCounts = { ...counts }
+    let nextItems = uniqueItems
+
+    while (awardWinnerSlotTotal(nextItems, nextCounts) > Math.max(1, limit) && nextItems.length > 0) {
+      const removeIndex = nextItems.findIndex((item) => item !== keepId)
+      const index = removeIndex >= 0 ? removeIndex : 0
+      const [removed] = nextItems.splice(index, 1)
+      delete nextCounts[removed]
+    }
+
+    return { items: nextItems, counts: nextCounts }
+  }
+
+  function awardWinnerNames(value: string) {
+    return value
+      .split(',')
+      .map((name) => name.trim())
+      .filter(Boolean)
+      .filter((name) => name !== '미입력')
+  }
+
+  function awardTakenNames(targetAwardKey: string) {
+    return new Set(
+      awardResultRows
+        .filter((row) => row.awardKey !== targetAwardKey)
+        .flatMap((row) => awardWinnerNames(row.winner))
+    )
+  }
+
+  function awardCandidates(targetAwardKey: string) {
+    const taken = awardTakenNames(targetAwardKey)
+    const selected = new Set(awardWinnerNames(awardResultRows.find((row) => row.awardKey === targetAwardKey)?.winner ?? ''))
+    return draft.groups
+      .flatMap((group) => group.members)
+      .filter((member, index, members) => {
+        const key = member.userId || member.name
+        return members.findIndex((item) => (item.userId || item.name) === key) === index
+      })
+      .filter((member) => selected.has(member.name) || !taken.has(member.name))
+  }
+
+  function manualWinnersFromRows(rows: AwardResultRow[]) {
+    return Object.fromEntries(
+      rows
+        .filter((row) => row.awardKey !== 'last')
+        .map((row) => [row.awardKey, awardWinnerNames(row.winner)])
+        .filter(([, names]) => names.length > 0)
+    )
+  }
+
+  function applyManualWinners(rows: AwardResultRow[], manualWinners?: Record<string, string[]>) {
+    if (!manualWinners) return rows
+    return rows.map((row) => {
+      const names = manualWinners[row.awardKey]
+      if (!names?.length) return row
+      return {
+        ...row,
+        winner: names.join(', '),
+        detail: row.detail === '추첨' || row.detail === '현장 확인' ? '관리자 지정' : row.detail,
+      }
+    })
+  }
+
+  async function saveAwardManualWinners(nextRows: AwardResultRow[]) {
+    if (!club?.id || !draft.id) return
+    const baseConfig = draft.awardConfig ?? buildAwardConfig()
+    const nextConfig = {
+      ...baseConfig,
+      manualWinners: manualWinnersFromRows(nextRows),
+    }
+    setDraft((current) => ({ ...current, awardConfig: nextConfig }))
+    setItems((current) => current.map((item) => item.id === draft.id ? { ...item, awardConfig: nextConfig } : item))
+    const currentSchedule = items.find((item) => item.id === draft.id)
+    const next = await upsertRoundSchedule(club.id, {
+      id: draft.id,
+      date: draft.date,
+      courseId: draft.courseId,
+      courseName: draft.courseName?.trim() || undefined,
+      layoutId: draft.layoutId,
+      layoutName: draft.layoutName,
+      status: draft.status,
+      attendanceMode: draft.attendanceMode,
+      note: draft.note.trim(),
+      moneyGroupIds,
+      moneyConfig: draft.moneyConfig ?? currentSchedule?.moneyConfig ?? null,
+      awardConfig: nextConfig,
+      isPublished: draft.isPublished ?? currentSchedule?.isPublished ?? true,
+      groups: draft.groups.map((group, index) => ({
+        ...group,
+        name: group.name || `${index + 1}조`,
+        time: group.time.trim(),
+      })),
+    })
+    setItems(next)
+  }
+
+  async function saveAwardResultRows(nextRows: AwardResultRow[]) {
+    setAwardResultRows(nextRows)
+    if (!club?.id || !awardResultRoundId) return
+    try {
+      await saveAwardManualWinners(nextRows)
+      await saveClubAwardSnapshots(club.id, awardResultRoundId, nextRows)
+      notifyHomeRecordsChanged(club.id)
+    } catch (error) {
+      Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  async function toggleAwardResultWinner(awardKey: string, member: ScheduledRoundGroupMember, multiple: boolean) {
+    const target = awardResultRows.find((row) => row.awardKey === awardKey)
+    if (!target) return
+    const currentNames = awardWinnerNames(target.winner)
+    if (multiple && !currentNames.includes(member.name) && currentNames.length >= awardWinnerLimit(awardKey)) {
+      Alert.alert('확인', `${awardWinnerLimit(awardKey)}명까지 지정할 수 있습니다.`)
+      return
+    }
+    const nextNames = multiple
+      ? currentNames.includes(member.name)
+        ? currentNames.filter((name) => name !== member.name)
+        : [...currentNames, member.name]
+      : [member.name]
+    const nextRows = awardResultRows.map((row) => row.awardKey === awardKey
+      ? {
+          ...row,
+          winner: nextNames.length > 0 ? nextNames.join(', ') : '미입력',
+          detail: row.detail === '추첨' || row.detail === '현장 확인' ? '관리자 지정' : row.detail,
+        }
+      : row
+    )
+    await saveAwardResultRows(nextRows)
+    if (!multiple) setAwardWinnerPicker(null)
+  }
+
+  async function loadAwardResults(scheduleId?: string | null, awardItems = selectedAwardItems, count = awardCount, manualWinners = draft.awardConfig?.manualWinners) {
+    if (!club?.id || !scheduleId) {
+      setAwardResultRows([])
+      setAwardResultRoundId(null)
+      return
+    }
+    setAwardResultLoading(true)
+    try {
+      const rounds = await getRoundSummaries(club.id)
+      const round = rounds.find((item) => item.scheduleId === scheduleId)
+      if (!round) {
+        setAwardResultRows([])
+        setAwardResultRoundId(null)
+        return
+      }
+      setAwardResultRoundId(round.id)
+      const snapshots = await getClubAwardSnapshots(round.id).catch(() => [])
+      if (snapshots.length > 0) {
+        setAwardResultRows(applyManualWinners(toAwardResultRows(snapshots), manualWinners))
+        return
+      }
+      const itemIds = fillToCount(awardItems, count)
+      const handicaps = new Map(Object.entries(round.handicaps ?? {}))
+      setAwardResultRows(applyManualWinners(toAwardResultRows(computeClubAwardResults(itemIds, round, handicaps, totalPar(round.pars))), manualWinners))
+    } catch {
+      setAwardResultRows([])
+    } finally {
+      setAwardResultLoading(false)
+    }
+  }
+
   async function saveAwardConfig() {
     if (!club?.id) return Alert.alert('확인', '클럽 정보를 불러온 뒤 다시 시도해 주세요.')
     setAwardSaving(true)
     try {
-      const awardItems = fillToCount(selectedAwardItems, awardCount)
-      const awardConfig = { count: awardCount, items: awardItems }
+      const awardConfig = buildAwardConfig()
+      const awardItems = awardConfig.items
       if (draft.id) {
         const currentSchedule = items.find((item) => item.id === draft.id)
         const next = await upsertRoundSchedule(club.id, {
@@ -600,6 +890,7 @@ export default function RoundSchedulePrototypeScreen() {
         await saveClubAwardConfig(club.id, awardConfig)
       }
       setSelectedAwardItems(awardItems)
+      await loadAwardResults(draft.id, awardItems, awardCount)
       Alert.alert('저장 완료', '시상룰을 저장했습니다.')
     } catch (error) {
       Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
@@ -881,6 +1172,7 @@ export default function RoundSchedulePrototypeScreen() {
       const handicaps = new Map(Object.entries(saved.handicaps ?? {}))
       const awards = computeClubAwardResults(itemIds, saved, handicaps, totalPar(saved.pars))
       await saveClubAwardSnapshots(club.id, saved.id, awards)
+      setAwardResultRows(toAwardResultRows(awards))
       setLastSavedAt(new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }))
       // 조별 저장 직후 최신 DB 결과를 다시 읽어 스코어 탭에 즉시 반영한다.
       // 진행 중이던 이전 조회는 scoreSummaryLoadSeq로 무시되어 방금 저장한 요약을 덮어쓰지 못한다.
@@ -1040,13 +1332,13 @@ export default function RoundSchedulePrototypeScreen() {
 
     setSaving(true)
     try {
-      const awardItems = fillToCount(selectedAwardItems, awardCount)
+      const awardConfig = buildAwardConfig()
+      const awardItems = awardConfig.items
       const moneyConfig = {
         strokeFee: parseInt(strokeFee, 10) || 3000,
         birdieBonus,
         baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
       }
-      const awardConfig = { count: awardCount, items: awardItems }
       const next = await upsertRoundSchedule(club.id, {
         id: draft.id,
         date: draft.date,
@@ -1126,7 +1418,7 @@ export default function RoundSchedulePrototypeScreen() {
           birdieBonus,
           baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
         },
-        awardConfig: { count: awardCount, items: fillToCount(selectedAwardItems, awardCount) },
+        awardConfig: buildAwardConfig(),
         isPublished: draft.isPublished ?? true,
         groups: draft.groups.map((group, index) => ({
           ...group,
@@ -1213,7 +1505,7 @@ export default function RoundSchedulePrototypeScreen() {
           birdieBonus,
           baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
         },
-        awardConfig: { count: awardCount, items: fillToCount(selectedAwardItems, awardCount) },
+        awardConfig: buildAwardConfig(),
         isPublished: draft.isPublished ?? true,
         groups: draft.groups.map((group, index) => ({
           ...group,
@@ -1233,6 +1525,7 @@ export default function RoundSchedulePrototypeScreen() {
         const handicaps = new Map(Object.entries(finishedRound.handicaps ?? {}))
         const awards = computeClubAwardResults(itemIds, finishedRound, handicaps, totalPar(finishedRound.pars))
         await saveClubAwardSnapshots(club.id, finishedRound.id, awards)
+        setAwardResultRows(toAwardResultRows(awards))
         notifyHomeRecordsChanged(club.id)
       } else {
         const members = draft.groups.flatMap((group) => group.members)
@@ -1270,6 +1563,7 @@ export default function RoundSchedulePrototypeScreen() {
         const handicaps = new Map(Object.entries(saved.handicaps ?? {}))
         const awards = computeClubAwardResults(itemIds, saved, handicaps, totalPar(saved.pars))
         await saveClubAwardSnapshots(club.id, saved.id, awards)
+        setAwardResultRows(toAwardResultRows(awards))
         notifyHomeRecordsChanged(club.id)
         Alert.alert('완료', '저장된 스코어가 없어 전체 파 기록으로 종료했습니다.')
       }
@@ -1650,41 +1944,115 @@ export default function RoundSchedulePrototypeScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {AWARD_CATEGORIES.map((category) => {
-                  const isSpecialCategory = category.label === '특별상 / 유머'
-                  return (
+                {AWARD_CATEGORIES.map((category) => (
                   <View key={category.label} style={s.awardCategory}>
                     <Text style={s.awardCategoryTitle}>{category.label}</Text>
                     <View style={s.awardChipRow}>
                       {category.items.map((item) => {
                         const selected = selectedAwardItems.includes(item.id)
+                        const special = specialAwardKeys.has(item.id)
+                        const multiWinnerSpecial = multiWinnerSpecialAwardKeys.has(item.id)
+                        const winnerCount = awardWinnerLimit(item.id)
+                        const maxWinnerCount = Math.max(1, Math.min(awardCount, groupedParticipantCount || awardCount))
                         return (
-                          <View key={item.id} style={[s.awardOption, selected && s.awardOptionActive]}>
+                          <View key={item.id} style={[s.awardOption, special && selected && s.awardOptionSpecialActive, selected && !special && s.awardOptionActive]}>
                             <TouchableOpacity
-                              style={s.awardOptionMain}
+                              style={[s.awardOptionMain, special && selected && s.awardOptionMainSpecial]}
                               onPress={() => {
+                                if (special) {
+                                  selectSpecialAwardItem(item.id)
+                                  return
+                                }
                                 toggleAwardItem(item.id)
-                                if (isSpecialCategory) Alert.alert(item.label, item.detail)
                               }}
                               activeOpacity={0.86}
                             >
-                              <Text style={[s.awardChipText, selected && s.awardChipTextActive]}>{item.icon} {item.label}</Text>
+                              <Text style={[s.awardChipText, selected && s.awardChipTextActive]}>
+                                {item.icon} {item.label}
+                              </Text>
+                              {special && selected ? <Text style={s.awardInfoInline}>i</Text> : null}
                             </TouchableOpacity>
-                            <TouchableOpacity
-                              style={s.awardInfoButton}
-                              onPress={() => Alert.alert(item.label, item.detail)}
-                              hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
-                            >
-                              <Text style={[s.awardInfoText, selected && s.awardChipTextActive]}>ⓘ</Text>
-                            </TouchableOpacity>
+                            {multiWinnerSpecial && selected ? (
+                              <View style={s.specialAwardStepperInline}>
+                                <TouchableOpacity
+                                  style={[s.specialAwardStepperButton, winnerCount <= 1 && s.specialAwardStepperButtonDisabled]}
+                                  onPress={() => winnerCount > 1 && setSpecialAwardWinnerCount(item.id, winnerCount - 1)}
+                                  disabled={winnerCount <= 1}
+                                  activeOpacity={0.84}
+                                >
+                                  <Text style={[s.specialAwardStepperButtonText, winnerCount <= 1 && s.specialAwardStepperButtonTextDisabled]}>-</Text>
+                                </TouchableOpacity>
+                                <Text style={s.specialAwardStepperValue}>{winnerCount}명</Text>
+                                <TouchableOpacity
+                                  style={[s.specialAwardStepperButton, winnerCount >= maxWinnerCount && s.specialAwardStepperButtonDisabled]}
+                                  onPress={() => winnerCount < maxWinnerCount && setSpecialAwardWinnerCount(item.id, winnerCount + 1)}
+                                  disabled={winnerCount >= maxWinnerCount}
+                                  activeOpacity={0.84}
+                                >
+                                  <Text style={[s.specialAwardStepperButtonText, winnerCount >= maxWinnerCount && s.specialAwardStepperButtonTextDisabled]}>+</Text>
+                                </TouchableOpacity>
+                              </View>
+                            ) : null}
                           </View>
                         )
                       })}
                     </View>
                   </View>
-                  )
-                })}
-                <Text style={s.awardHelpText}>특별상 / 유머 항목은 선택하면 간단한 설명이 표시됩니다.</Text>
+                ))}
+                <Text style={s.awardHelpText}>특별상은 시상 결과에서 2명 이상 수상자로 지정할 수 있습니다.</Text>
+
+                <View style={s.awardResultCard}>
+                  <View style={s.awardResultHeader}>
+                    <Text style={s.awardResultTitle}>시상 결과</Text>
+                    <TouchableOpacity
+                      style={s.awardResultRefresh}
+                      onPress={() => loadAwardResults(draft.id)}
+                      disabled={!draft.id || awardResultLoading}
+                      activeOpacity={0.84}
+                    >
+                      <Text style={s.awardResultRefreshText}>{awardResultLoading ? '확인중' : '새로고침'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {awardResultLoading ? (
+                    <View style={s.awardResultEmpty}>
+                      <ActivityIndicator color={C.green} />
+                      <Text style={s.awardResultEmptyText}>시상 결과를 불러오고 있습니다.</Text>
+                    </View>
+                  ) : awardResultRows.length > 0 ? (
+                    <View style={s.awardResultList}>
+                      {awardResultRows.map((award, index) => {
+                        const editable = isEditableAwardResult(award)
+                        const multiple = specialAwardKeys.has(award.awardKey)
+                        const selectedWinnerCount = awardWinnerNames(award.winner).length
+                        const winnerLimit = awardWinnerLimit(award.awardKey)
+                        return (
+                          <View key={`${award.awardKey}-${index}`} style={s.awardResultRow}>
+                            <View style={s.awardResultIcon}>
+                              <Text style={s.awardResultIconText}>{award.icon}</Text>
+                            </View>
+                            <Text style={s.awardResultLabel} numberOfLines={1}>{award.label}</Text>
+                            <TouchableOpacity
+                              style={[s.awardResultWinnerBox, editable && s.awardResultWinnerButton]}
+                              onPress={() => editable && setAwardWinnerPicker({ awardKey: award.awardKey, multiple })}
+                              disabled={!editable}
+                              activeOpacity={0.84}
+                            >
+                              <Text style={s.awardResultWinner} numberOfLines={1}>{award.winner || '미지정'}</Text>
+                              <Text style={s.awardResultDetail} numberOfLines={1}>
+                                {editable ? (multiple ? `수상자 선택 ${selectedWinnerCount}/${winnerLimit}` : '수상자 선택') : (award.detail || '자동 선정')}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        )
+                      })}
+                    </View>
+                  ) : (
+                    <View style={s.awardResultEmpty}>
+                      <Text style={s.awardResultEmptyTitle}>아직 시상 결과가 없습니다.</Text>
+                      <Text style={s.awardResultEmptyText}>스코어 저장 후 자동 시상 결과가 표시됩니다.</Text>
+                    </View>
+                  )}
+                </View>
               </ScrollView>
             ) : (
               <ScrollView contentContainerStyle={s.awardBody}>
@@ -1808,8 +2176,10 @@ export default function RoundSchedulePrototypeScreen() {
               key={count}
               style={[s.pickerRow, count === awardCount && s.awardCountPickerRowActive]}
               onPress={() => {
+                const normalized = normalizeAwardSelection(selectedAwardItems, awardWinnerCounts, count)
                 setAwardCount(count)
-                setSelectedAwardItems((current) => current.slice(0, count))
+                setSelectedAwardItems(normalized.items)
+                setAwardWinnerCounts(normalized.counts)
                 setAwardCountPickerOpen(false)
               }}
               activeOpacity={0.84}
@@ -1820,6 +2190,37 @@ export default function RoundSchedulePrototypeScreen() {
           )) : (
             <Text style={s.pickerEmptyText}>참석으로 등록된 라운드 참가자가 없습니다.</Text>
           )}
+        </PickerShell>
+      </Modal>
+
+      <Modal transparent animationType="fade" visible={!!awardWinnerPicker} onRequestClose={() => setAwardWinnerPicker(null)}>
+        <PickerShell
+          title={awardWinnerPicker?.multiple ? '수상자 선택' : '수상자 지정'}
+          onClose={() => setAwardWinnerPicker(null)}
+        >
+          {awardWinnerPicker ? (() => {
+            const row = awardResultRows.find((item) => item.awardKey === awardWinnerPicker.awardKey)
+            const selectedNames = new Set(row ? awardWinnerNames(row.winner) : [])
+            const candidates = awardCandidates(awardWinnerPicker.awardKey)
+            const winnerLimit = awardWinnerLimit(awardWinnerPicker.awardKey)
+            return candidates.length > 0 ? candidates.map((member) => {
+              const selected = selectedNames.has(member.name)
+              const disabledByLimit = awardWinnerPicker.multiple && !selected && selectedNames.size >= winnerLimit
+              return (
+                <TouchableOpacity
+                  key={`${awardWinnerPicker.awardKey}-${member.userId || member.name}`}
+                  style={[s.pickerRow, selected && s.awardCountPickerRowActive, disabledByLimit && s.pickerRowDisabled]}
+                  onPress={() => toggleAwardResultWinner(awardWinnerPicker.awardKey, member, awardWinnerPicker.multiple)}
+                  activeOpacity={0.84}
+                >
+                  <Text style={[s.pickerRowText, selected && s.awardCountPickerTextActive, disabledByLimit && s.pickerRowDisabledText]}>{member.name}</Text>
+                  {selected ? <Text style={s.awardCountPickerCheck}>✓</Text> : null}
+                </TouchableOpacity>
+              )
+            }) : (
+              <Text style={s.pickerEmptyText}>선택 가능한 미수상자가 없습니다.</Text>
+            )
+          })() : null}
         </PickerShell>
       </Modal>
 
@@ -2288,11 +2689,96 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
     backgroundColor: '#fff',
+    overflow: 'hidden',
   },
   awardOptionActive: { backgroundColor: C.accent, borderColor: C.accent },
-  awardOptionMain: { paddingLeft: 12, paddingRight: 4, paddingVertical: 9 },
-  awardInfoButton: { paddingLeft: 2, paddingRight: 10, paddingVertical: 9 },
-  awardInfoText: { fontSize: 13, fontWeight: '900', color: C.muted },
+  awardOptionSpecialActive: { backgroundColor: C.accent, borderColor: C.accent, paddingRight: 5 },
+  awardOptionMain: { paddingHorizontal: 12, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  awardOptionMainSpecial: { paddingRight: 4 },
+  awardInfoInline: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: C.accentText,
+    textAlign: 'center',
+    lineHeight: 12,
+    fontSize: 9,
+    fontWeight: '900',
+    color: C.accentText,
+  },
+  specialAwardStepperInline: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  specialAwardStepperButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#dfffa3',
+  },
+  specialAwardStepperButtonDisabled: { opacity: 0.45 },
+  specialAwardStepperButtonText: { fontSize: 20, lineHeight: 22, fontWeight: '900', color: C.text },
+  specialAwardStepperButtonTextDisabled: { color: C.muted },
+  specialAwardStepperValue: { minWidth: 28, textAlign: 'center', fontSize: 13, fontWeight: '900', color: C.accentText },
+  awardResultCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: '#fff',
+    padding: 14,
+    gap: 12,
+  },
+  awardResultHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  awardResultTitle: { fontSize: 16, fontWeight: '900', color: C.text },
+  awardResultRefresh: {
+    borderRadius: 999,
+    backgroundColor: C.greenLight,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  awardResultRefreshText: { fontSize: 12, fontWeight: '900', color: C.green },
+  awardResultList: { gap: 2 },
+  awardResultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 48,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    paddingVertical: 8,
+  },
+  awardResultIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.greenLight,
+  },
+  awardResultIconText: { fontSize: 17 },
+  awardResultLabel: { flex: 1, minWidth: 0, fontSize: 14, fontWeight: '900', color: C.text },
+  awardResultWinnerBox: { width: 112, minWidth: 0, alignItems: 'flex-end' },
+  awardResultWinnerButton: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.greenLight,
+    backgroundColor: '#f8fff8',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  awardResultWinner: { maxWidth: '100%', fontSize: 14, fontWeight: '900', color: C.green },
+  awardResultDetail: { maxWidth: '100%', marginTop: 2, fontSize: 11, fontWeight: '700', color: C.muted },
+  awardResultEmpty: {
+    minHeight: 80,
+    borderRadius: 14,
+    backgroundColor: '#f8fbf8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    padding: 14,
+  },
+  awardResultEmptyTitle: { fontSize: 14, fontWeight: '900', color: C.text },
+  awardResultEmptyText: { fontSize: 12, fontWeight: '700', color: C.muted, textAlign: 'center', lineHeight: 18 },
   moneyInputRow: {
     minHeight: 54,
     borderWidth: 1.5,
@@ -2569,6 +3055,8 @@ const s = StyleSheet.create({
     paddingVertical: 14,
     backgroundColor: '#fff',
   },
+  pickerRowDisabled: { opacity: 0.45 },
   pickerRowText: { fontSize: 15, fontWeight: '800', color: C.text },
+  pickerRowDisabledText: { color: C.muted },
   pickerRowMeta: { fontSize: 12, color: C.muted, marginTop: 4 },
 })

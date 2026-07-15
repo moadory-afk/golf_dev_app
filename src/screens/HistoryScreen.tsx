@@ -14,7 +14,7 @@ import { useClub } from '../lib/ClubContext'
 import { useUserProfile } from '../lib/UserProfileContext'
 import { useAsync } from '../lib/useAsync'
 import { loadHandicapBasis, type HandicapBasis } from '../lib/handicapBasis'
-import { fillToCount } from '../lib/awardConfig'
+import { AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
 import { computeClubAwardResults } from '../lib/awardResults'
 import { getRoundSchedules, type ScheduledRound } from '../lib/roundSchedule'
 import { calcSettlement, fmtKRW } from '../features/settlement'
@@ -33,6 +33,11 @@ type RankingType = 'wins' | 'streak' | 'lowestHandicap' | 'birdie' | 'singleBird
 type RoundDetailTab = 'regular' | 'peoria' | 'score' | 'award'
 type HistoryMember = { userId: string; name: string; role: string }
 type HistoryRoundCard = SavedRound & { isScheduleOnly?: boolean }
+const MULTI_SPECIAL_AWARD_KEYS = new Set(
+  (AWARD_CATEGORIES.find((category) => category.label === '특별상')?.items ?? [])
+    .filter((item) => item.id !== 'last')
+    .map((item) => item.id),
+)
 const HISTORY_TABS: Array<{ value: Tab; label: string; icon: string }> = [
   { value: 'byPlayer', label: '개인별', icon: 'user' },
   { value: 'byRound', label: '라운딩 별', icon: 'flag' },
@@ -48,6 +53,15 @@ function lottoPrizeForHits(hits: number, config: LottoAwardConfig, jackpot: numb
   if (hits === 6) return jackpot
   if (hits === 3 || hits === 4 || hits === 5) return config.prizes[String(hits) as '3' | '4' | '5']
   return 0
+}
+
+function awardWinnerDisplay(winner: string) {
+  return winner
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .map(shortName)
+    .join(', ')
 }
 
 function diffText(d: number) { return d > 0 ? `+${d}` : `${d}` }
@@ -852,7 +866,10 @@ function RoundFlipCard({
     : effectiveRound.pars.map((_, i) => i + 1)
   const shinScoreRank = effectiveRound.players
     .map((p) => {
-      const total = playerTotal(p.strokes)
+      const total = p.strokes.reduce(
+        (sum, stroke, index) => sum + (hiddenHoles.includes(index + 1) ? stroke : (effectiveRound.pars[index] ?? 0)),
+        0,
+      )
       return { name: p.name, total, diff: total - detailPar }
     })
     .sort((a, b) => a.total - b.total)
@@ -899,17 +916,19 @@ function RoundFlipCard({
         getHandicapsForRound(effectiveRound, rounds, handicapBasis),
         detailPar,
       ).map((award) => ({
+        awardKey: award.awardKey,
         icon: award.icon,
         label: award.label,
-        winner: shortName(award.winner),
+        winner: awardWinnerDisplay(award.winner),
         detail: award.detail,
       }))
     : []
   const awardRows = awardSnapshots.length > 0
     ? awardSnapshots.map((award) => ({
+        awardKey: award.awardKey,
         icon: award.icon,
         label: award.label,
-        winner: shortName(award.winner),
+        winner: awardWinnerDisplay(award.winner),
         detail: award.detail,
       }))
     : fallbackAwardRows
@@ -1069,7 +1088,7 @@ function RoundFlipCard({
                 {awardRows.length === 0 ? (
                   <Text style={s.backAwardMuted}>설정된 시상 항목이 없습니다.</Text>
                 ) : awardRows.map((award, i) => (
-                  <AwardRow key={`${award.label}-${i}`} icon={award.icon} label={award.label} winner={award.winner} detail={award.detail} first={i === 0} />
+                  <AwardRow key={`${award.label}-${i}`} awardKey={award.awardKey} icon={award.icon} label={award.label} winner={award.winner} detail={award.detail} first={i === 0} />
                 ))}
               </AwardCard>
               <AwardCard title="Lotto 6/18" icon="◎">
@@ -1145,8 +1164,9 @@ function RankingPanel({ title, rows }: { title: string; rows: { name: string; ma
 function AwardCard({ title, icon, children }: { title: string; icon?: string; children: ReactNode }) {
   return <View style={s.backAwardCard}><View style={s.backAwardHeader}>{icon ? <Text style={s.backAwardHeaderIcon}>{icon}</Text> : null}<Text style={s.backAwardTitle}>{title}</Text></View>{children}</View>
 }
-function AwardRow({ icon, label, winner, detail, first = false }: { icon: string; label: string; winner: string; detail: string; first?: boolean }) {
-  return <View style={[s.awardRow, first && { borderTopWidth: 0 }]}><View style={s.awardIconWrap}><Text style={s.awardIcon}>{icon}</Text></View><Text style={s.awardLabel}>{label}</Text><Text style={s.awardWinner} numberOfLines={1}>{winner}</Text><View style={s.awardDetailWrap}><Text style={s.awardDetail} numberOfLines={1}>{detail}</Text></View></View>
+function AwardRow({ awardKey, icon, label, winner, detail, first = false }: { awardKey?: string; icon: string; label: string; winner: string; detail: string; first?: boolean }) {
+  const hideDetail = awardKey ? MULTI_SPECIAL_AWARD_KEYS.has(awardKey) : false
+  return <View style={[s.awardRow, first && { borderTopWidth: 0 }]}><View style={s.awardIconWrap}><Text style={s.awardIcon}>{icon}</Text></View><Text style={s.awardLabel}>{label}</Text><Text style={s.awardWinner}>{winner}</Text>{hideDetail ? null : <View style={s.awardDetailWrap}><Text style={s.awardDetail} numberOfLines={1}>{detail}</Text></View>}</View>
 }
 
 // ─── 개인별 ──────────────────────────────────────────────────────────────────

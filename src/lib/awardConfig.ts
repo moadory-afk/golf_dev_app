@@ -43,7 +43,7 @@ export const AWARD_CATEGORIES: { label: string; items: AwardItemDef[] }[] = [
     ],
   },
   {
-    label: '특별상 / 유머',
+    label: '특별상',
     items: [
       { id: 'last',        icon: '🐢', label: '꼴찌상',     desc: '최고타',          detail: '라운드에서 가장 높은 타수를 기록한 플레이어.\n격려와 유머의 의미로 수여.' },
       { id: 'fighter',     icon: '💪', label: '파이팅상',   desc: '꼴찌인데 버디',    detail: '최하위 타수임에도 버디를 기록한 플레이어.\n꼴찌이지만 포기하지 않는 투지를 기림!' },
