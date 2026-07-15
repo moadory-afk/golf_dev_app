@@ -1,10 +1,14 @@
 import {
+  Alert,
   Animated,
   Image,
   ImageSourcePropType,
   FlatList,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Linking,
+  Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -369,6 +373,8 @@ const HeroRoundCard = memo(function HeroRoundCard({
               routeTimeText={round.routeTimeText}
               departureTimeText={round.departureTimeText}
               departureBufferMinutes={departureBufferMinutes}
+              courseLatitude={round.courseLatitude}
+              courseLongitude={round.courseLongitude}
             />
           </View>
         </TouchableOpacity>
@@ -680,6 +686,8 @@ function HeroBottomSummary({
   routeTimeText,
   departureTimeText,
   departureBufferMinutes,
+  courseLatitude,
+  courseLongitude,
 }: {
   width: number;
   courseName: string;
@@ -692,6 +700,8 @@ function HeroBottomSummary({
   routeTimeText?: string;
   departureTimeText?: string;
   departureBufferMinutes: number;
+  courseLatitude?: number | null;
+  courseLongitude?: number | null;
 }) {
   const isCompact = isCompactWidth(width);
   const scheduleLine = teeTime ? `Tee Off ${teeTime}` : "Tee Off --:--";
@@ -704,6 +714,53 @@ function HeroBottomSummary({
     departureTimeText && !departureTimeText.includes("준비중")
       ? departureTimeText.replace(/^출발 추천\s*/, "")
       : "";
+  const [mapChooserVisible, setMapChooserVisible] = useState(false);
+  const hasDestination =
+    typeof courseLatitude === "number" &&
+    Number.isFinite(courseLatitude) &&
+    typeof courseLongitude === "number" &&
+    Number.isFinite(courseLongitude);
+
+  const openNavigation = async (provider: "kakao" | "tmap" | "naver") => {
+    if (!hasDestination) {
+      Alert.alert("길안내 준비중", "골프장 위치 정보가 등록되지 않았습니다.");
+      return;
+    }
+
+    const name = encodeURIComponent(courseName);
+    const lat = courseLatitude;
+    const lng = courseLongitude;
+    const urls = {
+      kakao: {
+        app: `kakaomap://route?ep=${lat},${lng}&by=CAR`,
+        web: `https://map.kakao.com/link/to/${name},${lat},${lng}`,
+      },
+      tmap: {
+        app: `tmap://route?goalname=${name}&goalx=${lng}&goaly=${lat}`,
+        web: `https://www.tmap.co.kr/search?searchKeyword=${name}`,
+      },
+      naver: {
+        app: `nmap://route/car?dlat=${lat}&dlng=${lng}&dname=${name}&appname=gogopar`,
+        web: `https://map.naver.com/p/search/${name}`,
+      },
+    }[provider];
+
+    setMapChooserVisible(false);
+    try {
+      if (Platform.OS === "web") {
+        await Linking.openURL(urls.web);
+        return;
+      }
+      const supported = await Linking.canOpenURL(urls.app);
+      await Linking.openURL(supported ? urls.app : urls.web);
+    } catch {
+      try {
+        await Linking.openURL(urls.web);
+      } catch {
+        Alert.alert("길안내 실행 실패", "지도 앱을 열 수 없습니다.");
+      }
+    }
+  };
 
   return (
     <View style={[styles.bottomSummary, { paddingTop: isCompact ? 6 : 8 }]}>
@@ -796,7 +853,15 @@ function HeroBottomSummary({
 
         <View style={[styles.summaryDivider, { marginHorizontal: isCompact ? 3 : 6 }]} />
 
-        <View style={[styles.travelSummary, { paddingHorizontal: isCompact ? 4 : 8 }]}>
+        <TouchableOpacity
+          activeOpacity={0.72}
+          disabled={!hasDestination}
+          onPress={(event) => {
+            event.stopPropagation?.();
+            setMapChooserVisible(true);
+          }}
+          style={[styles.travelSummary, { paddingHorizontal: isCompact ? 4 : 8 }]}
+        >
           <Text
             style={[
               styles.departureTime,
@@ -824,8 +889,38 @@ function HeroBottomSummary({
           >
             {`${Math.max(0, Math.round(departureBufferMinutes))}분 여유 가정`}
           </Text>
-        </View>
+        </TouchableOpacity>
       </View>
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={mapChooserVisible}
+        onRequestClose={() => setMapChooserVisible(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setMapChooserVisible(false)}
+          style={styles.mapModalBackdrop}
+        >
+          <TouchableOpacity activeOpacity={1} style={styles.mapChooser}>
+            <Text style={styles.mapChooserTitle}>길안내 앱 선택</Text>
+            <Text style={styles.mapChooserCourse} numberOfLines={1}>{courseName}</Text>
+            <TouchableOpacity style={styles.mapOption} onPress={() => openNavigation("kakao")}>
+              <Text style={styles.mapOptionText}>카카오맵</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.mapOption} onPress={() => openNavigation("tmap")}>
+              <Text style={styles.mapOptionText}>티맵</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.mapOption} onPress={() => openNavigation("naver")}>
+              <Text style={styles.mapOptionText}>네이버지도</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.mapCancel} onPress={() => setMapChooserVisible(false)}>
+              <Text style={styles.mapCancelText}>취소</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -1340,4 +1435,52 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: spacing.xs,
   },
+  mapModalBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.48)",
+    padding: 16,
+  },
+  mapChooser: {
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+    gap: 8,
+  },
+  mapChooserTitle: {
+    color: "#111827",
+    fontSize: 18,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  mapChooserCourse: {
+    color: "#6B7280",
+    fontSize: 13,
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  mapOption: {
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: "#F3F4F6",
+  },
+  mapOptionText: {
+    color: "#111827",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  mapCancel: {
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  mapCancelText: {
+    color: "#6B7280",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+
 });

@@ -39,6 +39,8 @@ export type HomeUpcomingRound = {
   fiveHourWeatherDetail?: string
   fiveHourWeatherHours?: HomeWeatherHour[]
   courseId?: string
+  courseLatitude?: number | null
+  courseLongitude?: number | null
   layoutId?: string
   heroImageUrl?: string | null
   routeTimeText?: string
