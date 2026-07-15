@@ -38,6 +38,7 @@ import {
   subscribeProfileTutorialOpen,
 } from "../lib/tutorial";
 import { resetFeatureTutorials } from "../lib/featureTutorial";
+import { SupportCenter } from "../features/support/SupportCenter";
 import {
   TutorialCoachModal,
   type CoachStep,
@@ -1957,83 +1958,7 @@ export default function ProfileScreen({
         {activeTab === "support" && (
           <>
             <Text style={p.sectionLabel}>고객문의</Text>
-            <View style={p.menuCard}>
-              <TouchableOpacity
-                style={p.menuRow}
-                onPress={() =>
-                  Alert.alert(
-                    "1:1 문의",
-                    "문의 접수 기능은 향후 업데이트에서 제공됩니다.",
-                  )
-                }
-              >
-                <Text style={p.menuIcon}>💬</Text>
-                <Text style={p.menuText}>1:1 문의</Text>
-                <Text style={p.menuArrow}>›</Text>
-              </TouchableOpacity>
-              <View style={p.menuDivider} />
-              <TouchableOpacity
-                style={p.menuRow}
-                onPress={() =>
-                  Alert.alert(
-                    "버그 신고",
-                    "버그 신고 기능은 향후 업데이트에서 제공됩니다.",
-                  )
-                }
-              >
-                <Text style={p.menuIcon}>🐞</Text>
-                <Text style={p.menuText}>버그 신고</Text>
-                <Text style={p.menuArrow}>›</Text>
-              </TouchableOpacity>
-              <View style={p.menuDivider} />
-              <TouchableOpacity
-                style={p.menuRow}
-                onPress={() =>
-                  Alert.alert(
-                    "기능 제안",
-                    "기능 제안 접수는 향후 업데이트에서 제공됩니다.",
-                  )
-                }
-              >
-                <Text style={p.menuIcon}>💡</Text>
-                <Text style={p.menuText}>기능 제안</Text>
-                <Text style={p.menuArrow}>›</Text>
-              </TouchableOpacity>
-              <View style={p.menuDivider} />
-              <TouchableOpacity
-                style={p.menuRow}
-                onPress={() =>
-                  Alert.alert("자주 묻는 질문", "FAQ는 준비 중입니다.")
-                }
-              >
-                <Text style={p.menuIcon}>❓</Text>
-                <Text style={p.menuText}>자주 묻는 질문(FAQ)</Text>
-                <Text style={p.menuArrow}>›</Text>
-              </TouchableOpacity>
-              <View style={p.menuDivider} />
-              <TouchableOpacity
-                style={p.menuRow}
-                onPress={() =>
-                  Alert.alert(
-                    "공지사항",
-                    "공지사항은 홈 화면에서 확인할 수 있습니다.",
-                  )
-                }
-              >
-                <Text style={p.menuIcon}>📢</Text>
-                <Text style={p.menuText}>공지사항</Text>
-                <Text style={p.menuArrow}>›</Text>
-              </TouchableOpacity>
-              <View style={p.menuDivider} />
-              <TouchableOpacity
-                style={p.menuRow}
-                onPress={() => setInstallGuideOpen(true)}
-              >
-                <Text style={p.menuIcon}>📖</Text>
-                <Text style={p.menuText}>이용안내</Text>
-                <Text style={p.menuArrow}>›</Text>
-              </TouchableOpacity>
-            </View>
+            <SupportCenter user={user} />
           </>
         )}
 
