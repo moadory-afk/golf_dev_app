@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -30,9 +30,16 @@ import { C } from "../theme";
 import { useSkin, type SkinId } from "../skins";
 import type { RootStackProps } from "../navigation/types";
 import type { UserPreferenceTee } from "../features/caddie/types/caddieData";
-import { requestTutorialOpen } from "../lib/tutorial";
+import { hasCompletedProfileTutorial, markProfileTutorialCompleted, requestHomeTutorialOpen, requestTutorialOpen, subscribeProfileTutorialOpen } from "../lib/tutorial";
+import { TutorialCoachModal, type CoachStep } from "../components/TutorialCoachModal";
 
 const APP_URL = "https://golf-seven-psi.vercel.app";
+
+const PROFILE_TUTORIAL_STEPS: CoachStep[] = [
+  { emoji: "📍", eyebrow: "집 주소 등록", title: "집 주소를 검색해 출발지를 등록하세요", description: "등록한 주소는 골프장까지의 이동시간과 추천 출발시간 계산에 사용됩니다.", hint: "‘검색’ 버튼을 눌러 카카오 주소 검색 결과에서 선택하세요." },
+  { emoji: "🏌️", eyebrow: "클럽별 평균거리", title: "사용하는 클럽의 평균거리를 입력하세요", description: "AI 캐디의 추천 클럽, 홀 공략과 Shot Plan 계산에 반영됩니다.", hint: "보유하지 않은 클럽은 0으로 두고 실제 사용하는 클럽만 입력하세요." },
+  { emoji: "✅", eyebrow: "프로필 설정 완료", title: "상단의 저장 버튼을 눌러 설정을 저장하세요", description: "주소와 클럽 거리를 변경한 뒤에는 프로필 화면 상단의 저장 버튼을 눌러주세요.", hint: "이 안내는 계정 메뉴의 ‘튜토리얼 다시 보기’에서 다시 실행할 수 있습니다." },
+];
 
 const PROFILE_EMOJIS = [
   "🏌️",
@@ -469,6 +476,40 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
   const [defaultTee, setDefaultTee] = useState<UserPreferenceTee>("white");
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [departureBufferInput, setDepartureBufferInput] = useState("40");
+  const profileScrollRef = useRef<ScrollView>(null);
+  const [profileTutorialVisible, setProfileTutorialVisible] = useState(false);
+  const [profileTutorialStep, setProfileTutorialStep] = useState(0);
+
+  useEffect(() => subscribeProfileTutorialOpen(() => {
+    setProfileTutorialStep(0);
+    setProfileTutorialVisible(true);
+    profileScrollRef.current?.scrollTo({ y: 250, animated: true });
+  }), []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let active = true;
+    hasCompletedProfileTutorial(user.id).then((completed) => {
+      if (active && !completed) {
+        setProfileTutorialStep(0);
+        setProfileTutorialVisible(true);
+        setTimeout(() => profileScrollRef.current?.scrollTo({ y: 250, animated: true }), 250);
+      }
+    });
+    return () => { active = false; };
+  }, [user?.id]);
+
+  async function finishProfileTutorial() {
+    if (user?.id) await markProfileTutorialCompleted(user.id);
+    setProfileTutorialVisible(false);
+    setProfileTutorialStep(0);
+  }
+
+  function moveProfileTutorial(next: number) {
+    setProfileTutorialStep(next);
+    const y = next === 0 ? 250 : next === 1 ? 610 : 900;
+    setTimeout(() => profileScrollRef.current?.scrollTo({ y, animated: true }), 50);
+  }
 
   useEffect(() => {
     let alive = true;
@@ -947,6 +988,18 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
 
   return (
     <View style={p.screen}>
+      <TutorialCoachModal
+        visible={profileTutorialVisible}
+        step={PROFILE_TUTORIAL_STEPS[profileTutorialStep]}
+        stepIndex={profileTutorialStep}
+        total={PROFILE_TUTORIAL_STEPS.length}
+        onPrevious={profileTutorialStep > 0 ? () => moveProfileTutorial(profileTutorialStep - 1) : undefined}
+        onNext={() => profileTutorialStep === PROFILE_TUTORIAL_STEPS.length - 1
+          ? finishProfileTutorial()
+          : moveProfileTutorial(profileTutorialStep + 1)}
+        onSkip={finishProfileTutorial}
+        nextLabel={profileTutorialStep === PROFILE_TUTORIAL_STEPS.length - 1 ? "튜토리얼 완료" : "다음"}
+      />
       {pendingPhotoCrop && (
         <ImageCropModal
           uri={pendingPhotoCrop.uri}
@@ -1155,7 +1208,7 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
         onSelect={handleSelectAddressResult}
         onClose={() => setShowAddressSearch(false)}
       />
-      <ScrollView contentContainerStyle={p.content}>
+      <ScrollView ref={profileScrollRef} contentContainerStyle={p.content}>
         <View style={p.profileSection}>
           <TouchableOpacity
             onPress={() => setShowAvatarOptions(true)}

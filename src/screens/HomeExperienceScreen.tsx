@@ -17,6 +17,7 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { GPButton, GPCard } from "../design";
+import { TutorialCoachModal, type CoachStep } from "../components/TutorialCoachModal";
 import { useSkin } from "../skins";
 import { useClub } from "../lib/ClubContext";
 import { useUserProfile } from "../lib/UserProfileContext";
@@ -77,6 +78,7 @@ import {
 import { AWARD_CATEGORIES, fillToCount } from "../lib/awardConfig";
 import { computeClubAwardResults } from "../lib/awardResults";
 import { subscribeHomeRecordsChanged } from "../lib/homeRecordEvents";
+import { hasCompletedHomeTutorial, markHomeTutorialCompleted, requestProfileTutorialOpen, subscribeHomeTutorialOpen } from "../lib/tutorial";
 import type { HomeFeedAction, HomeFeedEvent } from "../features/home/engine";
 
 
@@ -99,6 +101,13 @@ type AwardDetailRow = ClubAwardSnapshot & { roundDate: string; courseName: strin
 const LOTTO_JACKPOT_BASE = 50000;
 const LOTTO_JACKPOT_STEP = 10000;
 const HOME_RECORD_CACHE_VERSION = 1;
+
+const HOME_TUTORIAL_STEPS: CoachStep[] = [
+  { emoji: "⛳", eyebrow: "클럽과 라운드", title: "상단에서 클럽과 예정 라운드를 확인하세요", description: "히어로 카드를 좌우로 넘기면 예정된 라운드를 한 장씩 확인할 수 있습니다.", hint: "골프장, 티오프 시간, 날씨와 이동 정보가 함께 표시됩니다." },
+  { emoji: "☝️", eyebrow: "참석과 주요 기능", title: "라운드 카드에서 필요한 기능을 바로 실행하세요", description: "참석 등록, 캐디북, 조 편성, 로또와 시상 기능을 현재 라운드에 맞게 이용할 수 있습니다.", hint: "관리자는 마지막 카드에서 새 라운드도 등록할 수 있습니다." },
+  { emoji: "🧢", eyebrow: "AI 캐디", title: "진행 단계에 맞는 안내를 확인하세요", description: "AI 캐디가 참석, 조 편성, 캐디북, 로또와 결과 등록 등 지금 필요한 작업을 알려드립니다.", hint: "안내 카드의 버튼을 누르면 해당 기능으로 바로 이동합니다." },
+  { emoji: "🏠", eyebrow: "하단 메뉴", title: "홈 · 클럽 · 기록 메뉴를 이용하세요", description: "클럽 운영은 클럽 메뉴에서, 지난 라운드와 시상 결과는 기록 메뉴에서 확인할 수 있습니다.", hint: "다음으로 프로필에서 주소와 클럽 거리를 등록합니다." },
+];
 
 function caddieBookParams(round: HomeUpcomingRound | null) {
   if (!round) return undefined;
@@ -727,6 +736,8 @@ export default function HomeExperienceScreen() {
     departureBufferMinutes,
   });
   const [selectedHeroKey, setSelectedHeroKey] = useState<string | null>(null);
+  const [homeTutorialVisible, setHomeTutorialVisible] = useState(false);
+  const [homeTutorialStep, setHomeTutorialStep] = useState(0);
   const [activeRoundIndex, setActiveRoundIndex] = useState(0);
   const [roundPopupMode, setRoundPopupMode] = useState<
     "groups" | "lotto" | "award" | null
@@ -758,6 +769,33 @@ export default function HomeExperienceScreen() {
   const [recordDetailLoading, setRecordDetailLoading] = useState(false);
   const focusedClubIdRef = useRef<string | null | undefined>(undefined);
   const recordRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => subscribeHomeTutorialOpen(() => {
+    setHomeTutorialStep(0);
+    setHomeTutorialVisible(true);
+  }), []);
+
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    if (!userId) return () => { active = false; };
+    hasCompletedHomeTutorial(userId).then((completed) => {
+      if (active && !completed) {
+        setHomeTutorialStep(0);
+        setHomeTutorialVisible(true);
+      }
+    });
+    return () => { active = false; };
+  }, [userId]));
+
+  const finishHomeTutorial = useCallback(async (openProfile: boolean) => {
+    if (userId) await markHomeTutorialCompleted(userId);
+    setHomeTutorialVisible(false);
+    setHomeTutorialStep(0);
+    if (openProfile) {
+      nav.navigate("Profile");
+      setTimeout(() => requestProfileTutorialOpen(), 350);
+    }
+  }, [nav, userId]);
 
   const loadRecordCards = useCallback(async (options?: { force?: boolean }) => {
     if (!club?.id) {
@@ -1219,6 +1257,18 @@ export default function HomeExperienceScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: palette.bg }]}>
+      <TutorialCoachModal
+        visible={homeTutorialVisible}
+        step={HOME_TUTORIAL_STEPS[homeTutorialStep]}
+        stepIndex={homeTutorialStep}
+        total={HOME_TUTORIAL_STEPS.length}
+        onPrevious={homeTutorialStep > 0 ? () => setHomeTutorialStep((value) => value - 1) : undefined}
+        onNext={() => homeTutorialStep === HOME_TUTORIAL_STEPS.length - 1
+          ? finishHomeTutorial(true)
+          : setHomeTutorialStep((value) => value + 1)}
+        onSkip={() => finishHomeTutorial(false)}
+        nextLabel={homeTutorialStep === HOME_TUTORIAL_STEPS.length - 1 ? "프로필 설정하기" : "다음"}
+      />
       <StatusBar
         barStyle="light-content"
         translucent
