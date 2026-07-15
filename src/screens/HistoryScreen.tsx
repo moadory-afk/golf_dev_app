@@ -260,14 +260,89 @@ export default function HistoryScreen() {
   )
   const { data: memberData } = useAsync(
     () => (activeClub ? getClubMembers(activeClub.id) : Promise.resolve([])),
-    [activeClub?.id],
+    [activeClub?.id, refreshKey],
   )
+  const [allClubMembers, setAllClubMembers] = useState<HistoryMember[]>([])
+
+  // getClubMembers 결과가 일부 인원만 반환되는 환경에서도 클럽 소속 회원 전체를 확보한다.
+  // club_members를 페이지 단위로 모두 읽은 뒤 profiles와 결합한다.
+  useEffect(() => {
+    let cancelled = false
+
+    const loadAllClubMembers = async () => {
+      if (!activeClub?.id) {
+        if (!cancelled) setAllClubMembers([])
+        return
+      }
+
+      try {
+        const pageSize = 1000
+        const rows: Array<{ user_id: string; role?: string | null }> = []
+
+        for (let from = 0; ; from += pageSize) {
+          const { data: page, error } = await supabase
+            .from('club_members')
+            .select('user_id, role')
+            .eq('club_id', activeClub.id)
+            .range(from, from + pageSize - 1)
+
+          if (error) throw error
+          const current = (page ?? []) as Array<{ user_id: string; role?: string | null }>
+          rows.push(...current)
+          if (current.length < pageSize) break
+        }
+
+        const userIds = Array.from(new Set(rows.map((row) => row.user_id).filter(Boolean)))
+        const profileById = new Map<string, { name?: string | null; nickname?: string | null }>()
+
+        // Supabase의 IN 조건 길이 제한을 피하기 위해 작은 묶음으로 조회한다.
+        for (let index = 0; index < userIds.length; index += 100) {
+          const chunk = userIds.slice(index, index + 100)
+          const { data: profiles, error } = await supabase
+            .from('profiles')
+            .select('id, name, nickname')
+            .in('id', chunk)
+
+          if (error) throw error
+          for (const profile of profiles ?? []) {
+            profileById.set(profile.id, profile)
+          }
+        }
+
+        const loaded = rows.map((row) => {
+          const profile = profileById.get(row.user_id)
+          const displayName = profile?.name?.trim() || profile?.nickname?.trim() || '이름 미등록'
+          return {
+            userId: row.user_id,
+            name: displayName,
+            role: row.role ?? 'member',
+          }
+        })
+
+        if (!cancelled) setAllClubMembers(loaded)
+      } catch (error) {
+        console.warn('[HistoryScreen] 전체 클럽 회원 조회 실패', error)
+        if (!cancelled) setAllClubMembers([])
+      }
+    }
+
+    loadAllClubMembers()
+    return () => { cancelled = true }
+  }, [activeClub?.id, refreshKey])
   const { data: scheduleData } = useAsync(
     () => (activeClub ? getRoundSchedules(activeClub.id) : Promise.resolve([])),
     [refreshKey, activeClub?.id],
   )
   const rounds = data ?? []
-  const members = memberData ?? []
+  const members = (() => {
+    const merged = new Map<string, HistoryMember>()
+    for (const member of [...(memberData ?? []), ...allClubMembers]) {
+      const key = member.userId || member.name.trim().toLocaleLowerCase()
+      if (!key) continue
+      merged.set(key, member)
+    }
+    return Array.from(merged.values())
+  })()
   const schedules = scheduleData ?? []
   const hiddenScheduleIds = new Set(schedules.filter((schedule) => schedule.isPublished === false).map((schedule) => schedule.id))
   const visibleSchedules = schedules.filter((schedule) => schedule.isPublished !== false)
@@ -1986,27 +2061,47 @@ function Club({ rounds, handicapBasis: currentHandicapBasis, members = [] }: { r
     }
   }
 
-  const stats = Array.from(byName.entries())
+  const recordedStats = Array.from(byName.entries())
     .map(([name, entries]) => {
       const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date))
       const totals = sorted.map((e) => e.total)
       const lastN = sorted.slice(-handicapBasis)
       const handicap = Math.ceil(lastN.reduce((sum, e) => sum + (e.total - e.par), 0) / lastN.length)
       return {
-        name, rounds: totals.length,
+        name,
+        rounds: totals.length,
         avg: Math.ceil(totals.reduce((a, b) => a + b, 0) / totals.length),
         worst: Math.max(...totals),
         best: Math.min(...totals),
         handicap,
+        hasRecord: true as const,
       }
     })
     .sort((a, b) => a.avg - b.avg)
 
+  // 클럽 랭킹은 경기 기록 유무와 관계없이 소속 회원 전체를 표시한다.
+  // 기록이 있는 회원은 성적순으로 먼저 배치하고, 기록이 없는 회원은 이름순으로 뒤에 배치한다.
+  const recordedNameKeys = new Set(recordedStats.map((stat) => stat.name.trim().toLocaleLowerCase()))
+  const unrecordedStats = members
+    .filter((member) => member.name?.trim())
+    .filter((member) => !recordedNameKeys.has(member.name.trim().toLocaleLowerCase()))
+    .map((member) => ({
+      name: member.name.trim(),
+      rounds: 0,
+      avg: null,
+      worst: null,
+      best: null,
+      handicap: null,
+      hasRecord: false as const,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ko-KR'))
+
+  const stats = [...recordedStats, ...unrecordedStats]
   const totalAttendance = rounds.reduce((sum, r) => sum + r.players.length, 0)
-  const clubAvg = Math.ceil(
-    stats.reduce((a, st) => a + st.avg * st.rounds, 0) /
-    stats.reduce((a, st) => a + st.rounds, 0)
-  )
+  const recordedRoundCount = recordedStats.reduce((sum, stat) => sum + stat.rounds, 0)
+  const clubAvg = recordedRoundCount > 0
+    ? Math.ceil(recordedStats.reduce((sum, stat) => sum + stat.avg * stat.rounds, 0) / recordedRoundCount)
+    : null
 
   const roundAvgs = [...rounds]
     .sort((a, b) => a.date.localeCompare(b.date))
@@ -2046,7 +2141,7 @@ function Club({ rounds, handicapBasis: currentHandicapBasis, members = [] }: { r
           </View>
           {/* 클럽 평균 */}
           <TouchableOpacity style={{ flex: 1, alignItems: 'center' }} onPress={() => setShowChart('avg')}>
-            <Text style={{ fontSize: 22, fontWeight: '700', color: C.green }}>{clubAvg}</Text>
+            <Text style={{ fontSize: 22, fontWeight: '700', color: C.green }}>{clubAvg ?? '-'}</Text>
             <Text style={[s.muted, { fontSize: 11, textAlign: 'center' }]}>클럽 평균</Text>
           </TouchableOpacity>
           {/* 최저타 */}
@@ -2100,20 +2195,39 @@ function Club({ rounds, handicapBasis: currentHandicapBasis, members = [] }: { r
         </View>
         {stats.map((stat, i) => {
           const medalBg = ['#fffbe8', '#f4f6f8', '#fdf5f0']
-          const isMedal = i < 3
+          const rank = stat.hasRecord ? i + 1 : null
+          const isMedal = rank !== null && rank <= 3
+          const handicapText = stat.handicap === null
+            ? '-'
+            : stat.handicap > 0
+              ? `+${stat.handicap}`
+              : `${stat.handicap}`
           return (
-            <View key={stat.name} style={[s.tableRow, { alignItems: 'center' }, i < 3 && { backgroundColor: medalBg[i], borderRadius: 8, marginBottom: 2 }]}>
-              <View style={{ flex: 0.6, alignItems: 'center' }}>{isMedal ? <EmojiIcon char={['🥇','🥈','🥉'][i]} size={17} /> : <Text style={[s.td, { fontSize: 13 }]}>{i + 1}</Text>}</View>
-              <Text style={[s.td, { flex: 2, fontWeight: i < 3 ? '700' : '400' }]}>{shortName(stat.name)}</Text>
-              <Text style={[s.td, { flex: 1, textAlign: 'center' }]}>{stat.rounds}</Text>
-              <Text style={[s.td, { flex: 1.2, textAlign: 'center', fontWeight: '700', color: i === 0 ? C.gold : C.text }]}>{stat.avg}</Text>
-              <Text style={[s.td, { flex: 1, textAlign: 'center' }]}>{stat.worst}</Text>
-              <Text style={[s.td, { flex: 1, textAlign: 'center' }]}>{stat.best}</Text>
+            <View
+              key={`${stat.name}-${stat.hasRecord ? 'recorded' : 'member'}`}
+              style={[
+                s.tableRow,
+                { alignItems: 'center' },
+                isMedal && { backgroundColor: medalBg[(rank ?? 1) - 1], borderRadius: 8, marginBottom: 2 },
+              ]}
+            >
+              <View style={{ flex: 0.6, alignItems: 'center' }}>
+                {isMedal
+                  ? <EmojiIcon char={['🥇','🥈','🥉'][(rank ?? 1) - 1]} size={17} />
+                  : <Text style={[s.td, { fontSize: 13 }]}>{rank ?? '-'}</Text>}
+              </View>
+              <Text style={[s.td, { flex: 2, fontWeight: isMedal ? '700' : '400' }]}>{shortName(stat.name)}</Text>
+              <Text style={[s.td, { flex: 1, textAlign: 'center' }]}>{stat.rounds || '-'}</Text>
+              <Text style={[s.td, { flex: 1.2, textAlign: 'center', fontWeight: '700', color: rank === 1 ? C.gold : C.text }]}>{stat.avg ?? '-'}</Text>
+              <Text style={[s.td, { flex: 1, textAlign: 'center' }]}>{stat.worst ?? '-'}</Text>
+              <Text style={[s.td, { flex: 1, textAlign: 'center' }]}>{stat.best ?? '-'}</Text>
               <Text style={[s.td, {
-                flex: 1.2, textAlign: 'center', fontWeight: '600',
-                color: stat.handicap > 0 ? C.warn : stat.handicap < 0 ? C.info : C.text,
+                flex: 1.2,
+                textAlign: 'center',
+                fontWeight: '600',
+                color: stat.handicap === null ? C.muted : stat.handicap > 0 ? C.warn : stat.handicap < 0 ? C.info : C.text,
               }]}>
-                {stat.handicap > 0 ? `+${stat.handicap}` : `${stat.handicap}`}
+                {handicapText}
               </Text>
             </View>
           )

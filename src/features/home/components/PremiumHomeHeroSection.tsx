@@ -415,7 +415,8 @@ function HeroBackSide({
   const isCompact = isCompactWidth(width);
   const contentTop = isCompact ? 52 : 62;
   const horizontalPadding = isCompact ? 18 : 24;
-  const menuWidth = isCompact ? 106 : 120;
+  // 오른쪽 메뉴 영역을 조금 줄여 왼쪽 조별 참석자명이 한 줄에 더 잘 보이도록 한다.
+  const menuWidth = isCompact ? 94 : 108;
   const menuButtonHeight = isCompact ? 32 : 35;
   const iconSize = isCompact ? 28 : 32;
   const companionText = formatRoundCompanions(round);

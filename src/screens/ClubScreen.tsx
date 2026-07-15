@@ -1293,24 +1293,26 @@ export default function ClubScreen() {
                 ))}
               </View>
 
-              <View style={[s.card, s.summaryCard]}>
+              <View style={[s.card, s.summaryCard, s.lottoSummaryCard]}>
                 <TouchableOpacity
-                  style={s.cardTitleRow}
+                  style={s.lottoSummaryTouchable}
                   onPress={() => {
                     if (isManagerView) setLottoAwardOpen(true);
                     else setShowLottoAwardGuide(true);
                   }}
                   activeOpacity={0.82}
                 >
-                  <View style={{ flex: 1 }}>
-                    <Text style={[s.cardTitle, { marginBottom: 0 }]}>
+                  <View style={s.lottoSummaryTextArea}>
+                    <Text style={s.lottoSummaryTitle}>
                       Lotto 6/18 당첨금 안내
                     </Text>
                     <Text style={s.lottoGuideSummary}>
                       현재 누적 당첨금 {formatWon(currentLottoCarryoverAmount)}
                     </Text>
                   </View>
-                  <Text style={s.more}>{summaryCardActionLabel}</Text>
+                  <View style={s.lottoSummaryActionArea}>
+                    <Text style={s.more}>{summaryCardActionLabel}</Text>
+                  </View>
                 </TouchableOpacity>
               </View>
 
@@ -3027,11 +3029,59 @@ const s = StyleSheet.create({
     color: C.muted,
   },
   noticeDetailBody: { fontSize: 14, lineHeight: 22, color: C.text },
+  lottoSummaryCard: {
+    justifyContent: "center",
+    paddingVertical: 0,
+  },
+  lottoSummaryTouchable: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  lottoSummaryTextArea: {
+    flex: 1,
+    justifyContent: "center",
+    paddingRight: 14,
+  },
+  lottoSummaryTitle: {
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: "700",
+    color: C.text,
+  },
   lottoGuideSummary: {
-    marginTop: 6,
-    fontSize: 12,
-    fontWeight: "800",
+    marginTop: 7,
+    fontSize: 19,
+    lineHeight: 25,
+    fontWeight: "900",
     color: C.green,
+    letterSpacing: -0.35,
+    fontFamily: Platform.select({
+      ios: "AvenirNext-DemiBold",
+      android: "sans-serif-medium",
+      web: "Pretendard, Arial, sans-serif",
+      default: undefined,
+    }),
+  },
+  lottoSummaryActionArea: {
+    alignSelf: "stretch",
+    justifyContent: "center",
+    alignItems: "flex-end",
+    minWidth: 76,
+  },
+  lottoSummaryAction: {
+    fontSize: 15,
+    lineHeight: 21,
+    color: C.green,
+    fontWeight: "900",
+    letterSpacing: -0.25,
+    fontFamily: Platform.select({
+      ios: "AvenirNext-DemiBold",
+      android: "sans-serif-medium",
+      web: "Pretendard, Arial, sans-serif",
+      default: undefined,
+    }),
   },
   lottoGuideModalList: { marginTop: 12 },
   lottoGuideRow: {

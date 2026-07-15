@@ -1621,7 +1621,7 @@ export default function RoundSchedulePrototypeScreen() {
           <View style={s.modalSheet}>
             <View style={s.modalHeader}>
               <View>
-                <Text style={s.modalTitle}>{draft.id ? '라운드 일정 수정' : '라운드 일정 등록'}</Text>
+                <Text style={s.modalTitle}>라운드 수정</Text>
                 {lastSavedAt ? <Text style={s.headerSavedText}>✓ 마지막 저장 {lastSavedAt}</Text> : null}
               </View>
               <View style={s.modalHeaderActions}>
@@ -1642,6 +1642,14 @@ export default function RoundSchedulePrototypeScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity style={[s.headerActionButton, s.headerSaveButton]} onPress={handleSave} disabled={saving || scoreSaveBusy} activeOpacity={0.8}>
                   <Text style={s.headerSaveText}>{saving ? '저장 중' : '저장'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.headerActionButton, s.headerCloseButton]}
+                  onPress={closeEditor}
+                  disabled={saving || scoreSaveBusy}
+                  activeOpacity={0.8}
+                >
+                  <Text style={s.headerCloseText}>닫기</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2511,10 +2519,12 @@ const s = StyleSheet.create({
   headerPublishButton: { backgroundColor: '#e8f6ee', borderWidth: 1, borderColor: C.green },
   headerPrivateButton: { backgroundColor: '#f2f3f2', borderWidth: 1, borderColor: C.border },
   headerSaveButton: { backgroundColor: C.accent },
+  headerCloseButton: { backgroundColor: '#eef2ee' },
   headerDeleteText: { fontSize: 13, fontWeight: '900', color: '#d65b4a' },
   headerPublishText: { fontSize: 13, fontWeight: '900', color: C.green },
   headerPrivateText: { color: C.muted },
   headerSaveText: { fontSize: 13, fontWeight: '900', color: C.accentText },
+  headerCloseText: { fontSize: 13, fontWeight: '900', color: C.text },
   editorTabRow: {
     flexDirection: 'row',
     gap: 8,

@@ -79,6 +79,19 @@ import { computeClubAwardResults } from "../lib/awardResults";
 import { subscribeHomeRecordsChanged } from "../lib/homeRecordEvents";
 import type { HomeFeedAction, HomeFeedEvent } from "../features/home/engine";
 
+
+const AWARD_DISPLAY_ORDER = new Map(
+  AWARD_CATEGORIES.flatMap((category) => category.items).map((item, index) => [item.id, index]),
+);
+
+function sortAwardItemIdsByDisplayOrder(items: string[]): string[] {
+  return [...items].sort((a, b) => {
+    const aOrder = AWARD_DISPLAY_ORDER.get(a) ?? Number.MAX_SAFE_INTEGER;
+    const bOrder = AWARD_DISPLAY_ORDER.get(b) ?? Number.MAX_SAFE_INTEGER;
+    return aOrder - bOrder;
+  });
+}
+
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type LottoSelection = { par3: number[]; par4: number[]; par5: number[] };
 type PersonalCourseSegment = { label: string; layoutId?: string; start: number; end: number };
@@ -1777,7 +1790,7 @@ function RoundInfoModal({
   const awardItems = useMemo(() => {
     if (!awardConfig) return [];
     const defs = AWARD_CATEGORIES.flatMap((category) => category.items);
-    return fillToCount(awardConfig.items, awardConfig.count)
+    return sortAwardItemIdsByDisplayOrder(fillToCount(awardConfig.items, awardConfig.count))
       .map((id) => defs.find((item) => item.id === id))
       .filter((item): item is NonNullable<typeof item> => !!item);
   }, [awardConfig]);

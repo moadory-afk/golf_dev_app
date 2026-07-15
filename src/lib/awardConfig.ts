@@ -54,3 +54,21 @@ export const AWARD_CATEGORIES: { label: string; items: AwardItemDef[] }[] = [
     ],
   },
 ]
+
+const AWARD_DISPLAY_ORDER = new Map(
+  AWARD_CATEGORIES.flatMap((category) => category.items).map((item, index) => [item.id, index]),
+)
+
+/**
+ * 시상 설정 화면의 카테고리/항목 순서로 선택 항목을 정렬한다.
+ * 저장된 선택 순서와 관계없이 홈 히어로 시상계획 등 모든 조회 화면에서
+ * 성적 기반 → 홀 기록 → 특별상 순서를 동일하게 유지한다.
+ */
+export function sortAwardItemIdsByDisplayOrder(items: string[]): string[] {
+  return [...items].sort((a, b) => {
+    const aOrder = AWARD_DISPLAY_ORDER.get(a) ?? Number.MAX_SAFE_INTEGER
+    const bOrder = AWARD_DISPLAY_ORDER.get(b) ?? Number.MAX_SAFE_INTEGER
+    return aOrder - bOrder
+  })
+}
+
