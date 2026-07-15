@@ -23,8 +23,6 @@ import { EmojiIcon } from '../components/EmojiIcon'
 import { Icon } from '../components/Icon'
 import { TopActionButtons } from '../components/TopActionButtons'
 import { ImageCropModal, type ImageCropRect } from '../components/ImageCropModal'
-import { FeatureFirstUseModal } from '../components/FeatureFirstUseModal'
-import { hasCompletedFeatureTutorial, markFeatureTutorialCompleted } from '../lib/featureTutorial'
 import { getCourseHeroImageSource } from '../data/courseHeroImages'
 import { uploadRoundPhoto } from '../lib/roundPhotos'
 import type { RootStackParamList } from '../navigation/types'
@@ -253,7 +251,6 @@ export default function HistoryScreen() {
   const insets = useSafeAreaInsets()
   const [tab, setTab] = useState<Tab>('byPlayer')
   const [refreshKey, setRefreshKey] = useState(0)
-  const [historyTutorialVisible, setHistoryTutorialVisible] = useState(false)
   const { name: myName, userId: myUserId } = useUserProfile()
   const [handicapBasis, setHandicapBasis] = useState<HandicapBasis>(5)
   const { activeClub, clubsLoaded } = useClub()
@@ -266,20 +263,6 @@ export default function HistoryScreen() {
     [activeClub?.id, refreshKey],
   )
   const [allClubMembers, setAllClubMembers] = useState<HistoryMember[]>([])
-
-  useFocusEffect(useCallback(() => {
-    let active = true
-    if (!myUserId) return () => { active = false }
-    hasCompletedFeatureTutorial('history', myUserId).then((completed) => {
-      if (active && !completed) setHistoryTutorialVisible(true)
-    })
-    return () => { active = false }
-  }, [myUserId]))
-
-  const closeHistoryTutorial = useCallback(async () => {
-    setHistoryTutorialVisible(false)
-    await markFeatureTutorialCompleted('history', myUserId)
-  }, [myUserId])
 
   // getClubMembers 결과가 일부 인원만 반환되는 환경에서도 클럽 소속 회원 전체를 확보한다.
   // club_members를 페이지 단위로 모두 읽은 뒤 profiles와 결합한다.
@@ -375,13 +358,6 @@ export default function HistoryScreen() {
 
   return (
     <>
-      <FeatureFirstUseModal
-        visible={historyTutorialVisible}
-        emoji="📚"
-        title="라운딩 카드를 좌우로 넘겨 기록을 확인하세요"
-        description="카드를 누르면 상세 기록과 시상 결과를 볼 수 있습니다."
-        onClose={closeHistoryTutorial}
-      />
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <View style={[s.topActions, { paddingTop: insets.top + 10 }]}>
         <TopActionButtons />

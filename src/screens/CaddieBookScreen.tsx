@@ -23,8 +23,6 @@ import { useUserProfile } from "../lib/UserProfileContext";
 import { supabase } from "../lib/supabase";
 import type { RootStackParamList } from "../navigation/types";
 import { useCaddieBook, type CaddieBookHole } from "../features/caddie";
-import { FeatureFirstUseModal } from '../components/FeatureFirstUseModal';
-import { hasCompletedFeatureTutorial, markFeatureTutorialCompleted } from '../lib/featureTutorial';
 import type { UserPreferenceTee } from "../features/caddie/types/caddieData";
 import { radius, spacing, typography } from "../design/tokens";
 import {
@@ -984,22 +982,6 @@ export default function CaddieBookScreen() {
     userId,
   });
   const [selectedHoleNo, setSelectedHoleNo] = useState(1);
-  const [caddieTutorialVisible, setCaddieTutorialVisible] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    if (!userId) return () => { active = false; };
-    hasCompletedFeatureTutorial('caddieBook', userId).then((completed) => {
-      if (active && !completed) setCaddieTutorialVisible(true);
-    });
-    return () => { active = false; };
-  }, [userId]);
-
-  const closeCaddieTutorial = useCallback(async () => {
-    setCaddieTutorialVisible(false);
-    await markFeatureTutorialCompleted('caddieBook', userId);
-  }, [userId]);
-
   useEffect(() => {
     let alive = true;
 
@@ -1260,13 +1242,6 @@ export default function CaddieBookScreen() {
 
   return (
     <>
-      <FeatureFirstUseModal
-        visible={caddieTutorialVisible}
-        emoji="🧢"
-        title="홀을 넘기면 공략 정보가 함께 변경됩니다"
-        description="좌우로 홀을 이동하면 해당 홀의 공략 정보와 추천 클럽, 스코어 입력 영역이 함께 바뀝니다."
-        onClose={closeCaddieTutorial}
-      />
     <View
       style={[styles.root, { backgroundColor: palette.bg }]}
       onLayout={(event) => {

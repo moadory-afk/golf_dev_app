@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import type { Session } from '@supabase/supabase-js'
 import { C } from '../theme'
-import { hasCompletedTutorial, markTutorialCompleted, requestHomeTutorialOpen, subscribeTutorialOpen } from '../lib/tutorial'
+import { hasCompletedTutorial, markTutorialCompleted, subscribeTutorialOpen } from '../lib/tutorial'
 
 type TutorialStep = {
   emoji: string
@@ -82,7 +82,6 @@ export function FirstUseTutorial({ session }: { session: Session | null }) {
   async function completeTutorial() {
     if (userId) await markTutorialCompleted(userId)
     setVisible(false)
-    requestHomeTutorialOpen()
     setStepIndex(0)
   }
 
