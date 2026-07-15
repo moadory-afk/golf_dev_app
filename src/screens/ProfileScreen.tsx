@@ -30,16 +30,45 @@ import { C } from "../theme";
 import { useSkin, type SkinId } from "../skins";
 import type { RootStackProps } from "../navigation/types";
 import type { UserPreferenceTee } from "../features/caddie/types/caddieData";
-import { hasCompletedProfileTutorial, markProfileTutorialCompleted, requestHomeTutorialOpen, requestTutorialOpen, subscribeProfileTutorialOpen } from "../lib/tutorial";
+import {
+  hasCompletedProfileTutorial,
+  markProfileTutorialCompleted,
+  requestHomeTutorialOpen,
+  requestTutorialOpen,
+  subscribeProfileTutorialOpen,
+} from "../lib/tutorial";
 import { resetFeatureTutorials } from "../lib/featureTutorial";
-import { TutorialCoachModal, type CoachStep } from "../components/TutorialCoachModal";
+import {
+  TutorialCoachModal,
+  type CoachStep,
+} from "../components/TutorialCoachModal";
 
 const APP_URL = "https://golf-seven-psi.vercel.app";
 
 const PROFILE_TUTORIAL_STEPS: CoachStep[] = [
-  { emoji: "📍", eyebrow: "집 주소 등록", title: "집 주소를 검색해 출발지를 등록하세요", description: "등록한 주소는 골프장까지의 이동시간과 추천 출발시간 계산에 사용됩니다.", hint: "‘검색’ 버튼을 눌러 카카오 주소 검색 결과에서 선택하세요." },
-  { emoji: "🏌️", eyebrow: "클럽별 평균거리", title: "사용하는 클럽의 평균거리를 입력하세요", description: "AI 캐디의 추천 클럽, 홀 공략과 Shot Plan 계산에 반영됩니다.", hint: "보유하지 않은 클럽은 0으로 두고 실제 사용하는 클럽만 입력하세요." },
-  { emoji: "✅", eyebrow: "프로필 설정 완료", title: "상단의 저장 버튼을 눌러 설정을 저장하세요", description: "주소와 클럽 거리를 변경한 뒤에는 프로필 화면 상단의 저장 버튼을 눌러주세요.", hint: "이 안내는 계정 메뉴의 ‘튜토리얼 다시 보기’에서 다시 실행할 수 있습니다." },
+  {
+    emoji: "📍",
+    eyebrow: "집 주소 등록",
+    title: "집 주소를 검색해 출발지를 등록하세요",
+    description:
+      "등록한 주소는 골프장까지의 이동시간과 추천 출발시간 계산에 사용됩니다.",
+    hint: "‘검색’ 버튼을 눌러 카카오 주소 검색 결과에서 선택하세요.",
+  },
+  {
+    emoji: "🏌️",
+    eyebrow: "클럽별 평균거리",
+    title: "사용하는 클럽의 평균거리를 입력하세요",
+    description: "AI 캐디의 추천 클럽, 홀 공략과 Shot Plan 계산에 반영됩니다.",
+    hint: "보유하지 않은 클럽은 0으로 두고 실제 사용하는 클럽만 입력하세요.",
+  },
+  {
+    emoji: "✅",
+    eyebrow: "프로필 설정 완료",
+    title: "상단의 저장 버튼을 눌러 설정을 저장하세요",
+    description:
+      "주소와 클럽 거리를 변경한 뒤에는 프로필 화면 상단의 저장 버튼을 눌러주세요.",
+    hint: "이 안내는 계정 메뉴의 ‘튜토리얼 다시 보기’에서 다시 실행할 수 있습니다.",
+  },
 ];
 
 const PROFILE_EMOJIS = [
@@ -132,6 +161,46 @@ const DEFAULT_DISTANCE_VALUES: Record<ClubDistanceKey, number> = {
   sw_m: 0,
 };
 
+type ClubCategory = "wood" | "hybrid" | "iron" | "wedge";
+
+type CustomClub = {
+  id: string;
+  category: ClubCategory;
+  name: string;
+  distance: string;
+};
+
+const CLUB_CATEGORY_LABELS: Record<ClubCategory, string> = {
+  wood: "드라이버 / 우드",
+  hybrid: "유틸리티",
+  iron: "아이언",
+  wedge: "웨지",
+};
+
+const CLUB_CATEGORY_FIELDS: Record<ClubCategory, ClubDistanceKey[]> = {
+  wood: ["driver_m", "wood3_m", "wood5_m"],
+  hybrid: ["hybrid4_m", "hybrid5_m"],
+  iron: ["iron5_m", "iron6_m", "iron7_m", "iron8_m", "iron9_m"],
+  wedge: ["pw_m", "aw_m", "sw_m"],
+};
+
+type ProfileTab =
+  | "departure"
+  | "club"
+  | "settings"
+  | "support"
+  | "etc"
+  | "account";
+
+const PROFILE_TABS: Array<{ key: ProfileTab; icon: string; label: string }> = [
+  { key: "departure", icon: "📍", label: "출발지" },
+  { key: "club", icon: "⛳", label: "클럽거리" },
+  { key: "settings", icon: "⚙️", label: "환경설정" },
+  { key: "support", icon: "💬", label: "고객문의" },
+  { key: "etc", icon: "📦", label: "기타" },
+  { key: "account", icon: "👤", label: "계정" },
+];
+
 type GeoPoint = { latitude: number; longitude: number };
 
 type KakaoAddressResult = {
@@ -199,9 +268,7 @@ async function searchKakaoAddress(
     const subLabel = [placeName, jibunAddress]
       .filter((value) => value && value !== label)
       .join(" · ");
-    const id = String(
-      doc.id || `${label}-${longitude}-${latitude}-${index}`,
-    );
+    const id = String(doc.id || `${label}-${longitude}-${latitude}-${index}`);
 
     if (!unique.has(id)) {
       unique.set(id, {
@@ -437,7 +504,9 @@ function KakaoAddressSearchModal({
   );
 }
 
-export default function ProfileScreen({ navigation }: RootStackProps<"Profile">) {
+export default function ProfileScreen({
+  navigation,
+}: RootStackProps<"Profile">) {
   const { refreshProfile } = useUserProfile();
   const { activeClub } = useClub();
   const { skinId, skins, setSkinId, palette } = useSkin();
@@ -480,12 +549,28 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
   const profileScrollRef = useRef<ScrollView>(null);
   const [profileTutorialVisible, setProfileTutorialVisible] = useState(false);
   const [profileTutorialStep, setProfileTutorialStep] = useState(0);
+  const [activeTab, setActiveTab] = useState<ProfileTab>("departure");
+  const [openClubCategory, setOpenClubCategory] = useState<ClubCategory | null>(
+    "wood",
+  );
+  const [selectedBuiltInClubs, setSelectedBuiltInClubs] = useState<
+    Set<ClubDistanceKey>
+  >(new Set());
+  const [customClubs, setCustomClubs] = useState<CustomClub[]>([]);
+  const [showAddClubModal, setShowAddClubModal] = useState(false);
+  const [addClubCategory, setAddClubCategory] = useState<ClubCategory>("wood");
+  const [addClubName, setAddClubName] = useState("");
+  const [addClubDistance, setAddClubDistance] = useState("");
 
-  useEffect(() => subscribeProfileTutorialOpen(() => {
-    setProfileTutorialStep(0);
-    setProfileTutorialVisible(true);
-    profileScrollRef.current?.scrollTo({ y: 250, animated: true });
-  }), []);
+  useEffect(
+    () =>
+      subscribeProfileTutorialOpen(() => {
+        setProfileTutorialStep(0);
+        setProfileTutorialVisible(true);
+        profileScrollRef.current?.scrollTo({ y: 250, animated: true });
+      }),
+    [],
+  );
 
   useEffect(() => {
     if (!user?.id) return;
@@ -494,10 +579,15 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
       if (active && !completed) {
         setProfileTutorialStep(0);
         setProfileTutorialVisible(true);
-        setTimeout(() => profileScrollRef.current?.scrollTo({ y: 250, animated: true }), 250);
+        setTimeout(
+          () => profileScrollRef.current?.scrollTo({ y: 250, animated: true }),
+          250,
+        );
       }
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [user?.id]);
 
   async function finishProfileTutorial() {
@@ -509,7 +599,10 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
   function moveProfileTutorial(next: number) {
     setProfileTutorialStep(next);
     const y = next === 0 ? 250 : next === 1 ? 610 : 900;
-    setTimeout(() => profileScrollRef.current?.scrollTo({ y, animated: true }), 50);
+    setTimeout(
+      () => profileScrollRef.current?.scrollTo({ y, animated: true }),
+      50,
+    );
   }
 
   useEffect(() => {
@@ -526,7 +619,9 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
       if (authUser) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("name, nickname, home_address, home_latitude, home_longitude, departure_buffer_minutes")
+          .select(
+            "name, nickname, home_address, home_latitude, home_longitude, departure_buffer_minutes",
+          )
           .eq("id", authUser.id)
           .maybeSingle();
         fallbackName = profile?.nickname ?? profile?.name ?? "";
@@ -561,6 +656,31 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
               typeof value === "number" ? String(value) : "";
           });
           setDistanceForm(nextForm);
+          setSelectedBuiltInClubs(
+            new Set(
+              CLUB_DISTANCE_FIELDS.filter(
+                (field) => Number(nextForm[field.key]) > 0,
+              ).map((field) => field.key),
+            ),
+          );
+        }
+
+        const storedCustomClubs = authUser.user_metadata?.customClubDistances;
+        if (alive && Array.isArray(storedCustomClubs)) {
+          setCustomClubs(
+            storedCustomClubs
+              .filter((club: any) => club && typeof club.name === "string")
+              .map((club: any, index: number) => ({
+                id: String(club.id || `custom-${index}`),
+                category: (["wood", "hybrid", "iron", "wedge"].includes(
+                  club.category,
+                )
+                  ? club.category
+                  : "wood") as ClubCategory,
+                name: String(club.name),
+                distance: String(club.distance ?? "").replace(/[^0-9]/g, ""),
+              })),
+          );
         }
 
         const { data: preferences } = await supabase
@@ -755,7 +875,7 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
     setSavingHome(true);
     try {
       const point = address
-        ? selectedHomePoint ?? (await geocodeAddress(address))
+        ? (selectedHomePoint ?? (await geocodeAddress(address)))
         : null;
       const payload = {
         home_address: address,
@@ -783,13 +903,15 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
       }
       await refreshProfile();
       setDepartureBufferInput(String(departureBufferMinutes));
-      if (!options?.silent && point) Alert.alert("저장 완료", "출발지 정보가 저장되었습니다.");
+      if (!options?.silent && point)
+        Alert.alert("저장 완료", "출발지 정보가 저장되었습니다.");
       else if (!options?.silent && address)
         Alert.alert(
           "주소 저장 완료",
           "주소는 저장했지만 좌표를 찾지 못했습니다. 카카오 REST API 키 또는 더 자세한 주소를 확인해주세요.",
         );
-      else if (!options?.silent) Alert.alert("저장 완료", "프로필 설정이 저장되었습니다.");
+      else if (!options?.silent)
+        Alert.alert("저장 완료", "프로필 설정이 저장되었습니다.");
       return true;
     } catch (e: unknown) {
       Alert.alert(
@@ -809,6 +931,74 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
     }));
   }
 
+  function toggleBuiltInClub(key: ClubDistanceKey) {
+    setSelectedBuiltInClubs((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+        setDistanceForm((form) => ({ ...form, [key]: "" }));
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
+  function openAddClub(category: ClubCategory) {
+    setAddClubCategory(category);
+    setAddClubName("");
+    setAddClubDistance("");
+    setShowAddClubModal(true);
+  }
+
+  function handleAddCustomClub() {
+    const name = addClubName.trim();
+    if (!name) {
+      Alert.alert("클럽 이름 확인", "추가할 클럽 이름을 입력해주세요.");
+      return;
+    }
+    const duplicate = [
+      ...CLUB_DISTANCE_FIELDS.map((field) => field.label.toLowerCase()),
+      ...customClubs.map((club) => club.name.toLowerCase()),
+    ].includes(name.toLowerCase());
+    if (duplicate) {
+      Alert.alert("중복된 클럽", "이미 등록된 클럽 이름입니다.");
+      return;
+    }
+    setCustomClubs((prev) => [
+      ...prev,
+      {
+        id: `custom-${Date.now()}`,
+        category: addClubCategory,
+        name,
+        distance: addClubDistance.replace(/[^0-9]/g, ""),
+      },
+    ]);
+    setShowAddClubModal(false);
+  }
+
+  function updateCustomClubDistance(id: string, value: string) {
+    setCustomClubs((prev) =>
+      prev.map((club) =>
+        club.id === id
+          ? { ...club, distance: value.replace(/[^0-9]/g, "") }
+          : club,
+      ),
+    );
+  }
+
+  function removeCustomClub(id: string) {
+    Alert.alert("클럽 삭제", "추가한 클럽을 삭제하시겠습니까?", [
+      { text: "취소", style: "cancel" },
+      {
+        text: "삭제",
+        style: "destructive",
+        onPress: () =>
+          setCustomClubs((prev) => prev.filter((club) => club.id !== id)),
+      },
+    ]);
+  }
+
   function handleChangeDepartureBuffer(value: string) {
     setDepartureBufferInput(value.replace(/[^0-9]/g, ""));
   }
@@ -821,10 +1011,12 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
       updated_at: new Date().toISOString(),
     };
     for (const field of CLUB_DISTANCE_FIELDS) {
-      payload[field.key] = normalizeDistanceValue(
-        distanceForm[field.key],
-        DEFAULT_DISTANCE_VALUES[field.key],
-      );
+      payload[field.key] = selectedBuiltInClubs.has(field.key)
+        ? normalizeDistanceValue(
+            distanceForm[field.key],
+            DEFAULT_DISTANCE_VALUES[field.key],
+          )
+        : 0;
     }
 
     setSavingDistances(true);
@@ -834,12 +1026,24 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
         .upsert(payload, { onConflict: "user_id" });
       if (error) throw error;
 
+      const { error: metadataError } = await supabase.auth.updateUser({
+        data: {
+          ...user.user_metadata,
+          customClubDistances: customClubs.map((club) => ({
+            ...club,
+            distance: normalizeDistanceValue(club.distance, 0),
+          })),
+        },
+      });
+      if (metadataError) throw metadataError;
+
       const nextForm = { ...DEFAULT_DISTANCE_FORM };
       CLUB_DISTANCE_FIELDS.forEach((field) => {
         nextForm[field.key] = String(payload[field.key]);
       });
       setDistanceForm(nextForm);
-      if (!options?.silent) Alert.alert("저장 완료", "클럽별 거리 정보가 저장되었습니다.");
+      if (!options?.silent)
+        Alert.alert("저장 완료", "클럽별 거리 정보가 저장되었습니다.");
       return true;
     } catch (e: unknown) {
       Alert.alert(
@@ -866,7 +1070,8 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
         { onConflict: "user_id" },
       );
       if (error) throw error;
-      if (!options?.silent) Alert.alert("저장 완료", "티샷 위치가 저장되었습니다.");
+      if (!options?.silent)
+        Alert.alert("저장 완료", "티샷 위치가 저장되었습니다.");
       return true;
     } catch (e: unknown) {
       Alert.alert(
@@ -885,11 +1090,13 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
     const savedPreferences = await handleSavePreferences({ silent: true });
     if (!savedPreferences) return;
     const savedDistances = await handleSaveDistances({ silent: true });
-    if (savedDistances) Alert.alert("저장 완료", "프로필 설정이 저장되었습니다.");
+    if (savedDistances)
+      Alert.alert("저장 완료", "프로필 설정이 저장되었습니다.");
   }
 
   useEffect(() => {
-    const savingProfileSettings = savingHome || savingDistances || savingPreferences;
+    const savingProfileSettings =
+      savingHome || savingDistances || savingPreferences;
     navigation.setOptions({
       headerRight: () => (
         <View style={p.headerActions}>
@@ -907,7 +1114,10 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
               <Text style={p.headerSaveText}>저장</Text>
             )}
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={p.headerCloseButton}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={p.headerCloseButton}
+          >
             <Text style={p.headerCloseText}>닫기</Text>
           </TouchableOpacity>
         </View>
@@ -994,13 +1204,69 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
         step={PROFILE_TUTORIAL_STEPS[profileTutorialStep]}
         stepIndex={profileTutorialStep}
         total={PROFILE_TUTORIAL_STEPS.length}
-        onPrevious={profileTutorialStep > 0 ? () => moveProfileTutorial(profileTutorialStep - 1) : undefined}
-        onNext={() => profileTutorialStep === PROFILE_TUTORIAL_STEPS.length - 1
-          ? finishProfileTutorial()
-          : moveProfileTutorial(profileTutorialStep + 1)}
+        onPrevious={
+          profileTutorialStep > 0
+            ? () => moveProfileTutorial(profileTutorialStep - 1)
+            : undefined
+        }
+        onNext={() =>
+          profileTutorialStep === PROFILE_TUTORIAL_STEPS.length - 1
+            ? finishProfileTutorial()
+            : moveProfileTutorial(profileTutorialStep + 1)
+        }
         onSkip={finishProfileTutorial}
-        nextLabel={profileTutorialStep === PROFILE_TUTORIAL_STEPS.length - 1 ? "튜토리얼 완료" : "다음"}
+        nextLabel={
+          profileTutorialStep === PROFILE_TUTORIAL_STEPS.length - 1
+            ? "튜토리얼 완료"
+            : "다음"
+        }
       />
+      <Modal
+        visible={showAddClubModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAddClubModal(false)}
+      >
+        <View style={p.overlay}>
+          <View style={p.modalCard}>
+            <View style={p.modalHeader}>
+              <Text style={p.modalTitle}>클럽 추가</Text>
+              <TouchableOpacity onPress={() => setShowAddClubModal(false)}>
+                <Text style={p.modalClose}>닫기</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={p.addClubCategoryLabel}>
+              {CLUB_CATEGORY_LABELS[addClubCategory]}
+            </Text>
+            <TextInput
+              style={p.modalInput}
+              value={addClubName}
+              onChangeText={setAddClubName}
+              placeholder="클럽 이름 (예: 7W, 6H, 치퍼)"
+              placeholderTextColor={C.muted}
+              maxLength={12}
+            />
+            <View style={p.addClubDistanceModalRow}>
+              <TextInput
+                style={[p.modalInput, p.addClubDistanceModalInput]}
+                value={addClubDistance}
+                onChangeText={(value) =>
+                  setAddClubDistance(value.replace(/[^0-9]/g, ""))
+                }
+                placeholder="평균 거리"
+                placeholderTextColor={C.muted}
+                keyboardType="number-pad"
+                maxLength={3}
+              />
+              <Text style={p.addClubDistanceModalUnit}>m</Text>
+            </View>
+            <TouchableOpacity style={p.modalBtn} onPress={handleAddCustomClub}>
+              <Text style={p.modalBtnText}>추가</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {pendingPhotoCrop && (
         <ImageCropModal
           uri={pendingPhotoCrop.uri}
@@ -1190,10 +1456,16 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
                 placeholderTextColor={C.muted}
                 keyboardType="phone-pad"
               />
-              <TouchableOpacity style={p.modalBtn} onPress={handleSendSignupGuideSms}>
+              <TouchableOpacity
+                style={p.modalBtn}
+                onPress={handleSendSignupGuideSms}
+              >
                 <Text style={p.modalBtnText}>SMS로 보내기</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={p.shareBtn} onPress={handleShareSignupGuide}>
+              <TouchableOpacity
+                style={p.shareBtn}
+                onPress={handleShareSignupGuide}
+              >
                 <Text style={p.shareBtnText}>카톡/공유로 보내기</Text>
               </TouchableOpacity>
             </TouchableOpacity>
@@ -1201,7 +1473,10 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
         </Modal>
       )}
 
-      <PwaInstallGuide visible={installGuideOpen} onClose={() => setInstallGuideOpen(false)} />
+      <PwaInstallGuide
+        visible={installGuideOpen}
+        onClose={() => setInstallGuideOpen(false)}
+      />
 
       <KakaoAddressSearchModal
         visible={showAddressSearch}
@@ -1276,115 +1551,313 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
           </View>
         </View>
 
-        <Text style={p.sectionLabel}>출발지 설정</Text>
-        <View style={p.settingsCard}>
-          <View style={p.settingHeaderRow}>
-            <View>
-              <Text style={p.settingTitle}>🏠 집 주소</Text>
-              <Text style={p.settingHint}>
-                카카오 주소 검색으로 선택한 주소가 골프장 이동시간 계산에 사용됩니다.
-              </Text>
-            </View>
-          </View>
-          <TouchableOpacity
-            activeOpacity={0.86}
-            onPress={() => setShowAddressSearch(true)}
-            style={p.addressPickerButton}
-          >
-            <Text
-              style={[p.addressPickerText, !homeAddress && { color: C.muted }]}
-              numberOfLines={2}
-            >
-              {homeAddress || "카카오 주소 검색으로 집 주소를 선택하세요"}
-            </Text>
-            <Text style={p.addressPickerAction}>검색</Text>
-          </TouchableOpacity>
-          <View style={p.bufferRow}>
-            <View style={p.bufferTextArea}>
-              <Text style={p.bufferTitle}>🚗 준비시간</Text>
-              <Text style={p.settingHint}>
-                출발 추천에 사용할 여유 시간입니다.
-              </Text>
-            </View>
-            <View style={p.bufferInputWrap}>
-              <TextInput
-                style={p.bufferInput}
-                value={departureBufferInput}
-                onChangeText={handleChangeDepartureBuffer}
-                placeholder="40"
-                placeholderTextColor={C.muted}
-                keyboardType="number-pad"
-                maxLength={3}
-              />
-              <Text style={p.bufferUnit}>분</Text>
-            </View>
-          </View>
-        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={p.tabBar}
+          style={p.tabBarScroll}
+        >
+          {PROFILE_TABS.map((tab) => {
+            const active = activeTab === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                activeOpacity={0.82}
+                onPress={() => setActiveTab(tab.key)}
+                style={[p.tabButton, active && p.tabButtonActive]}
+              >
+                <Text style={p.tabIcon}>{tab.icon}</Text>
+                <Text style={[p.tabLabel, active && p.tabLabelActive]}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
 
-        <Text style={p.sectionLabel}>티샷 위치 설정</Text>
-        <View style={p.settingsCard}>
-          <Text style={p.settingHint}>
-            캐디북의 홀 거리와 Shot Plan 계산에 사용할 티박스 기준입니다.
-          </Text>
-          <View style={p.teeRadioRow}>
-            {([
-              { value: "white", label: "화이트", badge: "W", color: "#8B9691" },
-              { value: "red", label: "레드", badge: "R", color: "#DE544B" },
-              { value: "blue", label: "블루", badge: "B", color: "#2F73D9" },
-            ] as const).map((item) => {
-              const active = defaultTee === item.value;
-              return (
-                <TouchableOpacity
-                  key={item.value}
-                  activeOpacity={0.82}
-                  onPress={() => setDefaultTee(item.value)}
-                  style={[
-                    p.teeRadioButton,
-                    active && { borderColor: item.color, backgroundColor: `${item.color}18` },
-                  ]}
-                >
-                  <View style={[p.teeRadioDot, { borderColor: item.color }]}>
-                    {active ? <View style={[p.teeRadioDotInner, { backgroundColor: item.color }]} /> : null}
-                  </View>
-                  <View style={[p.teeRadioBadge, { backgroundColor: item.color }]}>
-                    <Text style={p.teeRadioBadgeText}>{item.badge}</Text>
-                  </View>
-                  <Text style={[p.teeRadioText, active && { color: item.color }]}>
-                    {item.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        <Text style={p.sectionLabel}>클럽별 평균거리</Text>
-        <View style={p.settingsCard}>
-          <Text style={p.settingHint}>
-            AI 캐디의 클럽 추천과 Shot Plan 계산에 사용됩니다. 단위는 m입니다.
-          </Text>
-          <View style={p.distanceGrid}>
-            {CLUB_DISTANCE_FIELDS.map((field) => (
-              <View key={field.key} style={p.distanceItem}>
-                <Text style={p.distanceLabel}>{field.label}</Text>
-                <TextInput
-                  style={p.distanceInput}
-                  value={distanceForm[field.key]}
-                  onChangeText={(value) =>
-                    handleChangeDistance(field.key, value)
-                  }
-                  placeholder="0"
-                  placeholderTextColor={C.muted}
-                  keyboardType="number-pad"
-                />
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {isAdmin && (
+        {activeTab === "departure" && (
           <>
-            <Text style={p.sectionLabel}>디자인 스킨</Text>
+            <Text style={p.sectionLabel}>출발지 설정</Text>
+            <View style={p.settingsCard}>
+              <View style={p.settingHeaderRow}>
+                <View>
+                  <Text style={p.settingTitle}>🏠 집</Text>
+                  <Text style={p.settingHint}>
+                    골프장 이동시간과 추천 출발시간 계산에 사용됩니다.
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                activeOpacity={0.86}
+                onPress={() => setShowAddressSearch(true)}
+                style={p.addressPickerButton}
+              >
+                <Text
+                  style={[
+                    p.addressPickerText,
+                    !homeAddress && { color: C.muted },
+                  ]}
+                  numberOfLines={2}
+                >
+                  {homeAddress || "카카오 주소 검색으로 집 주소를 선택하세요"}
+                </Text>
+                <Text style={p.addressPickerAction}>검색</Text>
+              </TouchableOpacity>
+              <View style={p.menuDividerFull} />
+              <TouchableOpacity
+                style={p.menuRowCompact}
+                onPress={() =>
+                  Alert.alert(
+                    "회사 출발지",
+                    "회사 출발지 설정은 향후 업데이트에서 제공됩니다.",
+                  )
+                }
+              >
+                <Text style={p.menuIcon}>🏢</Text>
+                <View style={p.menuTextArea}>
+                  <Text style={p.menuText}>회사</Text>
+                  <Text style={p.menuSubText}>향후 추가 예정</Text>
+                </View>
+                <Text style={p.menuArrow}>›</Text>
+              </TouchableOpacity>
+              <View style={p.bufferRow}>
+                <View style={p.bufferTextArea}>
+                  <Text style={p.bufferTitle}>🚗 출발 여유시간</Text>
+                  <Text style={p.settingHint}>
+                    추천 출발시간에 더할 준비시간입니다.
+                  </Text>
+                </View>
+                <View style={p.bufferInputWrap}>
+                  <TextInput
+                    style={p.bufferInput}
+                    value={departureBufferInput}
+                    onChangeText={handleChangeDepartureBuffer}
+                    placeholder="40"
+                    placeholderTextColor={C.muted}
+                    keyboardType="number-pad"
+                    maxLength={3}
+                  />
+                  <Text style={p.bufferUnit}>분</Text>
+                </View>
+              </View>
+            </View>
+          </>
+        )}
+
+        {activeTab === "club" && (
+          <>
+            <Text style={p.sectionLabel}>티샷 위치 및 클럽 거리</Text>
+            <View style={p.settingsCard}>
+              <Text style={p.settingTitle}>⛳ 티샷 위치</Text>
+              <Text style={p.settingHint}>
+                캐디북의 홀 거리와 Shot Plan 계산 기준입니다.
+              </Text>
+              <View style={p.teeRadioRow}>
+                {(
+                  [
+                    {
+                      value: "white",
+                      label: "화이트",
+                      badge: "W",
+                      color: "#8B9691",
+                    },
+                    {
+                      value: "red",
+                      label: "레드",
+                      badge: "R",
+                      color: "#DE544B",
+                    },
+                    {
+                      value: "blue",
+                      label: "블루",
+                      badge: "B",
+                      color: "#2F73D9",
+                    },
+                  ] as const
+                ).map((item) => {
+                  const active = defaultTee === item.value;
+                  return (
+                    <TouchableOpacity
+                      key={item.value}
+                      activeOpacity={0.82}
+                      onPress={() => setDefaultTee(item.value)}
+                      style={[
+                        p.teeRadioButton,
+                        active && {
+                          borderColor: item.color,
+                          backgroundColor: `${item.color}18`,
+                        },
+                      ]}
+                    >
+                      <View
+                        style={[p.teeRadioDot, { borderColor: item.color }]}
+                      >
+                        {active ? (
+                          <View
+                            style={[
+                              p.teeRadioDotInner,
+                              { backgroundColor: item.color },
+                            ]}
+                          />
+                        ) : null}
+                      </View>
+                      <View
+                        style={[
+                          p.teeRadioBadge,
+                          { backgroundColor: item.color },
+                        ]}
+                      >
+                        <Text style={p.teeRadioBadgeText}>{item.badge}</Text>
+                      </View>
+                      <Text
+                        style={[
+                          p.teeRadioText,
+                          active && { color: item.color },
+                        ]}
+                      >
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+            <Text style={p.sectionLabel}>보유 클럽 · 클럽별 평균 거리</Text>
+            <Text style={p.clubSectionHint}>
+              클럽 종류를 펼쳐 보유 클럽을 선택하고 평균거리를 입력하세요.
+            </Text>
+            {(["wood", "hybrid", "iron", "wedge"] as ClubCategory[]).map(
+              (category) => {
+                const isOpen = openClubCategory === category;
+                const builtInKeys = CLUB_CATEGORY_FIELDS[category];
+                const selectedCount =
+                  builtInKeys.filter((key) => selectedBuiltInClubs.has(key))
+                    .length +
+                  customClubs.filter((club) => club.category === category)
+                    .length;
+                return (
+                  <View key={category} style={p.accordionCard}>
+                    <TouchableOpacity
+                      style={p.accordionHeader}
+                      activeOpacity={0.82}
+                      onPress={() =>
+                        setOpenClubCategory(isOpen ? null : category)
+                      }
+                    >
+                      <Text style={p.accordionTitle}>
+                        {CLUB_CATEGORY_LABELS[category]}
+                      </Text>
+                      <Text style={p.accordionCount}>{selectedCount}개</Text>
+                      <Text style={p.accordionArrow}>{isOpen ? "⌃" : "⌄"}</Text>
+                    </TouchableOpacity>
+                    {isOpen && (
+                      <View style={p.accordionBody}>
+                        {builtInKeys.map((key) => {
+                          const field = CLUB_DISTANCE_FIELDS.find(
+                            (item) => item.key === key,
+                          )!;
+                          const selected = selectedBuiltInClubs.has(key);
+                          return (
+                            <View key={key} style={p.clubDistanceRow}>
+                              <TouchableOpacity
+                                style={[
+                                  p.clubCheck,
+                                  selected && p.clubCheckActive,
+                                ]}
+                                onPress={() => toggleBuiltInClub(key)}
+                              >
+                                <Text style={p.clubCheckText}>
+                                  {selected ? "✓" : ""}
+                                </Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={p.clubNameArea}
+                                onPress={() => toggleBuiltInClub(key)}
+                              >
+                                <Text
+                                  style={[
+                                    p.clubName,
+                                    !selected && p.clubNameInactive,
+                                  ]}
+                                >
+                                  {field.label}
+                                </Text>
+                              </TouchableOpacity>
+                              {selected ? (
+                                <View style={p.clubDistanceInputWrap}>
+                                  <TextInput
+                                    style={p.clubDistanceInput}
+                                    value={distanceForm[key]}
+                                    onChangeText={(value) =>
+                                      handleChangeDistance(key, value)
+                                    }
+                                    placeholder="0"
+                                    placeholderTextColor={C.muted}
+                                    keyboardType="number-pad"
+                                    maxLength={3}
+                                  />
+                                  <Text style={p.clubDistanceUnit}>m</Text>
+                                </View>
+                              ) : (
+                                <Text style={p.clubSelectGuide}>선택</Text>
+                              )}
+                            </View>
+                          );
+                        })}
+                        {customClubs
+                          .filter((club) => club.category === category)
+                          .map((club) => (
+                            <View key={club.id} style={p.clubDistanceRow}>
+                              <View style={[p.clubCheck, p.clubCheckActive]}>
+                                <Text style={p.clubCheckText}>✓</Text>
+                              </View>
+                              <Text
+                                style={[p.clubNameArea, p.clubName]}
+                                numberOfLines={1}
+                              >
+                                {club.name}
+                              </Text>
+                              <View style={p.clubDistanceInputWrap}>
+                                <TextInput
+                                  style={p.clubDistanceInput}
+                                  value={club.distance}
+                                  onChangeText={(value) =>
+                                    updateCustomClubDistance(club.id, value)
+                                  }
+                                  placeholder="0"
+                                  placeholderTextColor={C.muted}
+                                  keyboardType="number-pad"
+                                  maxLength={3}
+                                />
+                                <Text style={p.clubDistanceUnit}>m</Text>
+                              </View>
+                              <TouchableOpacity
+                                style={p.clubDeleteButton}
+                                onPress={() => removeCustomClub(club.id)}
+                              >
+                                <Text style={p.clubDeleteText}>×</Text>
+                              </TouchableOpacity>
+                            </View>
+                          ))}
+                        <TouchableOpacity
+                          style={p.addClubButton}
+                          onPress={() => openAddClub(category)}
+                        >
+                          <Text style={p.addClubButtonText}>＋ 클럽 추가</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                );
+              },
+            )}
+          </>
+        )}
+
+        {activeTab === "settings" && (
+          <>
+            <Text style={p.sectionLabel}>환경설정</Text>
+            <Text style={p.subsectionTitle}>디자인 스킨</Text>
             <View style={p.skinGrid}>
               {skins.map((item) => {
                 const active = item.id === skinId;
@@ -1417,7 +1890,10 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
                         ]}
                       />
                       <View
-                        style={[p.skinSwatch, { backgroundColor: item.palette.bg }]}
+                        style={[
+                          p.skinSwatch,
+                          { backgroundColor: item.palette.bg },
+                        ]}
                       />
                     </View>
                     <Text style={[p.skinName, { color: palette.text }]}>
@@ -1430,7 +1906,9 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
                       {item.description}
                     </Text>
                     {active && (
-                      <Text style={[p.skinActiveText, { color: palette.green }]}>
+                      <Text
+                        style={[p.skinActiveText, { color: palette.green }]}
+                      >
                         적용중
                       </Text>
                     )}
@@ -1438,46 +1916,206 @@ export default function ProfileScreen({ navigation }: RootStackProps<"Profile">)
                 );
               })}
             </View>
+            <View style={[p.menuCard, p.menuCardSpaced]}>
+              <TouchableOpacity
+                style={p.menuRow}
+                onPress={() =>
+                  Alert.alert("다크모드", "향후 업데이트에서 제공됩니다.")
+                }
+              >
+                <Text style={p.menuIcon}>🌙</Text>
+                <View style={p.menuTextArea}>
+                  <Text style={p.menuText}>다크모드</Text>
+                  <Text style={p.menuSubText}>향후</Text>
+                </View>
+                <Text style={p.menuArrow}>›</Text>
+              </TouchableOpacity>
+              <View style={p.menuDivider} />
+              <View style={p.menuRow}>
+                <Text style={p.menuIcon}>ℹ️</Text>
+                <Text style={p.menuText}>버전 정보</Text>
+                <Text style={p.menuValue}>v1.0</Text>
+              </View>
+              <View style={p.menuDivider} />
+              <TouchableOpacity
+                style={p.menuRow}
+                onPress={() =>
+                  Alert.alert(
+                    "업데이트 확인",
+                    "현재 최신 버전을 사용하고 있습니다.",
+                  )
+                }
+              >
+                <Text style={p.menuIcon}>🔄</Text>
+                <Text style={p.menuText}>업데이트 확인</Text>
+                <Text style={p.menuArrow}>›</Text>
+              </TouchableOpacity>
+            </View>
           </>
         )}
 
-        <Text style={p.sectionLabel}>계정</Text>
-        <View style={p.menuCard}>
-          <TouchableOpacity
-            style={p.menuRow}
-            onPress={() => setShowPwModal(true)}
-          >
-            <Text style={p.menuIcon}>🔑</Text>
-            <Text style={p.menuText}>비밀번호 변경</Text>
-            <Text style={p.menuArrow}>›</Text>
-          </TouchableOpacity>
-          <View style={p.menuDivider} />
-          <TouchableOpacity style={p.menuRow} onPress={() => setInstallGuideOpen(true)}>
-            <Text style={p.menuIcon}>📱</Text>
-            <Text style={p.menuText}>홈 화면에 앱 설치</Text>
-            <Text style={p.menuArrow}>›</Text>
-          </TouchableOpacity>
-          <View style={p.menuDivider} />
-          <TouchableOpacity style={p.menuRow} onPress={() => setSignupGuideOpen(true)}>
-            <Text style={p.menuIcon}>📝</Text>
-            <Text style={p.menuText}>어플 회원가입 안내</Text>
-            <Text style={p.menuArrow}>›</Text>
-          </TouchableOpacity>
-          <View style={p.menuDivider} />
-          <TouchableOpacity style={p.menuRow} onPress={async () => { await resetFeatureTutorials(user?.id); requestTutorialOpen(); }}>
-            <Text style={p.menuIcon}>💡</Text>
-            <Text style={p.menuText}>튜토리얼 다시 보기</Text>
-            <Text style={p.menuArrow}>›</Text>
-          </TouchableOpacity>
-          <View style={p.menuDivider} />
-          <TouchableOpacity style={p.menuRow} onPress={handleLogout}>
-            <View style={[p.menuIcon, p.centerIcon]}>
-              <EmojiIcon char="🚪" size={17} color={C.danger} />
+        {activeTab === "support" && (
+          <>
+            <Text style={p.sectionLabel}>고객문의</Text>
+            <View style={p.menuCard}>
+              <TouchableOpacity
+                style={p.menuRow}
+                onPress={() =>
+                  Alert.alert(
+                    "1:1 문의",
+                    "문의 접수 기능은 향후 업데이트에서 제공됩니다.",
+                  )
+                }
+              >
+                <Text style={p.menuIcon}>💬</Text>
+                <Text style={p.menuText}>1:1 문의</Text>
+                <Text style={p.menuArrow}>›</Text>
+              </TouchableOpacity>
+              <View style={p.menuDivider} />
+              <TouchableOpacity
+                style={p.menuRow}
+                onPress={() =>
+                  Alert.alert(
+                    "버그 신고",
+                    "버그 신고 기능은 향후 업데이트에서 제공됩니다.",
+                  )
+                }
+              >
+                <Text style={p.menuIcon}>🐞</Text>
+                <Text style={p.menuText}>버그 신고</Text>
+                <Text style={p.menuArrow}>›</Text>
+              </TouchableOpacity>
+              <View style={p.menuDivider} />
+              <TouchableOpacity
+                style={p.menuRow}
+                onPress={() =>
+                  Alert.alert(
+                    "기능 제안",
+                    "기능 제안 접수는 향후 업데이트에서 제공됩니다.",
+                  )
+                }
+              >
+                <Text style={p.menuIcon}>💡</Text>
+                <Text style={p.menuText}>기능 제안</Text>
+                <Text style={p.menuArrow}>›</Text>
+              </TouchableOpacity>
+              <View style={p.menuDivider} />
+              <TouchableOpacity
+                style={p.menuRow}
+                onPress={() =>
+                  Alert.alert("자주 묻는 질문", "FAQ는 준비 중입니다.")
+                }
+              >
+                <Text style={p.menuIcon}>❓</Text>
+                <Text style={p.menuText}>자주 묻는 질문(FAQ)</Text>
+                <Text style={p.menuArrow}>›</Text>
+              </TouchableOpacity>
+              <View style={p.menuDivider} />
+              <TouchableOpacity
+                style={p.menuRow}
+                onPress={() =>
+                  Alert.alert(
+                    "공지사항",
+                    "공지사항은 홈 화면에서 확인할 수 있습니다.",
+                  )
+                }
+              >
+                <Text style={p.menuIcon}>📢</Text>
+                <Text style={p.menuText}>공지사항</Text>
+                <Text style={p.menuArrow}>›</Text>
+              </TouchableOpacity>
+              <View style={p.menuDivider} />
+              <TouchableOpacity
+                style={p.menuRow}
+                onPress={() => setInstallGuideOpen(true)}
+              >
+                <Text style={p.menuIcon}>📖</Text>
+                <Text style={p.menuText}>이용안내</Text>
+                <Text style={p.menuArrow}>›</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={[p.menuText, { color: C.danger }]}>로그아웃</Text>
-            <Text style={p.menuArrow}>›</Text>
-          </TouchableOpacity>
-        </View>
+          </>
+        )}
+
+        {activeTab === "etc" && (
+          <>
+            <Text style={p.sectionLabel}>기타</Text>
+            <View style={p.menuCard}>
+              <TouchableOpacity
+                style={p.menuRow}
+                onPress={() =>
+                  Alert.alert("AI 캐디", "AI 캐디 설정은 준비 중입니다.")
+                }
+              >
+                <Text style={p.menuIcon}>🤖</Text>
+                <View style={p.menuTextArea}>
+                  <Text style={p.menuText}>AI 캐디</Text>
+                  <Text style={p.menuSubText}>준비중</Text>
+                </View>
+                <Text style={p.menuArrow}>›</Text>
+              </TouchableOpacity>
+              <View style={p.menuDivider} />
+              <TouchableOpacity
+                style={p.menuRow}
+                onPress={() =>
+                  Alert.alert("알림 설정", "알림 설정은 준비 중입니다.")
+                }
+              >
+                <Text style={p.menuIcon}>🔔</Text>
+                <View style={p.menuTextArea}>
+                  <Text style={p.menuText}>알림 설정</Text>
+                  <Text style={p.menuSubText}>준비중</Text>
+                </View>
+                <Text style={p.menuArrow}>›</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+
+        {activeTab === "account" && (
+          <>
+            <Text style={p.sectionLabel}>계정</Text>
+            <View style={p.menuCard}>
+              <TouchableOpacity
+                style={p.menuRow}
+                onPress={() => {
+                  setEditNameVal(userName);
+                  setEditingName(true);
+                  profileScrollRef.current?.scrollTo({ y: 0, animated: true });
+                }}
+              >
+                <Text style={p.menuIcon}>✏️</Text>
+                <Text style={p.menuText}>닉네임</Text>
+                <Text style={p.menuValue} numberOfLines={1}>
+                  {userName || "미설정"}
+                </Text>
+                <Text style={p.menuArrow}>›</Text>
+              </TouchableOpacity>
+              <View style={p.menuDivider} />
+              <TouchableOpacity style={p.menuRow} onPress={handleLogout}>
+                <View style={[p.menuIcon, p.centerIcon]}>
+                  <EmojiIcon char="🚪" size={17} color={C.danger} />
+                </View>
+                <Text style={[p.menuText, { color: C.danger }]}>로그아웃</Text>
+                <Text style={p.menuArrow}>›</Text>
+              </TouchableOpacity>
+              <View style={p.menuDivider} />
+              <TouchableOpacity
+                style={p.menuRow}
+                onPress={() =>
+                  Alert.alert(
+                    "회원탈퇴",
+                    "회원탈퇴 처리는 고객문의를 통해 요청해주세요.",
+                  )
+                }
+              >
+                <Text style={p.menuIcon}>⚠️</Text>
+                <Text style={[p.menuText, { color: C.danger }]}>회원탈퇴</Text>
+                <Text style={p.menuArrow}>›</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
 
         <Text style={p.version}>GogoPar v1.0</Text>
       </ScrollView>
@@ -1532,7 +2170,12 @@ const p = StyleSheet.create({
     color: "rgba(255,255,255,0.6)",
     marginTop: 4,
   },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: 8, marginRight: 16 },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginRight: 16,
+  },
   headerSaveButton: {
     minWidth: 54,
     minHeight: 32,
@@ -1574,6 +2217,46 @@ const p = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
   },
+  tabBarScroll: {
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  tabBar: { paddingHorizontal: 10, paddingVertical: 10, gap: 6 },
+  tabButton: {
+    minWidth: 76,
+    minHeight: 54,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f7f8f9",
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  tabButtonActive: { backgroundColor: C.greenLight, borderColor: C.green },
+  tabIcon: { fontSize: 18, marginBottom: 3 },
+  tabLabel: { fontSize: 11, fontWeight: "800", color: C.muted },
+  tabLabelActive: { color: C.green },
+  subsectionTitle: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: C.text,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  menuCardSpaced: { marginTop: 16 },
+  menuDividerFull: { height: 1, backgroundColor: C.border, marginTop: 14 },
+  menuRowCompact: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    gap: 12,
+  },
+  menuTextArea: { flex: 1, minWidth: 0 },
+  menuSubText: { fontSize: 11, color: C.muted, marginTop: 2 },
+  menuValue: { maxWidth: 130, color: C.muted, fontSize: 13, fontWeight: "700" },
   sectionLabel: {
     fontSize: 11,
     fontWeight: "700",
@@ -1672,7 +2355,12 @@ const p = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 0,
   },
-  bufferUnit: { color: C.muted, fontSize: 13, fontWeight: "800", marginLeft: 4 },
+  bufferUnit: {
+    color: C.muted,
+    fontSize: 13,
+    fontWeight: "800",
+    marginLeft: 4,
+  },
   homeSaveButton: {
     backgroundColor: C.green,
     borderRadius: 50,
@@ -1688,15 +2376,17 @@ const p = StyleSheet.create({
   },
   teeRadioButton: {
     flex: 1,
-    minHeight: 54,
+    minHeight: 48,
+    flexDirection: "row",
     borderWidth: 1.5,
     borderColor: C.border,
     borderRadius: 14,
     backgroundColor: "#fafafa",
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
-    paddingVertical: 8,
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
   },
   teeRadioDot: {
     position: "absolute",
@@ -1722,7 +2412,13 @@ const p = StyleSheet.create({
     justifyContent: "center",
   },
   teeRadioBadgeText: { color: "#fff", fontSize: 12, fontWeight: "900" },
-  teeRadioText: { fontSize: 12, lineHeight: 16, fontWeight: "900", color: C.text },
+  teeRadioText: {
+    flexShrink: 0,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "900",
+    color: C.text,
+  },
   distanceGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1749,13 +2445,153 @@ const p = StyleSheet.create({
     textAlign: "center",
     fontWeight: "800",
   },
+  clubSectionHint: {
+    color: C.muted,
+    fontSize: 12,
+    lineHeight: 17,
+    marginHorizontal: 16,
+    marginBottom: 10,
+  },
+  accordionCard: {
+    backgroundColor: "#fff",
+    borderRadius: 15,
+    marginHorizontal: 16,
+    marginBottom: 9,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  accordionHeader: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 15,
+    gap: 8,
+  },
+  accordionTitle: { flex: 1, color: C.text, fontSize: 15, fontWeight: "900" },
+  accordionCount: { color: C.green, fontSize: 12, fontWeight: "900" },
+  accordionArrow: {
+    width: 20,
+    textAlign: "center",
+    color: C.muted,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  accordionBody: {
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+    paddingHorizontal: 13,
+    paddingBottom: 12,
+  },
+  clubDistanceRow: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F2F1",
+    gap: 9,
+  },
+  clubCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+  },
+  clubCheckActive: { borderColor: C.green, backgroundColor: C.green },
+  clubCheckText: { color: "#fff", fontSize: 13, fontWeight: "900" },
+  clubNameArea: { flex: 1, minWidth: 0 },
+  clubName: { color: C.text, fontSize: 14, fontWeight: "800" },
+  clubNameInactive: { color: C.muted },
+  clubSelectGuide: {
+    width: 70,
+    textAlign: "right",
+    color: C.muted,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  clubDistanceInputWrap: {
+    width: 82,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 4,
+  },
+  clubDistanceInput: {
+    width: 56,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderRadius: 9,
+    backgroundColor: "#fafafa",
+    color: C.text,
+    fontSize: 14,
+    fontWeight: "900",
+    textAlign: "right",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  clubDistanceUnit: { color: C.muted, fontSize: 12, fontWeight: "800" },
+  clubDeleteButton: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFF1F0",
+  },
+  clubDeleteText: {
+    color: C.danger,
+    fontSize: 20,
+    lineHeight: 22,
+    fontWeight: "600",
+  },
+  addClubButton: {
+    marginTop: 11,
+    minHeight: 40,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: C.green,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: C.greenLight,
+  },
+  addClubButtonText: { color: C.green, fontSize: 13, fontWeight: "900" },
+  addClubCategoryLabel: {
+    color: C.green,
+    fontSize: 13,
+    fontWeight: "900",
+    marginBottom: 10,
+  },
+  addClubDistanceModalRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  addClubDistanceModalInput: { flex: 1, marginBottom: 0 },
+  addClubDistanceModalUnit: {
+    color: C.muted,
+    fontSize: 14,
+    fontWeight: "900",
+    marginRight: 4,
+  },
   skinGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
     paddingHorizontal: 16,
   },
-  skinCard: { flexBasis: "47%", flexGrow: 1, minWidth: 0, borderWidth: 1.5, padding: 12, minHeight: 118 },
+  skinCard: {
+    flexBasis: "47%",
+    flexGrow: 1,
+    minWidth: 0,
+    borderWidth: 1.5,
+    padding: 12,
+    minHeight: 118,
+  },
   skinSwatches: { flexDirection: "row", gap: 5, marginBottom: 10 },
   skinSwatch: {
     width: 20,
@@ -1787,7 +2623,13 @@ const p = StyleSheet.create({
   },
   menuIcon: { fontSize: 18, width: 26, textAlign: "center" },
   centerIcon: { alignItems: "center" },
-  menuText: { flex: 1, minWidth: 0, fontSize: 15, color: C.text, fontWeight: "500" },
+  menuText: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 15,
+    color: C.text,
+    fontWeight: "500",
+  },
   menuArrow: { fontSize: 16, color: C.muted },
   menuDivider: { height: 1, backgroundColor: C.border, marginLeft: 54 },
   version: {
