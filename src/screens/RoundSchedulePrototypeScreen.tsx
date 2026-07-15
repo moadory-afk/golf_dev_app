@@ -41,7 +41,7 @@ const ROUND_EDITOR_TABS: Array<{ value: RoundEditorTab; label: string }> = [
   { value: 'basic', label: '기본' },
   { value: 'score', label: '스코어' },
   { value: 'award', label: '시상' },
-  { value: 'money', label: '머니게임' },
+  { value: 'money', label: '게임/로또' },
 ]
 
 type Draft = {
@@ -645,10 +645,17 @@ export default function RoundSchedulePrototypeScreen() {
         .filter(([key, value]) => awardItems.includes(key) && multiWinnerSpecialAwardKeys.has(key) && value > 1)
         .map(([key, value]) => [key, value])
     )
+    const visibleManualWinners = manualWinnersFromRows(awardResultRows)
+    const manualWinners = Object.fromEntries(
+      Object.entries({ ...(draft.awardConfig?.manualWinners ?? {}), ...visibleManualWinners })
+        .filter(([key, names]) => awardItems.includes(key) && key !== 'last' && names.length > 0)
+        .map(([key, names]) => [key, names])
+    )
     return {
       count,
       items: awardItems,
       ...(Object.keys(winnerCounts).length > 0 ? { winnerCounts } : {}),
+      ...(Object.keys(manualWinners).length > 0 ? { manualWinners } : {}),
     }
   }
 

@@ -64,6 +64,22 @@ function awardWinnerDisplay(winner: string) {
     .join(', ')
 }
 
+function applyManualAwardWinners<T extends { awardKey: string; winner: string; detail: string }>(
+  rows: T[],
+  manualWinners?: Record<string, string[]>,
+) {
+  if (!manualWinners) return rows
+  return rows.map((row) => {
+    const winners = manualWinners[row.awardKey]
+    if (!winners?.length) return row
+    return {
+      ...row,
+      winner: winners.map(shortName).join(', '),
+      detail: row.detail === '추첨' || row.detail === '현장 확인' ? '관리자 지정' : row.detail,
+    }
+  })
+}
+
 function diffText(d: number) { return d > 0 ? `+${d}` : `${d}` }
 
 function formatWinners(names: string[], value: string): string {
@@ -683,7 +699,7 @@ function RoundFlipCard({
   const [lottoAwardConfig, setLottoAwardConfig] = useState<LottoAwardConfig>(DEFAULT_LOTTO_AWARD_CONFIG)
   const [clubMembers, setClubMembers] = useState<Array<{ userId: string; name: string; role: string }>>([])
   const [roundSchedules, setRoundSchedules] = useState<ScheduledRound[]>([])
-  const [clubAwardConfig, setClubAwardConfig] = useState<{ count: number; items: string[] } | null>(null)
+  const [clubAwardConfig, setClubAwardConfig] = useState<{ count: number; items: string[]; manualWinners?: Record<string, string[]> } | null>(null)
   const [photoData, setPhotoData] = useState<string[]>(round.photoData ?? [])
   const [photoSaving, setPhotoSaving] = useState(false)
   const [photoCropSource, setPhotoCropSource] = useState<{ uri: string; width: number; height: number } | null>(null)
@@ -923,7 +939,7 @@ function RoundFlipCard({
         detail: award.detail,
       }))
     : []
-  const awardRows = awardSnapshots.length > 0
+  const awardRows = applyManualAwardWinners(awardSnapshots.length > 0
     ? awardSnapshots.map((award) => ({
         awardKey: award.awardKey,
         icon: award.icon,
@@ -931,7 +947,7 @@ function RoundFlipCard({
         winner: awardWinnerDisplay(award.winner),
         detail: award.detail,
       }))
-    : fallbackAwardRows
+    : fallbackAwardRows, effectiveAwardConfig?.manualWinners)
   const lottoJackpot = lottoAwardConfig.prizes['6'] + (lottoAwardConfig.rollover ? lottoAwardConfig.carryoverAmount : 0)
   const lottoAwardRows = lottoEntries.map((entry) => {
     const member = clubMembers.find((item) => item.userId === entry.userId)
