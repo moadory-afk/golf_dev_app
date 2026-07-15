@@ -65,6 +65,8 @@ export interface ClubNotice {
 export type PersonalRoundFir = 'long' | 'center' | 'short' | 'left_ob' | 'right_ob' | 'other_ob' | 'hazard' | null
 
 export interface PersonalRoundHoleStat {
+  layoutId?: string
+  layoutName?: string
   hole: number
   par: number
   fir: PersonalRoundFir
@@ -1528,7 +1530,9 @@ export async function getCourseHoleGuides(layoutIds: string[]): Promise<CourseHo
 }
 
 export async function savePersonalRoundStat(input: PersonalRoundStat): Promise<void> {
-  const holeStats = input.holeStats.map(({ hole, par, fir, putts, penalties }) => ({
+  const holeStats = input.holeStats.map(({ layoutId, layoutName, hole, par, fir, putts, penalties }) => ({
+    layoutId,
+    layoutName,
     hole,
     par,
     fir,

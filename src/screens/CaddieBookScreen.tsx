@@ -60,8 +60,14 @@ function todayDateKey() {
   return `${year}-${month}-${day}`;
 }
 
-function defaultHoleStats(holes: CaddieBookHole[]): PersonalRoundHoleStat[] {
+function defaultHoleStats(
+  holes: CaddieBookHole[],
+  layoutId?: string | null,
+  layoutName?: string | null,
+): PersonalRoundHoleStat[] {
   return holes.map((hole, index) => ({
+    layoutId: layoutId ?? undefined,
+    layoutName: layoutName ?? undefined,
     hole: hole.holeNo || index + 1,
     par: hole.par || 4,
     fir: null,
@@ -1024,8 +1030,9 @@ export default function CaddieBookScreen() {
         );
 
         setLayoutTabs(tabs);
-        const initialTab =
-          tabs.find((tab) => tab.id === activeLayoutId) ?? tabs[0];
+        // 라운드 캐디북은 항상 전반 코스부터 시작한다.
+        // groupRows를 front -> back 순서로 추가하므로 첫 번째 탭이 전반 코스다.
+        const initialTab = tabs[0];
         if (initialTab) {
           setActiveLayoutId(initialTab.id);
           setActiveLayoutName(initialTab.name);
@@ -1069,40 +1076,71 @@ export default function CaddieBookScreen() {
     };
   }, [params.courseId, params.layoutId, params.layoutName, params.scheduleId]);
 
-  useEffect(() => {
-    if (data.primaryHole) setSelectedHoleNo(data.primaryHole.holeNo);
-  }, [data.primaryHole?.holeNo]);
 
   useEffect(() => {
     let alive = true;
     async function loadPersonalStats() {
-      if (!params.scheduleId || !userId || data.holes.length === 0) {
-        setHoleStats(defaultHoleStats(data.holes));
+      if (!activeLayoutId || data.holes.length === 0) return;
+
+      const currentDefaults = defaultHoleStats(
+        data.holes,
+        activeLayoutId,
+        activeLayoutName,
+      );
+      if (!params.scheduleId || !userId) {
+        setHoleStats(currentDefaults);
         return;
       }
+
       try {
         const saved = await getPersonalRoundStat(params.scheduleId, userId);
         if (!alive) return;
-        const baseStats = defaultHoleStats(data.holes);
+        const savedStats = saved?.holeStats ?? [];
+
+        // 구버전 데이터에는 layoutId가 없다. 해당 데이터는 전반(첫 번째 탭)에만
+        // 귀속시켜 후반 코스로 복제되는 현상을 막는다.
+        const frontLayoutId = layoutTabs[0]?.id;
+        const normalizedSaved = savedStats.map((item) =>
+          item.layoutId
+            ? item
+            : {
+                ...item,
+                layoutId: frontLayoutId,
+                layoutName: layoutTabs[0]?.name,
+              },
+        );
         const savedByHole = new Map(
-          (saved?.holeStats ?? []).map((item) => [item.hole, item]),
+          normalizedSaved
+            .filter((item) => item.layoutId === activeLayoutId)
+            .map((item) => [item.hole, item]),
         );
-        setHoleStats(
-          baseStats.map((item) => ({
-            ...item,
-            ...(savedByHole.get(item.hole) ?? {}),
-            par: item.par,
-          })),
+        const currentLayoutStats = currentDefaults.map((item) => ({
+          ...item,
+          ...(savedByHole.get(item.hole) ?? {}),
+          layoutId: activeLayoutId,
+          layoutName: activeLayoutName ?? undefined,
+          par: item.par,
+        }));
+        const otherLayoutStats = normalizedSaved.filter(
+          (item) => item.layoutId !== activeLayoutId,
         );
+        setHoleStats([...otherLayoutStats, ...currentLayoutStats]);
       } catch {
-        if (alive) setHoleStats(defaultHoleStats(data.holes));
+        if (alive) setHoleStats(currentDefaults);
       }
     }
     loadPersonalStats();
     return () => {
       alive = false;
     };
-  }, [data.holes, params.scheduleId, userId]);
+  }, [
+    activeLayoutId,
+    activeLayoutName,
+    data.holes,
+    layoutTabs,
+    params.scheduleId,
+    userId,
+  ]);
 
   const selectedIndex = useMemo(() => {
     const index = data.holes.findIndex(
@@ -1140,7 +1178,11 @@ export default function CaddieBookScreen() {
   );
 
   const selectedHoleStat = selectedHole
-    ? holeStats.find((item) => item.hole === selectedHole.holeNo)
+    ? holeStats.find(
+        (item) =>
+          item.layoutId === activeLayoutId &&
+          item.hole === selectedHole.holeNo,
+      )
     : undefined;
 
   const updateSelectedHoleStat = async (
@@ -1148,19 +1190,38 @@ export default function CaddieBookScreen() {
   ) => {
     if (!params.scheduleId || !userId || !roundMeta.clubId || !selectedHole)
       return;
-    const baseStats = holeStats.length
-      ? holeStats
-      : defaultHoleStats(data.holes);
-    const nextStats = baseStats.map((item) =>
-      item.hole === selectedHole.holeNo
-        ? {
-            ...item,
-            ...patch,
-            hole: selectedHole.holeNo,
-            par: selectedHole.par || item.par || 4,
-          }
-        : item,
+    if (!activeLayoutId) return;
+    const currentDefaults = defaultHoleStats(
+      data.holes,
+      activeLayoutId,
+      activeLayoutName,
     );
+    const otherLayoutStats = holeStats.filter(
+      (item) => item.layoutId !== activeLayoutId,
+    );
+    const currentLayoutStats = currentDefaults.map((defaultItem) => {
+      const existing = holeStats.find(
+        (item) =>
+          item.layoutId === activeLayoutId &&
+          item.hole === defaultItem.hole,
+      );
+      const baseItem = existing ?? defaultItem;
+      return defaultItem.hole === selectedHole.holeNo
+        ? {
+            ...baseItem,
+            ...patch,
+            layoutId: activeLayoutId,
+            layoutName: activeLayoutName ?? undefined,
+            hole: selectedHole.holeNo,
+            par: selectedHole.par || baseItem.par || 4,
+          }
+        : {
+            ...baseItem,
+            layoutId: activeLayoutId,
+            layoutName: activeLayoutName ?? undefined,
+          };
+    });
+    const nextStats = [...otherLayoutStats, ...currentLayoutStats];
     setHoleStats(nextStats);
     setScoreSaving(true);
     try {

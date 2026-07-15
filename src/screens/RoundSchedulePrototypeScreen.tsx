@@ -168,6 +168,7 @@ export default function RoundSchedulePrototypeScreen() {
   const [scoreGroupSummaries, setScoreGroupSummaries] = useState<Record<string, ScoreGroupSummary>>({})
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
   const realtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const scoreSummaryLoadSeq = useRef(0)
   const realtimeKey = useRef(`schedule-${Date.now()}-${Math.random().toString(36).slice(2)}`)
 
   useEffect(() => {
@@ -218,6 +219,8 @@ export default function RoundSchedulePrototypeScreen() {
     }
 
     let cancelled = false
+    const loadSeq = ++scoreSummaryLoadSeq.current
+    const isStale = () => cancelled || loadSeq !== scoreSummaryLoadSeq.current
     const normalizePlayerName = (value: unknown) => String(value ?? '').replace(/\s+/g, '').toLowerCase()
     const playerTotal = (player: any, round: any) => {
       const strokeValues = [player?.strokes, player?.scores, player?.holeScores]
@@ -243,7 +246,7 @@ export default function RoundSchedulePrototypeScreen() {
 
     getRoundSummaries(club.id)
       .then((rounds) => {
-        if (cancelled) return
+        if (isStale()) return
         const memberNames = new Set(
           draft.groups.flatMap((group) => group.members.map((member) => normalizePlayerName(member.name))),
         )
@@ -257,15 +260,44 @@ export default function RoundSchedulePrototypeScreen() {
           return sameDate && sameCourse && hasScheduledMember
         })
 
-        const playerTotals = new Map<string, number>()
+        // 저장된 라운드는 같은 날짜/코스의 여러 조 스코어가 한 round.players 배열로
+        // 병합될 수 있다. 이름의 공백·유니코드·OCR 표기 차이 때문에 2조 이후 결과가
+        // 누락되지 않도록 정확 일치 후 유사 이름 매칭까지 적용한다.
+        const persistedPlayers: Array<{ name: string; total: number }> = []
         scheduleRounds.forEach((round: any) => {
           if (!Array.isArray(round.players)) return
           round.players.forEach((player: any) => {
+            const name = String(player?.name ?? '').trim()
             const total = playerTotal(player, round)
-            const key = normalizePlayerName(player?.name)
-            if (key && total > 0) playerTotals.set(key, total)
+            if (name && total > 0) persistedPlayers.push({ name, total })
           })
         })
+
+        const savedNames = persistedPlayers.map((player) => player.name)
+        const savedTotalsByNormalizedName = new Map<string, number>()
+        persistedPlayers.forEach((player) => {
+          const key = normalizePlayerName(player.name.normalize('NFC'))
+          if (key) savedTotalsByNormalizedName.set(key, player.total)
+        })
+
+        const usedPersistedIndexes = new Set<number>()
+        const findPersistedTotal = (memberName: string) => {
+          const normalizedMemberName = normalizePlayerName(memberName.normalize('NFC'))
+          const exactTotal = savedTotalsByNormalizedName.get(normalizedMemberName)
+          if (exactTotal && exactTotal > 0) {
+            const exactIndex = persistedPlayers.findIndex((player, index) =>
+              !usedPersistedIndexes.has(index)
+              && normalizePlayerName(player.name.normalize('NFC')) === normalizedMemberName,
+            )
+            if (exactIndex >= 0) usedPersistedIndexes.add(exactIndex)
+            return exactTotal
+          }
+
+          const fuzzyIndex = findBestOcrMatch(memberName, savedNames, usedPersistedIndexes)
+          if (fuzzyIndex < 0) return 0
+          usedPersistedIndexes.add(fuzzyIndex)
+          return persistedPlayers[fuzzyIndex]?.total ?? 0
+        }
 
         const nextSummaries: Record<string, ScoreGroupSummary> = {}
         const completedIds: string[] = []
@@ -274,7 +306,7 @@ export default function RoundSchedulePrototypeScreen() {
           const players = group.members
             .map((member) => ({
               name: member.name,
-              total: playerTotals.get(normalizePlayerName(member.name)) ?? 0,
+              total: findPersistedTotal(member.name),
             }))
             .filter((player) => player.total > 0)
             .sort((a, b) => a.total - b.total)
@@ -288,13 +320,34 @@ export default function RoundSchedulePrototypeScreen() {
           }
         })
 
-        setSavedScoreGroupIds(completedIds)
-        setScoreGroupSummaries(nextSummaries)
+        const visibleGroupIds = new Set(draft.groups.map((group) => group.id))
+        setScoreGroupSummaries((current) => {
+          const merged: Record<string, ScoreGroupSummary> = {}
+          draft.groups.forEach((group) => {
+            const summary = nextSummaries[group.id] ?? current[group.id]
+            if (summary) merged[group.id] = summary
+          })
+          return merged
+        })
+        setSavedScoreGroupIds((current) => {
+          const ids = new Set(completedIds)
+          current.forEach((id) => {
+            if (visibleGroupIds.has(id)) ids.add(id)
+          })
+          return Array.from(ids)
+        })
       })
       .catch(() => {
-        if (cancelled) return
-        setSavedScoreGroupIds([])
-        setScoreGroupSummaries({})
+        if (isStale()) return
+        const visibleGroupIds = new Set(draft.groups.map((group) => group.id))
+        setSavedScoreGroupIds((current) => current.filter((id) => visibleGroupIds.has(id)))
+        setScoreGroupSummaries((current) => {
+          const visibleSummaries: Record<string, ScoreGroupSummary> = {}
+          draft.groups.forEach((group) => {
+            if (current[group.id]) visibleSummaries[group.id] = current[group.id]
+          })
+          return visibleSummaries
+        })
       })
 
     return () => {
@@ -690,6 +743,7 @@ export default function RoundSchedulePrototypeScreen() {
 
   async function saveScoreResult() {
     if (!club?.id || !selectedScoreGroup || !scoreOcrResult) return
+    const savedGroupId = selectedScoreGroup.id
     setScoreSaveBusy(true)
     try {
       const photoData: string[] = []
@@ -710,6 +764,13 @@ export default function RoundSchedulePrototypeScreen() {
         Alert.alert('저장 불가', '조 멤버와 매칭된 OCR 결과가 없습니다.')
         return
       }
+      const savedPlayers = players
+        .map((player) => ({
+          name: player.name,
+          total: player.strokes.reduce((sum, stroke) => sum + (Number(stroke) || 0), 0),
+        }))
+        .filter((player) => player.total > 0)
+        .sort((a, b) => a.total - b.total)
       const selectedGroupIndex = draft.groups.findIndex((group) => group.id === selectedScoreGroup.id)
       const settlement = selectedGroupIndex >= 0 && moneyGroupIds.includes(moneyGroupKey(selectedGroupIndex))
         ? {
@@ -731,31 +792,29 @@ export default function RoundSchedulePrototypeScreen() {
         settlement,
         scheduleId: draft.id ?? undefined,
       })
-      await completeRound(saved.id)
-      const itemIds = fillToCount(selectedAwardItems, awardCount)
-      const handicaps = new Map(Object.entries(saved.handicaps ?? {}))
-      const awards = computeClubAwardResults(itemIds, saved, handicaps, totalPar(saved.pars))
-      await saveClubAwardSnapshots(club.id, saved.id, awards)
-      setSavedScoreGroupIds((current) => current.includes(selectedScoreGroup.id) ? current : [...current, selectedScoreGroup.id])
-      const savedPlayers = players
-        .map((player) => ({
-          name: player.name,
-          total: player.strokes.reduce((sum, stroke) => sum + (Number(stroke) || 0), 0),
-        }))
-        .filter((player) => player.total > 0)
-        .sort((a, b) => a.total - b.total)
+      scoreSummaryLoadSeq.current += 1
+      setEditorTab('score')
+      setSavedScoreGroupIds((current) => current.includes(savedGroupId) ? current : [...current, savedGroupId])
       setScoreGroupSummaries((current) => ({
         ...current,
-        [selectedScoreGroup.id]: {
+        [savedGroupId]: {
           players: savedPlayers,
           average: savedPlayers.length > 0
             ? savedPlayers.reduce((sum, player) => sum + player.total, 0) / savedPlayers.length
             : 0,
         },
       }))
-      setLastSavedAt(new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }))
-      notifyHomeRecordsChanged(club.id)
       closeScoreUpload()
+      await completeRound(saved.id)
+      const itemIds = fillToCount(selectedAwardItems, awardCount)
+      const handicaps = new Map(Object.entries(saved.handicaps ?? {}))
+      const awards = computeClubAwardResults(itemIds, saved, handicaps, totalPar(saved.pars))
+      await saveClubAwardSnapshots(club.id, saved.id, awards)
+      setLastSavedAt(new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }))
+      // 조별 저장 직후 최신 DB 결과를 다시 읽어 스코어 탭에 즉시 반영한다.
+      // 진행 중이던 이전 조회는 scoreSummaryLoadSeq로 무시되어 방금 저장한 요약을 덮어쓰지 못한다.
+      setRefreshKey((current) => current + 1)
+      notifyHomeRecordsChanged(club.id)
       Alert.alert('스코어 저장 완료', `${selectedScoreGroup.name ?? '선택한 조'}의 스코어를 정상적으로 저장했습니다.`)
     } catch (error) {
       Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
