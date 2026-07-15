@@ -39,6 +39,7 @@ import {
 } from "../lib/tutorial";
 import { resetFeatureTutorials } from "../lib/featureTutorial";
 import { SupportCenter } from "../features/support/SupportCenter";
+import { SupportAdminCenter } from "../features/support/SupportAdminCenter";
 import {
   TutorialCoachModal,
   type CoachStep,
@@ -191,7 +192,8 @@ type ProfileTab =
   | "settings"
   | "support"
   | "etc"
-  | "account";
+  | "account"
+  | "developer";
 
 const PROFILE_TABS: Array<{ key: ProfileTab; icon: string; label: string }> = [
   { key: "departure", icon: "📍", label: "출발지" },
@@ -551,6 +553,7 @@ export default function ProfileScreen({
   const [profileTutorialVisible, setProfileTutorialVisible] = useState(false);
   const [profileTutorialStep, setProfileTutorialStep] = useState(0);
   const [activeTab, setActiveTab] = useState<ProfileTab>("departure");
+  const [appRole, setAppRole] = useState<"user" | "developer">("user");
   const [openClubCategory, setOpenClubCategory] = useState<ClubCategory | null>(
     "wood",
   );
@@ -621,12 +624,13 @@ export default function ProfileScreen({
         const { data: profile } = await supabase
           .from("profiles")
           .select(
-            "name, nickname, home_address, home_latitude, home_longitude, departure_buffer_minutes",
+            "name, nickname, home_address, home_latitude, home_longitude, departure_buffer_minutes, app_role",
           )
           .eq("id", authUser.id)
           .maybeSingle();
         fallbackName = profile?.nickname ?? profile?.name ?? "";
         if (alive && profile) {
+          setAppRole(profile.app_role === "developer" ? "developer" : "user");
           setHomeAddress(profile.home_address ?? "");
           const latitude = Number(profile.home_latitude);
           const longitude = Number(profile.home_longitude);
@@ -1558,7 +1562,7 @@ export default function ProfileScreen({
           contentContainerStyle={p.tabBar}
           style={p.tabBarScroll}
         >
-          {PROFILE_TABS.map((tab) => {
+          {[...PROFILE_TABS, ...(appRole === "developer" ? [{ key: "developer" as ProfileTab, icon: "🛠", label: "개발자" }] : [])].map((tab) => {
             const active = activeTab === tab.key;
             return (
               <TouchableOpacity
@@ -1994,6 +1998,13 @@ export default function ProfileScreen({
                 <Text style={p.menuArrow}>›</Text>
               </TouchableOpacity>
             </View>
+          </>
+        )}
+
+        {activeTab === "developer" && appRole === "developer" && (
+          <>
+            <Text style={p.sectionLabel}>개발자 관리</Text>
+            <SupportAdminCenter user={user} />
           </>
         )}
 
