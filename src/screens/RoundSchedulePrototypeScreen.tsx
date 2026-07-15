@@ -121,6 +121,11 @@ function moneyGroupKey(index: number) {
   return `group-${index + 1}`
 }
 
+type ScoreGroupSummary = {
+  players: Array<{ name: string; total: number }>
+  average: number
+}
+
 export default function RoundSchedulePrototypeScreen() {
   const nav = useNavigation<Nav>()
   const route = useRoute<Route>()
@@ -160,6 +165,7 @@ export default function RoundSchedulePrototypeScreen() {
   const [scoreOcrResult, setScoreOcrResult] = useState<RecognizedScorecard | null>(null)
   const [scoreOcrError, setScoreOcrError] = useState('')
   const [savedScoreGroupIds, setSavedScoreGroupIds] = useState<string[]>([])
+  const [scoreGroupSummaries, setScoreGroupSummaries] = useState<Record<string, ScoreGroupSummary>>({})
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
   const realtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const realtimeKey = useRef(`schedule-${Date.now()}-${Math.random().toString(36).slice(2)}`)
@@ -207,23 +213,94 @@ export default function RoundSchedulePrototypeScreen() {
   useEffect(() => {
     if (!club?.id || !draft.id || !editorOpen) {
       setSavedScoreGroupIds([])
+      setScoreGroupSummaries({})
       return
     }
+
+    let cancelled = false
+    const normalizePlayerName = (value: unknown) => String(value ?? '').replace(/\s+/g, '').toLowerCase()
+    const playerTotal = (player: any, round: any) => {
+      const strokeValues = [player?.strokes, player?.scores, player?.holeScores]
+        .find((value) => Array.isArray(value))
+      if (Array.isArray(strokeValues)) {
+        const total = strokeValues.reduce((sum: number, stroke: unknown) => sum + (Number(stroke) || 0), 0)
+        if (total > 0) return total
+      }
+
+      if (Array.isArray(player?.diffs)) {
+        const pars = Array.isArray(round?.pars) ? round.pars : []
+        const total = player.diffs.reduce((sum: number, diff: unknown, index: number) => {
+          return sum + (Number(pars[index]) || 4) + (Number(diff) || 0)
+        }, 0)
+        if (total > 0) return total
+      }
+
+      const directTotal = [player?.total, player?.grossScore, player?.gross, player?.score]
+        .map((value) => Number(value))
+        .find((value) => Number.isFinite(value) && value > 0)
+      return directTotal ?? 0
+    }
+
     getRoundSummaries(club.id)
       .then((rounds) => {
-        const savedNames = new Set(
-          rounds
-            .filter((round) => round.scheduleId === draft.id)
-            .flatMap((round) => round.players.map((player) => player.name))
+        if (cancelled) return
+        const memberNames = new Set(
+          draft.groups.flatMap((group) => group.members.map((member) => normalizePlayerName(member.name))),
         )
-        setSavedScoreGroupIds(
-          draft.groups
-            .filter((group) => group.members.length > 0 && group.members.every((member) => savedNames.has(member.name)))
-            .map((group) => group.id)
-        )
+        const scheduleRounds = rounds.filter((round: any) => {
+          if (round.scheduleId === draft.id) return true
+          const sameDate = round.date === draft.date
+          const sameCourse = !draft.courseName || !round.courseName || round.courseName === draft.courseName
+          const hasScheduledMember = Array.isArray(round.players) && round.players.some((player: any) =>
+            memberNames.has(normalizePlayerName(player?.name)),
+          )
+          return sameDate && sameCourse && hasScheduledMember
+        })
+
+        const playerTotals = new Map<string, number>()
+        scheduleRounds.forEach((round: any) => {
+          if (!Array.isArray(round.players)) return
+          round.players.forEach((player: any) => {
+            const total = playerTotal(player, round)
+            const key = normalizePlayerName(player?.name)
+            if (key && total > 0) playerTotals.set(key, total)
+          })
+        })
+
+        const nextSummaries: Record<string, ScoreGroupSummary> = {}
+        const completedIds: string[] = []
+        draft.groups.forEach((group) => {
+          if (group.members.length === 0) return
+          const players = group.members
+            .map((member) => ({
+              name: member.name,
+              total: playerTotals.get(normalizePlayerName(member.name)) ?? 0,
+            }))
+            .filter((player) => player.total > 0)
+            .sort((a, b) => a.total - b.total)
+
+          if (players.length === group.members.length) completedIds.push(group.id)
+          if (players.length > 0) {
+            nextSummaries[group.id] = {
+              players,
+              average: players.reduce((sum, player) => sum + player.total, 0) / players.length,
+            }
+          }
+        })
+
+        setSavedScoreGroupIds(completedIds)
+        setScoreGroupSummaries(nextSummaries)
       })
-      .catch(() => setSavedScoreGroupIds([]))
-  }, [club?.id, draft.id, draft.groups, editorOpen, refreshKey])
+      .catch(() => {
+        if (cancelled) return
+        setSavedScoreGroupIds([])
+        setScoreGroupSummaries({})
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [club?.id, draft.id, draft.date, draft.courseName, draft.groups, editorOpen, refreshKey])
 
   useEffect(() => {
     if (!club?.id) return
@@ -660,6 +737,22 @@ export default function RoundSchedulePrototypeScreen() {
       const awards = computeClubAwardResults(itemIds, saved, handicaps, totalPar(saved.pars))
       await saveClubAwardSnapshots(club.id, saved.id, awards)
       setSavedScoreGroupIds((current) => current.includes(selectedScoreGroup.id) ? current : [...current, selectedScoreGroup.id])
+      const savedPlayers = players
+        .map((player) => ({
+          name: player.name,
+          total: player.strokes.reduce((sum, stroke) => sum + (Number(stroke) || 0), 0),
+        }))
+        .filter((player) => player.total > 0)
+        .sort((a, b) => a.total - b.total)
+      setScoreGroupSummaries((current) => ({
+        ...current,
+        [selectedScoreGroup.id]: {
+          players: savedPlayers,
+          average: savedPlayers.length > 0
+            ? savedPlayers.reduce((sum, player) => sum + player.total, 0) / savedPlayers.length
+            : 0,
+        },
+      }))
       setLastSavedAt(new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }))
       notifyHomeRecordsChanged(club.id)
       closeScoreUpload()
@@ -1337,6 +1430,8 @@ export default function RoundSchedulePrototypeScreen() {
                   {draft.groups.some((group) => group.members.length > 0) ? (
                     draft.groups.map((group, index) => {
                       const disabled = group.members.length === 0
+                      const summary = scoreGroupSummaries[group.id]
+                      const isComplete = savedScoreGroupIds.includes(group.id)
                       return (
                         <TouchableOpacity
                           key={group.id}
@@ -1352,19 +1447,36 @@ export default function RoundSchedulePrototypeScreen() {
                             <Icon name="camera" size={18} color={C.green} />
                           </View>
                           <View style={{ flex: 1 }}>
-                            <Text style={s.scoreGroupTitle}>{group.name || `${index + 1}조`}</Text>
+                            <View style={s.scoreGroupHeaderRow}>
+                              <Text style={s.scoreGroupTitle}>{group.name || `${index + 1}조`}</Text>
+                              {!disabled ? (
+                                <Text style={[s.scoreGroupSaveState, isComplete && s.scoreGroupSaveStateDone]}>
+                                  {isComplete ? '● 완료' : summary ? '일부 입력' : '미입력'}
+                                </Text>
+                              ) : null}
+                            </View>
                             <Text style={s.scoreGroupMeta}>
-                              {group.time?.trim() ? group.time : '티오프 미정'} · {[group.frontLayoutName ?? '전반 미정', group.backLayoutName ?? '후반 미정', draft.layoutName].filter(Boolean).join(' / ')}
+                              {group.time?.trim() ? `${group.time} Tee Off` : '티오프 미정'}
                             </Text>
-                            <Text style={s.scoreGroupMembers}>
-                              {group.members.length > 0 ? group.members.map((member) => member.name).join(', ') : '배정된 회원 없음'}
-                            </Text>
+                            {summary?.players?.length ? (
+                              <View style={s.scoreSummaryList}>
+                                {summary.players.map((player, playerIndex) => (
+                                  <View key={`${group.id}-${player.name}`} style={s.scoreSummaryRow}>
+                                    <Text style={s.scoreSummaryRank}>
+                                      {playerIndex === 0 ? '🥇' : playerIndex === 1 ? '🥈' : playerIndex === 2 ? '🥉' : `${playerIndex + 1}.`}
+                                    </Text>
+                                    <Text style={s.scoreSummaryName} numberOfLines={1}>{player.name}</Text>
+                                    <Text style={s.scoreSummaryTotal}>{player.total}타</Text>
+                                  </View>
+                                ))}
+                                <Text style={s.scoreSummaryAverage}>평균 {summary.average.toFixed(1)}타</Text>
+                              </View>
+                            ) : (
+                              <Text style={s.scoreGroupMembers}>
+                                {group.members.length > 0 ? group.members.map((member) => member.name).join(', ') : '배정된 회원 없음'}
+                              </Text>
+                            )}
                           </View>
-                          {!disabled ? (
-                            <Text style={[s.scoreGroupSaveState, savedScoreGroupIds.includes(group.id) && s.scoreGroupSaveStateDone]}>
-                              {savedScoreGroupIds.includes(group.id) ? '✓ 저장 완료' : '미입력'}
-                            </Text>
-                          ) : null}
                           <Icon name="chevronRight" size={16} color={disabled ? C.border : C.muted} />
                         </TouchableOpacity>
                       )
@@ -1867,9 +1979,16 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: C.greenLight,
   },
+  scoreGroupHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   scoreGroupTitle: { fontSize: 16, fontWeight: '900', color: C.text },
   scoreGroupMeta: { fontSize: 12, fontWeight: '700', color: C.muted, marginTop: 4 },
   scoreGroupMembers: { fontSize: 13, fontWeight: '800', color: C.text, marginTop: 6, lineHeight: 18 },
+  scoreSummaryList: { marginTop: 8, gap: 4 },
+  scoreSummaryRow: { flexDirection: 'row', alignItems: 'center', minHeight: 22 },
+  scoreSummaryRank: { width: 28, fontSize: 14 },
+  scoreSummaryName: { flex: 1, fontSize: 13, fontWeight: '800', color: C.text },
+  scoreSummaryTotal: { fontSize: 13, fontWeight: '900', color: C.green },
+  scoreSummaryAverage: { marginTop: 4, fontSize: 12, fontWeight: '800', color: C.muted },
   scoreUploadBody: { gap: 12, paddingBottom: 4 },
   scoreUploadGroupBox: {
     borderRadius: 16,
