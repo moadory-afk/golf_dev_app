@@ -715,11 +715,27 @@ function HeroBottomSummary({
       ? departureTimeText.replace(/^출발 추천\s*/, "")
       : "";
   const [mapChooserVisible, setMapChooserVisible] = useState(false);
+  const [weatherChooserVisible, setWeatherChooserVisible] = useState(false);
   const hasDestination =
     typeof courseLatitude === "number" &&
     Number.isFinite(courseLatitude) &&
     typeof courseLongitude === "number" &&
     Number.isFinite(courseLongitude);
+
+  const openWeatherProvider = async (provider: "kma" | "accuweather") => {
+    const query = encodeURIComponent(courseName);
+    const url =
+      provider === "kma"
+        ? "https://www.weather.go.kr/w/index.do"
+        : `https://www.accuweather.com/ko/search-locations?query=${query}`;
+
+    setWeatherChooserVisible(false);
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert("날씨 정보 실행 실패", "날씨 사이트를 열 수 없습니다.");
+    }
+  };
 
   const openNavigation = async (provider: "kakao" | "tmap" | "naver") => {
     if (!hasDestination) {
@@ -780,7 +796,12 @@ function HeroBottomSummary({
         {courseName}
       </Text>
       <View style={styles.summaryContentRow}>
-        <View
+        <TouchableOpacity
+          activeOpacity={0.72}
+          onPress={(event) => {
+            event.stopPropagation?.();
+            setWeatherChooserVisible(true);
+          }}
           style={[
             styles.weatherSummary,
             { gap: isCompact ? 4 : 8, paddingHorizontal: isCompact ? 3 : 8 },
@@ -817,7 +838,7 @@ function HeroBottomSummary({
               </Text>
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
 
         <View style={[styles.summaryDivider, { marginHorizontal: isCompact ? 3 : 6 }]} />
 
@@ -834,20 +855,24 @@ function HeroBottomSummary({
           <Text
             style={[
               styles.summaryDate,
-              { fontSize: isCompact ? 10 : 11, lineHeight: isCompact ? 15 : 17 },
+              { fontSize: isCompact ? 12 : 14, lineHeight: isCompact ? 16 : 19 },
             ]}
             numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.82}
           >
-            🗓 {dateLabel}
+            {dateLabel}
           </Text>
           <Text
             style={[
               styles.summaryTeeTime,
-              { fontSize: isCompact ? 10 : 11, lineHeight: isCompact ? 15 : 17 },
+              { fontSize: isCompact ? 12 : 14, lineHeight: isCompact ? 16 : 19 },
             ]}
             numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.78}
           >
-            ◷ {scheduleLine}
+            {scheduleLine}
           </Text>
         </View>
 
@@ -874,23 +899,54 @@ function HeroBottomSummary({
           <Text
             style={[
               styles.travelTime,
-              { fontSize: isCompact ? 10 : 11, lineHeight: isCompact ? 15 : 17 },
+              { fontSize: isCompact ? 12 : 14, lineHeight: isCompact ? 16 : 19 },
             ]}
             numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.82}
           >
             {travelTimeText.includes("준비중") ? travelTimeText : `${travelTimeText} 소요`}
           </Text>
           <Text
             style={[
               styles.travelBuffer,
-              { fontSize: isCompact ? 9 : 10, lineHeight: isCompact ? 13 : 14 },
+              { fontSize: isCompact ? 11 : 13, lineHeight: isCompact ? 15 : 18 },
             ]}
             numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.78}
           >
             {`${Math.max(0, Math.round(departureBufferMinutes))}분 여유 가정`}
           </Text>
         </TouchableOpacity>
       </View>
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={weatherChooserVisible}
+        onRequestClose={() => setWeatherChooserVisible(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setWeatherChooserVisible(false)}
+          style={styles.mapModalBackdrop}
+        >
+          <TouchableOpacity activeOpacity={1} style={styles.mapChooser}>
+            <Text style={styles.mapChooserTitle}>날씨 정보 선택</Text>
+            <Text style={styles.mapChooserCourse} numberOfLines={1}>{courseName}</Text>
+            <TouchableOpacity style={styles.mapOption} onPress={() => openWeatherProvider("kma")}>
+              <Text style={styles.mapOptionText}>기상청 날씨누리</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.mapOption} onPress={() => openWeatherProvider("accuweather")}>
+              <Text style={styles.mapOptionText}>AccuWeather</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.mapCancel} onPress={() => setWeatherChooserVisible(false)}>
+              <Text style={styles.mapCancelText}>취소</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       <Modal
         animationType="fade"
