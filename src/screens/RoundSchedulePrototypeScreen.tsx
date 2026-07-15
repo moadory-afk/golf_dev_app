@@ -159,6 +159,8 @@ export default function RoundSchedulePrototypeScreen() {
   const [scoreSaveBusy, setScoreSaveBusy] = useState(false)
   const [scoreOcrResult, setScoreOcrResult] = useState<RecognizedScorecard | null>(null)
   const [scoreOcrError, setScoreOcrError] = useState('')
+  const [savedScoreGroupIds, setSavedScoreGroupIds] = useState<string[]>([])
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
   const realtimeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const realtimeKey = useRef(`schedule-${Date.now()}-${Math.random().toString(36).slice(2)}`)
 
@@ -200,6 +202,28 @@ export default function RoundSchedulePrototypeScreen() {
       .then(setAttendanceMap)
       .catch(() => setAttendanceMap({}))
   }, [club?.id, draft.id, editorOpen, refreshKey])
+
+
+  useEffect(() => {
+    if (!club?.id || !draft.id || !editorOpen) {
+      setSavedScoreGroupIds([])
+      return
+    }
+    getRoundSummaries(club.id)
+      .then((rounds) => {
+        const savedNames = new Set(
+          rounds
+            .filter((round) => round.scheduleId === draft.id)
+            .flatMap((round) => round.players.map((player) => player.name))
+        )
+        setSavedScoreGroupIds(
+          draft.groups
+            .filter((group) => group.members.length > 0 && group.members.every((member) => savedNames.has(member.name)))
+            .map((group) => group.id)
+        )
+      })
+      .catch(() => setSavedScoreGroupIds([]))
+  }, [club?.id, draft.id, draft.groups, editorOpen, refreshKey])
 
   useEffect(() => {
     if (!club?.id) return
@@ -635,9 +659,11 @@ export default function RoundSchedulePrototypeScreen() {
       const handicaps = new Map(Object.entries(saved.handicaps ?? {}))
       const awards = computeClubAwardResults(itemIds, saved, handicaps, totalPar(saved.pars))
       await saveClubAwardSnapshots(club.id, saved.id, awards)
+      setSavedScoreGroupIds((current) => current.includes(selectedScoreGroup.id) ? current : [...current, selectedScoreGroup.id])
+      setLastSavedAt(new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }))
+      notifyHomeRecordsChanged(club.id)
       closeScoreUpload()
-      closeEditor()
-      nav.navigate('RoundDetail', { id: saved.id })
+      Alert.alert('스코어 저장 완료', `${selectedScoreGroup.name ?? '선택한 조'}의 스코어를 정상적으로 저장했습니다.`)
     } catch (error) {
       Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
     } finally {
@@ -791,6 +817,13 @@ export default function RoundSchedulePrototypeScreen() {
 
     setSaving(true)
     try {
+      const awardItems = fillToCount(selectedAwardItems, awardCount)
+      const moneyConfig = {
+        strokeFee: parseInt(strokeFee, 10) || 3000,
+        birdieBonus,
+        baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
+      }
+      const awardConfig = { count: awardCount, items: awardItems }
       const next = await upsertRoundSchedule(club.id, {
         id: draft.id,
         date: draft.date,
@@ -802,12 +835,8 @@ export default function RoundSchedulePrototypeScreen() {
         attendanceMode: draft.attendanceMode,
         note: draft.note.trim(),
         moneyGroupIds,
-        moneyConfig: {
-          strokeFee: parseInt(strokeFee, 10) || 3000,
-          birdieBonus,
-          baepanConditions: { strokeOverpar: baepanOn, tie: baepanOn, birdie: false },
-        },
-        awardConfig: { count: awardCount, items: fillToCount(selectedAwardItems, awardCount) },
+        moneyConfig,
+        awardConfig,
         groups: draft.groups.map((group, index) => ({
           ...group,
           name: `${index + 1}조`,
@@ -815,8 +844,35 @@ export default function RoundSchedulePrototypeScreen() {
         })),
       })
       setItems(next)
+      setSelectedAwardItems(awardItems)
+      const savedSchedule = next.find((item) => item.id === draft.id) ?? next.find((item) =>
+        item.date === draft.date &&
+        (item.courseId ?? '') === (draft.courseId ?? '') &&
+        item.groups[0]?.time === draft.groups[0]?.time.trim()
+      )
+      if (savedSchedule) {
+        setDraft({
+          id: savedSchedule.id,
+          date: savedSchedule.date,
+          courseId: savedSchedule.courseId,
+          courseName: savedSchedule.courseName,
+          layoutId: savedSchedule.layoutId,
+          layoutName: savedSchedule.layoutName,
+          status: savedSchedule.status,
+          attendanceMode: savedSchedule.attendanceMode,
+          note: savedSchedule.note,
+          moneyConfig,
+          awardConfig,
+          groups: savedSchedule.groups,
+        })
+        await saveRoundLottoDrafter(club.id, savedSchedule.id, lottoDrafterUserId)
+      }
       notifyHomeDashboardChanged(club.id)
-      closeEditor()
+      const savedAt = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+      setLastSavedAt(savedAt)
+      Alert.alert('저장 완료', '라운드 일정, 시상룰, 머니게임, 로또 추첨자를 저장했습니다.')
+    } catch (error) {
+      Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
     } finally {
       setSaving(false)
     }
@@ -1042,15 +1098,18 @@ export default function RoundSchedulePrototypeScreen() {
         <View style={s.modalBackdrop}>
           <View style={s.modalSheet}>
             <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>{draft.id ? '라운드 일정 수정' : '라운드 일정 등록'}</Text>
+              <View>
+                <Text style={s.modalTitle}>{draft.id ? '라운드 일정 수정' : '라운드 일정 등록'}</Text>
+                {lastSavedAt ? <Text style={s.headerSavedText}>✓ 마지막 저장 {lastSavedAt}</Text> : null}
+              </View>
               <View style={s.modalHeaderActions}>
                 {draft.id ? (
                   <TouchableOpacity style={[s.headerActionButton, s.headerDeleteButton]} onPress={handleDelete} disabled={saving} activeOpacity={0.8}>
                     <Text style={s.headerDeleteText}>삭제</Text>
                   </TouchableOpacity>
                 ) : null}
-                <TouchableOpacity style={[s.headerActionButton, s.headerSaveButton]} onPress={handleSave} disabled={saving} activeOpacity={0.8}>
-                  <Text style={s.headerSaveText}>{saving ? '저장 중' : '저장'}</Text>
+                <TouchableOpacity style={[s.headerActionButton, s.headerSaveButton]} onPress={handleSave} disabled={saving || scoreSaveBusy} activeOpacity={0.8}>
+                  <Text style={s.headerSaveText}>{saving ? '전체 저장 중' : '전체 저장'}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={s.closeButton} onPress={closeEditor} activeOpacity={0.8}>
                   <Text style={s.closeButtonText}>닫기</Text>
@@ -1260,6 +1319,21 @@ export default function RoundSchedulePrototypeScreen() {
             ) : editorTab === 'score' ? (
               <>
                 <ScrollView contentContainerStyle={s.scoreBody}>
+                  {(() => {
+                    const scoreGroups = draft.groups.filter((group) => group.members.length > 0)
+                    const completed = scoreGroups.filter((group) => savedScoreGroupIds.includes(group.id)).length
+                    return (
+                      <View style={s.scoreStatusCard}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.scoreStatusTitle}>스코어 입력 현황</Text>
+                          <Text style={s.scoreStatusMeta}>{completed} / {scoreGroups.length}개 조 입력 완료</Text>
+                        </View>
+                        <Text style={[s.scoreStatusBadge, completed === scoreGroups.length && scoreGroups.length > 0 && s.scoreStatusBadgeComplete]}>
+                          {scoreGroups.length === 0 ? '조편성 전' : completed === scoreGroups.length ? '입력 완료' : `${scoreGroups.length - completed}개 조 미입력`}
+                        </Text>
+                      </View>
+                    )
+                  })()}
                   {draft.groups.some((group) => group.members.length > 0) ? (
                     draft.groups.map((group, index) => {
                       const disabled = group.members.length === 0
@@ -1286,6 +1360,11 @@ export default function RoundSchedulePrototypeScreen() {
                               {group.members.length > 0 ? group.members.map((member) => member.name).join(', ') : '배정된 회원 없음'}
                             </Text>
                           </View>
+                          {!disabled ? (
+                            <Text style={[s.scoreGroupSaveState, savedScoreGroupIds.includes(group.id) && s.scoreGroupSaveStateDone]}>
+                              {savedScoreGroupIds.includes(group.id) ? '✓ 저장 완료' : '미입력'}
+                            </Text>
+                          ) : null}
                           <Icon name="chevronRight" size={16} color={disabled ? C.border : C.muted} />
                         </TouchableOpacity>
                       )
@@ -1365,15 +1444,6 @@ export default function RoundSchedulePrototypeScreen() {
                     </View>
                   </View>
                 ))}
-
-                <TouchableOpacity
-                  style={[s.saveButton, awardSaving && { opacity: 0.6 }]}
-                  onPress={saveAwardConfig}
-                  disabled={awardSaving}
-                  activeOpacity={0.86}
-                >
-                  {awardSaving ? <ActivityIndicator color={C.accentText} /> : <Text style={s.saveButtonText}>시상룰 저장</Text>}
-                </TouchableOpacity>
               </ScrollView>
             ) : (
               <ScrollView contentContainerStyle={s.awardBody}>
@@ -1481,26 +1551,9 @@ export default function RoundSchedulePrototypeScreen() {
                           )
                         })}
                       </View>
-                      <TouchableOpacity
-                        style={[s.lottoDrafterSaveBtn, lottoDrafterSaving && { opacity: 0.6 }]}
-                        onPress={saveLottoDrafter}
-                        disabled={lottoDrafterSaving}
-                        activeOpacity={0.86}
-                      >
-                        {lottoDrafterSaving ? <ActivityIndicator color={C.accentText} /> : <Text style={s.saveButtonText}>추첨자 저장</Text>}
-                      </TouchableOpacity>
                     </>
                   )}
                 </View>
-
-                <TouchableOpacity
-                  style={[s.saveButton, moneySaving && { opacity: 0.6 }]}
-                  onPress={saveMoneyGameConfig}
-                  disabled={moneySaving}
-                  activeOpacity={0.86}
-                >
-                  {moneySaving ? <ActivityIndicator color={C.accentText} /> : <Text style={s.saveButtonText}>머니게임 저장</Text>}
-                </TouchableOpacity>
               </ScrollView>
             )}
           </View>
@@ -1567,7 +1620,7 @@ export default function RoundSchedulePrototypeScreen() {
 
               {scoreOcrResult && (
                 <View style={s.scoreOcrResult}>
-                  <Text style={s.scoreOcrResultTitle}>인식 결과</Text>
+                  <Text style={s.scoreOcrResultTitle}>인식 결과 · 저장 전</Text>
                   {scoreOcrResult.players.map((player, index) => {
                     const total = player.diffs.reduce<number>((sum, diff, holeIndex) => sum + ((scoreOcrResult.pars[holeIndex] ?? 4) + (diff ?? 0)), 0)
                     return (
@@ -1583,8 +1636,9 @@ export default function RoundSchedulePrototypeScreen() {
                     disabled={scoreSaveBusy}
                     activeOpacity={0.86}
                   >
-                    {scoreSaveBusy ? <ActivityIndicator color={C.accentText} /> : <Text style={s.scoreSaveButtonText}>스코어 저장</Text>}
+                    {scoreSaveBusy ? <ActivityIndicator color={C.accentText} /> : <Text style={s.scoreSaveButtonText}>이 조 스코어 저장</Text>}
                   </TouchableOpacity>
+                  <Text style={s.scoreSaveHelp}>저장 완료 후 스코어 탭의 입력 현황에 즉시 반영됩니다.</Text>
                 </View>
               )}
             </ScrollView>
@@ -1742,6 +1796,7 @@ const s = StyleSheet.create({
   },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   modalTitle: { fontSize: 24, fontWeight: '900', color: C.text },
+  headerSavedText: { marginTop: 3, fontSize: 11, fontWeight: '800', color: C.green },
   modalHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   headerActionButton: {
     minHeight: 34,
@@ -1784,6 +1839,14 @@ const s = StyleSheet.create({
   },
   editorPlaceholderTitle: { fontSize: 18, fontWeight: '900', color: C.text },
   editorPlaceholderDesc: { fontSize: 13, lineHeight: 20, color: C.muted, textAlign: 'center' },
+  scoreStatusCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: C.border, backgroundColor: '#F8FAF9', marginBottom: 2 },
+  scoreStatusTitle: { fontSize: 15, fontWeight: '900', color: C.text },
+  scoreStatusMeta: { marginTop: 3, fontSize: 12, fontWeight: '700', color: C.muted },
+  scoreStatusBadge: { fontSize: 11, fontWeight: '900', color: '#B66A18', backgroundColor: '#FFF3E8', paddingHorizontal: 9, paddingVertical: 6, borderRadius: 999 },
+  scoreStatusBadgeComplete: { color: C.greenDark, backgroundColor: '#E9F6EE' },
+  scoreGroupSaveState: { fontSize: 11, fontWeight: '900', color: '#B66A18', marginRight: 4 },
+  scoreGroupSaveStateDone: { color: C.green },
+  scoreSaveHelp: { marginTop: 8, textAlign: 'center', fontSize: 11, fontWeight: '700', color: C.muted },
   scoreBody: { flexGrow: 1, gap: 10, paddingBottom: 20 },
   scoreGroupCard: {
     flexDirection: 'row',
