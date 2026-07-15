@@ -142,6 +142,7 @@ export default function RoundSchedulePrototypeScreen() {
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorTab, setEditorTab] = useState<RoundEditorTab>('basic')
   const [awardCount, setAwardCount] = useState(2)
+  const [awardCountPickerOpen, setAwardCountPickerOpen] = useState(false)
   const [selectedAwardItems, setSelectedAwardItems] = useState<string[]>(['medal', 'birdieKing', 'last'])
   const [awardSaving, setAwardSaving] = useState(false)
   const [strokeFee, setStrokeFee] = useState('3000')
@@ -209,6 +210,30 @@ export default function RoundSchedulePrototypeScreen() {
       .then(setAttendanceMap)
       .catch(() => setAttendanceMap({}))
   }, [club?.id, draft.id, editorOpen, refreshKey])
+
+  const groupedParticipantCount = useMemo(() => {
+    const groupedMembers = draft.groups.flatMap((group) => group.members)
+    const uniqueMemberKeys = new Set(
+      groupedMembers.map((member, index) => {
+        const userId = member.userId?.trim()
+        if (userId) return `user:${userId}`
+        const name = member.name?.trim()
+        return name ? `name:${name}` : `member:${index}`
+      }),
+    )
+    return uniqueMemberKeys.size
+  }, [draft.groups])
+
+  const awardCountOptions = useMemo(
+    () => Array.from({ length: groupedParticipantCount }, (_, index) => index + 1),
+    [groupedParticipantCount],
+  )
+
+  useEffect(() => {
+    if (groupedParticipantCount <= 0 || awardCount <= groupedParticipantCount) return
+    setAwardCount(groupedParticipantCount)
+    setSelectedAwardItems((current) => current.slice(0, groupedParticipantCount))
+  }, [awardCount, groupedParticipantCount])
 
 
   useEffect(() => {
@@ -1202,18 +1227,6 @@ export default function RoundSchedulePrototypeScreen() {
     <View style={[s.screen, modalOnly && s.modalOnlyScreen]}>
       {!modalOnly ? (
       <ScrollView contentContainerStyle={s.content}>
-        <View style={s.heroCard}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.heroEyebrow}>{club?.name ?? '클럽'}</Text>
-            <Text style={s.heroTitle}>라운드 일정 관리</Text>
-            <Text style={s.heroDesc}>총무가 날짜, 골프장, 코스, 티오프 시간과 조편성을 등록하는 운영 화면입니다.</Text>
-          </View>
-          <TouchableOpacity style={s.heroButton} onPress={openCreate} activeOpacity={0.86}>
-            <Icon name="plus" size={18} color={C.accentText} />
-            <Text style={s.heroButtonText}>일정 추가</Text>
-          </TouchableOpacity>
-        </View>
-
         <View style={s.listCard}>
           <View style={s.listHeader}>
             <Text style={s.listTitle}>등록된 일정</Text>
@@ -1567,22 +1580,21 @@ export default function RoundSchedulePrototypeScreen() {
               </>
             ) : editorTab === 'award' ? (
               <ScrollView contentContainerStyle={s.awardBody}>
-                <Text style={s.fieldLabel}>시상 인원</Text>
-                <View style={s.awardChipRow}>
-                  {[1, 2, 3, 4, 5].map((count) => (
-                    <TouchableOpacity
-                      key={count}
-                      style={[s.awardChip, awardCount === count && s.awardChipActive]}
-                      onPress={() => {
-                        setAwardCount(count)
-                        setSelectedAwardItems((current) => current.slice(0, count))
-                      }}
-                      activeOpacity={0.86}
-                    >
-                      <Text style={[s.awardChipText, awardCount === count && s.awardChipTextActive]}>{count}명</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+                <Text style={s.fieldLabel}>시상 대상 인원</Text>
+                <TouchableOpacity
+                  style={[s.awardCountSelect, groupedParticipantCount <= 0 && s.awardCountSelectDisabled]}
+                  onPress={() => groupedParticipantCount > 0 && setAwardCountPickerOpen(true)}
+                  disabled={groupedParticipantCount <= 0}
+                  activeOpacity={0.86}
+                >
+                  <View>
+                    <Text style={s.awardCountSelectValue}>
+                      {groupedParticipantCount > 0 ? `${Math.min(awardCount, groupedParticipantCount)}명` : '조편성 인원 없음'}
+                    </Text>
+                    <Text style={s.awardCountSelectHint}>최대 {groupedParticipantCount}명 · 조편성 포함 인원 기준</Text>
+                  </View>
+                  <Text style={s.awardCountSelectArrow}>⌄</Text>
+                </TouchableOpacity>
 
                 <View style={s.inlineHeader}>
                   <Text style={s.fieldLabel}>시상 항목</Text>
@@ -1591,7 +1603,9 @@ export default function RoundSchedulePrototypeScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {AWARD_CATEGORIES.map((category) => (
+                {AWARD_CATEGORIES.map((category) => {
+                  const isSpecialCategory = category.label === '특별상 / 유머'
+                  return (
                   <View key={category.label} style={s.awardCategory}>
                     <Text style={s.awardCategoryTitle}>{category.label}</Text>
                     <View style={s.awardChipRow}>
@@ -1599,7 +1613,14 @@ export default function RoundSchedulePrototypeScreen() {
                         const selected = selectedAwardItems.includes(item.id)
                         return (
                           <View key={item.id} style={[s.awardOption, selected && s.awardOptionActive]}>
-                            <TouchableOpacity style={s.awardOptionMain} onPress={() => toggleAwardItem(item.id)} activeOpacity={0.86}>
+                            <TouchableOpacity
+                              style={s.awardOptionMain}
+                              onPress={() => {
+                                toggleAwardItem(item.id)
+                                if (isSpecialCategory) Alert.alert(item.label, item.detail)
+                              }}
+                              activeOpacity={0.86}
+                            >
                               <Text style={[s.awardChipText, selected && s.awardChipTextActive]}>{item.icon} {item.label}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
@@ -1614,7 +1635,9 @@ export default function RoundSchedulePrototypeScreen() {
                       })}
                     </View>
                   </View>
-                ))}
+                  )
+                })}
+                <Text style={s.awardHelpText}>특별상 / 유머 항목은 선택하면 간단한 설명이 표시됩니다.</Text>
               </ScrollView>
             ) : (
               <ScrollView contentContainerStyle={s.awardBody}>
@@ -1729,6 +1752,28 @@ export default function RoundSchedulePrototypeScreen() {
             )}
           </View>
         </View>
+      </Modal>
+
+      <Modal transparent animationType="fade" visible={awardCountPickerOpen} onRequestClose={() => setAwardCountPickerOpen(false)}>
+        <PickerShell title="시상 대상 인원 선택" onClose={() => setAwardCountPickerOpen(false)}>
+          {awardCountOptions.length > 0 ? awardCountOptions.map((count) => (
+            <TouchableOpacity
+              key={count}
+              style={[s.pickerRow, count === awardCount && s.awardCountPickerRowActive]}
+              onPress={() => {
+                setAwardCount(count)
+                setSelectedAwardItems((current) => current.slice(0, count))
+                setAwardCountPickerOpen(false)
+              }}
+              activeOpacity={0.84}
+            >
+              <Text style={[s.pickerRowText, count === awardCount && s.awardCountPickerTextActive]}>{count}명</Text>
+              {count === awardCount ? <Text style={s.awardCountPickerCheck}>✓</Text> : null}
+            </TouchableOpacity>
+          )) : (
+            <Text style={s.pickerEmptyText}>참석으로 등록된 라운드 참가자가 없습니다.</Text>
+          )}
+        </PickerShell>
       </Modal>
 
       <Modal transparent animationType="fade" visible={!!scoreGroupId} onRequestClose={closeScoreUpload}>
@@ -2367,6 +2412,26 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   confirmButtonText: { fontSize: 16, fontWeight: '900', color: C.greenDark },
+  awardCountSelect: {
+    minHeight: 58,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+  },
+  awardCountSelectDisabled: { opacity: 0.55 },
+  awardCountSelectValue: { fontSize: 16, fontWeight: '900', color: C.text },
+  awardCountSelectHint: { marginTop: 3, fontSize: 12, fontWeight: '700', color: C.muted },
+  awardCountSelectArrow: { fontSize: 22, fontWeight: '900', color: C.green },
+  awardCountPickerRowActive: { backgroundColor: '#e7f6ed' },
+  awardCountPickerTextActive: { color: C.green },
+  awardCountPickerCheck: { fontSize: 18, fontWeight: '900', color: C.green },
+  awardHelpText: { fontSize: 12, lineHeight: 18, color: C.muted, fontWeight: '700' },
   pickerBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(16, 24, 18, 0.24)',

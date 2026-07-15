@@ -2284,6 +2284,9 @@ function CourseSeasonImageModal({
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [coursePickerOpen, setCoursePickerOpen] = useState(false);
   const [courseSearch, setCourseSearch] = useState("");
+  const [courseSeasonAvailability, setCourseSeasonAvailability] = useState<
+    Record<string, Partial<Record<SeasonKey, boolean>>>
+  >({});
   const [images, setImages] = useState<Record<SeasonKey, string | null>>({
     spring: null,
     summer: null,
@@ -2315,6 +2318,48 @@ function CourseSeasonImageModal({
       setSelectedCourseId(courseList[0].id);
     }
   }, [courseList, selectedCourseId]);
+
+  useEffect(() => {
+    const courseIds = courseList.map((course) => course.id).filter(Boolean);
+    if (courseIds.length === 0) {
+      setCourseSeasonAvailability({});
+      return;
+    }
+
+    let mounted = true;
+    supabase
+      .from("golf_course_season_images")
+      .select("golf_course_id, season")
+      .in("golf_course_id", courseIds)
+      .eq("is_active", true)
+      .then(({ data, error }) => {
+        if (!mounted) return;
+        if (error) throw error;
+        const next: Record<
+          string,
+          Partial<Record<SeasonKey, boolean>>
+        > = {};
+        ((data ?? []) as Array<{
+          golf_course_id: string;
+          season: SeasonKey;
+        }>).forEach((row) => {
+          next[row.golf_course_id] = {
+            ...(next[row.golf_course_id] ?? {}),
+            [row.season]: true,
+          };
+        });
+        setCourseSeasonAvailability(next);
+      })
+      .catch((error) => {
+        if (mounted) {
+          console.warn("골프장 계절 사진 상태 조회 실패", error);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [courseList]);
 
   useEffect(() => {
     if (!selectedCourse?.id) return;
@@ -2377,6 +2422,13 @@ function CourseSeasonImageModal({
         result.assets[0].uri,
       );
       setImages((prev) => ({ ...prev, [season]: publicUrl }));
+      setCourseSeasonAvailability((prev) => ({
+        ...prev,
+        [selectedCourse.id]: {
+          ...(prev[selectedCourse.id] ?? {}),
+          [season]: true,
+        },
+      }));
     } catch (error) {
       Alert.alert(
         "저장 실패",
@@ -2595,14 +2647,37 @@ function CourseSeasonImageModal({
                       activeOpacity={0.84}
                     >
                       <View style={s.coursePickerRowTextWrap}>
-                        <Text
-                          style={[
-                            s.coursePickerRowText,
-                            active && s.coursePickerRowTextActive,
-                          ]}
-                        >
-                          {course.name}
-                        </Text>
+                        <View style={s.coursePickerRowTopLine}>
+                          <Text
+                            style={[
+                              s.coursePickerRowText,
+                              active && s.coursePickerRowTextActive,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {course.name}
+                          </Text>
+                          <View style={s.coursePickerSeasonRow}>
+                            {SEASONS.map((season) => {
+                              const registered =
+                                !!courseSeasonAvailability[course.id]?.[
+                                  season.key
+                                ];
+                              return (
+                                <Text
+                                  key={season.key}
+                                  style={[
+                                    s.coursePickerSeasonText,
+                                    registered &&
+                                      s.coursePickerSeasonTextRegistered,
+                                  ]}
+                                >
+                                  {season.label}
+                                </Text>
+                              );
+                            })}
+                          </View>
+                        </View>
                         <Text style={s.coursePickerRowMeta}>
                           {course.region}
                         </Text>
@@ -3529,7 +3604,32 @@ const s = StyleSheet.create({
     borderBottomColor: "transparent",
   },
   coursePickerRowTextWrap: { flex: 1 },
-  coursePickerRowText: { fontSize: 14, fontWeight: "900", color: C.text },
+  coursePickerRowTopLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  coursePickerRowText: {
+    flexShrink: 1,
+    fontSize: 14,
+    fontWeight: "900",
+    color: C.text,
+  },
+  coursePickerSeasonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    flexShrink: 0,
+  },
+  coursePickerSeasonText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: C.muted,
+  },
+  coursePickerSeasonTextRegistered: {
+    color: C.green,
+  },
   coursePickerRowTextActive: { color: C.green },
   coursePickerRowMeta: {
     marginTop: 3,
