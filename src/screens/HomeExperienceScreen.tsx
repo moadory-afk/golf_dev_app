@@ -737,6 +737,7 @@ export default function HomeExperienceScreen() {
   const [attendanceOverviewRound, setAttendanceOverviewRound] = useState<HomeUpcomingRound | null>(null);
   const [weatherDetailRound, setWeatherDetailRound] = useState<HomeUpcomingRound | null>(null);
   const [weatherDetailHours, setWeatherDetailHours] = useState<HomeWeatherHour[]>([]);
+  const [weatherDetailSummary, setWeatherDetailSummary] = useState("");
   const [recordDetailMode, setRecordDetailMode] = useState<HomeRecordDetailMode | null>(null);
   const [recordDetailRounds, setRecordDetailRounds] = useState<SavedRound[]>([]);
   const [recordAwardRows, setRecordAwardRows] = useState<AwardDetailRow[]>([]);
@@ -991,6 +992,7 @@ export default function HomeExperienceScreen() {
       if (actionType === "open_weather_detail" && round) {
         setWeatherDetailRound(round);
         setWeatherDetailHours(feed.weatherHours ?? round.fiveHourWeatherHours ?? []);
+        setWeatherDetailSummary(feed.message ?? "");
         return;
       }
       resolveFeedNavigation(nav, actionType, round);
@@ -1290,9 +1292,11 @@ export default function HomeExperienceScreen() {
         visible={weatherDetailRound !== null}
         round={weatherDetailRound}
         hours={weatherDetailHours}
+        summary={weatherDetailSummary}
         onClose={() => {
           setWeatherDetailRound(null);
           setWeatherDetailHours([]);
+          setWeatherDetailSummary("");
         }}
       />
 
@@ -1360,11 +1364,13 @@ function WeatherDetailModal({
   visible,
   round,
   hours,
+  summary,
   onClose,
 }: {
   visible: boolean;
   round: HomeUpcomingRound | null;
   hours: HomeWeatherHour[];
+  summary: string;
   onClose: () => void;
 }) {
   const { palette } = useSkin();
@@ -1374,7 +1380,7 @@ function WeatherDetailModal({
         <View style={[styles.weatherModalCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
           <View style={styles.weatherModalHeader}>
             <View style={styles.weatherModalHeaderText}>
-              <Text style={[styles.weatherModalTitle, { color: palette.text }]}>티오프부터 5시간 예보</Text>
+              <Text style={[styles.weatherModalTitle, { color: palette.text }]}>날씨 상세 정보</Text>
               <Text style={[styles.weatherModalSubtitle, { color: palette.muted }]} numberOfLines={1}>
                 {round ? `${round.courseName} · ${round.teeTime}` : '라운드 날씨 상세 정보'}
               </Text>
@@ -1383,6 +1389,14 @@ function WeatherDetailModal({
               <Text style={[styles.weatherModalCloseText, { color: palette.text }]}>닫기</Text>
             </TouchableOpacity>
           </View>
+
+          {summary ? (
+            <View style={[styles.weatherSummaryBox, { backgroundColor: palette.background, borderColor: palette.border }]}>
+              <Text style={[styles.weatherSummaryText, { color: palette.text }]}>{summary}</Text>
+            </View>
+          ) : null}
+
+          <Text style={[styles.weatherSectionTitle, { color: palette.text }]}>라운딩 시간대별 예보</Text>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weatherHourList}>
             {hours.length > 0 ? hours.map((hour, index) => (
@@ -2794,6 +2808,9 @@ const styles = StyleSheet.create({
   weatherModalSubtitle: { marginTop: 3, fontSize: 12, lineHeight: 17, fontWeight: "700" },
   weatherModalClose: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
   weatherModalCloseText: { fontSize: 12, lineHeight: 16, fontWeight: "900" },
+  weatherSummaryBox: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14 },
+  weatherSummaryText: { fontSize: 13, lineHeight: 20, fontWeight: "800" },
+  weatherSectionTitle: { fontSize: 15, lineHeight: 21, fontWeight: "900", marginBottom: 10 },
   weatherHourList: { gap: 10, paddingRight: 4 },
   weatherHourCard: { width: 104, borderWidth: 1, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 10, alignItems: "center" },
   weatherHourTime: { fontSize: 13, lineHeight: 18, fontWeight: "900" },
