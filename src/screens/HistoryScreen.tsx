@@ -439,7 +439,6 @@ function memberPlaceholders(members: HistoryMember[]) {
   const names = members
     .map((member) => shortName(member.name || ''))
     .filter((name) => name.length > 0)
-    .slice(0, 8)
   return names.length > 0 ? names : ['회원']
 }
 
@@ -588,15 +587,22 @@ function EmptyClub({ members, handicapBasis }: { members: HistoryMember[]; handi
           <Text style={[s.th, { flex: 1, textAlign: 'right' }]}>평균</Text>
           <Text style={[s.th, { flex: 1, textAlign: 'right' }]}>핸디</Text>
         </View>
-        {names.map((name, index) => (
-          <View key={`${name}-${index}`} style={s.tableRow}>
-            <Text style={[s.td, { flex: 0.6, textAlign: 'center', color: C.muted }]}>{index + 1}</Text>
-            <Text style={[s.td, { flex: 2, fontWeight: '700' }]}>{name}</Text>
-            <Text style={[s.td, { flex: 1, textAlign: 'center', color: C.muted }]}>-</Text>
-            <Text style={[s.td, { flex: 1, textAlign: 'right', color: C.muted }]}>-</Text>
-            <Text style={[s.td, { flex: 1, textAlign: 'right', color: C.muted }]}>-</Text>
-          </View>
-        ))}
+        <ScrollView
+          style={s.clubRankingScroll}
+          contentContainerStyle={s.clubRankingScrollContent}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator
+        >
+          {names.map((name, index) => (
+            <View key={`${name}-${index}`} style={s.tableRow}>
+              <Text style={[s.td, { flex: 0.6, textAlign: 'center', color: C.muted }]}>{index + 1}</Text>
+              <Text style={[s.td, { flex: 2, fontWeight: '700' }]}>{name}</Text>
+              <Text style={[s.td, { flex: 1, textAlign: 'center', color: C.muted }]}>-</Text>
+              <Text style={[s.td, { flex: 1, textAlign: 'right', color: C.muted }]}>-</Text>
+              <Text style={[s.td, { flex: 1, textAlign: 'right', color: C.muted }]}>-</Text>
+            </View>
+          ))}
+        </ScrollView>
       </View>
     </>
   )
@@ -2219,7 +2225,13 @@ function Club({ rounds, handicapBasis: currentHandicapBasis, members = [] }: { r
           <Text style={[s.th, { flex: 1, textAlign: 'center' }]}>최저</Text>
           <Text style={[s.th, { flex: 1.2, textAlign: 'center' }]}>핸디</Text>
         </View>
-        {stats.map((stat, i) => {
+        <ScrollView
+          style={s.clubRankingScroll}
+          contentContainerStyle={s.clubRankingScrollContent}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator
+        >
+          {stats.map((stat, i) => {
           const medalBg = ['#fffbe8', '#f4f6f8', '#fdf5f0']
           const rank = stat.hasRecord ? i + 1 : null
           const isMedal = rank !== null && rank <= 3
@@ -2257,7 +2269,8 @@ function Club({ rounds, handicapBasis: currentHandicapBasis, members = [] }: { r
               </Text>
             </View>
           )
-        })}
+          })}
+        </ScrollView>
       </View>
     </>
   )
@@ -2970,6 +2983,8 @@ const s = StyleSheet.create({
   dropdownItemText: { fontSize: 13, color: C.text },
   dropdownItemActive: { color: C.green, fontWeight: '700' } as const,
   tableHeader: { flexDirection: 'row', borderBottomWidth: 1.5, borderBottomColor: C.border, paddingBottom: 7, marginBottom: 2 },
+  clubRankingScroll: { maxHeight: 430 },
+  clubRankingScrollContent: { paddingBottom: 2 },
   tableRow: { flexDirection: 'row', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.border },
   th: { fontSize: 11, color: C.muted, fontWeight: '700', letterSpacing: 0.3 },
   td: { fontSize: 13, color: C.text },
