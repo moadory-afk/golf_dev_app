@@ -752,6 +752,7 @@ export default function HomeExperienceScreen() {
   const [attendanceOverviewRound, setAttendanceOverviewRound] = useState<HomeUpcomingRound | null>(null);
   const [weatherDetailRound, setWeatherDetailRound] = useState<HomeUpcomingRound | null>(null);
   const [weatherDetailHours, setWeatherDetailHours] = useState<HomeWeatherHour[]>([]);
+  const [weatherDetailOpenHours, setWeatherDetailOpenHours] = useState<HomeWeatherHour[]>([]);
   const [weatherDetailSummary, setWeatherDetailSummary] = useState("");
   const [recordDetailMode, setRecordDetailMode] = useState<HomeRecordDetailMode | null>(null);
   const [recordDetailRounds, setRecordDetailRounds] = useState<SavedRound[]>([]);
@@ -1024,6 +1025,7 @@ export default function HomeExperienceScreen() {
       if (actionType === "open_weather_detail" && round) {
         setWeatherDetailRound(round);
         setWeatherDetailHours(feed.weatherHours ?? round.fiveHourWeatherHours ?? []);
+        setWeatherDetailOpenHours(round.openWeatherHours ?? []);
         setWeatherDetailSummary(feed.message ?? "");
         return;
       }
@@ -1273,6 +1275,16 @@ export default function HomeExperienceScreen() {
                       modalOnly: true,
                     })
                   }
+                  onWeatherPress={(round) => {
+                    setWeatherDetailRound(round);
+                    setWeatherDetailHours(round.fiveHourWeatherHours ?? []);
+                    setWeatherDetailOpenHours(round.openWeatherHours ?? []);
+                    setWeatherDetailSummary(
+                      [round.fiveHourWeatherSummary, round.fiveHourWeatherDetail]
+                        .filter(Boolean)
+                        .join("\n"),
+                    );
+                  }}
                   heroImageSource={activeHeroImageSource}
                   topInset={insets.top}
                   activeIndex={activeRoundIndex}
@@ -1324,10 +1336,12 @@ export default function HomeExperienceScreen() {
         visible={weatherDetailRound !== null}
         round={weatherDetailRound}
         hours={weatherDetailHours}
+        openWeatherHours={weatherDetailOpenHours}
         summary={weatherDetailSummary}
         onClose={() => {
           setWeatherDetailRound(null);
           setWeatherDetailHours([]);
+          setWeatherDetailOpenHours([]);
           setWeatherDetailSummary("");
         }}
       />
@@ -1396,16 +1410,38 @@ function WeatherDetailModal({
   visible,
   round,
   hours,
+  openWeatherHours,
   summary,
   onClose,
 }: {
   visible: boolean;
   round: HomeUpcomingRound | null;
   hours: HomeWeatherHour[];
+  openWeatherHours: HomeWeatherHour[];
   summary: string;
   onClose: () => void;
 }) {
   const { palette } = useSkin();
+  const compareTimes = Array.from(new Set([
+    ...hours.map((item) => item.time),
+    ...openWeatherHours.map((item) => item.time),
+  ])).sort();
+  const renderProviderRow = (label: string, hour?: HomeWeatherHour) => (
+    <View style={styles.weatherProviderRow}>
+      <Text style={[styles.weatherProviderLabel, { color: palette.muted }]}>{label}</Text>
+      {hour ? (
+        <>
+          <Text style={styles.weatherProviderIcon}>{hour.icon}</Text>
+          <Text style={[styles.weatherProviderCondition, { color: palette.text }]} numberOfLines={1}>{hour.condition}</Text>
+          <Text style={[styles.weatherProviderValue, { color: palette.text }]}>{hour.tempC}°</Text>
+          <Text style={[styles.weatherProviderMeta, { color: palette.muted }]}>비 {hour.pop ?? 0}%</Text>
+          <Text style={[styles.weatherProviderMeta, { color: palette.muted }]}>바람 {typeof hour.windMs === "number" ? `${hour.windMs}m/s` : "-"}</Text>
+        </>
+      ) : (
+        <Text style={[styles.weatherProviderEmpty, { color: palette.muted }]}>해당 시각 예보 없음</Text>
+      )}
+    </View>
+  );
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.weatherModalBackdrop}>
@@ -1428,17 +1464,17 @@ function WeatherDetailModal({
             </View>
           ) : null}
 
-          <Text style={[styles.weatherSectionTitle, { color: palette.text }]}>라운딩 시간대별 예보</Text>
+          <View style={styles.weatherSectionHeader}>
+            <Text style={[styles.weatherSectionTitle, { color: palette.text }]}>라운딩 시간대별 예보 비교</Text>
+            <Text style={[styles.weatherIntervalNote, { color: palette.muted }]}>기상청 시간별 · OpenWeather 3시간 간격</Text>
+          </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weatherHourList}>
-            {hours.length > 0 ? hours.map((hour, index) => (
-              <View key={`${hour.time}-${index}`} style={[styles.weatherHourCard, { borderColor: palette.border, backgroundColor: palette.background }]}>
-                <Text style={[styles.weatherHourTime, { color: palette.text }]}>{hour.time.replace(':00', '시')}</Text>
-                <Text style={styles.weatherHourIcon}>{hour.icon}</Text>
-                <Text style={[styles.weatherHourCondition, { color: palette.text }]} numberOfLines={1}>{hour.condition}</Text>
-                <Text style={[styles.weatherHourTemp, { color: palette.text }]}>{hour.tempC}°C</Text>
-                <Text style={[styles.weatherHourMeta, { color: palette.muted }]}>비 {hour.pop ?? 0}%</Text>
-                <Text style={[styles.weatherHourMeta, { color: palette.muted }]}>바람 {typeof hour.windMs === 'number' ? `${hour.windMs}m/s` : '-'}</Text>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.weatherCompareList}>
+            {compareTimes.length > 0 ? compareTimes.map((time) => (
+              <View key={time} style={[styles.weatherCompareCard, { borderColor: palette.border, backgroundColor: palette.background }]}> 
+                <Text style={[styles.weatherCompareTime, { color: palette.text }]}>{time.replace(':00', '시')}</Text>
+                {renderProviderRow("기상청", hours.find((item) => item.time === time))}
+                {renderProviderRow("OpenWeather", openWeatherHours.find((item) => item.time === time))}
               </View>
             )) : (
               <View style={styles.weatherEmptyBox}>
@@ -1446,6 +1482,7 @@ function WeatherDetailModal({
               </View>
             )}
           </ScrollView>
+          <Text style={[styles.weatherSourceText, { color: palette.muted }]}>기상청 단기예보{round?.kmaIssuedAt ? ` · ${round.kmaIssuedAt} 발표` : ""}</Text>
         </View>
       </View>
     </Modal>
@@ -2835,6 +2872,7 @@ const styles = StyleSheet.create({
     maxWidth: 620,
     width: "100%",
     alignSelf: "center",
+    maxHeight: "82%",
   },
   weatherModalHeader: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
   weatherModalHeaderText: { flex: 1, minWidth: 0 },
@@ -2844,7 +2882,20 @@ const styles = StyleSheet.create({
   weatherModalCloseText: { fontSize: 12, lineHeight: 16, fontWeight: "900" },
   weatherSummaryBox: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14 },
   weatherSummaryText: { fontSize: 13, lineHeight: 20, fontWeight: "800" },
-  weatherSectionTitle: { fontSize: 15, lineHeight: 21, fontWeight: "900", marginBottom: 10 },
+  weatherSectionHeader: { marginBottom: 10 },
+  weatherSectionTitle: { fontSize: 15, lineHeight: 21, fontWeight: "900" },
+  weatherIntervalNote: { marginTop: 2, fontSize: 10, lineHeight: 15, fontWeight: "700" },
+  weatherCompareList: { gap: 9, paddingBottom: 4 },
+  weatherCompareCard: { borderWidth: 1, borderRadius: 14, padding: 10 },
+  weatherCompareTime: { fontSize: 14, lineHeight: 19, fontWeight: "900", marginBottom: 7 },
+  weatherProviderRow: { flexDirection: "row", alignItems: "center", minHeight: 27, gap: 5 },
+  weatherProviderLabel: { width: 79, fontSize: 10, lineHeight: 15, fontWeight: "900" },
+  weatherProviderIcon: { width: 22, fontSize: 16, lineHeight: 22, textAlign: "center" },
+  weatherProviderCondition: { flex: 1, minWidth: 42, fontSize: 10, lineHeight: 15, fontWeight: "800" },
+  weatherProviderValue: { width: 30, fontSize: 11, lineHeight: 16, fontWeight: "900", textAlign: "right" },
+  weatherProviderMeta: { width: 58, fontSize: 9, lineHeight: 14, fontWeight: "700", textAlign: "right" },
+  weatherProviderEmpty: { flex: 1, fontSize: 10, lineHeight: 15, fontWeight: "700" },
+  weatherSourceText: { marginTop: 9, fontSize: 10, lineHeight: 15, fontWeight: "700", textAlign: "right" },
   weatherHourList: { gap: 10, paddingRight: 4 },
   weatherHourCard: { width: 104, borderWidth: 1, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 10, alignItems: "center" },
   weatherHourTime: { fontSize: 13, lineHeight: 18, fontWeight: "900" },

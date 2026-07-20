@@ -92,6 +92,8 @@ export function mergeHomeWeather(
       fiveHourWeatherSummary: weatherRound.fiveHourWeatherSummary,
       fiveHourWeatherDetail: weatherRound.fiveHourWeatherDetail,
       fiveHourWeatherHours: weatherRound.fiveHourWeatherHours,
+      openWeatherHours: weatherRound.openWeatherHours,
+      kmaIssuedAt: weatherRound.kmaIssuedAt,
     };
   });
 
@@ -106,6 +108,8 @@ export function mergeHomeWeather(
           fiveHourWeatherSummary: firstRound.fiveHourWeatherSummary,
           fiveHourWeatherDetail: firstRound.fiveHourWeatherDetail,
           fiveHourWeatherHours: firstRound.fiveHourWeatherHours,
+          openWeatherHours: firstRound.openWeatherHours,
+          kmaIssuedAt: firstRound.kmaIssuedAt,
         }
       : current.upcomingRound;
 

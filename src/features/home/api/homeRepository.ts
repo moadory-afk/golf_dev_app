@@ -123,6 +123,8 @@ export type HomeWeatherSnapshot = {
   fiveHourSummary?: string;
   fiveHourDetail?: string;
   fiveHourHours?: HomeWeatherHour[];
+  openWeatherHours?: HomeWeatherHour[];
+  kmaIssuedAt?: string;
   fetchedAt?: string;
 };
 
@@ -170,6 +172,15 @@ function weatherSnapshotFromRoundWeather(
       pop: item.pop,
       windMs: item.windMs,
     })),
+    openWeatherHours: weather.openWeatherHourlyForecast?.map((item) => ({
+      time: item.time,
+      icon: item.icon,
+      condition: item.condition,
+      tempC: item.tempC,
+      pop: item.pop,
+      windMs: item.windMs,
+    })),
+    kmaIssuedAt: weather.kmaIssuedAt,
     fetchedAt: weather.fetchedAt,
   };
 }

@@ -52,6 +52,7 @@ type PremiumHomeHeroSectionProps = {
   onLottoPress?: (round: HomeHeroRound) => void;
   onAwardPress?: (round: HomeHeroRound) => void;
   onEditRoundPress?: (round: HomeHeroRound) => void;
+  onWeatherPress?: (round: HomeHeroRound) => void;
   heroImageSource?: ImageSourcePropType;
   topInset?: number;
   activeIndex?: number;
@@ -75,6 +76,7 @@ export function PremiumHomeHeroSection({
   onLottoPress,
   onAwardPress,
   onEditRoundPress,
+  onWeatherPress,
   heroImageSource,
   topInset = 0,
   activeIndex: controlledActiveIndex,
@@ -204,11 +206,9 @@ export function PremiumHomeHeroSection({
                     onLottoPress={onLottoPress}
                     onAwardPress={onAwardPress}
                     onEditRoundPress={onEditRoundPress}
+                    onWeatherPress={onWeatherPress}
                     departureBufferMinutes={departureBufferMinutes}
-                    extraData={activeIndex}
-            initialNumToRender={carouselItems.length}
-            windowSize={5}
-          />
+                  />
                 );
               }
               if (item.kind === "create") {
@@ -286,6 +286,7 @@ const HeroRoundCard = memo(function HeroRoundCard({
   onLottoPress,
   onAwardPress,
   onEditRoundPress,
+  onWeatherPress,
   departureBufferMinutes,
 }: {
   width: number;
@@ -299,6 +300,7 @@ const HeroRoundCard = memo(function HeroRoundCard({
   onLottoPress?: (round: HomeHeroRound) => void;
   onAwardPress?: (round: HomeHeroRound) => void;
   onEditRoundPress?: (round: HomeHeroRound) => void;
+  onWeatherPress?: (round: HomeHeroRound) => void;
   departureBufferMinutes: number;
 }) {
   const optimizedHeroImageUrl = useMemo(
@@ -375,6 +377,7 @@ const HeroRoundCard = memo(function HeroRoundCard({
               departureBufferMinutes={departureBufferMinutes}
               courseLatitude={round.courseLatitude}
               courseLongitude={round.courseLongitude}
+              onWeatherPress={() => onWeatherPress?.(round)}
             />
           </View>
         </TouchableOpacity>
@@ -688,6 +691,7 @@ function HeroBottomSummary({
   departureBufferMinutes,
   courseLatitude,
   courseLongitude,
+  onWeatherPress,
 }: {
   width: number;
   courseName: string;
@@ -702,6 +706,7 @@ function HeroBottomSummary({
   departureBufferMinutes: number;
   courseLatitude?: number | null;
   courseLongitude?: number | null;
+  onWeatherPress?: () => void;
 }) {
   const isCompact = isCompactWidth(width);
   const scheduleLine = teeTime ? `Tee Off ${teeTime}` : "Tee Off --:--";
@@ -715,27 +720,11 @@ function HeroBottomSummary({
       ? departureTimeText.replace(/^출발 추천\s*/, "")
       : "";
   const [mapChooserVisible, setMapChooserVisible] = useState(false);
-  const [weatherChooserVisible, setWeatherChooserVisible] = useState(false);
   const hasDestination =
     typeof courseLatitude === "number" &&
     Number.isFinite(courseLatitude) &&
     typeof courseLongitude === "number" &&
     Number.isFinite(courseLongitude);
-
-  const openWeatherProvider = async (provider: "kma" | "accuweather") => {
-    const query = encodeURIComponent(courseName);
-    const url =
-      provider === "kma"
-        ? "https://www.weather.go.kr/w/index.do"
-        : `https://www.accuweather.com/ko/search-locations?query=${query}`;
-
-    setWeatherChooserVisible(false);
-    try {
-      await Linking.openURL(url);
-    } catch {
-      Alert.alert("날씨 정보 실행 실패", "날씨 사이트를 열 수 없습니다.");
-    }
-  };
 
   const openNavigation = async (provider: "kakao" | "tmap" | "naver") => {
     if (!hasDestination) {
@@ -800,7 +789,7 @@ function HeroBottomSummary({
           activeOpacity={0.72}
           onPress={(event) => {
             event.stopPropagation?.();
-            setWeatherChooserVisible(true);
+            onWeatherPress?.();
           }}
           style={[
             styles.weatherSummary,
@@ -920,33 +909,6 @@ function HeroBottomSummary({
           </Text>
         </TouchableOpacity>
       </View>
-
-      <Modal
-        animationType="fade"
-        transparent
-        visible={weatherChooserVisible}
-        onRequestClose={() => setWeatherChooserVisible(false)}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={() => setWeatherChooserVisible(false)}
-          style={styles.mapModalBackdrop}
-        >
-          <TouchableOpacity activeOpacity={1} style={styles.mapChooser}>
-            <Text style={styles.mapChooserTitle}>날씨 정보 선택</Text>
-            <Text style={styles.mapChooserCourse} numberOfLines={1}>{courseName}</Text>
-            <TouchableOpacity style={styles.mapOption} onPress={() => openWeatherProvider("kma")}>
-              <Text style={styles.mapOptionText}>기상청 날씨누리</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.mapOption} onPress={() => openWeatherProvider("accuweather")}>
-              <Text style={styles.mapOptionText}>AccuWeather</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.mapCancel} onPress={() => setWeatherChooserVisible(false)}>
-              <Text style={styles.mapCancelText}>취소</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
 
       <Modal
         animationType="fade"

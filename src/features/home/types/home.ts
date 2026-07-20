@@ -38,6 +38,8 @@ export type HomeUpcomingRound = {
   fiveHourWeatherSummary?: string
   fiveHourWeatherDetail?: string
   fiveHourWeatherHours?: HomeWeatherHour[]
+  openWeatherHours?: HomeWeatherHour[]
+  kmaIssuedAt?: string
   courseId?: string
   courseLatitude?: number | null
   courseLongitude?: number | null
