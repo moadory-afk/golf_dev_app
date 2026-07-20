@@ -6,8 +6,10 @@ node_modules/
 # Expo
 .expo/
 dist/
+dist*/
 web-build/
 expo-env.d.ts
+.tmp-web-check*/
 
 # Native
 .kotlin/
@@ -41,23 +43,28 @@ yarn-error.*
 /ios
 /android
 
-# 빌드 산출물
-dist2/
-dist3/
-dist4/
-dist_deploy/
-
-# 내부 전용
+# AI assistant local files
 CLAUDE.md
 .claude/
 
-# 로컬 실행 스크립트
+# local run scripts
 *.bat
 *.ps1
 
-# 시드/마이그레이션 로컬 스크립트 (키 하드코딩 위험)
+# local seed / migration scripts with hardcoding risk
 seed_*.js
 seed_*.sql
 *.sql
 !supabase/migrations/*.sql
 supabase/.temp/
+
+# local backups / accidental copies
+src*.zip
+*.zipcopy.tsx
+assets/src/
+src/src/
+
+# generated migration outputs
+scripts/round-photo-migration.sql
+scripts/round-photo-migration-report.json
+scripts/round-photo-base64.csv
