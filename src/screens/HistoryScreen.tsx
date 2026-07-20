@@ -165,12 +165,15 @@ function holeStats(strokes: number[], pars: number[]) {
 }
 
 function getWinnerLocal(r: SavedRound, handicaps: Map<string, number>): string | null {
-  const best = Math.min(...r.players.map((p) => playerTotal(p.strokes)))
-  const medalWinner = r.players.find((p) => playerTotal(p.strokes) === best)?.name
   const ranked = r.players
-    .map((p) => ({ name: p.name, net: playerTotal(p.strokes) - (handicaps.get(p.name) ?? 0) }))
-    .sort((a, b) => a.net - b.net)
-  if (ranked[0]?.name === medalWinner) return ranked[1]?.name ?? null
+    .map((p) => {
+      const total = playerTotal(p.strokes)
+      return { name: p.name, net: total - (handicaps.get(p.name) ?? 0), total }
+    })
+    .sort((a, b) => {
+      const netDiff = a.net - b.net
+      return netDiff !== 0 ? netDiff : a.total - b.total
+    })
   return ranked[0]?.name ?? null
 }
 
@@ -807,8 +810,8 @@ function RoundFlipCard({
       return { name: p.name, total, handicap, net: total - handicap }
     })
     .sort((a, b) => a.net - b.net)
-  const winner = regularRank.find((row) => row.name !== bestPlayer?.name) ?? regularRank[0]
-  const runnerUp = regularRank.find((row) => row.name !== bestPlayer?.name && row.name !== winner?.name)
+  const winner = regularRank[0]
+  const runnerUp = regularRank.find((row) => row.name !== winner?.name)
 
   const playerHighlights = round.players.map((p) => {
     const stats = holeStats(p.strokes, round.pars)

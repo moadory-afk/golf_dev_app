@@ -89,8 +89,18 @@ export function mergeScorecards(
     }
 
     // players
+    //
+    // 같은 스코어카드 안에서 이름이 마스킹되어 동일하게 인식되는 경우가 있다.
+    // 예: "이**" 선수가 2명인 조 → 이름만 key로 쓰면 두 행이 한 명으로 합쳐져 3명처럼 보인다.
+    // 카드별 같은 이름의 등장 순번을 key에 포함해 행을 보존하고,
+    // 전/후반 카드가 나뉜 경우에는 같은 이름 + 같은 순번끼리 이어 붙인다.
+    const nameSeenInCard = new Map<string, number>()
     for (const p of card.players) {
-      const key = p.name.trim() || `_${playerOrder.length}`
+      const rawName = p.name.trim()
+      const baseKey = rawName || `_card${cardIdx}_row${nameSeenInCard.size}`
+      const occurrence = nameSeenInCard.get(baseKey) ?? 0
+      nameSeenInCard.set(baseKey, occurrence + 1)
+      const key = `${baseKey}#${occurrence}`
       if (!playerMap.has(key)) {
         playerMap.set(key, { name: p.name, diffs: Array.from({ length: 18 }, () => null) })
         playerOrder.push(key)

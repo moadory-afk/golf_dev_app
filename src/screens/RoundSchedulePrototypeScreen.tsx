@@ -141,6 +141,12 @@ type AwardWinnerPickerState = {
   multiple: boolean
 } | null
 
+function normalizeScoreLayoutName(value?: string | null) {
+  return (value ?? '')
+    .replace(/코스|course|[\s·/()_-]/gi, '')
+    .toLowerCase()
+}
+
 export default function RoundSchedulePrototypeScreen() {
   const nav = useNavigation<Nav>()
   const route = useRoute<Route>()
@@ -1037,8 +1043,17 @@ export default function RoundSchedulePrototypeScreen() {
     try {
       const cards = await Promise.all(scorePhotoUris.map((uri) => recognizeScorecard(uri)))
       const merged = mergeScorecards(cards, selectedScoreGroup?.frontLayoutName, selectedScoreGroup?.backLayoutName)
-      setScoreOcrResult(merged)
-      if (selectedScoreGroup) setScoreOcrMemberMap(buildAutoScoreOcrMemberMap(selectedScoreGroup, merged))
+      const recognizedCourseLayout = scoreLayoutFromRecognizedCards(cards)
+      const normalizedMerged = recognizedCourseLayout
+        ? { ...merged, pars: recognizedCourseLayout.pars, recognizedCourseName: recognizedCourseLayout.layoutNames.join(' / ') }
+        : merged
+      if (selectedScoreGroup) {
+        const completed = completeScoreOcrResultForGroup(selectedScoreGroup, normalizedMerged)
+        setScoreOcrResult(completed.result)
+        setScoreOcrMemberMap(completed.memberMap)
+      } else {
+        setScoreOcrResult(normalizedMerged)
+      }
     } catch (error) {
       setScoreOcrError(`인식 오류: ${String(error)}`)
     } finally {
@@ -1051,6 +1066,54 @@ export default function RoundSchedulePrototypeScreen() {
     const back = layouts.find((layout) => layout.id === group.backLayoutId)?.pars ?? []
     const pars = [...front, ...back].slice(0, 18)
     return pars.length === 18 ? pars : Array.from({ length: 18 }, () => 4)
+  }
+
+  function scoreParsFromOcrResult(result: RecognizedScorecard) {
+    const pars = result.pars.slice(0, 18)
+    const complete = pars.length === 18 && pars.every((par) =>
+      typeof par === 'number' && Number.isFinite(par) && par >= 3 && par <= 6
+    )
+    return complete ? pars as number[] : null
+  }
+
+  function scoreParsForGroupResult(group: ScheduledRoundGroup, result?: RecognizedScorecard | null) {
+    return result ? scoreParsFromOcrResult(result) ?? scoreParsForGroup(group) : scoreParsForGroup(group)
+  }
+
+  function scoreLayoutsFromText(text?: string) {
+    const normalizedText = normalizeScoreLayoutName(text)
+    if (!normalizedText) return []
+    return layouts
+      .map((layout) => {
+        const normalizedName = normalizeScoreLayoutName(layout.name)
+        const index = normalizedName ? normalizedText.indexOf(normalizedName) : -1
+        return index >= 0 ? { layout, index } : null
+      })
+      .filter((item): item is { layout: CourseLayout; index: number } => !!item)
+      .sort((a, b) => a.index - b.index)
+      .map((item) => item.layout)
+  }
+
+  function scoreLayoutFromRecognizedCards(cards: RecognizedScorecard[]) {
+    const matchedLayouts = cards.flatMap((card) => scoreLayoutsFromText(card.recognizedCourseName))
+    const uniqueLayouts = Array.from(new Map(matchedLayouts.map((layout) => [layout.id, layout])).values())
+      .filter((layout) => layout.pars.length > 0)
+      .slice(0, 2)
+    const pars = uniqueLayouts.flatMap((layout) => layout.pars).slice(0, 18)
+    if (uniqueLayouts.length === 0 || pars.length !== 18) return null
+    return {
+      pars,
+      layoutNames: uniqueLayouts.map((layout) => layout.name),
+    }
+  }
+
+  function scoreHoleLabelsFromOcrResult(result: RecognizedScorecard) {
+    const matchedLayouts = scoreLayoutsFromText(result.recognizedCourseName)
+    const uniqueLayouts = Array.from(new Map(matchedLayouts.map((layout) => [layout.id, layout])).values()).slice(0, 2)
+    const labels = uniqueLayouts.flatMap((layout) =>
+      Array.from({ length: layout.holes }, (_, index) => `${layout.name}${index + 1}`)
+    )
+    return labels.length === 18 ? labels : undefined
   }
 
   function scoreHoleLabelsForGroup(group: ScheduledRoundGroup) {
@@ -1075,6 +1138,31 @@ export default function RoundSchedulePrototypeScreen() {
     return next
   }
 
+  function completeScoreOcrResultForGroup(group: ScheduledRoundGroup, result: RecognizedScorecard) {
+    const pars = scoreParsForGroupResult(group, result)
+    const players = result.players.map((player) => ({ ...player }))
+    const memberMap = buildAutoScoreOcrMemberMap(group, result)
+    const matchedUserIds = new Set(Object.values(memberMap))
+    group.members.forEach((member) => {
+      if (matchedUserIds.has(member.userId)) return
+      const index = players.length
+      players.push({
+        name: `${member.name} (미인식)`,
+        diffs: Array.from({ length: pars.length || 18 }, () => 0),
+      })
+      memberMap[index] = member.userId
+      matchedUserIds.add(member.userId)
+    })
+    return {
+      result: {
+        ...result,
+        pars,
+        players,
+      },
+      memberMap,
+    }
+  }
+
   function toggleScoreOcrMember(ocrIndex: number, member: ScheduledRoundGroupMember) {
     setScoreOcrMemberMap((current) => {
       const next = Object.fromEntries(
@@ -1087,7 +1175,7 @@ export default function RoundSchedulePrototypeScreen() {
   }
 
   function scorePlayersForGroup(group: ScheduledRoundGroup, result: RecognizedScorecard) {
-    const pars = scoreParsForGroup(group)
+    const pars = scoreParsForGroupResult(group, result)
     const ocrNames = result.players.map((player) => player.name)
     const manualByUser = new Map<string, number>()
     Object.entries(scoreOcrMemberMap).forEach(([index, userId]) => {
@@ -1129,6 +1217,12 @@ export default function RoundSchedulePrototypeScreen() {
         }
       }
       const players = scorePlayersForGroup(selectedScoreGroup, scoreOcrResult)
+      const scorePars = scoreParsForGroupResult(selectedScoreGroup, scoreOcrResult)
+      const groupPars = scoreParsForGroup(selectedScoreGroup)
+      const ocrHoleLabels = scoreHoleLabelsFromOcrResult(scoreOcrResult)
+      const scoreHoleLabels = scorePars.every((par, index) => par === groupPars[index])
+        ? scoreHoleLabelsForGroup(selectedScoreGroup)
+        : ocrHoleLabels
       if (players.length === 0) {
         Alert.alert('저장 불가', '조 멤버와 매칭된 OCR 결과가 없습니다.')
         return
@@ -1153,8 +1247,8 @@ export default function RoundSchedulePrototypeScreen() {
         date: draft.date,
         courseName: draft.courseName ?? selectedScoreGroup.frontLayoutName ?? '이름 없는 코스',
         golfCourseId: draft.courseId,
-        pars: scoreParsForGroup(selectedScoreGroup),
-        holeLabels: scoreHoleLabelsForGroup(selectedScoreGroup),
+        pars: scorePars,
+        holeLabels: scoreHoleLabels,
         players,
         photoData,
         clubId: club.id,
@@ -2302,6 +2396,9 @@ export default function RoundSchedulePrototypeScreen() {
                 <View style={s.scoreOcrResult}>
                   <Text style={s.scoreOcrResultTitle}>인식 결과 · 저장 전</Text>
                   <Text style={s.scoreOcrMatchHelp}>OCR 이름이 실제 조 멤버와 다르면 아래에서 실제 회원을 선택해 주세요.</Text>
+                  {scoreOcrResult.players.some((player) => player.name.includes('(미인식)')) ? (
+                    <Text style={s.scoreOcrWarning}>OCR이 놓친 멤버는 미인식 행으로 추가했습니다. 저장 후 스코어 탭에서 해당 점수를 확인해 주세요.</Text>
+                  ) : null}
                   {scoreOcrResult.players.map((player, index) => {
                     const total = player.diffs.reduce<number>((sum, diff, holeIndex) => sum + ((scoreOcrResult.pars[holeIndex] ?? 4) + (diff ?? 0)), 0)
                     const selectedUserId = scoreOcrMemberMap[index]
@@ -2631,6 +2728,7 @@ const s = StyleSheet.create({
   },
   scoreOcrResultTitle: { fontSize: 13, fontWeight: '900', color: C.muted, marginBottom: 8 },
   scoreOcrMatchHelp: { fontSize: 12, fontWeight: '700', color: C.muted, lineHeight: 18, marginBottom: 8 },
+  scoreOcrWarning: { fontSize: 12, fontWeight: '800', color: '#B66A18', backgroundColor: '#FFF3E8', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8, lineHeight: 18, marginBottom: 8 },
   scoreOcrRow: { paddingVertical: 8, borderTopWidth: 1, borderTopColor: C.border },
   scoreOcrInfo: { gap: 8 },
   scoreOcrNameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
