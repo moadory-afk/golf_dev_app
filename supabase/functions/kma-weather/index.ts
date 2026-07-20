@@ -43,9 +43,27 @@ function toKmaGrid(latitude: number, longitude: number) {
   };
 }
 
-function latestBaseDateTime() {
-  // 발표자료 생성 지연을 고려해 현재 한국시각보다 10분 이전의 최신 발표를 선택한다.
-  const shifted = new Date(Date.now() + 9 * 60 * 60 * 1000 - 10 * 60 * 1000);
+function latestBaseDateTime(targetDate?: string, targetTime?: string) {
+  // 발표자료 생성 지연을 고려한 현재 사용 가능 시각이다.
+  const availableNow = Date.now() - 10 * 60 * 1000;
+  let cutoff = availableNow;
+
+  // 티오프 직후 첫 정시 예보가 포함된 발표 회차를 선택한다.
+  // 예: 13:32 티오프 → 첫 표시 14:00 → 11:00 발표자료 사용.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(targetDate ?? "") && /^\d{1,2}:\d{2}/.test(targetTime ?? "")) {
+    const [hourText, minuteText] = (targetTime as string).split(":");
+    const hour = Number(hourText);
+    const minute = Number(minuteText);
+    const teeTimestamp = new Date(`${targetDate}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+09:00`).getTime();
+    if (Number.isFinite(teeTimestamp)) {
+      const firstForecastHour = teeTimestamp + (minute > 0 ? (60 - minute) * 60 * 1000 : 0);
+      // 단기예보의 첫 예보시각은 발표시각 다음 정시부터 시작한다.
+      const latestUsefulRelease = firstForecastHour - 60 * 60 * 1000;
+      cutoff = Math.min(cutoff, latestUsefulRelease);
+    }
+  }
+
+  const shifted = new Date(cutoff + 9 * 60 * 60 * 1000);
   const releaseHours = [2, 5, 8, 11, 14, 17, 20, 23];
   let year = shifted.getUTCFullYear();
   let month = shifted.getUTCMonth();
@@ -74,14 +92,14 @@ Deno.serve(async (req) => {
   try {
     const serviceKey = Deno.env.get("KMA_SERVICE_KEY");
     if (!serviceKey) throw new Error("KMA_SERVICE_KEY가 등록되지 않았습니다.");
-    const { latitude, longitude } = await req.json();
+    const { latitude, longitude, date, time } = await req.json();
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
       return new Response(JSON.stringify({ error: "유효한 골프장 좌표가 필요합니다." }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     const { nx, ny } = toKmaGrid(latitude, longitude);
-    const { baseDate, baseTime } = latestBaseDateTime();
+    const { baseDate, baseTime } = latestBaseDateTime(date, time);
     const params = new URLSearchParams({
       serviceKey, pageNo: "1", numOfRows: "1000", dataType: "JSON",
       base_date: baseDate, base_time: baseTime, nx: String(nx), ny: String(ny),

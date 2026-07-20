@@ -87,6 +87,12 @@ function targetTimestamp(date: string, time?: string) {
   return new Date(`${date}T${safeTime}:00+09:00`).getTime() / 1000;
 }
 
+function normalizeKmaDate(date: string) {
+  return /^\d{8}$/.test(date)
+    ? `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`
+    : date;
+}
+
 function formatHour(timestamp: number) {
   return new Date(timestamp * 1000).toLocaleTimeString("ko-KR", {
     timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false,
@@ -95,9 +101,9 @@ function formatHour(timestamp: number) {
 
 function pickFiveOpenWeatherHours(list: ForecastItem[], date: string, time?: string) {
   const start = targetTimestamp(date, time);
+  const end = start + 5 * 60 * 60;
   return list
-    .filter((item) => item.dt >= start - 90 * 60)
-    .slice(0, 3)
+    .filter((item) => item.dt >= start && item.dt <= end)
     .map<RoundWeatherHour>((item) => {
       const weather = item.weather?.[0];
       return {
@@ -113,9 +119,16 @@ function pickFiveOpenWeatherHours(list: ForecastItem[], date: string, time?: str
 
 function pickFiveKmaHours(hours: KmaFunctionHour[], date: string, time?: string) {
   const start = targetTimestamp(date, time);
+  const end = start + 5 * 60 * 60;
   return hours
-    .map((item) => ({ item, timestamp: targetTimestamp(item.date, `${item.time.slice(0, 2)}:${item.time.slice(2, 4)}`) }))
-    .filter(({ timestamp }) => timestamp >= start - 30 * 60)
+    .map((item) => ({
+      item,
+      timestamp: targetTimestamp(
+        normalizeKmaDate(item.date),
+        `${item.time.slice(0, 2)}:${item.time.slice(2, 4)}`,
+      ),
+    }))
+    .filter(({ timestamp }) => timestamp >= start && timestamp <= end)
     .sort((a, b) => a.timestamp - b.timestamp)
     .slice(0, 5)
     .map<RoundWeatherHour>(({ item, timestamp }) => {
@@ -198,8 +211,8 @@ export async function getWeatherForRound(params: {
     : params.courseName?.trim() ? await geocodeCourse(params.courseName, params.region) : null;
   if (!geo) return null;
   const coordinateKey = `${geo.lat},${geo.lon}`;
-  const cacheKey = `@gogopar_weather_compare:${coordinateKey}:${params.date}:${params.time ?? ""}`;
-  return getCachedAsync(`weather-compare:${coordinateKey}:${params.date}:${params.time ?? ""}`, CACHE_TTL_MS, async () => {
+  const cacheKey = `@gogopar_weather_compare_v3:${coordinateKey}:${params.date}:${params.time ?? ""}`;
+  return getCachedAsync(`weather-compare-v3:${coordinateKey}:${params.date}:${params.time ?? ""}`, CACHE_TTL_MS, async () => {
     const cached = await readCache(cacheKey);
     if (cached) return cached;
     const [kma, openWeatherHours] = await Promise.all([
