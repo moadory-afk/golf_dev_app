@@ -1426,20 +1426,13 @@ function WeatherDetailModal({
     ...hours.map((item) => item.time),
     ...openWeatherHours.map((item) => item.time),
   ])).sort();
-  const renderProviderRow = (label: string, hour?: HomeWeatherHour) => (
-    <View style={styles.weatherProviderRow}>
-      <Text style={[styles.weatherProviderLabel, { color: palette.muted }]}>{label}</Text>
-      {hour ? (
-        <>
-          <Text style={styles.weatherProviderIcon}>{hour.icon}</Text>
-          <Text style={[styles.weatherProviderCondition, { color: palette.text }]} numberOfLines={1}>{hour.condition}</Text>
-          <Text style={[styles.weatherProviderValue, { color: palette.text }]}>{hour.tempC}°</Text>
-          <Text style={[styles.weatherProviderMeta, { color: palette.muted }]}>비 {hour.pop ?? 0}%</Text>
-          <Text style={[styles.weatherProviderMeta, { color: palette.muted }]}>바람 {typeof hour.windMs === "number" ? `${hour.windMs}m/s` : "-"}</Text>
-        </>
-      ) : (
-        <Text style={[styles.weatherProviderEmpty, { color: palette.muted }]}>해당 시각 예보 없음</Text>
-      )}
+  const formatWind = (value?: number) => (typeof value === "number" ? value.toFixed(1) : "—");
+  const renderWeatherCells = (hour?: HomeWeatherHour) => (
+    <View style={styles.weatherTableProviderCells}>
+      <Text style={styles.weatherTableIcon}>{hour?.icon ?? "—"}</Text>
+      <Text style={[styles.weatherTableValue, { color: palette.text }]}>{hour ? `${hour.tempC}°` : "—"}</Text>
+      <Text style={[styles.weatherTableValue, { color: palette.text }]}>{hour ? `${hour.pop ?? 0}%` : "—"}</Text>
+      <Text style={[styles.weatherTableValue, { color: palette.text }]}>{hour ? formatWind(hour.windMs) : "—"}</Text>
     </View>
   );
   return (
@@ -1469,19 +1462,47 @@ function WeatherDetailModal({
             <Text style={[styles.weatherIntervalNote, { color: palette.muted }]}>기상청 시간별 · OpenWeather 3시간 간격</Text>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.weatherCompareList}>
-            {compareTimes.length > 0 ? compareTimes.map((time) => (
-              <View key={time} style={[styles.weatherCompareCard, { borderColor: palette.border, backgroundColor: palette.background }]}> 
-                <Text style={[styles.weatherCompareTime, { color: palette.text }]}>{time.replace(':00', '시')}</Text>
-                {renderProviderRow("기상청", hours.find((item) => item.time === time))}
-                {renderProviderRow("OpenWeather", openWeatherHours.find((item) => item.time === time))}
+          <View style={[styles.weatherTableWrap, { borderColor: palette.border, backgroundColor: palette.background }]}>
+            <View style={[styles.weatherTableHeader, { borderBottomColor: palette.border }]}>
+              <Text style={[styles.weatherTableTimeHeader, { color: palette.muted }]}>시간</Text>
+              <View style={styles.weatherTableProviderHeader}>
+                <Text style={[styles.weatherTableProviderTitle, { color: palette.text }]}>기상청</Text>
+                <View style={styles.weatherTableMetricRow}>
+                  <Text style={[styles.weatherTableMetricLabel, { color: palette.muted }]}>날씨</Text>
+                  <Text style={[styles.weatherTableMetricLabel, { color: palette.muted }]}>온도</Text>
+                  <Text style={[styles.weatherTableMetricLabel, { color: palette.muted }]}>강수</Text>
+                  <Text style={[styles.weatherTableMetricLabel, { color: palette.muted }]}>바람</Text>
+                </View>
               </View>
-            )) : (
-              <View style={styles.weatherEmptyBox}>
-                <Text style={[styles.weatherEmptyText, { color: palette.muted }]}>시간대별 예보를 불러오지 못했습니다.</Text>
+              <View style={styles.weatherTableProviderHeader}>
+                <Text style={[styles.weatherTableProviderTitle, { color: palette.text }]}>OpenWeather</Text>
+                <View style={styles.weatherTableMetricRow}>
+                  <Text style={[styles.weatherTableMetricLabel, { color: palette.muted }]}>날씨</Text>
+                  <Text style={[styles.weatherTableMetricLabel, { color: palette.muted }]}>온도</Text>
+                  <Text style={[styles.weatherTableMetricLabel, { color: palette.muted }]}>강수</Text>
+                  <Text style={[styles.weatherTableMetricLabel, { color: palette.muted }]}>바람</Text>
+                </View>
               </View>
-            )}
-          </ScrollView>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.weatherCompareList}>
+              {compareTimes.length > 0 ? compareTimes.map((time) => {
+                const kmaHour = hours.find((item) => item.time === time);
+                const openWeatherHour = openWeatherHours.find((item) => item.time === time);
+                return (
+                  <View key={time} style={[styles.weatherTableRow, { borderBottomColor: palette.border }]}>
+                    <Text style={[styles.weatherCompareTime, { color: palette.text }]}>{time.replace(':00', '시')}</Text>
+                    {renderWeatherCells(kmaHour)}
+                    {renderWeatherCells(openWeatherHour)}
+                  </View>
+                );
+              }) : (
+                <View style={styles.weatherEmptyBox}>
+                  <Text style={[styles.weatherEmptyText, { color: palette.muted }]}>시간대별 예보를 불러오지 못했습니다.</Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
           <Text style={[styles.weatherSourceText, { color: palette.muted }]}>기상청 단기예보{round?.kmaIssuedAt ? ` · ${round.kmaIssuedAt} 발표` : ""}</Text>
         </View>
       </View>
@@ -2885,16 +2906,19 @@ const styles = StyleSheet.create({
   weatherSectionHeader: { marginBottom: 10 },
   weatherSectionTitle: { fontSize: 15, lineHeight: 21, fontWeight: "900" },
   weatherIntervalNote: { marginTop: 2, fontSize: 10, lineHeight: 15, fontWeight: "700" },
-  weatherCompareList: { gap: 9, paddingBottom: 4 },
-  weatherCompareCard: { borderWidth: 1, borderRadius: 14, padding: 10 },
-  weatherCompareTime: { fontSize: 14, lineHeight: 19, fontWeight: "900", marginBottom: 7 },
-  weatherProviderRow: { flexDirection: "row", alignItems: "center", minHeight: 27, gap: 5 },
-  weatherProviderLabel: { width: 79, fontSize: 10, lineHeight: 15, fontWeight: "900" },
-  weatherProviderIcon: { width: 22, fontSize: 16, lineHeight: 22, textAlign: "center" },
-  weatherProviderCondition: { flex: 1, minWidth: 42, fontSize: 10, lineHeight: 15, fontWeight: "800" },
-  weatherProviderValue: { width: 30, fontSize: 11, lineHeight: 16, fontWeight: "900", textAlign: "right" },
-  weatherProviderMeta: { width: 58, fontSize: 9, lineHeight: 14, fontWeight: "700", textAlign: "right" },
-  weatherProviderEmpty: { flex: 1, fontSize: 10, lineHeight: 15, fontWeight: "700" },
+  weatherTableWrap: { borderWidth: 1, borderRadius: 16, overflow: "hidden" },
+  weatherTableHeader: { flexDirection: "row", alignItems: "stretch", borderBottomWidth: 1, paddingHorizontal: 8, paddingVertical: 10 },
+  weatherTableTimeHeader: { width: 40, alignSelf: "center", fontSize: 11, lineHeight: 15, fontWeight: "900", textAlign: "center" },
+  weatherTableProviderHeader: { flex: 1, minWidth: 0, paddingHorizontal: 3 },
+  weatherTableProviderTitle: { fontSize: 13, lineHeight: 18, fontWeight: "900", textAlign: "center", marginBottom: 5 },
+  weatherTableMetricRow: { flexDirection: "row", alignItems: "center" },
+  weatherTableMetricLabel: { flex: 1, minWidth: 0, fontSize: 9, lineHeight: 13, fontWeight: "800", textAlign: "center" },
+  weatherCompareList: { paddingBottom: 2 },
+  weatherTableRow: { flexDirection: "row", alignItems: "center", minHeight: 58, borderBottomWidth: StyleSheet.hairlineWidth, paddingHorizontal: 8, paddingVertical: 9 },
+  weatherCompareTime: { width: 40, fontSize: 16, lineHeight: 22, fontWeight: "900", textAlign: "center" },
+  weatherTableProviderCells: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", paddingHorizontal: 3 },
+  weatherTableIcon: { flex: 1, minWidth: 0, fontSize: 22, lineHeight: 28, textAlign: "center" },
+  weatherTableValue: { flex: 1, minWidth: 0, fontSize: 12, lineHeight: 17, fontWeight: "900", textAlign: "center" },
   weatherSourceText: { marginTop: 9, fontSize: 10, lineHeight: 15, fontWeight: "700", textAlign: "right" },
   weatherHourList: { gap: 10, paddingRight: 4 },
   weatherHourCard: { width: 104, borderWidth: 1, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 10, alignItems: "center" },
