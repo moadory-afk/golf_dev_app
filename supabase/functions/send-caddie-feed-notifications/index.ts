@@ -40,6 +40,16 @@ type AttendanceRow = {
   status: string;
 };
 
+type ClubMemberRow = {
+  club_id: string;
+  user_id: string;
+};
+
+type ClubRow = {
+  id: string;
+  name: string | null;
+};
+
 type RoundRow = {
   id: string;
   date: string;
@@ -65,6 +75,8 @@ type SubscriptionRow = {
   endpoint: string;
   p256dh: string | null;
   auth: string | null;
+  updated_at?: string | null;
+  last_seen_at?: string | null;
 };
 
 type CaddieFeedNotification = {
@@ -167,6 +179,28 @@ function bodyText(value: string) {
   return value.replace(/\n+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120);
 }
 
+function titleWithClubName(title: string, clubName?: string | null) {
+  const name = clubName?.trim();
+  if (!name) return title;
+  const prefix = `[${name}]`;
+  return title.startsWith(prefix) ? title : `${prefix} ${title}`;
+}
+
+function latestSubscriptionTimestamp(row: SubscriptionRow) {
+  return row.last_seen_at ?? row.updated_at ?? "";
+}
+
+function pickLatestSubscriptionPerUser(rows: SubscriptionRow[]) {
+  const latest = new Map<string, SubscriptionRow>();
+  for (const row of rows) {
+    const current = latest.get(row.user_id);
+    if (!current || latestSubscriptionTimestamp(row) > latestSubscriptionTimestamp(current)) {
+      latest.set(row.user_id, row);
+    }
+  }
+  return [...latest.values()];
+}
+
 function memberIdsForSchedule(schedule: ScheduleRow, members: GroupMemberRow[], attendances: AttendanceRow[]) {
   const grouped = members
     .filter((member) => member.schedule_id === schedule.id)
@@ -176,6 +210,12 @@ function memberIdsForSchedule(schedule: ScheduleRow, members: GroupMemberRow[], 
   return unique(attendances
     .filter((item) => item.schedule_id === schedule.id && item.status === "attending")
     .map((item) => item.member_user_id));
+}
+
+function memberIdsForClub(schedule: ScheduleRow, clubMembers: ClubMemberRow[]) {
+  return unique(clubMembers
+    .filter((member) => member.club_id === schedule.club_id)
+    .map((member) => member.user_id));
 }
 
 function extractRequestScope(body: RequestBody) {
@@ -223,6 +263,7 @@ function buildFeedNotifications(params: {
   groups: GroupRow[];
   members: GroupMemberRow[];
   attendances: AttendanceRow[];
+  clubMembers: ClubMemberRow[];
   rounds: RoundRow[];
   lottoEntries: LottoEntryRow[];
   lottoDraws: LottoDrawRow[];
@@ -240,7 +281,9 @@ function buildFeedNotifications(params: {
 
   for (const schedule of params.schedules) {
     const userIds = memberIdsForSchedule(schedule, params.members, params.attendances);
-    if (userIds.length === 0) continue;
+    const clubUserIds = memberIdsForClub(schedule, params.clubMembers);
+    const attendanceRequestUserIds = clubUserIds.length > 0 ? clubUserIds : userIds;
+    if (attendanceRequestUserIds.length === 0 && userIds.length === 0) continue;
 
     const roundDay = dday(schedule.round_date);
     const startAt = roundStartAt(schedule, params.groups);
@@ -248,7 +291,7 @@ function buildFeedNotifications(params: {
     const isToday = roundDay === 0;
     const isTomorrow = roundDay === 1;
     const isSoon = roundDay >= 0 && roundDay <= 3;
-    const groupingComplete = schedule.status === "closed" || schedule.status === "finished";
+    const groupingComplete = schedule.status === "closed" || schedule.status === "finished" || userIds.length > 0;
     const appearsFinished = schedule.status === "finished" || (isToday && minutesToStart !== null && minutesToStart < -300);
     const courseRegistered = !!schedule.course_id && (!!schedule.layout_id || params.groups.some((group) =>
       group.schedule_id === schedule.id && (group.front_layout_name || group.back_layout_name)
@@ -263,8 +306,8 @@ function buildFeedNotifications(params: {
     const purchased = purchasedBySchedule.get(schedule.id) ?? new Set<string>();
     const courseName = schedule.course_name ?? "라운드";
 
-    if (!groupingComplete && !appearsFinished) {
-      result.push(notification(schedule, userIds, {
+    if (!groupingComplete && !appearsFinished && attendanceRequestUserIds.length > 0) {
+      result.push(notification(schedule, attendanceRequestUserIds, {
         eventId: `stage-02-attendance-${schedule.id}`,
         type: "attendance_request",
         title: "참석 여부를 확인해 주세요",
@@ -272,6 +315,8 @@ function buildFeedNotifications(params: {
         priority: 100,
       }));
     }
+
+    if (userIds.length === 0) continue;
 
     if (groupingComplete && !appearsFinished) {
       result.push(notification(schedule, userIds, {
@@ -293,7 +338,10 @@ function buildFeedNotifications(params: {
       }));
     }
 
-    if (isSoon && schedule.award_config?.items?.length && !resultPublished) {
+    const awardPlanReady = Number(schedule.award_config?.count ?? 0) > 0
+      || (schedule.award_config?.items ?? []).some((item) => !!item?.trim());
+
+    if (isSoon && awardPlanReady && !resultPublished) {
       result.push(notification(schedule, userIds, {
         eventId: `stage-05-award-${schedule.id}`,
         type: "award",
@@ -407,20 +455,52 @@ async function sendOne(params: {
   vapidPrivateKey: string;
   vapidSubject: string;
   item: CaddieFeedNotification;
+  clubName?: string | null;
   dryRun: boolean;
 }) {
   const { supabase, item, dryRun } = params;
+  const notificationTitle = titleWithClubName(item.title, params.clubName);
+  const stalePendingBefore = new Date(Date.now() - 5 * 60 * 1000).toISOString();
   const { data: existing, error: logError } = await supabase
     .from("notification_logs")
-    .select("user_id")
+    .select("user_id, status, created_at")
     .eq("club_id", item.clubId)
     .eq("type", item.type)
     .contains("data", { feedEventId: item.eventId })
     .in("user_id", item.userIds);
   if (logError) throw logError;
 
+  const stalePendingUserIds = (existing ?? [])
+    .filter((row: { user_id?: string | null; status?: string | null; created_at?: string | null }) =>
+      row.user_id
+      && row.status === "pending"
+      && row.created_at
+      && row.created_at < stalePendingBefore
+    )
+    .map((row: { user_id?: string | null }) => row.user_id!);
+
+  if (stalePendingUserIds.length > 0) {
+    const { error: staleError } = await supabase
+      .from("notification_logs")
+      .update({
+        status: "failed",
+        error_message: "오래된 발송 대기 상태를 재시도 대상으로 전환했습니다.",
+      })
+      .eq("club_id", item.clubId)
+      .eq("type", item.type)
+      .contains("data", { feedEventId: item.eventId })
+      .eq("status", "pending")
+      .lt("created_at", stalePendingBefore)
+      .in("user_id", stalePendingUserIds);
+    if (staleError) throw staleError;
+  }
+
   const alreadyHandledUserIds = new Set(
     (existing ?? [])
+      .filter((row: { status?: string | null; created_at?: string | null }) =>
+        row.status === "sent"
+        || (row.status === "pending" && !!row.created_at && row.created_at >= stalePendingBefore)
+      )
       .map((row: { user_id?: string | null }) => row.user_id)
       .filter((userId): userId is string => Boolean(userId)),
   );
@@ -431,7 +511,7 @@ async function sendOne(params: {
 
   const { data: subscriptions, error } = await supabase
     .from("notification_subscriptions")
-    .select("id, user_id, club_id, endpoint, p256dh, auth")
+    .select("id, user_id, club_id, endpoint, p256dh, auth, updated_at, last_seen_at")
     .eq("club_id", item.clubId)
     .eq("channel", "web")
     .eq("enabled", true)
@@ -439,9 +519,9 @@ async function sendOne(params: {
   if (error) throw error;
 
   webpush.setVapidDetails(params.vapidSubject, params.vapidPublicKey, params.vapidPrivateKey);
-  const rows = (subscriptions ?? []) as SubscriptionRow[];
+  const rows = pickLatestSubscriptionPerUser((subscriptions ?? []) as SubscriptionRow[]);
   const payload = JSON.stringify({
-    title: item.title,
+    title: notificationTitle,
     body: bodyText(item.body),
     data: item.data,
   });
@@ -455,7 +535,7 @@ async function sendOne(params: {
         club_id: item.clubId,
         user_id: row.user_id,
         type: item.type,
-        title: item.title,
+        title: notificationTitle,
         body: bodyText(item.body),
         data: item.data,
         status: "pending",
@@ -542,15 +622,15 @@ Deno.serve(async (req) => {
     const scope = extractRequestScope(body);
     const dryRun = body.dryRun === true;
     const today = dayKey();
-    const until = dayKey(addDays(new Date(), 3));
+    const scanUntil = dayKey(addDays(new Date(), 30));
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     let scheduleQuery = supabase
       .from("club_round_schedules")
       .select("id, club_id, round_date, course_id, course_name, layout_id, layout_name, tee_time, status, award_config")
       .gte("round_date", today)
-      .lte("round_date", until)
       .in("status", ["planned", "recruiting", "closed", "finished"]);
+    if (scope.scheduleIds.length === 0) scheduleQuery = scheduleQuery.lte("round_date", scanUntil);
     if (scope.clubId) scheduleQuery = scheduleQuery.eq("club_id", scope.clubId);
     if (scope.scheduleIds.length > 0) scheduleQuery = scheduleQuery.in("id", scope.scheduleIds);
 
@@ -558,12 +638,15 @@ Deno.serve(async (req) => {
     if (scheduleError) throw scheduleError;
     const scheduleRows = (schedules ?? []) as ScheduleRow[];
     const scheduleIds = scheduleRows.map((item) => item.id);
+    const clubIds = unique(scheduleRows.map((item) => item.club_id));
     if (scheduleIds.length === 0) return jsonResponse({ candidates: 0, sent: 0, failed: 0, skipped: 0, dryRun });
 
     const [
       groupResult,
       memberResult,
       attendanceResult,
+      clubMemberResult,
+      clubResult,
       roundResult,
       lottoEntryResult,
       lottoDrawResult,
@@ -571,6 +654,8 @@ Deno.serve(async (req) => {
       supabase.from("club_round_groups").select("id, schedule_id, tee_time, front_layout_name, back_layout_name").in("schedule_id", scheduleIds),
       supabase.from("club_round_group_members").select("schedule_id, member_user_id, member_name").in("schedule_id", scheduleIds),
       supabase.from("club_round_attendances").select("schedule_id, member_user_id, status").in("schedule_id", scheduleIds),
+      supabase.from("club_members").select("club_id, user_id").in("club_id", clubIds),
+      supabase.from("clubs").select("id, name").in("id", clubIds),
       supabase.from("rounds").select("id, date, schedule_id, is_complete").in("schedule_id", scheduleIds),
       supabase.from("round_lotto_entries").select("schedule_id, user_id").in("schedule_id", scheduleIds),
       supabase.from("round_lotto_draws").select("schedule_id, drafter_user_id, draw_status").in("schedule_id", scheduleIds),
@@ -578,15 +663,21 @@ Deno.serve(async (req) => {
     if (groupResult.error) throw groupResult.error;
     if (memberResult.error) throw memberResult.error;
     if (attendanceResult.error) throw attendanceResult.error;
+    if (clubMemberResult.error) throw clubMemberResult.error;
+    if (clubResult.error) throw clubResult.error;
     if (roundResult.error) throw roundResult.error;
     if (lottoEntryResult.error) throw lottoEntryResult.error;
     if (lottoDrawResult.error) throw lottoDrawResult.error;
+    const clubNameById = new Map(
+      ((clubResult.data ?? []) as ClubRow[]).map((club) => [club.id, club.name]),
+    );
 
     const candidates = buildFeedNotifications({
       schedules: scheduleRows,
       groups: (groupResult.data ?? []) as GroupRow[],
       members: (memberResult.data ?? []) as GroupMemberRow[],
       attendances: (attendanceResult.data ?? []) as AttendanceRow[],
+      clubMembers: (clubMemberResult.data ?? []) as ClubMemberRow[],
       rounds: (roundResult.data ?? []) as RoundRow[],
       lottoEntries: (lottoEntryResult.data ?? []) as LottoEntryRow[],
       lottoDraws: (lottoDrawResult.data ?? []) as LottoDrawRow[],
@@ -602,6 +693,7 @@ Deno.serve(async (req) => {
         vapidPrivateKey,
         vapidSubject,
         item,
+        clubName: clubNameById.get(item.clubId),
         dryRun,
       });
       sent += result.sent;

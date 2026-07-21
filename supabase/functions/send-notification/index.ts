@@ -22,6 +22,8 @@ type NotificationSubscriptionRow = {
   endpoint: string;
   p256dh: string | null;
   auth: string | null;
+  updated_at?: string | null;
+  last_seen_at?: string | null;
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -50,6 +52,28 @@ function errorMessageFromUnknown(value: unknown): string {
     }
   }
   return String(value);
+}
+
+function titleWithClubName(title: string, clubName?: string | null) {
+  const name = clubName?.trim();
+  if (!name) return title;
+  const prefix = `[${name}]`;
+  return title.startsWith(prefix) ? title : `${prefix} ${title}`;
+}
+
+function latestSubscriptionTimestamp(row: NotificationSubscriptionRow) {
+  return row.last_seen_at ?? row.updated_at ?? "";
+}
+
+function pickLatestSubscriptionPerUser(rows: NotificationSubscriptionRow[]) {
+  const latest = new Map<string, NotificationSubscriptionRow>();
+  for (const row of rows) {
+    const current = latest.get(row.user_id);
+    if (!current || latestSubscriptionTimestamp(row) > latestSubscriptionTimestamp(current)) {
+      latest.set(row.user_id, row);
+    }
+  }
+  return [...latest.values()];
 }
 
 function getSupabaseSecretKey() {
@@ -105,9 +129,17 @@ Deno.serve(async (req) => {
     if (adminError) throw adminError;
     if (!adminRow) return jsonResponse({ error: "알림 발송 권한이 없습니다." }, 403);
 
+    const { data: clubRow, error: clubError } = await supabase
+      .from("clubs")
+      .select("name")
+      .eq("id", clubId)
+      .maybeSingle();
+    if (clubError) throw clubError;
+    const notificationTitle = titleWithClubName(title, clubRow?.name);
+
     let query = supabase
       .from("notification_subscriptions")
-      .select("id, user_id, endpoint, p256dh, auth")
+      .select("id, user_id, endpoint, p256dh, auth, updated_at, last_seen_at")
       .eq("club_id", clubId)
       .eq("channel", "web")
       .eq("enabled", true);
@@ -119,9 +151,9 @@ Deno.serve(async (req) => {
 
     webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
 
-    const rows = (subscriptions ?? []) as NotificationSubscriptionRow[];
+    const rows = pickLatestSubscriptionPerUser((subscriptions ?? []) as NotificationSubscriptionRow[]);
     const notificationPayload = JSON.stringify({
-      title,
+      title: notificationTitle,
       body,
       data: {
         ...(payload.data ?? {}),
@@ -149,7 +181,7 @@ Deno.serve(async (req) => {
           club_id: clubId,
           user_id: row.user_id,
           type,
-          title,
+          title: notificationTitle,
           body,
           data: payload.data ?? {},
           status: "sent",
@@ -162,7 +194,7 @@ Deno.serve(async (req) => {
           club_id: clubId,
           user_id: row.user_id,
           type,
-          title,
+          title: notificationTitle,
           body,
           data: payload.data ?? {},
           status: "failed",

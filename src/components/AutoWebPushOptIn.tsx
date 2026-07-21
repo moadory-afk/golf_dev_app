@@ -5,7 +5,7 @@ import type { Session } from '@supabase/supabase-js'
 import { C } from '../theme'
 import { useClub } from '../lib/ClubContext'
 import { isRunningStandalone } from '../lib/pwaInstall'
-import { canUseWebPush, registerWebPushSubscription } from '../lib/webPush'
+import { canUseWebPush, getWebPushSubscriptionEnabled, registerWebPushSubscription } from '../lib/webPush'
 
 const DISMISSED_KEY_PREFIX = '@gogopar_web_push_opt_in_dismissed'
 
@@ -38,10 +38,20 @@ export function AutoWebPushOptIn({ session }: { session: Session | null }) {
 
       const permission = currentNotificationPermission()
       if (permission === 'denied' || permission === 'unsupported') return
-      if (permission === 'granted') return
 
       const dismissedAt = await AsyncStorage.getItem(storageKey(clubId, userId))
-      if (active && !dismissedAt) setVisible(true)
+      if (dismissedAt) return
+
+      if (permission === 'granted') {
+        const status = await getWebPushSubscriptionEnabled(clubId, userId)
+        if (active && !status.enabled) {
+          setMessage(status.message)
+          setVisible(true)
+        }
+        return
+      }
+
+      if (active) setVisible(true)
     }
 
     prepare().catch(() => undefined)

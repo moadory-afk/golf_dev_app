@@ -4,9 +4,14 @@
 
 ## 역할
 
-- 오늘부터 3일 뒤까지의 라운드 일정을 확인합니다.
+- 기본 실행은 오늘부터 30일 뒤까지의 라운드 일정을 확인합니다.
+- Database Webhook처럼 특정 라운드 ID가 넘어온 실행은 날짜 상한 없이 해당 라운드를 다시 확인합니다.
 - 홈 캐디카드 기준에 맞는 알림 후보를 만듭니다.
-- 조편성 회원을 우선 대상으로 발송하고, 조편성이 없으면 참석 회원에게 발송합니다.
+- 새 라운드 참석 확인 알림은 클럽 전체 회원에게 발송합니다.
+- 조편성 이후 알림은 조편성 회원을 우선 대상으로 발송하고, 조편성이 없으면 참석 회원에게 발송합니다.
+- 조편성 완료 여부는 일정 상태가 `closed`/`finished`이거나 실제 조편성 멤버가 1명 이상 있으면 완료로 판단합니다.
+- 시상계획은 `award_config.count`가 있거나 `award_config.items`에 항목이 있으면 준비 완료로 판단합니다.
+- 휴대폰 푸시 제목은 `[클럽명] 알림 제목` 형식으로 발송합니다.
 - `notification_logs.data.feedEventId`와 `user_id`를 기준으로 같은 회원에게 같은 항목을 중복 발송하지 않습니다.
 
 ## 필요한 Secrets
@@ -120,7 +125,7 @@ x-auto-notification-secret: CADDIE_FEED_NOTIFICATION_SECRET 값
 - `round_lotto_draws`
 - `rounds`
 
-Webhook payload에 `club_id` 또는 `schedule_id`가 있으면 해당 일정만 다시 계산합니다. `club_round_schedules`는 row의 `id`를 일정 ID로 사용합니다.
+Webhook payload에 `club_id` 또는 `schedule_id`가 있으면 해당 일정만 다시 계산합니다. `club_round_schedules`는 row의 `id`를 일정 ID로 사용합니다. 특정 일정으로 호출된 경우에는 새로 등록한 미래 라운드도 날짜 상한 없이 알림 후보에 포함됩니다.
 
 권장 운영:
 
@@ -139,3 +144,13 @@ Database Webhook은 조편성 저장처럼 여러 row가 한 번에 바뀌는 �
 - Edge Function의 발송 전 `pending` 로그 선점 로직
 
 이미 같은 알림이 여러 번 발송된 로그가 있으면 `create-webhooks.sql`이 인덱스 생성 전에 중복 로그를 1개만 남기고 정리합니다.
+
+실패한 알림은 다음 Webhook 호출 때 다시 시도할 수 있습니다. 성공한 알림(`sent`)은 같은 회원에게 다시 보내지 않습니다.
+
+테스트 중 같은 라운드의 같은 알림을 다시 받아야 하면 SQL Editor에서 해당 일정 ID만 지정해 로그를 삭제합니다.
+
+```sql
+delete from public.notification_logs
+where data ->> 'scheduleId' = '테스트할 schedule_id'
+  and data ? 'feedEventId';
+```
