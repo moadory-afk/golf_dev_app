@@ -1700,7 +1700,7 @@ function ClubInfoModal({
         ? await disableWebPushSubscriptionForClub(club.id, userId)
         : await registerWebPushSubscription(club.id, userId);
       if (result.status === "subscribed") {
-        const nextEnabled = !pushEnabled;
+        const nextEnabled = pushEnabled ? false : true;
         setPushEnabled(nextEnabled);
         setPushMessage(nextEnabled ? "이 클럽의 알림을 받고 있습니다." : "이 클럽의 알림을 껐습니다.");
       } else {
@@ -1766,7 +1766,7 @@ function ClubInfoModal({
             keyboardShouldPersistTaps="handled"
           >
           <View style={s.modalHeader}>
-            <View style={{ flex: 1 }}>
+            <View style={s.clubInfoHeaderMain}>
               {editing ? (
                 <>
                   <TouchableOpacity
@@ -3365,6 +3365,8 @@ const s = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
+    flexWrap: "wrap",
+    gap: 10,
     marginBottom: 14,
   },
   clubInfoModalScroll: {
@@ -3376,9 +3378,11 @@ const s = StyleSheet.create({
   clubInfoHeaderActions: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "flex-end",
     gap: 8,
-    marginLeft: 10,
+    flexShrink: 0,
   },
+  clubInfoHeaderMain: { flex: 1, minWidth: 180 },
   clubInfoHeaderSaveBtn: {
     minWidth: 58,
     borderRadius: 20,

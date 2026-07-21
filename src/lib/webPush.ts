@@ -139,7 +139,7 @@ export async function getWebPushSubscriptionEnabled(clubId: string, userId: stri
 export async function disableWebPushSubscriptionForClub(clubId: string, userId: string) {
   try {
     const endpoint = await getCurrentSubscriptionEndpoint()
-    if (!endpoint) return { status: 'subscribed' as const, message: '이 기기의 알림 구독이 없습니다.' }
+    if (!endpoint) return { status: 'error' as const, message: '이 기기의 알림 구독이 없습니다.' }
     await setNotificationSubscriptionEnabled(clubId, userId, endpoint, false)
     return { status: 'subscribed' as const, message: '이 클럽의 알림을 껐습니다.' }
   } catch (error) {
