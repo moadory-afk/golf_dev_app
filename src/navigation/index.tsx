@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Animated, Easing, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SkinProvider, useSkin } from '../skins'
 import { Icon, type IconName } from '../components/Icon'
+import { AutoWebPushOptIn } from '../components/AutoWebPushOptIn'
 import { FirstVisitInstallGuide } from '../components/PwaInstallGuide'
 import { FirstUseTutorial } from '../components/FirstUseTutorial'
 import { colorLayers, radius, spacing, typography } from '../design/tokens'
@@ -387,6 +388,7 @@ export default function Navigation({ session }: { session: import('@supabase/sup
         <ClubProvider>
           <NavigationStack session={session} />
           <FirstVisitInstallGuide />
+          <AutoWebPushOptIn session={session} />
           <FirstUseTutorial session={session} />
         </ClubProvider>
       </UserProfileProvider>

@@ -81,6 +81,24 @@ export interface NotificationSendResult {
   total: number
 }
 
+function errorMessageFromPayload(value: unknown): string {
+  if (!value) return ''
+  if (typeof value === 'string') return value
+  if (value instanceof Error) return value.message
+  if (typeof value === 'object') {
+    const item = value as { error?: unknown; message?: unknown; msg?: unknown; details?: unknown }
+    const nested = item.error ?? item.message ?? item.msg
+    if (nested && nested !== value) return errorMessageFromPayload(nested)
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return String(value)
+    }
+  }
+  return String(value)
+}
+
+
 export type PersonalRoundFir = 'long' | 'center' | 'short' | 'left_ob' | 'right_ob' | 'other_ob' | 'hazard' | null
 
 export interface PersonalRoundHoleStat {
@@ -1464,19 +1482,35 @@ export async function saveNotificationSubscription(input: NotificationSubscripti
 
 export async function sendClubNotification(
   clubId: string,
-  input: { type: string; title: string; body: string; data?: Record<string, unknown> }
+  input: { type: string; title: string; body: string; data?: Record<string, unknown>; userIds?: string[] }
 ): Promise<NotificationSendResult> {
-  const { data, error } = await supabase.functions.invoke<NotificationSendResult>('send-notification', {
-    body: {
+  const { data: sessionData } = await supabase.auth.getSession()
+  const accessToken = sessionData.session?.access_token
+  const supabaseUrl = String(process.env.EXPO_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '')
+  const anonKey = String(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '')
+  const response = await fetch(`${supabaseUrl}/functions/v1/send-notification`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken ?? anonKey}`,
+      apikey: anonKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
       clubId,
       type: input.type,
       title: input.title,
       body: input.body,
       data: input.data ?? {},
-    },
+      userIds: input.userIds,
+    }),
   })
-  if (error) throw error
-  return data ?? { sent: 0, failed: 0, total: 0 }
+  const text = await response.text()
+  const payload = text ? JSON.parse(text) : null
+  if (!response.ok) {
+    const message = errorMessageFromPayload(payload?.error ?? payload?.message ?? text) || `HTTP ${response.status}`
+    throw new Error(message)
+  }
+  return payload ?? { sent: 0, failed: 0, total: 0 }
 }
 
 export async function updateClubNotice(

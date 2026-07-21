@@ -35,6 +35,23 @@ function compactBody(value: string) {
   return value.trim().replace(/\s+/g, " ").slice(0, 120);
 }
 
+function errorMessageFromUnknown(value: unknown): string {
+  if (!value) return "알 수 없는 오류";
+  if (typeof value === "string") return value;
+  if (value instanceof Error) return value.message;
+  if (typeof value === "object") {
+    const item = value as { error?: unknown; message?: unknown; msg?: unknown; details?: unknown };
+    const nested = item.error ?? item.message ?? item.msg ?? item.details;
+    if (nested && nested !== value) return errorMessageFromUnknown(nested);
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
 function getSupabaseSecretKey() {
   const legacy = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (legacy) return legacy;
@@ -80,7 +97,7 @@ Deno.serve(async (req) => {
 
     const { data: adminRow, error: adminError } = await supabase
       .from("club_members")
-      .select("id")
+      .select("user_id")
       .eq("club_id", clubId)
       .eq("user_id", authData.user.id)
       .eq("role", "admin")
@@ -164,6 +181,6 @@ Deno.serve(async (req) => {
 
     return jsonResponse({ sent, failed, total: rows.length });
   } catch (error) {
-    return jsonResponse({ error: error instanceof Error ? error.message : String(error) }, 500);
+    return jsonResponse({ error: errorMessageFromUnknown(error) }, 500);
   }
 });

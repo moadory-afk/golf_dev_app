@@ -20,7 +20,7 @@ import {
   type ScheduledRoundGroup,
   type ScheduledRoundGroupMember,
 } from '../lib/roundSchedule'
-import { completeRound, deleteRoundsBySchedule, getClubAwardConfig, getClubAwardSnapshots, getClubMembers, getClubSettlement, getCourseLayouts, getGolfCourses, getRoundLottoDraw, getRoundSummaries, saveClubAwardConfig, saveClubAwardSnapshots, saveClubSettlement, saveRound, saveRoundLottoDrafter, totalPar, type CourseLayout, type GolfCourse } from '../lib/store'
+import { completeRound, deleteRoundsBySchedule, getClubAwardConfig, getClubAwardSnapshots, getClubMembers, getClubSettlement, getCourseLayouts, getGolfCourses, getRoundLottoDraw, getRoundSummaries, saveClubAwardConfig, saveClubAwardSnapshots, saveClubSettlement, saveRound, saveRoundLottoDrafter, sendClubNotification, totalPar, type CourseLayout, type GolfCourse } from '../lib/store'
 import { AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
 import { notifyHomeDashboardChanged } from '../lib/homeDashboardEvents'
 import { notifyHomeRecordsChanged } from '../lib/homeRecordEvents'
@@ -173,6 +173,8 @@ export default function RoundSchedulePrototypeScreen() {
   const [lottoDrafterUserId, setLottoDrafterUserId] = useState<string | null>(null)
   const [lottoDrafterSaving, setLottoDrafterSaving] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [caddieNotifySending, setCaddieNotifySending] = useState(false)
+  const [caddieNotifyMessage, setCaddieNotifyMessage] = useState('')
   const [draft, setDraft] = useState<Draft>(createEmptyDraft())
   const [coursePickerOpen, setCoursePickerOpen] = useState(false)
   const [courseSearch, setCourseSearch] = useState('')
@@ -1372,6 +1374,70 @@ export default function RoundSchedulePrototypeScreen() {
     return draft.groups.find((group) => group.members.some((member) => member.userId === userId))?.id
   }
 
+  function assignedMembers() {
+    const byId = new Map<string, ScheduledRoundGroupMember>()
+    draft.groups.forEach((group) => {
+      group.members.forEach((member) => {
+        if (member.userId) byId.set(member.userId, member)
+      })
+    })
+    return Array.from(byId.values())
+  }
+
+  function caddieBriefingBody() {
+    const courseName = draft.courseName?.trim() || '라운드'
+    const teeTime = draft.groups.map((group) => group.time.trim()).find(Boolean)
+    const courseLayouts = draft.groups
+      .flatMap((group) => [group.frontLayoutName, group.backLayoutName])
+      .filter((value): value is string => Boolean(value?.trim()))
+    const layoutText = courseLayouts.length > 0 ? ` · ${Array.from(new Set(courseLayouts)).join('/')}` : ''
+    const timeText = teeTime ? ` ${teeTime} 출발` : ''
+    return `${draft.date}${timeText} ${courseName}${layoutText} 캐디북을 확인해 보세요.`
+  }
+
+  async function handleSendCaddieBriefing() {
+    if (!club?.id) return
+    if (!draft.id) {
+      Alert.alert('확인', '일정을 먼저 저장한 뒤 캐디 브리핑을 보낼 수 있습니다.')
+      return
+    }
+    const targets = assignedMembers()
+    if (targets.length === 0) {
+      Alert.alert('확인', '조편성 회원을 먼저 배정해 주세요.')
+      return
+    }
+
+    setCaddieNotifySending(true)
+    setCaddieNotifyMessage('캐디 브리핑 알림을 보내는 중입니다...')
+    try {
+      const result = await sendClubNotification(club.id, {
+        type: 'caddie_briefing',
+        title: '오늘의 캐디 브리핑',
+        body: caddieBriefingBody(),
+        userIds: targets.map((member) => member.userId),
+        data: {
+          type: 'caddie',
+          clubId: club.id,
+          scheduleId: draft.id,
+          courseId: draft.courseId,
+        },
+      })
+      const message = result.total === 0
+        ? '대상 회원 중 알림을 받을 기기가 아직 없습니다.'
+        : result.sent === 0
+          ? `캐디 브리핑 알림 발송에 실패했습니다. 실패 ${result.failed}건`
+          : `캐디 브리핑 알림 ${result.sent}건을 보냈습니다.`
+      setCaddieNotifyMessage(message)
+      Alert.alert('캐디 브리핑 알림', message)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setCaddieNotifyMessage(`캐디 브리핑 알림 발송 실패: ${message}`)
+      Alert.alert('발송 실패', message)
+    } finally {
+      setCaddieNotifySending(false)
+    }
+  }
+
   async function handleSave() {
     if (!club?.id) return
     if (!draft.date.trim()) return Alert.alert('확인', '라운드 날짜를 입력해 주세요.')
@@ -1889,6 +1955,23 @@ export default function RoundSchedulePrototypeScreen() {
                 <Text style={[s.statusToggleText, groupingComplete && s.statusToggleTextActive]}>
                   {groupingComplete ? '완료' : '미완료'}
                 </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={s.caddieNotifyPanel}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.caddieNotifyTitle}>캐디 브리핑 알림</Text>
+                <Text style={s.caddieNotifyDesc}>
+                  조편성 회원에게 라운드 캐디북 확인 알림을 보냅니다.
+                </Text>
+                {caddieNotifyMessage ? <Text style={s.caddieNotifyStatus}>{caddieNotifyMessage}</Text> : null}
+              </View>
+              <TouchableOpacity
+                style={[s.caddieNotifyButton, caddieNotifySending && { opacity: 0.55 }]}
+                onPress={handleSendCaddieBriefing}
+                disabled={caddieNotifySending}
+                activeOpacity={0.86}
+              >
+                <Text style={s.caddieNotifyButtonText}>{caddieNotifySending ? '발송 중' : '보내기'}</Text>
               </TouchableOpacity>
             </View>
               </>
@@ -2727,6 +2810,30 @@ const s = StyleSheet.create({
   statusToggleButtonActive: { backgroundColor: C.green, borderColor: C.green },
   statusToggleText: { fontSize: 13, fontWeight: '900', color: C.muted },
   statusToggleTextActive: { color: '#fff' },
+  caddieNotifyPanel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#B9DDC8',
+    backgroundColor: '#F0F8F3',
+    padding: 14,
+  },
+  caddieNotifyTitle: { fontSize: 15, fontWeight: '900', color: C.text },
+  caddieNotifyDesc: { fontSize: 12, lineHeight: 18, fontWeight: '700', color: C.muted, marginTop: 3 },
+  caddieNotifyStatus: { fontSize: 12, lineHeight: 18, fontWeight: '800', color: C.greenDark, marginTop: 7 },
+  caddieNotifyButton: {
+    minWidth: 82,
+    minHeight: 38,
+    borderRadius: 19,
+    backgroundColor: C.green,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+  caddieNotifyButtonText: { fontSize: 13, fontWeight: '900', color: '#fff' },
   awardBody: { flexGrow: 1, gap: 14, paddingBottom: 20 },
   awardChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   awardChip: {

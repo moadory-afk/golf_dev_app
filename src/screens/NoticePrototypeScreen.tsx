@@ -39,6 +39,7 @@ export default function NoticePrototypeScreen() {
   const [installGuideOpen, setInstallGuideOpen] = useState(false)
   const [pushRegistering, setPushRegistering] = useState(false)
   const [pushStatusMessage, setPushStatusMessage] = useState('')
+  const [noticeSaveMessage, setNoticeSaveMessage] = useState('')
 
   useLayoutEffect(() => {
     nav.setOptions({ title: `${activeClub?.name ?? '클럽'} 공지사항` })
@@ -89,6 +90,7 @@ export default function NoticePrototypeScreen() {
     if (!activeClub?.id || !title.trim() || saving) return
     let pushPayload: { noticeId: string; title: string } | null = null
     setSaving(true)
+    setNoticeSaveMessage('')
     try {
       if (editing === 'new') {
         const notice = await createClubNotice(activeClub.id, { title, body, isPublished, isImportant })
@@ -101,7 +103,9 @@ export default function NoticePrototypeScreen() {
       setEditing(null)
       await load()
     } catch (error) {
-      Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
+      const message = error instanceof Error ? error.message : String(error)
+      setNoticeSaveMessage(`저장 실패: ${message}`)
+      Alert.alert('저장 실패', message)
       return
     } finally {
       setSaving(false)
@@ -116,18 +120,31 @@ export default function NoticePrototypeScreen() {
           data: { type: 'notice', clubId: activeClub.id, noticeId: pushPayload.noticeId },
         })
         if (result.total === 0) {
+          setNoticeSaveMessage('공지사항은 저장됐지만, 아직 알림을 받을 기기가 없습니다.')
           Alert.alert('공지 저장 완료', '공지사항은 저장됐지만, 아직 알림을 받을 기기가 없습니다.')
         } else if (result.sent === 0) {
+          setNoticeSaveMessage(`공지사항은 저장됐지만, 휴대폰 알림 발송에 실패했습니다. 실패 ${result.failed}건`)
           Alert.alert('공지 저장 완료', `공지사항은 저장됐지만, 휴대폰 알림 발송에 실패했습니다. 실패 ${result.failed}건`)
         } else {
+          setNoticeSaveMessage(`공지사항을 저장하고 휴대폰 알림 ${result.sent}건을 보냈습니다.`)
           Alert.alert('알림 발송 완료', `공지사항을 저장하고 휴대폰 알림 ${result.sent}건을 보냈습니다.`)
         }
       } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        setNoticeSaveMessage(`공지는 저장됐지만 휴대폰 알림 발송은 실패했습니다. ${message}`)
         Alert.alert(
           '공지 저장 완료',
-          `공지는 저장됐지만 휴대폰 알림 발송은 실패했습니다.\n\n${error instanceof Error ? error.message : String(error)}`,
+          `공지는 저장됐지만 휴대폰 알림 발송은 실패했습니다.\n\n${message}`,
         )
       }
+    } else {
+      setNoticeSaveMessage(
+        sendPush && !isPublished
+          ? '비게시 공지는 휴대폰 알림을 보내지 않고 저장했습니다.'
+          : editing === 'new'
+            ? '공지사항을 저장했습니다. 휴대폰 알림은 선택되지 않았습니다.'
+            : '공지사항을 수정했습니다.',
+      )
     }
   }
 
@@ -211,6 +228,11 @@ export default function NoticePrototypeScreen() {
           <Text style={s.pushNoticeBody}>홈 화면에 설치한 GogoPar에서 새 공지 알림을 받을 수 있습니다.</Text>
           {pushStatusMessage ? <Text style={s.pushNoticeStatus}>{pushStatusMessage}</Text> : null}
         </TouchableOpacity>
+        {noticeSaveMessage ? (
+          <View style={s.noticeSaveBanner}>
+            <Text style={s.noticeSaveBannerText}>{noticeSaveMessage}</Text>
+          </View>
+        ) : null}
         {loading ? (
           <Text style={s.body}>불러오는 중...</Text>
         ) : notices.length === 0 ? (
@@ -326,6 +348,8 @@ const s = StyleSheet.create({
   pushNoticeTitle: { color: C.text, fontSize: 13, fontWeight: '900' },
   pushNoticeBody: { color: C.muted, fontSize: 12, lineHeight: 17, marginTop: 4 },
   pushNoticeStatus: { color: C.greenDark, fontSize: 12, lineHeight: 17, marginTop: 8, fontWeight: '800' },
+  noticeSaveBanner: { borderRadius: 12, backgroundColor: '#EAF5EF', padding: 11, marginBottom: 10 },
+  noticeSaveBannerText: { color: C.greenDark, fontSize: 12, lineHeight: 17, fontWeight: '800' },
   pinnedBadge: { color: '#fff', backgroundColor: C.greenDark, borderRadius: 7, overflow: 'hidden', paddingHorizontal: 6, paddingVertical: 2, fontSize: 10, fontWeight: '900' },
   sectionTitle: { fontSize: 15, fontWeight: '900', color: C.text },
   sectionAction: { fontSize: 12, fontWeight: '900', color: C.green },

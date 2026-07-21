@@ -11,13 +11,19 @@ export type WebPushRegistrationResult =
   | { status: 'error'; message: string }
 
 function getVapidPublicKey() {
-  return String(process.env.EXPO_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY || '').trim()
+  return String(process.env.EXPO_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY || '')
+    .trim()
+    .replace(/^['"]|['"]$/g, '')
+    .replace(/\s/g, '')
 }
 
 function urlBase64ToUint8Array(value: string) {
   const padding = '='.repeat((4 - value.length % 4) % 4)
   const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/')
   const raw = window.atob(base64)
+  if (raw.length !== 65 || raw.charCodeAt(0) !== 4) {
+    throw new Error('웹 푸시 공개키 형식이 올바르지 않습니다. VAPID Public Key를 다시 확인해주세요.')
+  }
   const output = new Uint8Array(raw.length)
   for (let i = 0; i < raw.length; i += 1) output[i] = raw.charCodeAt(i)
   return output
@@ -47,14 +53,14 @@ export async function registerWebPushSubscription(
   userId: string,
 ): Promise<WebPushRegistrationResult> {
   try {
-    if (!canUseWebPush()) {
-      return { status: 'unsupported', message: '이 브라우저는 웹 푸시 알림을 지원하지 않습니다.' }
-    }
     if (!isLocalOrHttps()) {
       return { status: 'unsupported', message: '웹 푸시는 HTTPS 주소에서만 사용할 수 있습니다.' }
     }
     if (isIosWeb() && !isRunningStandalone()) {
       return { status: 'requires_install', message: '아이폰은 홈 화면에 설치한 GogoPar에서 알림을 켤 수 있습니다.' }
+    }
+    if (!canUseWebPush()) {
+      return { status: 'unsupported', message: '이 브라우저는 웹 푸시 알림을 지원하지 않습니다. Safari, Chrome 또는 홈 화면에 설치한 GogoPar에서 다시 시도해주세요.' }
     }
 
     const vapidPublicKey = getVapidPublicKey()
