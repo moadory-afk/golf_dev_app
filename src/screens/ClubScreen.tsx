@@ -65,6 +65,11 @@ import { PwaInstallGuide } from "../components/PwaInstallGuide";
 import { Icon } from "../components/Icon";
 import { EmojiIcon } from "../components/EmojiIcon";
 import {
+  disableWebPushSubscriptionForClub,
+  getWebPushSubscriptionEnabled,
+  registerWebPushSubscription,
+} from "../lib/webPush";
+import {
   ImageCropModal,
   type ImageCropRect,
 } from "../components/ImageCropModal";
@@ -1522,6 +1527,7 @@ function ClubInfoModal({
   onInvite: () => void;
   onLeaveClub: () => Promise<void>;
 }) {
+  const { userId } = useUserProfile();
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(club.name);
   const [editSubtitle, setEditSubtitle] = useState(club.subtitle);
@@ -1536,12 +1542,21 @@ function ClubInfoModal({
   const [showHandicapDrop, setShowHandicapDrop] = useState(false);
   const [leavingClub, setLeavingClub] = useState(false);
   const [leaveError, setLeaveError] = useState<string | null>(null);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushMessage, setPushMessage] = useState("");
   const isAdmin = club.role === "admin";
   const isSoleAdmin = isAdmin && admins.length <= 1;
   const subtitle = club.subtitle?.trim()
     ? club.subtitle
     : "골프의 모든 경험을 하나로.";
   const role = isAdmin ? "관리자" : "일반회원";
+
+  async function resolveUserId() {
+    if (userId) return userId;
+    const { data } = await supabase.auth.getUser();
+    return data.user?.id ?? null;
+  }
 
   useEffect(() => {
     setEditing(false);
@@ -1550,6 +1565,35 @@ function ClubInfoModal({
     setEditCoverImage(club.coverImage);
     setLeaveError(null);
   }, [club.id, club.name, club.subtitle, club.coverImage]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadPushStatus() {
+      const resolvedUserId = await resolveUserId();
+      if (!resolvedUserId) {
+        setPushEnabled(false);
+        setPushMessage("로그인 후 알림을 설정할 수 있습니다.");
+        return;
+      }
+      setPushLoading(true);
+      const result = await getWebPushSubscriptionEnabled(club.id, resolvedUserId);
+      if (active) {
+        setPushEnabled(result.enabled);
+        setPushMessage(result.message);
+        setPushLoading(false);
+      }
+    }
+    loadPushStatus().catch((error: unknown) => {
+      if (active) {
+        setPushEnabled(false);
+        setPushMessage(error instanceof Error ? error.message : String(error));
+        setPushLoading(false);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [club.id, userId]);
 
   async function handleSave() {
     if (!editName.trim()) {
@@ -1641,6 +1685,32 @@ function ClubInfoModal({
       width: asset.width || 1600,
       height: asset.height || 900,
     });
+  }
+
+  async function handleTogglePush() {
+    if (pushLoading) return;
+    if (!userId) {
+      setPushMessage("로그인 후 알림을 설정할 수 있습니다.");
+      return;
+    }
+    setPushLoading(true);
+    setPushMessage(pushEnabled ? "알림을 끄는 중입니다..." : "알림 허용을 확인하고 있습니다...");
+    try {
+      const result = pushEnabled
+        ? await disableWebPushSubscriptionForClub(club.id, userId)
+        : await registerWebPushSubscription(club.id, userId);
+      if (result.status === "subscribed") {
+        const nextEnabled = !pushEnabled;
+        setPushEnabled(nextEnabled);
+        setPushMessage(nextEnabled ? "이 클럽의 알림을 받고 있습니다." : "이 클럽의 알림을 껐습니다.");
+      } else {
+        setPushMessage(result.message);
+      }
+    } catch (error: unknown) {
+      setPushMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPushLoading(false);
+    }
   }
 
   async function handleApplyCoverCrop(crop: ImageCropRect) {
@@ -1798,6 +1868,34 @@ function ClubInfoModal({
           <Text style={s.clubInfoStatsText}>
             회원 {memberCount}명 · 운영진 {admins.length}명 · 내 역할 {role}
           </Text>
+
+          <View style={s.infoSection}>
+            <TouchableOpacity
+              style={s.settingLine}
+              onPress={handleTogglePush}
+              disabled={pushLoading}
+              activeOpacity={0.86}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.settingLineLabel}>알림 허용</Text>
+                <Text style={s.infoMuted}>
+                  새 공지, 조편성, 캐디북, 로또, 경기 결과 알림을 받습니다.
+                </Text>
+                {pushMessage ? (
+                  <Text style={s.clubPushMessage}>{pushMessage}</Text>
+                ) : null}
+              </View>
+              <View
+                style={[
+                  s.switchTrack,
+                  pushEnabled && s.switchTrackOn,
+                  pushLoading && { opacity: 0.55 },
+                ]}
+              >
+                <View style={[s.switchThumb, pushEnabled && s.switchThumbOn]} />
+              </View>
+            </TouchableOpacity>
+          </View>
 
           {isAdmin && (
             <View style={[s.infoSection, { zIndex: 20 }]}>
@@ -3282,10 +3380,10 @@ const s = StyleSheet.create({
     marginLeft: 10,
   },
   clubInfoHeaderSaveBtn: {
-    minWidth: 64,
-    minHeight: 42,
-    borderRadius: 16,
-    paddingHorizontal: 16,
+    minWidth: 58,
+    borderRadius: 20,
+    paddingVertical: 5,
+    paddingHorizontal: 14,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: C.green,
@@ -3429,6 +3527,34 @@ const s = StyleSheet.create({
     gap: 12,
   },
   settingLineLabel: { fontSize: 13, fontWeight: "800", color: C.text },
+  clubPushMessage: {
+    color: C.greenDark,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 6,
+    fontWeight: "800",
+  },
+  switchTrack: {
+    width: 52,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#dfe5e1",
+    padding: 3,
+    justifyContent: "center",
+  },
+  switchTrackOn: { backgroundColor: C.green },
+  switchThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  switchThumbOn: { transform: [{ translateX: 22 }] },
   handicapSelectBtn: {
     borderRadius: 999,
     backgroundColor: C.greenLight,

@@ -1480,6 +1480,51 @@ export async function saveNotificationSubscription(input: NotificationSubscripti
   }
 }
 
+export async function getNotificationSubscriptionEnabled(
+  clubId: string,
+  userId: string,
+  endpoint: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('notification_subscriptions')
+    .select('enabled')
+    .eq('club_id', clubId)
+    .eq('user_id', userId)
+    .eq('channel', 'web')
+    .eq('endpoint', endpoint)
+    .maybeSingle()
+  if (error) {
+    if (isMissingNotificationSubscriptionsTable(error)) return false
+    throw error
+  }
+  return data?.enabled === true
+}
+
+export async function setNotificationSubscriptionEnabled(
+  clubId: string,
+  userId: string,
+  endpoint: string,
+  enabled: boolean
+): Promise<void> {
+  const { error } = await supabase
+    .from('notification_subscriptions')
+    .update({
+      enabled,
+      updated_at: new Date().toISOString(),
+      last_seen_at: new Date().toISOString(),
+    })
+    .eq('club_id', clubId)
+    .eq('user_id', userId)
+    .eq('channel', 'web')
+    .eq('endpoint', endpoint)
+  if (error) {
+    if (isMissingNotificationSubscriptionsTable(error)) {
+      throw new Error('알림 구독 테이블이 아직 적용되지 않았습니다. Supabase 마이그레이션이 필요합니다.')
+    }
+    throw error
+  }
+}
+
 export async function sendClubNotification(
   clubId: string,
   input: { type: string; title: string; body: string; data?: Record<string, unknown>; userIds?: string[] }

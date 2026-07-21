@@ -1,6 +1,10 @@
 import { Platform } from 'react-native'
 import { isRunningStandalone } from './pwaInstall'
-import { saveNotificationSubscription } from './store'
+import {
+  getNotificationSubscriptionEnabled,
+  saveNotificationSubscription,
+  setNotificationSubscriptionEnabled,
+} from './store'
 
 export type WebPushRegistrationResult =
   | { status: 'subscribed' }
@@ -96,5 +100,49 @@ export async function registerWebPushSubscription(
     return { status: 'subscribed' }
   } catch (error) {
     return { status: 'error', message: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+async function getCurrentSubscriptionEndpoint() {
+  if (!canUseWebPush()) return null
+  const registration = await navigator.serviceWorker.getRegistration()
+  const subscription = await registration?.pushManager.getSubscription()
+  return subscription?.endpoint ?? null
+}
+
+export async function getWebPushSubscriptionEnabled(clubId: string, userId: string) {
+  try {
+    if (!isLocalOrHttps()) {
+      return { enabled: false, message: '웹 푸시는 HTTPS 주소에서만 사용할 수 있습니다.' }
+    }
+    if (isIosWeb() && !isRunningStandalone()) {
+      return { enabled: false, message: '아이폰은 홈 화면에 설치한 GogoPar에서 알림을 켤 수 있습니다.' }
+    }
+    if (!canUseWebPush()) {
+      return { enabled: false, message: '이 브라우저는 웹 푸시 알림을 지원하지 않습니다.' }
+    }
+    if (Notification.permission === 'denied') {
+      return { enabled: false, message: '브라우저 알림 권한이 차단되어 있습니다.' }
+    }
+    if (Notification.permission !== 'granted') {
+      return { enabled: false, message: '알림 권한이 아직 허용되지 않았습니다.' }
+    }
+    const endpoint = await getCurrentSubscriptionEndpoint()
+    if (!endpoint) return { enabled: false, message: '이 기기의 알림 구독이 아직 등록되지 않았습니다.' }
+    const enabled = await getNotificationSubscriptionEnabled(clubId, userId, endpoint)
+    return { enabled, message: enabled ? '이 클럽의 알림을 받고 있습니다.' : '이 클럽의 알림이 꺼져 있습니다.' }
+  } catch (error) {
+    return { enabled: false, message: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+export async function disableWebPushSubscriptionForClub(clubId: string, userId: string) {
+  try {
+    const endpoint = await getCurrentSubscriptionEndpoint()
+    if (!endpoint) return { status: 'subscribed' as const, message: '이 기기의 알림 구독이 없습니다.' }
+    await setNotificationSubscriptionEnabled(clubId, userId, endpoint, false)
+    return { status: 'subscribed' as const, message: '이 클럽의 알림을 껐습니다.' }
+  } catch (error) {
+    return { status: 'error' as const, message: error instanceof Error ? error.message : String(error) }
   }
 }

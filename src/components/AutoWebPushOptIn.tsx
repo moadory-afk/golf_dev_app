@@ -8,9 +8,14 @@ import { isRunningStandalone } from '../lib/pwaInstall'
 import { canUseWebPush, registerWebPushSubscription } from '../lib/webPush'
 
 const DISMISSED_KEY_PREFIX = '@gogopar_web_push_opt_in_dismissed'
+const CONFIRMED_KEY_PREFIX = '@gogopar_web_push_registered_confirmed'
 
 function storageKey(clubId: string, userId: string) {
   return `${DISMISSED_KEY_PREFIX}:${clubId}:${userId}`
+}
+
+function confirmedKey(clubId: string, userId: string) {
+  return `${CONFIRMED_KEY_PREFIX}:${clubId}:${userId}`
 }
 
 function currentNotificationPermission() {
@@ -26,6 +31,7 @@ export function AutoWebPushOptIn({ session }: { session: Session | null }) {
 
   const userId = session?.user.id
   const clubId = activeClub?.id
+  const isAutoRegistrationNotice = message.startsWith('이 계정도')
 
   useEffect(() => {
     let active = true
@@ -41,7 +47,17 @@ export function AutoWebPushOptIn({ session }: { session: Session | null }) {
 
       if (permission === 'granted') {
         const result = await registerWebPushSubscription(clubId, userId)
-        if (active && result.status !== 'subscribed') setMessage(result.message)
+        if (!active) return
+        if (result.status === 'subscribed') {
+          const confirmedAt = await AsyncStorage.getItem(confirmedKey(clubId, userId))
+          if (!confirmedAt) {
+            await AsyncStorage.setItem(confirmedKey(clubId, userId), new Date().toISOString())
+            setMessage('이 계정도 이 기기에서 알림을 받을 수 있게 설정되었습니다.')
+            setVisible(true)
+          }
+        } else {
+          setMessage(result.message)
+        }
         return
       }
 
@@ -68,6 +84,7 @@ export function AutoWebPushOptIn({ session }: { session: Session | null }) {
     if (result.status === 'subscribed') {
       setMessage('이 기기에서 새 공지와 캐디 알림을 받을 수 있습니다.')
       await AsyncStorage.removeItem(storageKey(clubId, userId))
+      await AsyncStorage.setItem(confirmedKey(clubId, userId), new Date().toISOString())
       setTimeout(() => setVisible(false), 900)
     } else {
       setMessage(result.message)
@@ -91,11 +108,11 @@ export function AutoWebPushOptIn({ session }: { session: Session | null }) {
             {message ? <Text style={styles.message}>{message}</Text> : null}
             <TouchableOpacity
               style={[styles.primaryButton, subscribing && { opacity: 0.58 }]}
-              onPress={handleSubscribe}
+              onPress={isAutoRegistrationNotice ? () => setVisible(false) : handleSubscribe}
               disabled={subscribing}
               activeOpacity={0.84}
             >
-              <Text style={styles.primaryText}>{subscribing ? '설정 중' : '알림 켜기'}</Text>
+              <Text style={styles.primaryText}>{isAutoRegistrationNotice ? '확인' : subscribing ? '설정 중' : '알림 켜기'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.secondaryButton} onPress={closeAndRemember}>
               <Text style={styles.secondaryText}>나중에</Text>
