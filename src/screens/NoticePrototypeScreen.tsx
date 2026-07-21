@@ -38,6 +38,7 @@ export default function NoticePrototypeScreen() {
   const [deletingNoticeId, setDeletingNoticeId] = useState<string | null>(null)
   const [installGuideOpen, setInstallGuideOpen] = useState(false)
   const [pushRegistering, setPushRegistering] = useState(false)
+  const [pushStatusMessage, setPushStatusMessage] = useState('')
 
   useLayoutEffect(() => {
     nav.setOptions({ title: `${activeClub?.name ?? '클럽'} 공지사항` })
@@ -136,13 +137,20 @@ export default function NoticePrototypeScreen() {
       return
     }
     setPushRegistering(true)
+    setPushStatusMessage('알림 설정을 확인하고 있습니다...')
     try {
       const result = await registerWebPushSubscription(activeClub.id, userId)
       if (result.status === 'subscribed') {
+        setPushStatusMessage('알림 설정 완료. 이 기기에서 새 공지 알림을 받을 수 있습니다.')
         Alert.alert('알림 설정 완료', '이 기기에서 공지사항 알림을 받을 수 있습니다.')
       } else {
+        setPushStatusMessage(result.message)
         Alert.alert('알림 설정', result.message)
       }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setPushStatusMessage(message)
+      Alert.alert('알림 설정', message)
     } finally {
       setPushRegistering(false)
     }
@@ -201,6 +209,7 @@ export default function NoticePrototypeScreen() {
         >
           <Text style={s.pushNoticeTitle}>{pushRegistering ? '알림 설정 중...' : '휴대폰 공지 알림 받기'}</Text>
           <Text style={s.pushNoticeBody}>홈 화면에 설치한 GogoPar에서 새 공지 알림을 받을 수 있습니다.</Text>
+          {pushStatusMessage ? <Text style={s.pushNoticeStatus}>{pushStatusMessage}</Text> : null}
         </TouchableOpacity>
         {loading ? (
           <Text style={s.body}>불러오는 중...</Text>
@@ -316,6 +325,7 @@ const s = StyleSheet.create({
   pushNotice: { borderWidth: 1, borderColor: '#D7E7DD', backgroundColor: '#FBFEFC', borderRadius: 14, padding: 12, marginBottom: 10 },
   pushNoticeTitle: { color: C.text, fontSize: 13, fontWeight: '900' },
   pushNoticeBody: { color: C.muted, fontSize: 12, lineHeight: 17, marginTop: 4 },
+  pushNoticeStatus: { color: C.greenDark, fontSize: 12, lineHeight: 17, marginTop: 8, fontWeight: '800' },
   pinnedBadge: { color: '#fff', backgroundColor: C.greenDark, borderRadius: 7, overflow: 'hidden', paddingHorizontal: 6, paddingVertical: 2, fontSize: 10, fontWeight: '900' },
   sectionTitle: { fontSize: 15, fontWeight: '900', color: C.text },
   sectionAction: { fontSize: 12, fontWeight: '900', color: C.green },
