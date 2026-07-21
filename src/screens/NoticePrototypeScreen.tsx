@@ -6,7 +6,8 @@ import { Icon } from '../components/Icon'
 import { PwaInstallGuide } from '../components/PwaInstallGuide'
 import { useClub } from '../lib/ClubContext'
 import { useUserProfile } from '../lib/UserProfileContext'
-import { createClubNotice, deleteClubNotice, getClubNotices, updateClubNotice, type ClubNotice } from '../lib/store'
+import { createClubNotice, deleteClubNotice, getClubNotices, sendClubNotification, updateClubNotice, type ClubNotice } from '../lib/store'
+import { registerWebPushSubscription } from '../lib/webPush'
 import { C } from '../theme'
 
 function shortDate(input: string) {
@@ -32,8 +33,11 @@ export default function NoticePrototypeScreen() {
   const [body, setBody] = useState('')
   const [isPublished, setIsPublished] = useState(true)
   const [isImportant, setIsImportant] = useState(false)
+  const [sendPush, setSendPush] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [deletingNoticeId, setDeletingNoticeId] = useState<string | null>(null)
   const [installGuideOpen, setInstallGuideOpen] = useState(false)
+  const [pushRegistering, setPushRegistering] = useState(false)
 
   useLayoutEffect(() => {
     nav.setOptions({ title: `${activeClub?.name ?? '클럽'} 공지사항` })
@@ -65,6 +69,7 @@ export default function NoticePrototypeScreen() {
     setBody(notice?.body ?? '')
     setIsPublished(notice?.isPublished ?? true)
     setIsImportant(notice?.isImportant ?? false)
+    setSendPush(false)
   }
 
   async function markRead(notice: ClubNotice) {
@@ -80,10 +85,15 @@ export default function NoticePrototypeScreen() {
   }
 
   async function saveNotice() {
-    if (!activeClub?.id || !title.trim()) return
+    if (!activeClub?.id || !title.trim() || saving) return
+    let pushPayload: { noticeId: string; title: string } | null = null
+    setSaving(true)
     try {
       if (editing === 'new') {
-        await createClubNotice(activeClub.id, { title, body, isPublished, isImportant })
+        const notice = await createClubNotice(activeClub.id, { title, body, isPublished, isImportant })
+        if (sendPush && isPublished) {
+          pushPayload = { noticeId: notice.id, title: title.trim() }
+        }
       } else if (editing) {
         await updateClubNotice(editing.id, { title, body, isPublished, isImportant })
       }
@@ -91,6 +101,50 @@ export default function NoticePrototypeScreen() {
       await load()
     } catch (error) {
       Alert.alert('저장 실패', error instanceof Error ? error.message : String(error))
+      return
+    } finally {
+      setSaving(false)
+    }
+
+    if (pushPayload && activeClub?.id) {
+      try {
+        const result = await sendClubNotification(activeClub.id, {
+          type: 'notice',
+          title: '새 공지사항',
+          body: pushPayload.title,
+          data: { type: 'notice', clubId: activeClub.id, noticeId: pushPayload.noticeId },
+        })
+        if (result.total === 0) {
+          Alert.alert('공지 저장 완료', '공지사항은 저장됐지만, 아직 알림을 받을 기기가 없습니다.')
+        } else if (result.sent === 0) {
+          Alert.alert('공지 저장 완료', `공지사항은 저장됐지만, 휴대폰 알림 발송에 실패했습니다. 실패 ${result.failed}건`)
+        } else {
+          Alert.alert('알림 발송 완료', `공지사항을 저장하고 휴대폰 알림 ${result.sent}건을 보냈습니다.`)
+        }
+      } catch (error) {
+        Alert.alert(
+          '공지 저장 완료',
+          `공지는 저장됐지만 휴대폰 알림 발송은 실패했습니다.\n\n${error instanceof Error ? error.message : String(error)}`,
+        )
+      }
+    }
+  }
+
+  async function registerNoticePush() {
+    if (!activeClub?.id || !userId) {
+      Alert.alert('알림 설정', '로그인 후 클럽에 가입한 회원만 알림을 받을 수 있습니다.')
+      return
+    }
+    setPushRegistering(true)
+    try {
+      const result = await registerWebPushSubscription(activeClub.id, userId)
+      if (result.status === 'subscribed') {
+        Alert.alert('알림 설정 완료', '이 기기에서 공지사항 알림을 받을 수 있습니다.')
+      } else {
+        Alert.alert('알림 설정', result.message)
+      }
+    } finally {
+      setPushRegistering(false)
     }
   }
 
@@ -138,6 +192,15 @@ export default function NoticePrototypeScreen() {
             <Text style={s.installNoticeMeta}>항상 확인 가능</Text>
           </View>
           <Text style={s.installArrow}>›</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.pushNotice, pushRegistering && { opacity: 0.55 }]}
+          onPress={registerNoticePush}
+          activeOpacity={0.84}
+          disabled={pushRegistering}
+        >
+          <Text style={s.pushNoticeTitle}>{pushRegistering ? '알림 설정 중...' : '휴대폰 공지 알림 받기'}</Text>
+          <Text style={s.pushNoticeBody}>홈 화면에 설치한 GogoPar에서 새 공지 알림을 받을 수 있습니다.</Text>
         </TouchableOpacity>
         {loading ? (
           <Text style={s.body}>불러오는 중...</Text>
@@ -214,13 +277,18 @@ export default function NoticePrototypeScreen() {
               <TouchableOpacity style={[s.toggleBtn, isImportant && s.toggleOn]} onPress={() => setIsImportant((value) => !value)}>
                 <Text style={[s.toggleText, isImportant && s.toggleTextOn]}>중요</Text>
               </TouchableOpacity>
+              {editing === 'new' && (
+                <TouchableOpacity style={[s.toggleBtn, sendPush && s.toggleOn]} onPress={() => setSendPush((value) => !value)}>
+                  <Text style={[s.toggleText, sendPush && s.toggleTextOn]}>휴대폰 알림</Text>
+                </TouchableOpacity>
+              )}
             </View>
             <View style={s.modalButtons}>
               <TouchableOpacity style={s.cancelBtn} onPress={() => setEditing(null)}>
                 <Text style={s.cancelText}>취소</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[s.saveBtn, !title.trim() && { opacity: 0.45 }]} onPress={saveNotice} disabled={!title.trim()}>
-                <Text style={s.saveText}>저장</Text>
+              <TouchableOpacity style={[s.saveBtn, (!title.trim() || saving) && { opacity: 0.45 }]} onPress={saveNotice} disabled={!title.trim() || saving}>
+                <Text style={s.saveText}>{saving ? '저장 중...' : '저장'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -245,6 +313,9 @@ const s = StyleSheet.create({
   installNoticeTitle: { flex: 1, color: C.text, fontSize: 14, fontWeight: '900' },
   installNoticeMeta: { color: C.greenDark, fontSize: 11, fontWeight: '800', marginTop: 5 },
   installArrow: { color: C.greenDark, fontSize: 24, fontWeight: '500' },
+  pushNotice: { borderWidth: 1, borderColor: '#D7E7DD', backgroundColor: '#FBFEFC', borderRadius: 14, padding: 12, marginBottom: 10 },
+  pushNoticeTitle: { color: C.text, fontSize: 13, fontWeight: '900' },
+  pushNoticeBody: { color: C.muted, fontSize: 12, lineHeight: 17, marginTop: 4 },
   pinnedBadge: { color: '#fff', backgroundColor: C.greenDark, borderRadius: 7, overflow: 'hidden', paddingHorizontal: 6, paddingVertical: 2, fontSize: 10, fontWeight: '900' },
   sectionTitle: { fontSize: 15, fontWeight: '900', color: C.text },
   sectionAction: { fontSize: 12, fontWeight: '900', color: C.green },

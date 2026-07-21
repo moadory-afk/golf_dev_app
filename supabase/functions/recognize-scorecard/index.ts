@@ -36,6 +36,25 @@ function cleanNumberArray(value: unknown, maxLength = 18): Array<number | null> 
   )
 }
 
+function normalizeDiffs(value: unknown, pars: Array<number | null>): Array<number | null> {
+  const values = cleanNumberArray(value)
+  const readable = values
+    .map((item, index) => ({ value: item, par: pars[index] }))
+    .filter((item): item is { value: number; par: number } => item.value != null && item.par != null)
+
+  if (readable.length >= 3) {
+    const strokeLike = readable.filter(({ value }) => value >= 3 && value <= 12).length
+    if (strokeLike / readable.length >= 0.7) {
+      return values.map((item, index) => {
+        const par = pars[index]
+        return item != null && par != null ? item - par : item
+      })
+    }
+  }
+
+  return values
+}
+
 function normalizePayload(value: unknown): RecognizedScorecard {
   const raw = (value ?? {}) as {
     players?: unknown
@@ -57,15 +76,21 @@ function normalizePayload(value: unknown): RecognizedScorecard {
       ? raw.recognized_course_name
       : ''
 
+  const pars = cleanNumberArray(raw.pars)
   return {
     players: players.slice(0, 8).map((player) => {
-      const p = (player ?? {}) as { name?: unknown; diffs?: unknown }
+      const p = (player ?? {}) as { name?: unknown; diffs?: unknown; strokes?: unknown; scores?: unknown }
+      const rawScores = Array.isArray(p.diffs)
+        ? p.diffs
+        : Array.isArray(p.strokes)
+        ? p.strokes
+        : p.scores
       return {
         name: typeof p.name === 'string' ? p.name.trim() : '',
-        diffs: cleanNumberArray(p.diffs),
+        diffs: normalizeDiffs(rawScores, pars),
       }
     }),
-    pars: cleanNumberArray(raw.pars),
+    pars,
     courseName: courseName.trim() || undefined,
     recognizedCourseName: recognizedCourseName.trim() || undefined,
   }
@@ -119,7 +144,8 @@ Deno.serve(async (req) => {
         system: [
           'You read golf scorecard images and return JSON only.',
           'Return this shape: {"players":[{"name":"string","diffs":[number|null]}],"pars":[number|null],"courseName":"string","recognizedCourseName":"string"}.',
-          'diffs are strokes relative to par for each visible hole. birdie=-1, par=0, bogey=1, double=2.',
+          'diffs must be strokes relative to par for each visible hole, not gross strokes. birdie=-1, par=0, bogey=1, double=2.',
+          'If a card cell shows 0, 1, 2, or -1, copy that relative value as-is. Do not add par to it.',
           'Use null for unreadable cells. Keep hole order exactly as shown.',
           'Do not include markdown fences or explanatory text.',
         ].join(' '),

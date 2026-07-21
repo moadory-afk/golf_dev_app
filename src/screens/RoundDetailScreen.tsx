@@ -30,6 +30,10 @@ function lottoPrizeForHits(hits: number, config: LottoAwardConfig, jackpot: numb
   return 0
 }
 
+function normalizeCourseSectionName(value?: string | null) {
+  return (value ?? '').replace(/코스|course|\s/gi, '').trim()
+}
+
 function computeAwardResult(
   id: string,
   round: { id: string; players: { name: string; strokes: number[] }[]; pars: number[]; shinperioHoles: number[] },
@@ -268,6 +272,19 @@ export default function RoundDetailScreen() {
 
   const par = totalPar(round.pars)
   const handicaps = getHandicapsForRound(round, allRounds ?? [], handicapBasis)
+  const scheduledSectionNames = (() => {
+    if (!round.scheduleId || !roundSchedules) return []
+    const schedule = roundSchedules.find((item) => item.id === round.scheduleId)
+    if (!schedule) return []
+    const playerNames = new Set(round.players.map((player) => player.name))
+    const group = [...schedule.groups]
+      .sort((a, b) => {
+        const left = a.members.filter((member) => playerNames.has(member.name)).length
+        const right = b.members.filter((member) => playerNames.has(member.name)).length
+        return right - left
+      })[0]
+    return [group?.frontLayoutName, group?.backLayoutName].filter((name): name is string => Boolean(name?.trim()))
+  })()
   const scoreSections = (() => {
     const labels = round.holeLabels
     if (labels?.length === round.pars.length) {
@@ -278,7 +295,24 @@ export default function RoundDetailScreen() {
         if (last?.name === name) last.end = index + 1
         else sections.push({ name, start: index, end: index + 1 })
       })
+      if (scheduledSectionNames.length > 1) {
+        const ordered = scheduledSectionNames
+          .map((scheduledName) => {
+            const normalizedScheduled = normalizeCourseSectionName(scheduledName)
+            return sections.find((section) => normalizeCourseSectionName(section.name) === normalizedScheduled)
+          })
+          .filter((section): section is { name: string; start: number; end: number } => !!section)
+        if (ordered.length === scheduledSectionNames.length) return ordered
+      }
       return sections
+    }
+    if (scheduledSectionNames.length > 1 && round.pars.length % scheduledSectionNames.length === 0) {
+      const holesPerCourse = round.pars.length / scheduledSectionNames.length
+      return scheduledSectionNames.map((name, index) => ({
+        name,
+        start: index * holesPerCourse,
+        end: (index + 1) * holesPerCourse,
+      }))
     }
     const coursePart = round.courseName.split(/\s+/).find((part) => part.includes('+')) ?? ''
     const courseNames = coursePart.split('+').map((name) => name.trim()).filter(Boolean)

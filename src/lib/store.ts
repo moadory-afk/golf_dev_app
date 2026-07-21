@@ -64,6 +64,23 @@ export interface ClubNotice {
   updatedAt: string
 }
 
+export interface NotificationSubscriptionInput {
+  userId: string
+  clubId: string
+  channel: 'web' | 'native'
+  endpoint: string
+  p256dh?: string | null
+  auth?: string | null
+  platform?: string | null
+  userAgent?: string | null
+}
+
+export interface NotificationSendResult {
+  sent: number
+  failed: number
+  total: number
+}
+
 export type PersonalRoundFir = 'long' | 'center' | 'short' | 'left_ob' | 'right_ob' | 'other_ob' | 'hazard' | null
 
 export interface PersonalRoundHoleStat {
@@ -298,8 +315,9 @@ export async function saveRound(input: {
     ? await computeHandicapSnapshot(input.clubId, date, input.players)
     : {}
 
-  // 중복 방지: 키 = 날짜 + 선수 + 홀별 스코어 (골프장/코스는 무시)
-  // 같은 클럽·같은 날짜에 선수가 겹치는 라운드가 있으면 그 라운드에 병합한다.
+  // 중복 방지: 같은 클럽·같은 날짜에 선수가 겹치는 라운드만 병합한다.
+  // 코스명만 같다고 병합하면 조별 스코어가 한 라운드로 합쳐져
+  // 조마다 다른 전/후반 코스 순서와 par 기준을 보존할 수 없다.
   if (input.clubId) {
     const incomingNames = new Set(input.players.map((p) => p.name))
     const { data: sameDay } = await supabase
@@ -308,12 +326,13 @@ export async function saveRound(input: {
       .eq('club_id', input.clubId)
       .eq('date', date)
     const existingRow = ((sameDay ?? []) as RoundRow[]).find((r) =>
-      r.course_name === input.courseName || (r.players ?? []).some((p) => incomingNames.has(p.name))
+      (r.players ?? []).some((p) => incomingNames.has(p.name))
     )
     if (existingRow) {
       const existing = fromRow(existingRow)
       const players = mergePlayers(existing.players, input.players)
       const payload: Record<string, unknown> = {
+        pars: input.pars,
         players,
         handicaps: await computeHandicapSnapshot(input.clubId, date, players, 5, existing.id),
       }
@@ -329,7 +348,7 @@ export async function saveRound(input: {
           : input.settlement
       }
       if (input.scheduleId) payload.schedule_id = input.scheduleId
-      if (input.holeLabels) payload.hole_labels = input.holeLabels
+      payload.hole_labels = input.holeLabels ?? null
       if (input.photoData && input.photoData.length > 0)
         payload.photo_data = [...existing.photoData, ...input.photoData]
       const { data, error } = await supabase
@@ -1363,6 +1382,11 @@ function isMissingClubNoticesTable(error: unknown) {
   return item?.code === '42P01' || item?.message?.includes('club_notices')
 }
 
+function isMissingNotificationSubscriptionsTable(error: unknown) {
+  const item = error as { code?: string; message?: string }
+  return item?.code === '42P01' || item?.message?.includes('notification_subscriptions')
+}
+
 function normalizeNotice(row: any): ClubNotice {
   return {
     id: row.id,
@@ -1393,9 +1417,9 @@ export async function getClubNotices(clubId: string): Promise<ClubNotice[]> {
 export async function createClubNotice(
   clubId: string,
   input: { title: string; body: string; isPublished?: boolean; isImportant?: boolean }
-): Promise<void> {
+): Promise<ClubNotice> {
   const user = await getUser()
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('club_notices')
     .insert({
       club_id: clubId,
@@ -1405,7 +1429,54 @@ export async function createClubNotice(
       is_important: input.isImportant ?? false,
       created_by: user?.id ?? null,
     })
+    .select('id, club_id, title, body, is_published, is_important, created_at, updated_at')
+    .single()
   if (error) throw error
+  return normalizeNotice(data)
+}
+
+export async function saveNotificationSubscription(input: NotificationSubscriptionInput): Promise<void> {
+  const now = new Date().toISOString()
+  const { error } = await supabase
+    .from('notification_subscriptions')
+    .upsert({
+      user_id: input.userId,
+      club_id: input.clubId,
+      channel: input.channel,
+      endpoint: input.endpoint,
+      p256dh: input.p256dh ?? null,
+      auth: input.auth ?? null,
+      platform: input.platform ?? null,
+      user_agent: input.userAgent ?? null,
+      enabled: true,
+      updated_at: now,
+      last_seen_at: now,
+    }, {
+      onConflict: 'user_id,club_id,channel,endpoint',
+    })
+  if (error) {
+    if (isMissingNotificationSubscriptionsTable(error)) {
+      throw new Error('알림 구독 테이블이 아직 적용되지 않았습니다. Supabase 마이그레이션이 필요합니다.')
+    }
+    throw error
+  }
+}
+
+export async function sendClubNotification(
+  clubId: string,
+  input: { type: string; title: string; body: string; data?: Record<string, unknown> }
+): Promise<NotificationSendResult> {
+  const { data, error } = await supabase.functions.invoke<NotificationSendResult>('send-notification', {
+    body: {
+      clubId,
+      type: input.type,
+      title: input.title,
+      body: input.body,
+      data: input.data ?? {},
+    },
+  })
+  if (error) throw error
+  return data ?? { sent: 0, failed: 0, total: 0 }
 }
 
 export async function updateClubNotice(

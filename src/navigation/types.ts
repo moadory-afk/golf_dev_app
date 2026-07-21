@@ -35,7 +35,7 @@ export type RootStackParamList = {
   Members: { clubId: string; returnToManageMenu?: boolean }
   RoundDetail: { id: string }
   RoundSetup: {
-    ocrPlayers?: Array<{ name: string; strokes: number[] }>
+    ocrPlayers?: Array<{ name: string; diffs?: Array<number | null>; strokes?: number[] }>
     settlement?: SettlementConfig
   }
   PlayerSetup: {
@@ -43,7 +43,7 @@ export type RootStackParamList = {
     courseName: string
     pars: number[]
     golfCourseId?: string
-    ocrPlayers?: Array<{ name: string; strokes: number[] }>
+    ocrPlayers?: Array<{ name: string; diffs?: Array<number | null>; strokes?: number[] }>
     settlement?: SettlementConfig
   }
   ScoreEntry: {

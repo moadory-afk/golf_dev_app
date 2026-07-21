@@ -21,6 +21,18 @@ import { AWARD_CONFIG_KEY, AWARD_CATEGORIES, fillToCount, type AwardItemDef } fr
 
 type Nav = RootStackProps<'RoundSetup'>['navigation']
 
+function ocrPlayerStrokes(
+  ocr: { diffs?: Array<number | null>; strokes?: number[] } | undefined,
+  pars: number[],
+): number[] | undefined {
+  if (!ocr) return undefined
+  if (ocr.diffs) {
+    return pars.map((par, i) => Math.max(1, par + (ocr.diffs?.[i] ?? 0)))
+  }
+  if (ocr.strokes?.length === pars.length) return [...ocr.strokes]
+  return undefined
+}
+
 // ─── 스텝 카드 헤더 ───────────────────────────────────────────────────────────
 function StepCard({
   num, title, summary, done, open,
@@ -257,7 +269,7 @@ export default function RoundSetupScreen() {
     if (!pars || gamePlayers.length < 1) return
     const players = gamePlayers.map((name) => {
       const ocr = ocrPlayers?.find((p) => p.name === name)
-      return { name, strokes: ocr?.strokes ?? pars.map((p) => p) }
+      return { name, strokes: ocrPlayerStrokes(ocr, pars) ?? pars.map((p) => p) }
     })
     nav.navigate('ScoreEntry', {
       date,
@@ -326,7 +338,7 @@ export default function RoundSetupScreen() {
       used.add(idx)
       return {
         name,
-        strokes: recognized.players[idx].diffs.map((d, i) => Math.max(1, pars[i] + (d ?? 0))),
+        strokes: ocrPlayerStrokes(recognized.players[idx], pars) ?? pars.map((p) => p),
       }
     })
   }

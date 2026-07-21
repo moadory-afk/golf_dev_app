@@ -142,7 +142,7 @@ export default function ScoreCaptureScreen() {
     const ocrPlayers = recognized
       ? recognized.players.map((p, i) => ({
           name: p.name || `플레이어 ${i + 1}`,
-          strokes: p.diffs.map((d, j) => (recognized.pars[j] ?? 4) + (d ?? 0)),
+          diffs: p.diffs,
         }))
       : undefined
     nav.navigate('RoundSetup', { ocrPlayers, settlement })

@@ -90,8 +90,8 @@ export function mergeScorecards(
 
     // players
     //
-    // 같은 스코어카드 안에서 이름이 마스킹되어 동일하게 인식되는 경우가 있다.
-    // 예: "이**" 선수가 2명인 조 → 이름만 key로 쓰면 두 행이 한 명으로 합쳐져 3명처럼 보인다.
+    // 같은 카드 안에서 이름이 마스킹되어 동일하게 인식될 수 있다.
+    // 예: "이**"가 2명인 조를 이름만 key로 묶으면 두 행이 하나로 합쳐진다.
     // 카드별 같은 이름의 등장 순번을 key에 포함해 행을 보존하고,
     // 전/후반 카드가 나뉜 경우에는 같은 이름 + 같은 순번끼리 이어 붙인다.
     const nameSeenInCard = new Map<string, number>()
@@ -114,6 +114,7 @@ export function mergeScorecards(
   })
 
   const courseName = cards.map((c) => c.courseName?.trim()).find(Boolean)
+  const recognizedCourseName = cards.map((c) => c.recognizedCourseName?.trim()).filter(Boolean).join(' / ')
   return {
     players: playerOrder.map((k) => {
       const { name, diffs } = playerMap.get(k)!
@@ -121,6 +122,7 @@ export function mergeScorecards(
     }),
     pars: pars18,
     courseName,
+    recognizedCourseName: recognizedCourseName || undefined,
   }
 }
 
@@ -190,6 +192,25 @@ function toClean(arr: unknown): (number | null)[] {
   return a.map((v) => typeof v === 'number' && Number.isFinite(v) ? v : null)
 }
 
+function normalizeDiffs(raw: unknown, pars: (number | null)[]): (number | null)[] {
+  const values = toClean(raw)
+  const readable = values
+    .map((value, index) => ({ value, par: pars[index] }))
+    .filter((item): item is { value: number; par: number } => item.value != null && item.par != null)
+
+  if (readable.length >= 3) {
+    const strokeLike = readable.filter(({ value }) => value >= 3 && value <= 12).length
+    if (strokeLike / readable.length >= 0.7) {
+      return values.map((value, index) => {
+        const par = pars[index]
+        return value != null && par != null ? value - par : value
+      })
+    }
+  }
+
+  return values
+}
+
 function normalize(data: unknown): RecognizedScorecard {
   const d = (data ?? {}) as {
     players?: unknown; pars?: unknown
@@ -201,15 +222,21 @@ function normalize(data: unknown): RecognizedScorecard {
     : typeof d.course_name === 'string' ? d.course_name : ''
   const rawRecognized = typeof d.recognizedCourseName === 'string' ? d.recognizedCourseName
     : typeof d.recognized_course_name === 'string' ? d.recognized_course_name : ''
+  const pars = toClean(d.pars)
   return {
     players: players.slice(0, 8).map((p) => {
-      const pl = (p ?? {}) as { name?: unknown; diffs?: unknown }
+      const pl = (p ?? {}) as { name?: unknown; diffs?: unknown; strokes?: unknown; scores?: unknown }
+      const rawScores = Array.isArray(pl.diffs)
+        ? pl.diffs
+        : Array.isArray(pl.strokes)
+        ? pl.strokes
+        : pl.scores
       return {
         name: typeof pl.name === 'string' ? pl.name : '',
-        diffs: toClean(pl.diffs),
+        diffs: normalizeDiffs(rawScores, pars),
       }
     }),
-    pars: toClean(d.pars),
+    pars,
     courseName: rawCourse.trim() || undefined,
     recognizedCourseName: rawRecognized.trim() || undefined,
   }

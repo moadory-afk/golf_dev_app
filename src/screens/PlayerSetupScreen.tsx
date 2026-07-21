@@ -9,6 +9,18 @@ import type { RootStackProps } from '../navigation/types'
 
 type Nav = RootStackProps<'PlayerSetup'>['navigation']
 
+function ocrPlayerStrokes(
+  ocr: { diffs?: Array<number | null>; strokes?: number[] } | undefined,
+  pars: number[],
+): number[] | undefined {
+  if (!ocr) return undefined
+  if (ocr.diffs) {
+    return pars.map((par, i) => Math.max(1, par + (ocr.diffs?.[i] ?? 0)))
+  }
+  if (ocr.strokes?.length === pars.length) return [...ocr.strokes]
+  return undefined
+}
+
 export default function PlayerSetupScreen() {
   const nav = useNavigation<Nav>()
   const route = useRoute<RootStackProps<'PlayerSetup'>['route']>()
@@ -56,7 +68,7 @@ export default function PlayerSetupScreen() {
       const ocr = ocrPlayers?.find((p) => p.name === name)
       return {
         name,
-        strokes: ocr?.strokes ?? pars.map((p) => p),  // OCR 타수 or 파 기본값
+        strokes: ocrPlayerStrokes(ocr, pars) ?? pars.map((p) => p),  // OCR 타수 or 파 기본값
       }
     })
     nav.navigate('ScoreEntry', {

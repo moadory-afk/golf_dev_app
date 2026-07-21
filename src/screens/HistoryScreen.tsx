@@ -845,12 +845,66 @@ function RoundFlipCard({
       : [{ icon: '—', label: '기록 갱신 없음', value: '다음 라운드 도전' }]
   const frontHighlights = isScheduleOnly
     ? Array.from({ length: 3 }, () => ({ icon: '', label: '', value: '' }))
-    : [
-        (birdieTop?.birdie ?? 0) > 0 ? { icon: '🐦', label: '버디왕 후보', value: `${shortName(birdieTop!.name)} ${birdieTop!.birdie}개` } : null,
-        (parTop?.par ?? 0) > 0 ? { icon: '⛳', label: '파왕 후보', value: `${shortName(parTop!.name)} ${parTop!.par}개` } : null,
-        frontBackTop ? { icon: '📈', label: '후반 반등', value: `${shortName(frontBackTop.name)} ${frontBackTop.improvement}타` } : null,
-        { icon: '✨', label: '기록 후보', value: '다음 갱신 도전' },
-      ].filter(Boolean).slice(0, 3) as { icon: string; label: string; value: string }[]
+    : (() => {
+        type HighlightCandidate = { icon: string; label: string; value: string; priority: number }
+        const candidates: HighlightCandidate[] = []
+        const holeCount = Math.max(round.pars.length, 1)
+        const steadyParThreshold = Math.max(5, Math.ceil(holeCount * 0.5))
+
+        if (bestPlayer) {
+          candidates.push({
+            icon: '🏅',
+            label: '메달리스트',
+            value: `${shortName(bestPlayer.name)} ${best}타`,
+            priority: 95,
+          })
+        }
+
+        if ((birdieTop?.birdie ?? 0) >= 2) {
+          candidates.push({
+            icon: '🐦',
+            label: '버디 집중',
+            value: `${shortName(birdieTop!.name)} ${birdieTop!.birdie}개`,
+            priority: 80 + birdieTop!.birdie,
+          })
+        }
+
+        if ((parTop?.par ?? 0) >= steadyParThreshold) {
+          candidates.push({
+            icon: '⛳',
+            label: '파 세이브',
+            value: `${shortName(parTop!.name)} ${parTop!.par}개`,
+            priority: 70 + parTop!.par,
+          })
+        }
+
+        if ((frontBackTop?.improvement ?? 0) >= 3) {
+          candidates.push({
+            icon: '📈',
+            label: '후반 반등',
+            value: `${shortName(frontBackTop!.name)} ${frontBackTop!.improvement}타`,
+            priority: 75 + frontBackTop!.improvement,
+          })
+        }
+
+        if (candidates.length < 3 && (birdieTop?.birdie ?? 0) === 1) {
+          candidates.push({
+            icon: '🐦',
+            label: '오늘의 버디',
+            value: `${shortName(birdieTop!.name)} 1개`,
+            priority: 60,
+          })
+        }
+
+        if (candidates.length === 0) {
+          candidates.push({ icon: '✨', label: '라운드 완료', value: '다음 기록 도전', priority: 1 })
+        }
+
+        return candidates
+          .sort((a, b) => b.priority - a.priority)
+          .slice(0, 3)
+          .map(({ icon, label, value }) => ({ icon, label, value }))
+      })()
 
 
   const toggleFlip = async () => {
