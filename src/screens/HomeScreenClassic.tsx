@@ -418,7 +418,7 @@ export default function HomeScreen() {
       setSelectedRoundId(null)
       return
     }
-    getRoundSchedules(club.id).then((items) => {
+    getRoundSchedules(club.id, { fromDate: new Date().toISOString().slice(0, 10), limit: 8 }).then((items) => {
       const activeItems = items.filter(isVisibleUpcomingRound)
       setScheduledRounds(activeItems)
       setSelectedRoundId((current) => {

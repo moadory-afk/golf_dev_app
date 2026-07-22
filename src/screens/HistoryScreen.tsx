@@ -953,7 +953,9 @@ function RoundFlipCard({
         round.scheduleId ? getRoundLottoDraw(round.scheduleId).catch(() => null) : Promise.resolve(null),
         activeClub?.id ? getClubMembers(activeClub.id).catch(() => []) : Promise.resolve([]),
         activeClub?.id ? getClubLottoAwardConfig(activeClub.id).catch(() => DEFAULT_LOTTO_AWARD_CONFIG) : Promise.resolve(DEFAULT_LOTTO_AWARD_CONFIG),
-        activeClub?.id ? getRoundSchedules(activeClub.id).catch(() => []) : Promise.resolve([]),
+        activeClub?.id && round.scheduleId
+          ? getRoundSchedules(activeClub.id, { scheduleIds: [round.scheduleId] }).catch(() => [])
+          : Promise.resolve([]),
         activeClub?.id ? getClubAwardConfig(activeClub.id).catch(() => null) : Promise.resolve(null),
       ])
       if (full) setDetailRound(full)

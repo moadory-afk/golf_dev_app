@@ -126,7 +126,7 @@ export default function HomeScreen() {
     try {
       const [rounds, schedules] = await Promise.all([
         getRounds(club.id),
-        getRoundSchedules(club.id),
+        getRoundSchedules(club.id, { fromDate: new Date().toISOString().slice(0, 10), limit: 8 }),
       ])
       setHomeData({ rounds, schedules })
     } catch (error) {

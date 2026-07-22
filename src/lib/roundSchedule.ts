@@ -154,12 +154,34 @@ function seasonForDate(value?: string | null): CourseSeasonImageRow['season'] {
   return 'winter'
 }
 
-export async function getRoundSchedules(clubId: string): Promise<ScheduledRound[]> {
-  const { data: schedules, error } = await supabase
+export type RoundScheduleQueryOptions = {
+  scheduleIds?: string[]
+  fromDate?: string
+  toDate?: string
+  statuses?: RoundScheduleStatus[]
+  limit?: number
+}
+
+export async function getRoundSchedules(
+  clubId: string,
+  options: RoundScheduleQueryOptions = {},
+): Promise<ScheduledRound[]> {
+  if (options.scheduleIds && options.scheduleIds.length === 0) return []
+
+  let query = supabase
     .from('club_round_schedules')
     .select('id, round_date, course_id, course_name, layout_id, layout_name, tee_time, note, status, attendance_mode, money_group_ids, money_config, award_config, is_published, created_at, updated_at')
     .eq('club_id', clubId)
     .order('round_date', { ascending: true })
+    .order('tee_time', { ascending: true })
+
+  if (options.scheduleIds?.length) query = query.in('id', options.scheduleIds)
+  if (options.fromDate) query = query.gte('round_date', options.fromDate)
+  if (options.toDate) query = query.lte('round_date', options.toDate)
+  if (options.statuses?.length) query = query.in('status', options.statuses)
+  if (options.limit) query = query.limit(options.limit)
+
+  const { data: schedules, error } = await query
   if (error) throw error
   if (!schedules?.length) return []
 

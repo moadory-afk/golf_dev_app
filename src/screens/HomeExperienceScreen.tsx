@@ -893,7 +893,7 @@ export default function HomeExperienceScreen() {
       setPopupLoading(true);
       try {
         const [schedules, members] = await Promise.all([
-          getRoundSchedules(club.id),
+          getRoundSchedules(club.id, { scheduleIds: [round.id] }),
           getClubMembers(club.id),
         ]);
         const selectedRound = schedules.find((item) => item.id === round.id) ?? null;
@@ -978,7 +978,7 @@ export default function HomeExperienceScreen() {
             getClubMembers(club.id),
             getRoundAttendanceMap(club.id, round.id),
           ]);
-          const schedules = await getRoundSchedules(club.id).catch(() => []);
+          const schedules = await getRoundSchedules(club.id, { scheduleIds: [round.id] }).catch(() => []);
           const schedule = schedules.find((item) => item.id === round.id);
           const assignedMembers = schedule?.groups.flatMap((group) => group.members) ?? [];
           const assignedUserIds = new Set(assignedMembers.map((member) => member.userId).filter(Boolean));
