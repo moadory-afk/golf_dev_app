@@ -33,6 +33,30 @@ type HomeHeroCarouselItem =
   | { kind: "empty" }
   | { kind: "create" };
 
+type NavigationProvider = "kakao" | "tmap" | "naver";
+
+const MAP_NAVIGATION_APPS: Array<{
+  id: NavigationProvider;
+  label: string;
+  icon: ImageSourcePropType;
+}> = [
+  {
+    id: "kakao",
+    label: "카카오맵",
+    icon: require("../../../assets/map-apps/kakaomap.png"),
+  },
+  {
+    id: "tmap",
+    label: "티맵",
+    icon: require("../../../assets/map-apps/tmap.png"),
+  },
+  {
+    id: "naver",
+    label: "네이버지도",
+    icon: require("../../../assets/map-apps/navermap.png"),
+  },
+];
+
 type PremiumHomeHeroSectionProps = {
   greeting: string;
   userName: string;
@@ -726,7 +750,7 @@ function HeroBottomSummary({
     typeof courseLongitude === "number" &&
     Number.isFinite(courseLongitude);
 
-  const openNavigation = async (provider: "kakao" | "tmap" | "naver") => {
+  const openNavigation = async (provider: NavigationProvider) => {
     if (!hasDestination) {
       Alert.alert("길안내 준비중", "골프장 위치 정보가 등록되지 않았습니다.");
       return;
@@ -924,15 +948,21 @@ function HeroBottomSummary({
           <TouchableOpacity activeOpacity={1} style={styles.mapChooser}>
             <Text style={styles.mapChooserTitle}>길안내 앱 선택</Text>
             <Text style={styles.mapChooserCourse} numberOfLines={1}>{courseName}</Text>
-            <TouchableOpacity style={styles.mapOption} onPress={() => openNavigation("kakao")}>
-              <Text style={styles.mapOptionText}>카카오맵</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.mapOption} onPress={() => openNavigation("tmap")}>
-              <Text style={styles.mapOptionText}>티맵</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.mapOption} onPress={() => openNavigation("naver")}>
-              <Text style={styles.mapOptionText}>네이버지도</Text>
-            </TouchableOpacity>
+            <View style={styles.mapOptionRow}>
+              {MAP_NAVIGATION_APPS.map((app) => (
+                <TouchableOpacity
+                  key={app.id}
+                  style={styles.mapOption}
+                  onPress={() => openNavigation(app.id)}
+                  activeOpacity={0.84}
+                >
+                  <Image source={app.icon} style={styles.mapOptionIcon} resizeMode="cover" />
+                  <Text style={styles.mapOptionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
+                    {app.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
             <TouchableOpacity style={styles.mapCancel} onPress={() => setMapChooserVisible(false)}>
               <Text style={styles.mapCancelText}>취소</Text>
             </TouchableOpacity>
@@ -1463,7 +1493,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     backgroundColor: "#FFFFFF",
     padding: 16,
-    gap: 8,
+    gap: 10,
   },
   mapChooserTitle: {
     color: "#111827",
@@ -1477,17 +1507,35 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 4,
   },
+  mapOptionRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
   mapOption: {
-    minHeight: 48,
+    flex: 1,
+    minWidth: 0,
+    minHeight: 112,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 12,
-    backgroundColor: "#F3F4F6",
+    borderRadius: 16,
+    backgroundColor: "#F8FAF9",
+    borderWidth: 1,
+    borderColor: "#E1E8E4",
+    paddingHorizontal: 6,
+    paddingVertical: 12,
+  },
+  mapOptionIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 13,
+    marginBottom: 9,
   },
   mapOptionText: {
     color: "#111827",
-    fontSize: 16,
-    fontWeight: "700",
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: "900",
+    textAlign: "center",
   },
   mapCancel: {
     minHeight: 44,
