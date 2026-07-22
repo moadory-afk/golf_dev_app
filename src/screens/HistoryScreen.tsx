@@ -1,9 +1,10 @@
 import {
   FlatList, ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Dimensions, TextInput, ImageBackground, Animated, Alert, ActivityIndicator,
 } from 'react-native'
-import { useNavigation, useFocusEffect } from '@react-navigation/native'
+import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
+import type { RouteProp } from '@react-navigation/native'
+import { useState, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
 import Svg, { Polyline, Circle, Line, Text as SvgText, G, Polygon } from 'react-native-svg'
@@ -25,9 +26,10 @@ import { TopActionButtons } from '../components/TopActionButtons'
 import { ImageCropModal, type ImageCropRect } from '../components/ImageCropModal'
 import { getCourseHeroImageSource } from '../data/courseHeroImages'
 import { uploadRoundPhoto } from '../lib/roundPhotos'
-import type { RootStackParamList } from '../navigation/types'
+import type { MainTabParamList, RootStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
+type HistoryRoute = RouteProp<MainTabParamList, 'History'>
 type Tab = 'byRound' | 'byPlayer' | 'club' | 'hall'
 type RankingType = 'wins' | 'streak' | 'lowestHandicap' | 'birdie' | 'singleBirdie' | 'frontBack' | 'avgImprove' | 'handicapImprove' | 'singlePar' | 'roundsPlayed' | 'lowestScore' | 'highestScore'
 type RoundDetailTab = 'regular' | 'peoria' | 'score' | 'award'
@@ -39,10 +41,10 @@ const MULTI_SPECIAL_AWARD_KEYS = new Set(
     .map((item) => item.id),
 )
 const HISTORY_TABS: Array<{ value: Tab; label: string; icon: string }> = [
-  { value: 'byPlayer', label: '개인', icon: 'user' },
   { value: 'byRound', label: '라운딩', icon: 'flag' },
   { value: 'club', label: '클럽랭킹', icon: 'chart' },
   { value: 'hall', label: '기네스북', icon: 'trophy' },
+  { value: 'byPlayer', label: '개인', icon: 'user' },
 ]
 
 function formatWon(value: number) {
@@ -251,8 +253,11 @@ function getPlayerBadges(rounds: SavedRound[], basis = 5): Map<string, Badge[]> 
 
 export default function HistoryScreen() {
   const nav = useNavigation<Nav>()
+  const route = useRoute<HistoryRoute>()
   const insets = useSafeAreaInsets()
-  const [tab, setTab] = useState<Tab>('byPlayer')
+  const [tab, setTab] = useState<Tab>('byRound')
+  const [renderedTab, setRenderedTab] = useState<Tab>('byRound')
+  const [tabPending, setTabPending] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const { name: myName, userId: myUserId } = useUserProfile()
   const [handicapBasis, setHandicapBasis] = useState<HandicapBasis>(5)
@@ -337,7 +342,7 @@ export default function HistoryScreen() {
     [refreshKey, activeClub?.id],
   )
   const rounds = data ?? []
-  const members = (() => {
+  const members = useMemo(() => {
     const merged = new Map<string, HistoryMember>()
     for (const member of [...(memberData ?? []), ...allClubMembers]) {
       const key = member.userId || member.name.trim().toLocaleLowerCase()
@@ -345,19 +350,46 @@ export default function HistoryScreen() {
       merged.set(key, member)
     }
     return Array.from(merged.values())
-  })()
+  }, [allClubMembers, memberData])
   const schedules = scheduleData ?? []
-  const hiddenScheduleIds = new Set(schedules.filter((schedule) => schedule.isPublished === false).map((schedule) => schedule.id))
-  const visibleSchedules = schedules.filter((schedule) => schedule.isPublished !== false)
-  const visibleRounds = rounds.filter((round) => !round.scheduleId || !hiddenScheduleIds.has(round.scheduleId))
+  const hiddenScheduleIds = useMemo(
+    () => new Set(schedules.filter((schedule) => schedule.isPublished === false).map((schedule) => schedule.id)),
+    [schedules],
+  )
+  const visibleSchedules = useMemo(
+    () => schedules.filter((schedule) => schedule.isPublished !== false),
+    [schedules],
+  )
+  const visibleRounds = useMemo(
+    () => rounds.filter((round) => !round.scheduleId || !hiddenScheduleIds.has(round.scheduleId)),
+    [hiddenScheduleIds, rounds],
+  )
   const onRefresh = useCallback(() => setRefreshKey((k) => k + 1), [])
 
   // 화면 포커스 복귀 시 자동 새로고침 (삭제/저장 후 즉시 반영)
-  useFocusEffect(useCallback(() => { setRefreshKey((k) => k + 1) }, []))
+  useFocusEffect(useCallback(() => {
+    if (route.params?.initialTab) setTab(route.params.initialTab)
+    setRefreshKey((k) => k + 1)
+  }, [route.params?.initialTab]))
 
   useEffect(() => {
     loadHandicapBasis(activeClub?.id).then(setHandicapBasis)
   }, [activeClub?.id])
+
+  useEffect(() => {
+    if (renderedTab === tab) {
+      setTabPending(false)
+      return
+    }
+
+    setTabPending(true)
+    const timer = setTimeout(() => {
+      setRenderedTab(tab)
+      setTabPending(false)
+    }, 80)
+
+    return () => clearTimeout(timer)
+  }, [renderedTab, tab])
 
   return (
     <>
@@ -382,12 +414,14 @@ export default function HistoryScreen() {
       >
         {!clubsLoaded || loading ? (
           <Text style={s.muted}>데이터를 불러오는 중입니다.</Text>
+        ) : tabPending ? (
+          <Text style={s.muted}>기록을 준비하는 중입니다.</Text>
         ) : (
           <>
-            {tab === 'byRound' && <ByRound rounds={visibleRounds} schedules={visibleSchedules} handicapBasis={handicapBasis} members={members} />}
-            {tab === 'byPlayer' && <ByPlayer rounds={visibleRounds} handicapBasis={handicapBasis} myName={myName} myUserId={myUserId} />}
-            {tab === 'club' && <Club rounds={visibleRounds} handicapBasis={handicapBasis} members={members} />}
-            {tab === 'hall' && <HallOfFame rounds={visibleRounds} handicapBasis={handicapBasis} />}
+            {renderedTab === 'byRound' && <ByRound rounds={visibleRounds} schedules={visibleSchedules} handicapBasis={handicapBasis} members={members} />}
+            {renderedTab === 'byPlayer' && <ByPlayer rounds={visibleRounds} handicapBasis={handicapBasis} myName={myName} myUserId={myUserId} />}
+            {renderedTab === 'club' && <Club rounds={visibleRounds} handicapBasis={handicapBasis} members={members} />}
+            {renderedTab === 'hall' && <HallOfFame rounds={visibleRounds} handicapBasis={handicapBasis} />}
           </>
         )}
       </ScrollView>
@@ -706,13 +740,15 @@ function ScheduledRoundCard({ schedule, index, totalCount, width, height }: { sc
 
 function ByRound({ rounds, schedules = [], handicapBasis = 5, members = [] }: { rounds: SavedRound[]; schedules?: ScheduledRound[]; handicapBasis?: number; members?: HistoryMember[] }) {
   const [containerWidth, setContainerWidth] = useState(0)
-  const roundScheduleIds = new Set(rounds.map((round) => round.scheduleId).filter((id): id is string => !!id))
-  const items: RoundCarouselItem[] = [
-    ...rounds.map((round): RoundCarouselItem => ({ kind: 'round', key: `round-${round.id}`, date: round.date, round })),
-    ...schedules
-      .filter((schedule) => !roundScheduleIds.has(schedule.id))
-      .map((schedule): RoundCarouselItem => ({ kind: 'schedule', key: `schedule-${schedule.id}`, date: schedule.date, schedule })),
-  ].sort((a, b) => b.date.localeCompare(a.date))
+  const items = useMemo<RoundCarouselItem[]>(() => {
+    const roundScheduleIds = new Set(rounds.map((round) => round.scheduleId).filter((id): id is string => !!id))
+    return [
+      ...rounds.map((round): RoundCarouselItem => ({ kind: 'round', key: `round-${round.id}`, date: round.date, round })),
+      ...schedules
+        .filter((schedule) => !roundScheduleIds.has(schedule.id))
+        .map((schedule): RoundCarouselItem => ({ kind: 'schedule', key: `schedule-${schedule.id}`, date: schedule.date, schedule })),
+    ].sort((a, b) => b.date.localeCompare(a.date))
+  }, [rounds, schedules])
 
   if (items.length === 0) return <EmptyByRound members={members} />
 
@@ -2106,81 +2142,82 @@ function Club({ rounds, handicapBasis: currentHandicapBasis, members = [] }: { r
     setHandicapBasis(currentHandicapBasis)
   }, [currentHandicapBasis])
 
-  if (rounds.length === 0) return <EmptyClub members={members} handicapBasis={currentHandicapBasis} />
-
-  let bestRecord: { name: string; date: string; courseName: string; total: number } | null = null
-  for (const r of rounds)
-    for (const p of r.players) {
-      const t = playerTotal(p.strokes)
-      if (!bestRecord || t < bestRecord.total)
-        bestRecord = { name: p.name, date: r.date, courseName: r.courseName, total: t }
-    }
-
-  const byName = new Map<string, Array<{ date: string; total: number; par: number }>>()
-  for (const r of rounds) {
-    const par = totalPar(r.pars)
-    for (const p of r.players) {
-      const arr = byName.get(p.name) ?? []
-      arr.push({ date: r.date, total: playerTotal(p.strokes), par })
-      byName.set(p.name, arr)
-    }
-  }
-
-  const recordedStats = Array.from(byName.entries())
-    .map(([name, entries]) => {
-      const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date))
-      const totals = sorted.map((e) => e.total)
-      const lastN = sorted.slice(-handicapBasis)
-      const handicap = Math.ceil(lastN.reduce((sum, e) => sum + (e.total - e.par), 0) / lastN.length)
-      return {
-        name,
-        rounds: totals.length,
-        avg: Math.ceil(totals.reduce((a, b) => a + b, 0) / totals.length),
-        worst: Math.max(...totals),
-        best: Math.min(...totals),
-        handicap,
-        hasRecord: true as const,
+  const clubStats = useMemo(() => {
+    let bestRecord: { name: string; date: string; courseName: string; total: number } | null = null
+    for (const r of rounds)
+      for (const p of r.players) {
+        const t = playerTotal(p.strokes)
+        if (!bestRecord || t < bestRecord.total)
+          bestRecord = { name: p.name, date: r.date, courseName: r.courseName, total: t }
       }
-    })
-    .sort((a, b) => a.avg - b.avg)
 
-  // 클럽 랭킹은 경기 기록 유무와 관계없이 소속 회원 전체를 표시한다.
-  // 기록이 있는 회원은 성적순으로 먼저 배치하고, 기록이 없는 회원은 이름순으로 뒤에 배치한다.
-  const recordedNameKeys = new Set(recordedStats.map((stat) => stat.name.trim().toLocaleLowerCase()))
-  const unrecordedStats = members
-    .filter((member) => member.name?.trim())
-    .filter((member) => !recordedNameKeys.has(member.name.trim().toLocaleLowerCase()))
-    .map((member) => ({
-      name: member.name.trim(),
-      rounds: 0,
-      avg: null,
-      worst: null,
-      best: null,
-      handicap: null,
-      hasRecord: false as const,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name, 'ko-KR'))
+    const byName = new Map<string, Array<{ date: string; total: number; par: number }>>()
+    for (const r of rounds) {
+      const par = totalPar(r.pars)
+      for (const p of r.players) {
+        const arr = byName.get(p.name) ?? []
+        arr.push({ date: r.date, total: playerTotal(p.strokes), par })
+        byName.set(p.name, arr)
+      }
+    }
 
-  const stats = [...recordedStats, ...unrecordedStats]
-  const totalAttendance = rounds.reduce((sum, r) => sum + r.players.length, 0)
-  const recordedRoundCount = recordedStats.reduce((sum, stat) => sum + stat.rounds, 0)
-  const clubAvg = recordedRoundCount > 0
-    ? Math.ceil(recordedStats.reduce((sum, stat) => sum + stat.avg * stat.rounds, 0) / recordedRoundCount)
-    : null
+    const recordedStats = Array.from(byName.entries())
+      .map(([name, entries]) => {
+        const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date))
+        const totals = sorted.map((e) => e.total)
+        const lastN = sorted.slice(-handicapBasis)
+        const handicap = Math.ceil(lastN.reduce((sum, e) => sum + (e.total - e.par), 0) / lastN.length)
+        return {
+          name,
+          rounds: totals.length,
+          avg: Math.ceil(totals.reduce((a, b) => a + b, 0) / totals.length),
+          worst: Math.max(...totals),
+          best: Math.min(...totals),
+          handicap,
+          hasRecord: true as const,
+        }
+      })
+      .sort((a, b) => a.avg - b.avg)
 
-  const roundAvgs = [...rounds]
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map((r) => ({
+    const recordedNameKeys = new Set(recordedStats.map((stat) => stat.name.trim().toLocaleLowerCase()))
+    const unrecordedStats = members
+      .filter((member) => member.name?.trim())
+      .filter((member) => !recordedNameKeys.has(member.name.trim().toLocaleLowerCase()))
+      .map((member) => ({
+        name: member.name.trim(),
+        rounds: 0,
+        avg: null,
+        worst: null,
+        best: null,
+        handicap: null,
+        hasRecord: false as const,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko-KR'))
+
+    const stats = [...recordedStats, ...unrecordedStats]
+    const totalAttendance = rounds.reduce((sum, r) => sum + r.players.length, 0)
+    const recordedRoundCount = recordedStats.reduce((sum, stat) => sum + stat.rounds, 0)
+    const clubAvg = recordedRoundCount > 0
+      ? Math.ceil(recordedStats.reduce((sum, stat) => sum + stat.avg * stat.rounds, 0) / recordedRoundCount)
+      : null
+
+    const roundsByDate = [...rounds].sort((a, b) => a.date.localeCompare(b.date))
+    const roundAvgs = roundsByDate.map((r) => ({
       date: r.date,
       value: Math.ceil(r.players.reduce((sum, p) => sum + playerTotal(p.strokes), 0) / r.players.length),
     }))
 
-  const bestByRound = [...rounds]
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map((r) => ({
+    const bestByRound = roundsByDate.map((r) => ({
       date: r.date,
       value: Math.min(...r.players.map((p) => playerTotal(p.strokes))),
     }))
+
+    return { bestRecord, stats, totalAttendance, clubAvg, roundAvgs, bestByRound }
+  }, [handicapBasis, members, rounds])
+
+  if (rounds.length === 0) return <EmptyClub members={members} handicapBasis={currentHandicapBasis} />
+
+  const { bestRecord, stats, totalAttendance, clubAvg, roundAvgs, bestByRound } = clubStats
 
   return (
     <>

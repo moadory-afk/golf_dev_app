@@ -34,14 +34,17 @@ function mapHomeRoundSummary(row: HomeRoundSummaryRow): SavedRound {
 /**
  * Home 통계에 필요한 최소 필드만 조회한다.
  * photo_data, settlement, handicaps, hole_labels 등 상세 화면 전용 대용량 필드는 제외한다.
- * 라운드 범위는 기존과 동일하게 유지해 평균/베스트/핸디캡 결과가 달라지지 않도록 한다.
+ * 홈 첫 화면에서 쓰는 최근 통계 범위만 가져와 클럽 기록이 쌓여도 진입 속도가 급격히 느려지지 않게 한다.
  */
+const HOME_ROUND_SUMMARY_LIMIT = 40;
+
 async function getHomeRoundSummaries(clubId: string): Promise<SavedRound[]> {
   const { data, error } = await supabase
     .from("rounds")
     .select("id, date, course_name, pars, players, is_complete, schedule_id")
     .eq("club_id", clubId)
-    .order("date", { ascending: false });
+    .order("date", { ascending: false })
+    .limit(HOME_ROUND_SUMMARY_LIMIT);
 
   if (error) throw error;
   return ((data ?? []) as HomeRoundSummaryRow[]).map(mapHomeRoundSummary);

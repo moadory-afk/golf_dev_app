@@ -230,7 +230,7 @@ function resolveFeedNavigation(
   if (actionType === "open_notice") return nav.navigate("NoticePrototype");
   if (actionType === "open_score_entry") return nav.navigate("ScoreCapture");
   if (actionType === "open_result")
-    return nav.navigate("Main", { screen: "History" });
+    return nav.navigate("Main", { screen: "History", params: { initialTab: "byRound" } });
   return nav.navigate("RoundSchedulePrototype", { openCreate: true });
 }
 
@@ -1125,7 +1125,11 @@ export default function HomeExperienceScreen() {
   );
 
   useEffect(() => {
-    loadRecordCards();
+    const timer = setTimeout(() => {
+      void loadRecordCards();
+    }, 1200);
+
+    return () => clearTimeout(timer);
   }, [loadRecordCards]);
 
   useEffect(() => {

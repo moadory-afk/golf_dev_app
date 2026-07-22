@@ -5,7 +5,7 @@ import type { SettlementConfig } from '../lib/store'
 export type MainTabParamList = {
   Home: undefined
   Club: { openManageMenu?: boolean; openCreateClub?: boolean } | undefined
-  History: undefined
+  History: { initialTab?: 'byRound' | 'club' | 'hall' | 'byPlayer' } | undefined
 }
 
 export type RootStackParamList = {
