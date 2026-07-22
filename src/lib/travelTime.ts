@@ -6,10 +6,6 @@ type Coordinate = {
   longitude?: number | null;
 };
 
-function kakaoRestApiKey() {
-  return String(process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY || "").trim();
-}
-
 function hasCoordinate(
   point?: Coordinate | null,
 ): point is { latitude: number; longitude: number } {
@@ -66,105 +62,14 @@ function coordinateCacheKey(point: { latitude: number; longitude: number }) {
   return `${point.latitude.toFixed(5)},${point.longitude.toFixed(5)}`;
 }
 
-function tmapAppKey() {
-  return String(process.env.EXPO_PUBLIC_TMAP_APP_KEY || "").trim();
-}
-
-function minutesFromSeconds(seconds: unknown) {
-  const value = Number(seconds);
-  if (!Number.isFinite(value) || value <= 0) return null;
-  return Math.ceil(value / 60);
-}
-
-export async function getDrivingTravelTimeMinutes(
+export async function getProviderDrivingTravelTimeMinutes(
   origin: Coordinate,
   destination: Coordinate,
-): Promise<number | null> {
-  const apiKey = kakaoRestApiKey();
-  if (!apiKey || !hasCoordinate(origin) || !hasCoordinate(destination))
-    return null;
-
-  const cacheKey = `travel:${coordinateCacheKey(origin)}:${coordinateCacheKey(destination)}`;
-  return getCachedAsync(
-    cacheKey,
-    TRAVEL_CACHE_TTL_MS,
-    async () => {
-      const params = new URLSearchParams({
-        origin: `${origin.longitude},${origin.latitude}`,
-        destination: `${destination.longitude},${destination.latitude}`,
-        priority: "RECOMMEND",
-      });
-
-      const response = await fetch(
-        `https://apis-navi.kakaomobility.com/v1/directions?${params.toString()}`,
-        {
-          headers: { Authorization: `KakaoAK ${apiKey}` },
-        },
-      );
-      if (!response.ok) return null;
-
-      const json = await response.json();
-      const durationSeconds = Number(json?.routes?.[0]?.summary?.duration);
-      if (!Number.isFinite(durationSeconds) || durationSeconds <= 0)
-        return null;
-      return Math.ceil(durationSeconds / 60);
-    },
-    { shouldCache: (value) => value !== null },
-  );
-}
-
-export async function getTmapDrivingTravelTimeMinutes(
-  origin: Coordinate,
-  destination: Coordinate,
-): Promise<number | null> {
-  const apiKey = tmapAppKey();
-  if (!apiKey || !hasCoordinate(origin) || !hasCoordinate(destination))
-    return null;
-
-  const cacheKey = `travel:tmap:${coordinateCacheKey(origin)}:${coordinateCacheKey(destination)}`;
-  return getCachedAsync(
-    cacheKey,
-    TRAVEL_CACHE_TTL_MS,
-    async () => {
-      const response = await fetch(
-        "https://apis.openapi.sk.com/tmap/routes?version=1",
-        {
-          method: "POST",
-          headers: {
-            accept: "application/json",
-            "content-type": "application/json",
-            appKey: apiKey,
-          },
-          body: JSON.stringify({
-            startX: String(origin.longitude),
-            startY: String(origin.latitude),
-            endX: String(destination.longitude),
-            endY: String(destination.latitude),
-            reqCoordType: "WGS84GEO",
-            resCoordType: "WGS84GEO",
-            searchOption: "0",
-          }),
-        },
-      );
-      if (!response.ok) return null;
-
-      const json = await response.json();
-      const totalTime = json?.features?.[0]?.properties?.totalTime
-        ?? json?.features?.find?.((item: any) => Number.isFinite(Number(item?.properties?.totalTime)))?.properties?.totalTime;
-      return minutesFromSeconds(totalTime);
-    },
-    { shouldCache: (value) => value !== null },
-  );
-}
-
-export async function getNaverDrivingTravelTimeMinutes(
-  origin: Coordinate,
-  destination: Coordinate,
-): Promise<number | null> {
+): Promise<ProviderTravelTimeMinutes> {
   if (!hasCoordinate(origin) || !hasCoordinate(destination))
-    return null;
+    return {};
 
-  const cacheKey = `travel:naver:${coordinateCacheKey(origin)}:${coordinateCacheKey(destination)}`;
+  const cacheKey = `travel:providers:${coordinateCacheKey(origin)}:${coordinateCacheKey(destination)}`;
   return getCachedAsync(
     cacheKey,
     TRAVEL_CACHE_TTL_MS,
@@ -172,23 +77,16 @@ export async function getNaverDrivingTravelTimeMinutes(
       const { data, error } = await supabase.functions.invoke("route-travel-times", {
         body: { origin, destination },
       });
-      if (error) return null;
-      const minutes = Number(data?.naver);
-      return Number.isFinite(minutes) && minutes > 0 ? minutes : null;
+      if (error) return {};
+      const kakao = Number(data?.kakao);
+      const tmap = Number(data?.tmap);
+      const naver = Number(data?.naver);
+      return {
+        kakao: Number.isFinite(kakao) && kakao > 0 ? kakao : null,
+        tmap: Number.isFinite(tmap) && tmap > 0 ? tmap : null,
+        naver: Number.isFinite(naver) && naver > 0 ? naver : null,
+      };
     },
-    { shouldCache: (value) => value !== null },
+    { shouldCache: (value) => Object.values(value ?? {}).some((item) => item !== null && item !== undefined) },
   );
-}
-
-export async function getProviderDrivingTravelTimeMinutes(
-  origin: Coordinate,
-  destination: Coordinate,
-): Promise<ProviderTravelTimeMinutes> {
-  const [kakao, tmap, naver] = await Promise.all([
-    getDrivingTravelTimeMinutes(origin, destination).catch(() => null),
-    getTmapDrivingTravelTimeMinutes(origin, destination).catch(() => null),
-    getNaverDrivingTravelTimeMinutes(origin, destination).catch(() => null),
-  ]);
-
-  return { kakao, tmap, naver };
 }
