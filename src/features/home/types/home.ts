@@ -46,6 +46,7 @@ export type HomeUpcomingRound = {
   layoutId?: string
   heroImageUrl?: string | null
   routeTimeText?: string
+  routeTimeByProvider?: Partial<Record<'kakao' | 'tmap' | 'naver', string>>
   departureTimeText?: string
   awardPlanReady?: boolean
   lottoPurchased?: boolean

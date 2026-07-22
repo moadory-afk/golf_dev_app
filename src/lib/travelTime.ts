@@ -57,8 +57,36 @@ export function formatRecommendedDepartureTime(
 
 const TRAVEL_CACHE_TTL_MS = 1000 * 60 * 10;
 
+export type TravelTimeProvider = "kakao" | "tmap" | "naver";
+
+export type ProviderTravelTimeMinutes = Partial<Record<TravelTimeProvider, number | null>>;
+
 function coordinateCacheKey(point: { latitude: number; longitude: number }) {
   return `${point.latitude.toFixed(5)},${point.longitude.toFixed(5)}`;
+}
+
+function tmapAppKey() {
+  return String(process.env.EXPO_PUBLIC_TMAP_APP_KEY || "").trim();
+}
+
+function naverClientId() {
+  return String(process.env.EXPO_PUBLIC_NAVER_MAPS_CLIENT_ID || "").trim();
+}
+
+function naverClientSecret() {
+  return String(process.env.EXPO_PUBLIC_NAVER_MAPS_CLIENT_SECRET || "").trim();
+}
+
+function minutesFromSeconds(seconds: unknown) {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return Math.ceil(value / 60);
+}
+
+function minutesFromMilliseconds(milliseconds: unknown) {
+  const value = Number(milliseconds);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return Math.ceil(value / 1000 / 60);
 }
 
 export async function getDrivingTravelTimeMinutes(
@@ -96,4 +124,100 @@ export async function getDrivingTravelTimeMinutes(
     },
     { shouldCache: (value) => value !== null },
   );
+}
+
+export async function getTmapDrivingTravelTimeMinutes(
+  origin: Coordinate,
+  destination: Coordinate,
+): Promise<number | null> {
+  const apiKey = tmapAppKey();
+  if (!apiKey || !hasCoordinate(origin) || !hasCoordinate(destination))
+    return null;
+
+  const cacheKey = `travel:tmap:${coordinateCacheKey(origin)}:${coordinateCacheKey(destination)}`;
+  return getCachedAsync(
+    cacheKey,
+    TRAVEL_CACHE_TTL_MS,
+    async () => {
+      const response = await fetch(
+        "https://apis.openapi.sk.com/tmap/routes?version=1",
+        {
+          method: "POST",
+          headers: {
+            accept: "application/json",
+            "content-type": "application/json",
+            appKey: apiKey,
+          },
+          body: JSON.stringify({
+            startX: String(origin.longitude),
+            startY: String(origin.latitude),
+            endX: String(destination.longitude),
+            endY: String(destination.latitude),
+            reqCoordType: "WGS84GEO",
+            resCoordType: "WGS84GEO",
+            searchOption: "0",
+          }),
+        },
+      );
+      if (!response.ok) return null;
+
+      const json = await response.json();
+      const totalTime = json?.features?.[0]?.properties?.totalTime
+        ?? json?.features?.find?.((item: any) => Number.isFinite(Number(item?.properties?.totalTime)))?.properties?.totalTime;
+      return minutesFromSeconds(totalTime);
+    },
+    { shouldCache: (value) => value !== null },
+  );
+}
+
+export async function getNaverDrivingTravelTimeMinutes(
+  origin: Coordinate,
+  destination: Coordinate,
+): Promise<number | null> {
+  const clientId = naverClientId();
+  const clientSecret = naverClientSecret();
+  if (!clientId || !clientSecret || !hasCoordinate(origin) || !hasCoordinate(destination))
+    return null;
+
+  const cacheKey = `travel:naver:${coordinateCacheKey(origin)}:${coordinateCacheKey(destination)}`;
+  return getCachedAsync(
+    cacheKey,
+    TRAVEL_CACHE_TTL_MS,
+    async () => {
+      const params = new URLSearchParams({
+        start: `${origin.longitude},${origin.latitude}`,
+        goal: `${destination.longitude},${destination.latitude}`,
+        option: "trafast",
+      });
+
+      const response = await fetch(
+        `https://maps.apigw.ntruss.com/map-direction/v1/driving?${params.toString()}`,
+        {
+          headers: {
+            "X-NCP-APIGW-API-KEY-ID": clientId,
+            "X-NCP-APIGW-API-KEY": clientSecret,
+          },
+        },
+      );
+      if (!response.ok) return null;
+
+      const json = await response.json();
+      const duration = json?.route?.trafast?.[0]?.summary?.duration;
+      return minutesFromMilliseconds(duration);
+    },
+    { shouldCache: (value) => value !== null },
+  );
+}
+
+export async function getProviderDrivingTravelTimeMinutes(
+  origin: Coordinate,
+  destination: Coordinate,
+): Promise<ProviderTravelTimeMinutes> {
+  const [kakao, tmap, naver] = await Promise.all([
+    getDrivingTravelTimeMinutes(origin, destination).catch(() => null),
+    getTmapDrivingTravelTimeMinutes(origin, destination).catch(() => null),
+    getNaverDrivingTravelTimeMinutes(origin, destination).catch(() => null),
+  ]);
+
+  return { kakao, tmap, naver };
 }

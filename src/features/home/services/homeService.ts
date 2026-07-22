@@ -18,7 +18,7 @@ import { buildRoundFeedEvents, selectPrimaryHomeFeedEvent } from "../engine/home
 import {
   formatRecommendedDepartureTime,
   formatTravelMinutes,
-  getDrivingTravelTimeMinutes,
+  getProviderDrivingTravelTimeMinutes,
 } from "../../../lib/travelTime";
 
 type HomeCoordinate = {
@@ -33,7 +33,7 @@ export type HomeDashboardBaseResult = {
 
 type TravelRoundUpdate = Pick<
   HomeHeroRound,
-  "id" | "routeTimeText" | "departureTimeText"
+  "id" | "routeTimeText" | "routeTimeByProvider" | "departureTimeText"
 >;
 
 type AiCaddieUpdate = Partial<HomeDashboard["aiCaddie"]>;
@@ -155,26 +155,40 @@ export async function getHomeTravelUpdates(
       const course = schedule.course_id
         ? courseById.get(schedule.course_id)
         : undefined;
-      const minutes = await getDrivingTravelTimeMinutes(home, {
+      const providerMinutes = await getProviderDrivingTravelTimeMinutes(home, {
         latitude: course?.latitude,
         longitude: course?.longitude,
       }).catch(() => null);
+      const primaryMinutes = providerMinutes?.kakao
+        ?? providerMinutes?.tmap
+        ?? providerMinutes?.naver
+        ?? null;
 
-      if (!minutes) {
+      if (!primaryMinutes) {
         return {
           id: schedule.id,
           routeTimeText: "이동시간 준비중",
+          routeTimeByProvider: {
+            kakao: "예상 준비중",
+            tmap: "예상 준비중",
+            naver: "예상 준비중",
+          },
           departureTimeText: "출발 추천 준비중",
         };
       }
 
       return {
         id: schedule.id,
-        routeTimeText: formatTravelMinutes(minutes),
+        routeTimeText: formatTravelMinutes(primaryMinutes),
+        routeTimeByProvider: {
+          kakao: providerMinutes?.kakao ? `예상 ${formatTravelMinutes(providerMinutes.kakao).replace(/\s*소요$/, "")}` : "예상 준비중",
+          tmap: providerMinutes?.tmap ? `예상 ${formatTravelMinutes(providerMinutes.tmap).replace(/\s*소요$/, "")}` : "예상 준비중",
+          naver: providerMinutes?.naver ? `예상 ${formatTravelMinutes(providerMinutes.naver).replace(/\s*소요$/, "")}` : "예상 준비중",
+        },
         departureTimeText: formatRecommendedDepartureTime(
           schedule.round_date,
           roundById.get(schedule.id)?.teeTime ?? schedule.tee_time ?? undefined,
-          minutes,
+          primaryMinutes,
           departureBufferMinutes,
         ),
       };

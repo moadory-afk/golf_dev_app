@@ -89,6 +89,14 @@ function routeTimeText() {
   return '이동시간 준비중'
 }
 
+function routeTimeByProvider() {
+  return {
+    kakao: '예상 준비중',
+    tmap: '예상 준비중',
+    naver: '예상 준비중',
+  }
+}
+
 function departureTimeText() {
   return '출발 추천 준비중'
 }
@@ -294,6 +302,7 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow, 
     heroImageUrl: resolveHeroImageUrl(raw, course, schedule.round_date),
     locationLabel: locationParts.join(' · ') || '골프장 위치 준비중',
     routeTimeText: routeTimeText(),
+    routeTimeByProvider: routeTimeByProvider(),
     departureTimeText: departureTimeText(),
     awardPlanReady,
     lottoPurchased,

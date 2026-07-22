@@ -57,6 +57,30 @@ const MAP_NAVIGATION_APPS: Array<{
   },
 ];
 
+function openAppSchemeOnWeb(appUrl: string, fallbackUrl: string) {
+  if (typeof window === "undefined") {
+    void Linking.openURL(fallbackUrl);
+    return;
+  }
+
+  const startedAt = Date.now();
+  const fallbackTimer = window.setTimeout(() => {
+    if (Date.now() - startedAt < 1600 && document.visibilityState === "visible") {
+      window.location.href = fallbackUrl;
+    }
+  }, 1200);
+
+  const clearFallback = () => {
+    window.clearTimeout(fallbackTimer);
+    window.removeEventListener("pagehide", clearFallback);
+    document.removeEventListener("visibilitychange", clearFallback);
+  };
+
+  window.addEventListener("pagehide", clearFallback, { once: true });
+  document.addEventListener("visibilitychange", clearFallback, { once: true });
+  window.location.href = appUrl;
+}
+
 type PremiumHomeHeroSectionProps = {
   greeting: string;
   userName: string;
@@ -397,6 +421,7 @@ const HeroRoundCard = memo(function HeroRoundCard({
               teeTime={round.teeTime}
               groupCount={round.groupCount}
               routeTimeText={round.routeTimeText}
+              routeTimeByProvider={round.routeTimeByProvider}
               departureTimeText={round.departureTimeText}
               departureBufferMinutes={departureBufferMinutes}
               courseLatitude={round.courseLatitude}
@@ -711,6 +736,7 @@ function HeroBottomSummary({
   teeTime,
   groupCount,
   routeTimeText,
+  routeTimeByProvider,
   departureTimeText,
   departureBufferMinutes,
   courseLatitude,
@@ -726,6 +752,7 @@ function HeroBottomSummary({
   teeTime?: string;
   groupCount?: number;
   routeTimeText?: string;
+  routeTimeByProvider?: Partial<Record<NavigationProvider, string>>;
   departureTimeText?: string;
   departureBufferMinutes: number;
   courseLatitude?: number | null;
@@ -743,6 +770,7 @@ function HeroBottomSummary({
     departureTimeText && !departureTimeText.includes("준비중")
       ? departureTimeText.replace(/^출발 추천\s*/, "")
       : "";
+  const fallbackMapEstimateText = travelTimeText.includes("준비중") ? "예상 준비중" : `예상 ${travelTimeText}`;
   const [mapChooserVisible, setMapChooserVisible] = useState(false);
   const hasDestination =
     typeof courseLatitude === "number" &&
@@ -766,7 +794,7 @@ function HeroBottomSummary({
       },
       tmap: {
         app: `tmap://route?goalname=${name}&goalx=${lng}&goaly=${lat}`,
-        web: `https://www.tmap.co.kr/search?searchKeyword=${name}`,
+        web: `https://www.tmap.co.kr/tmap2/mobile/run.jsp`,
       },
       naver: {
         app: `nmap://route/car?dlat=${lat}&dlng=${lng}&dname=${name}&appname=gogopar`,
@@ -777,7 +805,7 @@ function HeroBottomSummary({
     setMapChooserVisible(false);
     try {
       if (Platform.OS === "web") {
-        await Linking.openURL(urls.web);
+        openAppSchemeOnWeb(urls.app, urls.web);
         return;
       }
       const supported = await Linking.canOpenURL(urls.app);
@@ -959,6 +987,9 @@ function HeroBottomSummary({
                   <Image source={app.icon} style={styles.mapOptionIcon} resizeMode="cover" />
                   <Text style={styles.mapOptionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
                     {app.label}
+                  </Text>
+                  <Text style={styles.mapOptionEstimate} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
+                    {routeTimeByProvider?.[app.id] ?? fallbackMapEstimateText}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -1536,6 +1567,14 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     fontWeight: "900",
     textAlign: "center",
+  },
+  mapOptionEstimate: {
+    color: "#6B7280",
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "800",
+    textAlign: "center",
+    marginTop: 3,
   },
   mapCancel: {
     minHeight: 44,
