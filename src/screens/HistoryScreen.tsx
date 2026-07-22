@@ -8,7 +8,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
 import Svg, { Polyline, Circle, Line, Text as SvgText, G } from 'react-native-svg'
-import { DEFAULT_LOTTO_AWARD_CONFIG, getClubAwardConfig, getClubAwardSnapshots, getClubLottoAwardConfig, getClubMembers, getRoundLottoDraw, getRoundLottoEntries, getRoundHistoryCards, getRound, getPersonalRoundStat, playerTotal, totalPar, getHandicapsForRound, computeHandicaps, shortName, updateRound, type ClubAwardSnapshot, type LottoAwardConfig, type PersonalRoundHoleStat, type RoundLottoDraw, type RoundLottoEntry, type SavedRound } from '../lib/store'
+import { DEFAULT_LOTTO_AWARD_CONFIG, getClubAwardConfig, getClubAwardSnapshots, getClubLottoAwardConfig, getClubMembers, getRoundLottoDraw, getRoundLottoEntries, getRoundHistoryCards, getRound, getPersonalRoundStats, playerTotal, totalPar, getHandicapsForRound, computeHandicaps, shortName, updateRound, type ClubAwardSnapshot, type LottoAwardConfig, type PersonalRoundHoleStat, type RoundLottoDraw, type RoundLottoEntry, type SavedRound } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { getPersonalRecordGoal, savePersonalRecordGoal } from '../lib/personalRecordGoal'
 import { useClub } from '../lib/ClubContext'
@@ -213,10 +213,6 @@ export default function HistoryScreen() {
     () => (activeClub ? getRoundHistoryCards(activeClub.id) : Promise.resolve([])),
     [refreshKey, activeClub?.id],
   )
-  const { data: memberData } = useAsync(
-    () => (activeClub ? getClubMembers(activeClub.id) : Promise.resolve([])),
-    [activeClub?.id, refreshKey],
-  )
   const [allClubMembers, setAllClubMembers] = useState<HistoryMember[]>([])
 
   // getClubMembers 결과가 일부 인원만 반환되는 환경에서도 클럽 소속 회원 전체를 확보한다.
@@ -291,13 +287,13 @@ export default function HistoryScreen() {
   const rounds = data ?? []
   const members = useMemo(() => {
     const merged = new Map<string, HistoryMember>()
-    for (const member of [...(memberData ?? []), ...allClubMembers]) {
+    for (const member of allClubMembers) {
       const key = member.userId || member.name.trim().toLocaleLowerCase()
       if (!key) continue
       merged.set(key, member)
     }
     return Array.from(merged.values())
-  }, [allClubMembers, memberData])
+  }, [allClubMembers])
   const schedules = scheduleData ?? []
   const hiddenScheduleIds = useMemo(
     () => new Set(schedules.filter((schedule) => schedule.isPublished === false).map((schedule) => schedule.id)),
@@ -313,10 +309,10 @@ export default function HistoryScreen() {
   )
   const onRefresh = useCallback(() => setRefreshKey((k) => k + 1), [])
 
-  // 화면 포커스 복귀 시 자동 새로고침 (삭제/저장 후 즉시 반영)
+  // 단순 화면 복귀만으로 전체 데이터를 다시 조회하지 않는다.
+  // 실제 갱신은 당겨서 새로고침으로 수행한다.
   useFocusEffect(useCallback(() => {
     if (route.params?.initialTab) setTab(route.params.initialTab)
-    setRefreshKey((k) => k + 1)
   }, [route.params?.initialTab]))
 
   useEffect(() => {
@@ -1158,12 +1154,14 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
       return
     }
     let cancelled = false
-    Promise.all(scheduleIds.map(async (scheduleId) => {
-      const item = await getPersonalRoundStat(scheduleId, myUserId)
-      return [scheduleId, item?.holeStats ?? []] as const
-    }))
+    getPersonalRoundStats(scheduleIds, myUserId)
       .then((items) => {
-        if (!cancelled) setPersonalStatsBySchedule(Object.fromEntries(items))
+        if (cancelled) return
+        const next: Record<string, PersonalRoundHoleStat[]> = Object.fromEntries(
+          scheduleIds.map((scheduleId) => [scheduleId, []]),
+        )
+        for (const item of items) next[item.scheduleId] = item.holeStats ?? []
+        setPersonalStatsBySchedule(next)
       })
       .catch(() => {
         if (!cancelled) setPersonalStatsBySchedule({})

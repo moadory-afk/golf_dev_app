@@ -58,8 +58,11 @@ export async function getHomeWeatherDashboard(
   userName?: string | null,
   userId?: string | null,
 ): Promise<HomeDashboard> {
+  // 홈 최초 진입에서는 가장 가까운 일정의 날씨만 우선 조회한다.
+  // 나머지 일정은 기본 카드 정보를 먼저 표시해 초기 네트워크 부하를 줄인다.
+  const initialWeatherSchedules = raw.schedules.slice(0, 1);
   const weatherByScheduleId = await fetchWeatherByScheduleId(
-    raw.schedules,
+    initialWeatherSchedules,
     raw.courses,
   );
   const weatherRaw: HomeDashboardRawData = {

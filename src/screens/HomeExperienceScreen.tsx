@@ -57,7 +57,6 @@ import {
   getHandicapsForRound,
   getRoundLottoDraw,
   getRoundLottoDrawsByScheduleIds,
-  getRoundLottoEntries,
   getRoundLottoEntriesByScheduleIds,
   getRoundLottoEntry,
   getRoundSummaries,
@@ -926,33 +925,52 @@ export default function HomeExperienceScreen() {
       if (!club?.id) return;
       setPopupLoading(true);
       try {
-        const [schedules, members] = await Promise.all([
-          getCachedHomeRoundSchedules(club.id, [round.id]),
-          getCachedHomeClubMembers(club.id),
-        ]);
+        const schedules = await getCachedHomeRoundSchedules(club.id, [round.id]);
         const selectedRound = schedules.find((item) => item.id === round.id) ?? null;
         setPopupRound(selectedRound);
-        setPopupMembers(members);
 
         if (mode === "lotto") {
-          const layouts = selectedRound?.courseId ? await getCourseLayouts(selectedRound.courseId) : [];
-          setPopupLottoPars(selectedRound ? parsForScheduledRound(selectedRound, layouts, userId, myName) : Array.from({ length: 18 }, () => 4));
-          const [saved, entries, draw, lottoConfig, savedRounds] = await Promise.all([
+          // 히어로 로또 화면은 관리자도 본인 구매 정보만 우선 조회한다.
+          // 전체 회원/라운드 기록 기반 당첨금 계산은 화면을 먼저 연 뒤 지연 처리한다.
+          const layoutsPromise = selectedRound?.courseId
+            ? getCourseLayouts(selectedRound.courseId)
+            : Promise.resolve([]);
+          const [layouts, saved, draw, lottoConfig] = await Promise.all([
+            layoutsPromise,
             userId ? getRoundLottoEntry(round.id, userId) : Promise.resolve(null),
-            getRoundLottoEntries(round.id),
             getRoundLottoDraw(round.id),
             getClubLottoAwardConfig(club.id),
-            getCachedHomeRoundSummaries(club.id),
           ]);
-          const roundRecord = savedRounds.find((item) => item.scheduleId === round.id);
-          const myPlayer = roundRecord ? findPlayer(roundRecord, myName) : null;
-          const jackpot = await calculateLottoJackpotAmount(savedRounds, members);
+
+          setPopupLottoPars(
+            selectedRound
+              ? parsForScheduledRound(selectedRound, layouts, userId, myName)
+              : Array.from({ length: 18 }, () => 4),
+          );
           setPopupLottoSelection(saved?.selectedHoles ?? emptyLottoSelection());
-          setPopupLottoEntries(entries);
+          setPopupLottoEntries(saved ? [saved] : []);
           setPopupLottoDraw(draw);
           setPopupLottoConfig(lottoConfig);
-          setPopupLottoJackpot(jackpot);
-          setPopupMyLottoStrokes(myPlayer?.strokes ?? null);
+
+          // 화면 표시를 막지 않는 부가 정보 조회
+          void Promise.all([
+            getCachedHomeClubMembers(club.id),
+            getCachedHomeRoundSummaries(club.id),
+          ])
+            .then(async ([members, savedRounds]) => {
+              const roundRecord = savedRounds.find((item) => item.scheduleId === round.id);
+              const myPlayer = roundRecord ? findPlayer(roundRecord, myName) : null;
+              const jackpot = await calculateLottoJackpotAmount(savedRounds, members);
+              setPopupMembers(members);
+              setPopupLottoJackpot(jackpot);
+              setPopupMyLottoStrokes(myPlayer?.strokes ?? null);
+            })
+            .catch(() => {
+              // 부가 정보 실패는 로또 화면 진입을 막지 않는다.
+            });
+        } else {
+          const members = await getCachedHomeClubMembers(club.id);
+          setPopupMembers(members);
         }
 
         if (mode === "award") {

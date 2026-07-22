@@ -1638,6 +1638,26 @@ export async function deleteRoundsBySchedule(scheduleId: string): Promise<void> 
   if (error) throw error
 }
 
+export async function getPersonalRoundStats(scheduleIds: string[], userId: string): Promise<PersonalRoundStat[]> {
+  const uniqueScheduleIds = [...new Set(scheduleIds.filter(Boolean))]
+  if (!userId || uniqueScheduleIds.length === 0) return []
+
+  const { data, error } = await supabase
+    .from('personal_round_stats')
+    .select('club_id, schedule_id, user_id, hole_stats, updated_at')
+    .eq('user_id', userId)
+    .in('schedule_id', uniqueScheduleIds)
+  if (error) throw error
+
+  return (data ?? []).map((row) => ({
+    clubId: row.club_id,
+    scheduleId: row.schedule_id,
+    userId: row.user_id,
+    holeStats: row.hole_stats ?? [],
+    updatedAt: row.updated_at ?? undefined,
+  }))
+}
+
 export async function getPersonalRoundStat(scheduleId: string, userId: string): Promise<PersonalRoundStat | null> {
   const { data, error } = await supabase
     .from('personal_round_stats')
