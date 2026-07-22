@@ -968,12 +968,13 @@ export default function HomeExperienceScreen() {
             .catch(() => {
               // 부가 정보 실패는 로또 화면 진입을 막지 않는다.
             });
-        } else {
+        } else if (mode === "groups") {
           const members = await getCachedHomeClubMembers(club.id);
           setPopupMembers(members);
         }
 
         if (mode === "award") {
+          // 시상계획은 회원 목록을 사용하지 않으므로 전체 회원 조회를 기다리지 않는다.
           const clubAwardConfig = await getClubAwardConfig(club.id);
           setPopupAwardConfig(selectedRound?.awardConfig ?? clubAwardConfig);
         }
