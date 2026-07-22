@@ -1,9 +1,9 @@
 import type { ImageSourcePropType } from 'react-native'
 
-const hillskyHeroImage = require('../../courses/hillsky.png')
-const bomunHeroImage = require('../../courses/bomun.png')
-const bugokHeroImage = require('../../courses/bugok.png')
-const gayaHeroImage = require('../../courses/gaya.png')
+const hillskyHeroImage = require('../../courses/hillsky.jpg')
+const bomunHeroImage = require('../../courses/bomun.jpg')
+const bugokHeroImage = require('../../courses/bugok.jpg')
+const gayaHeroImage = require('../../courses/gaya.jpg')
 
 export type CourseHeroKey = 'hillsky' | 'bomun' | 'bugok' | 'gaya'
 
@@ -25,7 +25,7 @@ export const COURSE_HERO_ASSETS: CourseHeroAsset[] = [
     courseName: '힐스카이CC',
     region: '경북 경주',
     source: hillskyHeroImage,
-    imagePath: 'courses/hillsky.png',
+    imagePath: 'courses/hillsky.jpg',
   },
   {
     key: 'bomun',
@@ -33,7 +33,7 @@ export const COURSE_HERO_ASSETS: CourseHeroAsset[] = [
     courseName: '보문CC',
     region: '경북 경주',
     source: bomunHeroImage,
-    imagePath: 'courses/bomun.png',
+    imagePath: 'courses/bomun.jpg',
   },
   {
     key: 'bugok',
@@ -41,7 +41,7 @@ export const COURSE_HERO_ASSETS: CourseHeroAsset[] = [
     courseName: '부곡CC',
     region: '경남 창녕',
     source: bugokHeroImage,
-    imagePath: 'courses/bugok.png',
+    imagePath: 'courses/bugok.jpg',
   },
   {
     key: 'gaya',
@@ -49,7 +49,7 @@ export const COURSE_HERO_ASSETS: CourseHeroAsset[] = [
     courseName: '가야CC',
     region: '경남 김해',
     source: gayaHeroImage,
-    imagePath: 'courses/gaya.png',
+    imagePath: 'courses/gaya.jpg',
   },
 ]
 

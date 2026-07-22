@@ -78,6 +78,7 @@ import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 import { isCompactWidth } from "../lib/responsive";
 import { notifyHomeDashboardChanged } from "../lib/homeDashboardEvents";
 import { getOptimizedRemoteImageUrl } from "../lib/imageOptimization";
+import { getCachedAsync } from "../lib/asyncCache";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type ClubRoute = RouteProp<MainTabParamList, "Club">;
@@ -97,6 +98,7 @@ const CLUB_HERO_IMAGE =
   "https://images.unsplash.com/photo-1592919505780-303950717480?auto=format&fit=crop&w=1200&q=80";
 const CLUB_HERO_DISPLAY_HEIGHT_RATIO = 0.7;
 const CLUB_HERO_MIN_WIDTH = 280;
+const CLUB_SCREEN_CACHE_TTL_MS = 30_000;
 const APP_URL = "https://golf-seven-psi.vercel.app";
 const LOTTO_JACKPOT_BASE = 50000;
 const LOTTO_JACKPOT_STEP = 10000;
@@ -280,23 +282,53 @@ export default function ClubScreen() {
     { kind: "create" as const },
   ];
   const clubHeroClubIds = myClubs.map((item) => item.id).join("|");
+  const forceClubScreenRefresh = refreshKey > 0;
   const { data, loading } = useAsync(
-    () => (club ? getRoundSummaries(club.id) : Promise.resolve([])),
+    () =>
+      club
+        ? getCachedAsync(
+            `club-screen:rounds:${club.id}`,
+            CLUB_SCREEN_CACHE_TTL_MS,
+            () => getRoundSummaries(club.id),
+            { forceRefresh: forceClubScreenRefresh },
+          )
+        : Promise.resolve([]),
     [refreshKey, club?.id],
   );
   const { data: clubMembers } = useAsync(
-    () => (club ? getClubMembers(club.id) : Promise.resolve([])),
+    () =>
+      club
+        ? getCachedAsync(
+            `club-screen:members:${club.id}`,
+            CLUB_SCREEN_CACHE_TTL_MS,
+            () => getClubMembers(club.id),
+            { forceRefresh: forceClubScreenRefresh },
+          )
+        : Promise.resolve([]),
     [refreshKey, club?.id],
   );
   const { data: lottoAwardConfig } = useAsync(
     () =>
       club
-        ? getClubLottoAwardConfig(club.id)
+        ? getCachedAsync(
+            `club-screen:lotto-award:${club.id}`,
+            CLUB_SCREEN_CACHE_TTL_MS,
+            () => getClubLottoAwardConfig(club.id),
+            { forceRefresh: forceClubScreenRefresh },
+          )
         : Promise.resolve(DEFAULT_LOTTO_AWARD_CONFIG),
     [refreshKey, club?.id],
   );
   const { data: clubNotices } = useAsync(
-    () => (club ? getClubNotices(club.id) : Promise.resolve([])),
+    () =>
+      club
+        ? getCachedAsync(
+            `club-screen:notices:${club.id}`,
+            CLUB_SCREEN_CACHE_TTL_MS,
+            () => getClubNotices(club.id),
+            { forceRefresh: forceClubScreenRefresh },
+          )
+        : Promise.resolve([]),
     [refreshKey, club?.id],
   );
   const rounds = data ?? [];

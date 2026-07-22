@@ -15,7 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { colorLayers, radius, spacing } from "../../../design/tokens";
 import { getCourseHeroImageSource } from "../../../data/courseHeroImages";
@@ -108,7 +108,7 @@ type PremiumHomeHeroSectionProps = {
   departureBufferMinutes?: number;
 };
 
-export function PremiumHomeHeroSection({
+function PremiumHomeHeroSectionComponent({
   rounds,
   fallbackCourseName,
   fallbackAddress,
@@ -158,18 +158,18 @@ export function PremiumHomeHeroSection({
     return items;
   }, [hasRounds, isAdmin, rounds]);
 
-  const updateActiveIndex = (nextIndex: number) => {
+  const updateActiveIndex = useCallback((nextIndex: number) => {
     const clampedIndex = Math.max(0, Math.min(nextIndex, totalCount - 1));
     activeIndexRef.current = clampedIndex;
     setInternalActiveIndex(clampedIndex);
     onActiveIndexChange?.(clampedIndex);
     return clampedIndex;
-  };
+  }, [onActiveIndexChange, totalCount]);
 
-  const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+  const handleScrollEnd = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const index = Math.round(event.nativeEvent.contentOffset.x / heroWidth);
     updateActiveIndex(index);
-  };
+  }, [heroWidth, updateActiveIndex]);
 
   useEffect(() => {
     const dotStep = 15;
@@ -321,6 +321,8 @@ export function PremiumHomeHeroSection({
     </View>
   );
 }
+
+export const PremiumHomeHeroSection = memo(PremiumHomeHeroSectionComponent);
 
 const HeroRoundCard = memo(function HeroRoundCard({
   width,

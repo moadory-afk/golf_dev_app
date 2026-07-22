@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -78,11 +78,45 @@ import { AWARD_CATEGORIES, fillToCount } from "../lib/awardConfig";
 import { computeClubAwardResults } from "../lib/awardResults";
 import { subscribeHomeRecordsChanged } from "../lib/homeRecordEvents";
 import type { HomeFeedAction, HomeFeedEvent } from "../features/home/engine";
+import { getCachedAsync } from "../lib/asyncCache";
 
 
 const AWARD_DISPLAY_ORDER = new Map(
   AWARD_CATEGORIES.flatMap((category) => category.items).map((item, index) => [item.id, index]),
 );
+const HOME_SCREEN_CACHE_TTL_MS = 30_000;
+
+function getCachedHomeRoundSummaries(clubId: string, forceRefresh = false) {
+  return getCachedAsync(
+    `home-screen:rounds:${clubId}`,
+    HOME_SCREEN_CACHE_TTL_MS,
+    () => getRoundSummaries(clubId),
+    { forceRefresh },
+  );
+}
+
+function getCachedHomeClubMembers(clubId: string, forceRefresh = false) {
+  return getCachedAsync(
+    `home-screen:members:${clubId}`,
+    HOME_SCREEN_CACHE_TTL_MS,
+    () => getClubMembers(clubId),
+    { forceRefresh },
+  );
+}
+
+function getCachedHomeRoundSchedules(
+  clubId: string,
+  scheduleIds?: string[],
+  forceRefresh = false,
+) {
+  const suffix = scheduleIds?.length ? scheduleIds.join("|") : "all";
+  return getCachedAsync(
+    `home-screen:schedules:${clubId}:${suffix}`,
+    HOME_SCREEN_CACHE_TTL_MS,
+    () => getRoundSchedules(clubId, scheduleIds?.length ? { scheduleIds } : undefined),
+    { forceRefresh },
+  );
+}
 
 function sortAwardItemIdsByDisplayOrder(items: string[]): string[] {
   return [...items].sort((a, b) => {
@@ -629,7 +663,7 @@ function awardRowsForUser(awards: AwardDetailRow[], userName?: string | null) {
 async function getHomeAwardRows(clubId: string, rounds: SavedRound[]): Promise<AwardDetailRow[]> {
   const [clubAwardConfig, schedules] = await Promise.all([
     getClubAwardConfig(clubId).catch(() => null),
-    getRoundSchedules(clubId).catch(() => [] as ScheduledRound[]),
+    getCachedHomeRoundSchedules(clubId).catch(() => [] as ScheduledRound[]),
   ]);
   const scheduleAwardConfigById = new Map(schedules.map((schedule) => [schedule.id, schedule.awardConfig ?? null]));
 
@@ -790,7 +824,7 @@ export default function HomeExperienceScreen() {
 
     setRecordCardsReady(false);
     try {
-      const rounds = await getRoundSummaries(club.id);
+      const rounds = await getCachedHomeRoundSummaries(club.id, options?.force);
       const awardRows = await getHomeAwardRows(club.id, rounds);
       setRecordDetailRounds(rounds);
       setRecordAwardRows(awardRows);
@@ -893,8 +927,8 @@ export default function HomeExperienceScreen() {
       setPopupLoading(true);
       try {
         const [schedules, members] = await Promise.all([
-          getRoundSchedules(club.id, { scheduleIds: [round.id] }),
-          getClubMembers(club.id),
+          getCachedHomeRoundSchedules(club.id, [round.id]),
+          getCachedHomeClubMembers(club.id),
         ]);
         const selectedRound = schedules.find((item) => item.id === round.id) ?? null;
         setPopupRound(selectedRound);
@@ -908,7 +942,7 @@ export default function HomeExperienceScreen() {
             getRoundLottoEntries(round.id),
             getRoundLottoDraw(round.id),
             getClubLottoAwardConfig(club.id),
-            getRoundSummaries(club.id),
+            getCachedHomeRoundSummaries(club.id),
           ]);
           const roundRecord = savedRounds.find((item) => item.scheduleId === round.id);
           const myPlayer = roundRecord ? findPlayer(roundRecord, myName) : null;
@@ -941,6 +975,57 @@ export default function HomeExperienceScreen() {
     },
     [club?.id, myName, userId],
   );
+
+  const handleHeroCreateRound = useCallback(() => {
+    nav.navigate("RoundSchedulePrototype", { openCreate: true });
+  }, [nav]);
+
+  const handleHeroCaddieBookPress = useCallback(
+    (round: HomeHeroRound) => {
+      nav.navigate("CaddieBook", caddieBookHeroParams(round));
+    },
+    [nav],
+  );
+
+  const handleHeroGroupsPress = useCallback(
+    (round: HomeUpcomingRound) => openRoundPopup(round, "groups"),
+    [openRoundPopup],
+  );
+
+  const handleHeroLottoPress = useCallback(
+    (round: HomeUpcomingRound) => openRoundPopup(round, "lotto"),
+    [openRoundPopup],
+  );
+
+  const handleHeroAwardPress = useCallback(
+    (round: HomeUpcomingRound) => openRoundPopup(round, "award"),
+    [openRoundPopup],
+  );
+
+  const handleHeroEditRoundPress = useCallback(
+    (round: HomeHeroRound) => {
+      nav.navigate("RoundSchedulePrototype", {
+        editScheduleId: round.id,
+        modalOnly: true,
+      });
+    },
+    [nav],
+  );
+
+  const handleHeroWeatherPress = useCallback((round: HomeHeroRound) => {
+    setWeatherDetailRound(round);
+    setWeatherDetailHours(round.fiveHourWeatherHours ?? []);
+    setWeatherDetailOpenHours(round.openWeatherHours ?? []);
+    setWeatherDetailSummary(
+      [round.fiveHourWeatherSummary, round.fiveHourWeatherDetail]
+        .filter(Boolean)
+        .join("\n"),
+    );
+  }, []);
+
+  const handleHeroActiveIndexChange = useCallback((index: number) => {
+    setActiveRoundIndex(index);
+  }, []);
 
   const handleCaddieFeedAction = useCallback(
     async (feed: HomeFeedEvent, action?: HomeFeedAction) => {
@@ -975,10 +1060,10 @@ export default function HomeExperienceScreen() {
         setAttendanceOverviewRound(round);
         try {
           const [members, attendanceMap] = await Promise.all([
-            getClubMembers(club.id),
+            getCachedHomeClubMembers(club.id),
             getRoundAttendanceMap(club.id, round.id),
           ]);
-          const schedules = await getRoundSchedules(club.id, { scheduleIds: [round.id] }).catch(() => []);
+          const schedules = await getCachedHomeRoundSchedules(club.id, [round.id]).catch(() => []);
           const schedule = schedules.find((item) => item.id === round.id);
           const assignedMembers = schedule?.groups.flatMap((group) => group.members) ?? [];
           const assignedUserIds = new Set(assignedMembers.map((member) => member.userId).filter(Boolean));
@@ -1086,7 +1171,7 @@ export default function HomeExperienceScreen() {
 
     setPopupDrawSaving(true);
     try {
-      const savedRounds = await getRoundSummaries(club.id);
+      const savedRounds = await getCachedHomeRoundSummaries(club.id);
       const roundRecord = savedRounds.find((item) => item.scheduleId === popupRound.id);
       const pars = roundRecord?.pars?.length === 18 ? roundRecord.pars : Array.from({ length: 18 }, () => 4);
       const drawnScores = generateLottoDrawScores(pars);
@@ -1111,7 +1196,7 @@ export default function HomeExperienceScreen() {
 
       setRecordDetailLoading(true);
       try {
-        const rounds = await getRoundSummaries(club.id);
+        const rounds = await getCachedHomeRoundSummaries(club.id);
         setRecordDetailRounds(rounds);
         if (mode === "awards") setRecordAwardRows(await getHomeAwardRows(club.id, rounds));
       } catch {
@@ -1264,37 +1349,17 @@ export default function HomeExperienceScreen() {
                   fallbackRoundDate={dashboard.hero.roundDate}
                   fallbackTeeTime={dashboard.hero.teeTime}
                   isAdmin={club?.role === "admin"}
-                  onCreateRound={() =>
-                    nav.navigate("RoundSchedulePrototype", { openCreate: true })
-                  }
-                  onCaddieBookPress={(round) =>
-                    nav.navigate("CaddieBook", caddieBookHeroParams(round))
-                  }
-                  onGroupsPress={(round) => openRoundPopup(round, "groups")}
-                  onLottoPress={(round) => openRoundPopup(round, "lotto")}
-                  onAwardPress={(round) => openRoundPopup(round, "award")}
-                  onEditRoundPress={(round) =>
-                    nav.navigate("RoundSchedulePrototype", {
-                      editScheduleId: round.id,
-                      modalOnly: true,
-                    })
-                  }
-                  onWeatherPress={(round) => {
-                    setWeatherDetailRound(round);
-                    setWeatherDetailHours(round.fiveHourWeatherHours ?? []);
-                    setWeatherDetailOpenHours(round.openWeatherHours ?? []);
-                    setWeatherDetailSummary(
-                      [round.fiveHourWeatherSummary, round.fiveHourWeatherDetail]
-                        .filter(Boolean)
-                        .join("\n"),
-                    );
-                  }}
+                  onCreateRound={handleHeroCreateRound}
+                  onCaddieBookPress={handleHeroCaddieBookPress}
+                  onGroupsPress={handleHeroGroupsPress}
+                  onLottoPress={handleHeroLottoPress}
+                  onAwardPress={handleHeroAwardPress}
+                  onEditRoundPress={handleHeroEditRoundPress}
+                  onWeatherPress={handleHeroWeatherPress}
                   heroImageSource={activeHeroImageSource}
                   topInset={insets.top}
                   activeIndex={activeRoundIndex}
-                  onActiveIndexChange={(index) => {
-                    setActiveRoundIndex(index);
-                  }}
+                  onActiveIndexChange={handleHeroActiveIndexChange}
                   departureBufferMinutes={departureBufferMinutes}
                 />
               </PremiumHomeMotion>
@@ -1410,7 +1475,7 @@ export default function HomeExperienceScreen() {
 }
 
 
-function WeatherDetailModal({
+const WeatherDetailModal = memo(function WeatherDetailModal({
   visible,
   round,
   hours,
@@ -1512,9 +1577,9 @@ function WeatherDetailModal({
       </View>
     </Modal>
   );
-}
+});
 
-function HomeRecordDetailModal({
+const HomeRecordDetailModal = memo(function HomeRecordDetailModal({
   visible,
   mode,
   rounds,
@@ -1532,16 +1597,32 @@ function HomeRecordDetailModal({
   onClose: () => void;
 }) {
   const { palette } = useSkin();
-  const personalRows = getPersonalRoundRows(rounds, userName);
-  const latestRows = personalRows.slice(0, 5);
-  const basisRows = [...personalRows].sort((a, b) => a.date.localeCompare(b.date)).slice(-5);
-  const average = personalRows.length
-    ? Math.round(personalRows.reduce((sum, row) => sum + row.total, 0) / personalRows.length)
-    : null;
-  const handicaps = computeHandicaps(rounds, 5);
+  const personalRows = useMemo(
+    () => getPersonalRoundRows(rounds, userName),
+    [rounds, userName],
+  );
+  const latestRows = useMemo(() => personalRows.slice(0, 5), [personalRows]);
+  const basisRows = useMemo(
+    () => [...personalRows].sort((a, b) => a.date.localeCompare(b.date)).slice(-5),
+    [personalRows],
+  );
+  const average = useMemo(
+    () =>
+      personalRows.length
+        ? Math.round(personalRows.reduce((sum, row) => sum + row.total, 0) / personalRows.length)
+        : null,
+    [personalRows],
+  );
+  const handicaps = useMemo(() => computeHandicaps(rounds, 5), [rounds]);
   const myHandicap = userName ? handicaps.get(userName) ?? 0 : 0;
-  const guinnessRows = guinnessRecordsForUser(rounds, userName);
-  const myAwardRows = awardRowsForUser(awards, userName).sort((a, b) => b.roundDate.localeCompare(a.roundDate));
+  const guinnessRows = useMemo(
+    () => guinnessRecordsForUser(rounds, userName),
+    [rounds, userName],
+  );
+  const myAwardRows = useMemo(
+    () => awardRowsForUser(awards, userName).sort((a, b) => b.roundDate.localeCompare(a.roundDate)),
+    [awards, userName],
+  );
 
   const renderRows = (rows: typeof personalRows, diffFromAverage = false) => (
     <View style={styles.detailTable}>
@@ -1698,9 +1779,9 @@ function HomeRecordDetailModal({
       </View>
     </Modal>
   );
-}
+});
 
-function AttendanceOverviewModal({
+const AttendanceOverviewModal = memo(function AttendanceOverviewModal({
   visible,
   loading,
   round,
@@ -1756,9 +1837,9 @@ function AttendanceOverviewModal({
       </View>
     </Modal>
   );
-}
+});
 
-function RoundInfoModal({
+const RoundInfoModal = memo(function RoundInfoModal({
   visible,
   mode,
   round,
@@ -2142,7 +2223,7 @@ function RoundInfoModal({
       </View>
     </Modal>
   );
-}
+});
 
 function ScratchLottoResultCard({
   hole,
