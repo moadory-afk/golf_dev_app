@@ -1142,6 +1142,7 @@ export default function ClubScreen() {
           {club && (
             <>
               <View
+                {...verticalClubPanResponder.panHandlers}
                 onLayout={(event) => {
                   const nextWidth = Math.round(event.nativeEvent.layout.width);
                   if (nextWidth > 0 && nextWidth !== measuredClubHeroWidth) {
@@ -1193,34 +1194,29 @@ export default function ClubScreen() {
                   renderItem={({ item }) => {
                     if (item.kind === "create") {
                       return (
-                        <View
+                        <TouchableOpacity
                           style={[
                             s.clubHeroCard,
                             s.createClubHeroCard,
                             { width: clubHeroWidth, height: clubHeroHeight },
                           ]}
+                          onPress={() => setCreateClubOpen(true)}
+                          activeOpacity={0.9}
+                          accessibilityRole="button"
+                          accessibilityLabel="새로운 클럽 만들기"
                         >
                           <View style={s.createClubHeroContent}>
                             <View style={s.createClubHeroIcon}>
                               <Text style={s.createClubHeroPlus}>＋</Text>
                             </View>
                             <Text style={s.createClubHeroTitle}>
-                              새 동호회 만들기
+                              새로운 클럽 만들기
                             </Text>
                             <Text style={s.createClubHeroDescription}>
-                              새로운 골프 동호회를 만들고 회원을 초대해 보세요.
+                              새로운 클럽을 만들고 회원을 초대해 보세요
                             </Text>
-                            <TouchableOpacity
-                              style={s.createClubHeroButton}
-                              onPress={() => setCreateClubOpen(true)}
-                              activeOpacity={0.86}
-                            >
-                              <Text style={s.createClubHeroButtonText}>
-                                동호회 만들기
-                              </Text>
-                            </TouchableOpacity>
                           </View>
-                        </View>
+                        </TouchableOpacity>
                       );
                     }
 
@@ -1490,7 +1486,7 @@ function CreateClubModal({
     setSaving(true);
     try {
       await onCreate(trimmedName, subtitle.trim());
-      Alert.alert("생성 완료", "새 동호회를 만들었습니다.");
+      Alert.alert("생성 완료", "새로운 클럽을 만들었습니다.");
     } catch (error) {
       Alert.alert(
         "오류",
@@ -1517,13 +1513,13 @@ function CreateClubModal({
           onPress={() => {}}
         >
           <View style={s.modalHeader}>
-            <Text style={s.modalTitle}>새 동호회 만들기</Text>
+            <Text style={s.modalTitle}>새로운 클럽 만들기</Text>
             <TouchableOpacity style={s.closeBtn} onPress={onClose}>
               <Text style={s.closeBtnText}>닫기</Text>
             </TouchableOpacity>
           </View>
 
-          <Text style={s.createClubLabel}>동호회 이름</Text>
+          <Text style={s.createClubLabel}>클럽 이름</Text>
           <TextInput
             style={s.clubInfoInput}
             value={name}
@@ -1552,7 +1548,7 @@ function CreateClubModal({
             {saving ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Text style={s.createClubSubmitText}>동호회 만들기</Text>
+              <Text style={s.createClubSubmitText}>클럽 만들기</Text>
             )}
           </TouchableOpacity>
         </TouchableOpacity>
