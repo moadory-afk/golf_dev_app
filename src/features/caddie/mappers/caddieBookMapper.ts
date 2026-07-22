@@ -57,7 +57,7 @@ export function mapCaddieBookData(params: {
       holeNo: guide.hole_no,
       par: guide.par,
       title: holeTitle(guide),
-      summary: guide.summary,
+      summary: guide.summary ?? '',
       strategy: guide.strategy,
       caution: guide.caution,
       teeDistanceM,

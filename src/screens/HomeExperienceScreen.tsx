@@ -339,7 +339,7 @@ async function calculateLottoJackpotAmount(
     getRoundLottoEntriesByScheduleIds(scheduleIds).catch(() => []),
   ]);
   const drawByScheduleId = new Map(draws.map((draw) => [draw.scheduleId, draw]));
-  const entriesByScheduleId = entries.reduce<Record<string, typeof entries>>((acc, entry) => {
+  const entriesByScheduleId = entries.reduce<Record<string, RoundLottoEntry[]>>((acc, entry) => {
     if (!acc[entry.scheduleId]) acc[entry.scheduleId] = [];
     acc[entry.scheduleId].push(entry);
     return acc;
@@ -1456,7 +1456,7 @@ function WeatherDetailModal({
           </View>
 
           {summary ? (
-            <View style={[styles.weatherSummaryBox, { backgroundColor: palette.background, borderColor: palette.border }]}>
+            <View style={[styles.weatherSummaryBox, { backgroundColor: palette.bg, borderColor: palette.border }]}>
               <Text style={[styles.weatherSummaryText, { color: palette.text }]}>{summary}</Text>
             </View>
           ) : null}
@@ -1466,7 +1466,7 @@ function WeatherDetailModal({
             <Text style={[styles.weatherIntervalNote, { color: palette.muted }]}>기상청 시간별 · Open-Meteo 시간별</Text>
           </View>
 
-          <View style={[styles.weatherTableWrap, { borderColor: palette.border, backgroundColor: palette.background }]}>
+          <View style={[styles.weatherTableWrap, { borderColor: palette.border, backgroundColor: palette.bg }]}>
             <View style={[styles.weatherTableHeader, { borderBottomColor: palette.border }]}>
               <Text style={[styles.weatherTableTimeHeader, { color: palette.muted }]}>시간</Text>
               <View style={styles.weatherTableProviderHeader}>

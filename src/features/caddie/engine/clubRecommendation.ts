@@ -32,11 +32,18 @@ export const CLUB_ORDER: ClubKey[] = [
   'sw',
 ]
 
-function normalizeProfile(profile: UserDistanceProfile) {
-  return CLUB_ORDER.map((club) => ({
-    club,
-    distance: profile[club],
-  })).filter((item) => Number.isFinite(item.distance) && item.distance > 0)
+type ClubDistanceCandidate = {
+  club: ClubKey
+  distance: number
+}
+
+function normalizeProfile(profile: UserDistanceProfile): ClubDistanceCandidate[] {
+  return CLUB_ORDER.flatMap((club) => {
+    const distance = profile[club]
+    return typeof distance === 'number' && Number.isFinite(distance) && distance > 0
+      ? [{ club, distance }]
+      : []
+  })
 }
 
 function confidenceFromGap(gapM: number, targetDistanceM: number) {

@@ -9,11 +9,11 @@ import type {
   StrategyScore,
 } from '../types/caddie'
 
-function firstText(...values: Array<string | null | undefined>) {
+function firstText(...values: Array<string | null | undefined>): string | undefined {
   return values.map((value) => value?.trim()).find(Boolean)
 }
 
-function textFromUnknown(value: unknown) {
+function textFromUnknown(value: unknown): string {
   if (value === null || typeof value === 'undefined') return ''
   if (typeof value === 'string') return value.trim()
   if (Array.isArray(value)) return value.map(textFromUnknown).filter(Boolean).join(' ')

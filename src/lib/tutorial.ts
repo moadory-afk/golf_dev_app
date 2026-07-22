@@ -21,5 +21,7 @@ export function requestTutorialOpen() {
 
 export function subscribeTutorialOpen(listener: () => void) {
   introListeners.add(listener)
-  return () => introListeners.delete(listener)
+  return () => {
+    introListeners.delete(listener)
+  }
 }

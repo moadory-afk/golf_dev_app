@@ -47,6 +47,7 @@ import {
   type ClubNotice,
   type GolfCourse,
   type LottoAwardConfig,
+  type RoundLottoEntry,
   type RoundLottoDrawScore,
   type SavedRound,
 } from "../lib/store";
@@ -184,7 +185,7 @@ async function calculateLottoCarryoverAmount(
   const drawByScheduleId = new Map(
     draws.map((draw) => [draw.scheduleId, draw]),
   );
-  const entriesByScheduleId = entries.reduce<Record<string, typeof entries>>(
+  const entriesByScheduleId = entries.reduce<Record<string, RoundLottoEntry[]>>(
     (acc, entry) => {
       if (!acc[entry.scheduleId]) acc[entry.scheduleId] = [];
       acc[entry.scheduleId].push(entry);
@@ -792,6 +793,7 @@ export default function ClubScreen() {
             nav.navigate("RoundSchedulePrototype", {
               returnToManageMenu: true,
             }),
+          featured: false,
         },
         {
           key: "courseImages",
@@ -799,6 +801,7 @@ export default function ClubScreen() {
           subtitle: "골프장 계절별 Hero 사진을 등록합니다",
           icon: "camera" as const,
           onPress: () => setCourseImagesOpen(true),
+          featured: false,
         },
         {
           key: "heroLab",
@@ -806,6 +809,7 @@ export default function ClubScreen() {
           subtitle: "골프장 Hero 이미지를 미리보고 홈 화면에 적용합니다",
           icon: "settings" as const,
           onPress: () => nav.navigate("HeroLab"),
+          featured: false,
         },
       ]
     : [];
@@ -2450,7 +2454,8 @@ function CourseSeasonImageModal({
     }
 
     let mounted = true;
-    supabase
+    Promise.resolve(
+      supabase
       .from("golf_course_season_images")
       .select("golf_course_id, season")
       .in("golf_course_id", courseIds)
@@ -2472,8 +2477,8 @@ function CourseSeasonImageModal({
           };
         });
         setCourseSeasonAvailability(next);
-      })
-      .catch((error) => {
+      }),
+    ).catch((error: unknown) => {
         if (mounted) {
           console.warn("골프장 계절 사진 상태 조회 실패", error);
         }
@@ -2488,7 +2493,8 @@ function CourseSeasonImageModal({
     if (!selectedCourse?.id) return;
     let mounted = true;
     setLoadingImages(true);
-    supabase
+    Promise.resolve(
+      supabase
       .from("golf_course_season_images")
       .select("golf_course_id, season, image_url")
       .eq("golf_course_id", selectedCourse.id)
@@ -2506,8 +2512,9 @@ function CourseSeasonImageModal({
           next[row.season] = row.image_url;
         });
         setImages(next);
-      })
-      .catch((error) => {
+      }),
+    )
+      .catch((error: unknown) => {
         if (mounted)
           Alert.alert(
             "오류",

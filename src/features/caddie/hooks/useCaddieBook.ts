@@ -6,6 +6,7 @@ function emptyCaddieBook(params: CaddieBookRouteParams): CaddieBookData {
   return {
     courseName: params.courseName || '캐디북',
     layoutName: params.layoutName,
+    defaultTee: 'white',
     holes: [],
     hasLiveGuide: false,
   }

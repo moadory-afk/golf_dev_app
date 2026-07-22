@@ -4,4 +4,11 @@ export * from './hooks/useCaddieBook'
 export * from './types/caddie'
 export * from './types/caddieData'
 export * from './types/caddieBook'
-export * from './types/shotPlan'
+export type {
+  AIShotPlan as LegacyAIShotPlan,
+  AIShotPlanInput,
+  AIShotPlanRoundSummary,
+  AIShotPlanStep as LegacyAIShotPlanStep,
+  ScoreProbability,
+  ShotPlanStepKind,
+} from './types/shotPlan'

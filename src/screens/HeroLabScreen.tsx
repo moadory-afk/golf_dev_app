@@ -22,6 +22,7 @@ function makePreviewRound(key: CourseHeroKey): HomeHeroRound {
     courseName: asset.courseName,
     layoutName: '대표',
     dday: 'D-7',
+    date: '2026-07-18',
     dateLabel: '7.18(토)',
     teeTime: '08:00',
     memberCount: 4,

@@ -69,7 +69,7 @@ interface UserAvatarDisplayProps {
 export function UserAvatarDisplay({ avatarUrl, icon, initial, size = 64 }: UserAvatarDisplayProps) {
   const circleStyle: any = {
     width: size, height: size, borderRadius: size / 2,
-    backgroundColor, overflow: 'hidden',
+    backgroundColor: C.gold, overflow: 'hidden',
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)',
   }

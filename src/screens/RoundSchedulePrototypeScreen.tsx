@@ -16,6 +16,7 @@ import {
   type RoundAttendanceLabel,
   type RoundAttendanceMode,
   type RoundScheduleStatus,
+  type ScheduleAwardConfig,
   type ScheduledRound,
   type ScheduledRoundGroup,
   type ScheduledRoundGroupMember,
@@ -639,19 +640,22 @@ export default function RoundSchedulePrototypeScreen() {
     setSelectedAwardItems(shuffled.slice(0, awardCount).map((item) => item.id))
   }
 
-  function buildAwardConfig(items = selectedAwardItems, count = awardCount) {
+  function buildAwardConfig(items = selectedAwardItems, count = awardCount): ScheduleAwardConfig {
     const normalized = normalizeAwardSelection(items, awardWinnerCounts, count)
     const awardItems = normalized.items
-    const winnerCounts = Object.fromEntries(
+    const winnerCounts: Record<string, number> = Object.fromEntries(
       Object.entries(normalized.counts)
         .filter(([key, value]) => awardItems.includes(key) && multiWinnerSpecialAwardKeys.has(key) && value > 1)
         .map(([key, value]) => [key, value])
     )
     const visibleManualWinners = manualWinnersFromRows(awardResultRows)
-    const manualWinners = Object.fromEntries(
-      Object.entries({ ...(draft.awardConfig?.manualWinners ?? {}), ...visibleManualWinners })
-        .filter(([key, names]) => awardItems.includes(key) && key !== 'last' && names.length > 0)
-        .map(([key, names]) => [key, names])
+    const manualWinnerEntries = Object.entries({ ...(draft.awardConfig?.manualWinners ?? {}), ...visibleManualWinners })
+      .filter((entry): entry is [string, string[]] => {
+        const [key, names] = entry
+        return awardItems.includes(key) && key !== 'last' && Array.isArray(names) && names.length > 0
+      })
+    const manualWinners: Record<string, string[]> = Object.fromEntries(
+      manualWinnerEntries.map(([key, names]) => [key, names])
     )
     return {
       count,
@@ -741,7 +745,7 @@ export default function RoundSchedulePrototypeScreen() {
       .filter((member) => selected.has(member.name) || !taken.has(member.name))
   }
 
-  function manualWinnersFromRows(rows: AwardResultRow[]) {
+  function manualWinnersFromRows(rows: AwardResultRow[]): Record<string, string[]> {
     return Object.fromEntries(
       rows
         .filter((row) => row.awardKey !== 'last')
