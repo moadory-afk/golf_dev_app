@@ -27,14 +27,16 @@ export type RoundWeather = {
 };
 
 type GeoItem = { lat: number; lon: number; name?: string };
-type ForecastItem = {
-  dt: number;
-  main?: { temp?: number };
-  weather?: { main?: string; description?: string; icon?: string }[];
-  wind?: { speed?: number; deg?: number };
-  pop?: number;
+type OpenMeteoForecastResponse = {
+  hourly?: {
+    time?: string[];
+    temperature_2m?: number[];
+    precipitation_probability?: Array<number | null>;
+    weather_code?: number[];
+    wind_speed_10m?: number[];
+  };
 };
-type ForecastResponse = { list?: ForecastItem[] };
+type OpenMeteoGeoResponse = { results?: Array<{ latitude: number; longitude: number; name?: string }> };
 type KmaFunctionHour = {
   date: string;
   time: string;
@@ -47,7 +49,6 @@ type KmaFunctionHour = {
 };
 type KmaFunctionResponse = { hours?: KmaFunctionHour[]; issuedAt?: string };
 
-const OPENWEATHER_API_KEY = process.env.EXPO_PUBLIC_OPENWEATHER_API_KEY;
 const CACHE_TTL_MS = 1000 * 60 * 60 * 3;
 const GEO_CACHE_TTL_MS = 1000 * 60 * 60 * 24;
 
@@ -62,14 +63,16 @@ function normalizeCourseName(name: string) {
     .trim();
 }
 
-function weatherEmoji(icon?: string, main?: string) {
-  if (icon?.includes("09") || icon?.includes("10") || /rain/i.test(main ?? "")) return "🌧️";
-  if (icon?.includes("11") || /thunder/i.test(main ?? "")) return "⛈️";
-  if (icon?.includes("13") || /snow/i.test(main ?? "")) return "❄️";
-  if (icon?.includes("50") || /mist|fog|haze/i.test(main ?? "")) return "🌫️";
-  if (icon?.includes("02")) return "🌤️";
-  if (icon?.includes("03") || icon?.includes("04") || /cloud/i.test(main ?? "")) return "☁️";
-  return "☀️";
+function openMeteoCondition(code?: number) {
+  if (code === 0) return { condition: "맑음", icon: "☀️" };
+  if (code === 1 || code === 2) return { condition: "구름조금", icon: "🌤️" };
+  if (code === 3) return { condition: "흐림", icon: "☁️" };
+  if (code === 45 || code === 48) return { condition: "안개", icon: "🌫️" };
+  if ([51, 53, 55, 56, 57].includes(code ?? -1)) return { condition: "이슬비", icon: "🌦️" };
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code ?? -1)) return { condition: "비", icon: "🌧️" };
+  if ([71, 73, 75, 77, 85, 86].includes(code ?? -1)) return { condition: "눈", icon: "❄️" };
+  if ([95, 96, 99].includes(code ?? -1)) return { condition: "뇌우", icon: "⛈️" };
+  return { condition: "날씨", icon: "☀️" };
 }
 
 function kmaCondition(sky?: number, pty?: number) {
@@ -99,20 +102,32 @@ function formatHour(timestamp: number) {
   });
 }
 
-function pickFiveOpenWeatherHours(list: ForecastItem[], date: string, time?: string) {
+function timestampFromOpenMeteoTime(value: string) {
+  return new Date(`${value}:00+09:00`).getTime() / 1000;
+}
+
+function pickFiveOpenMeteoHours(data: OpenMeteoForecastResponse, date: string, time?: string) {
   const start = targetTimestamp(date, time);
   const end = start + 5 * 60 * 60;
-  return list
-    .filter((item) => item.dt >= start && item.dt <= end)
-    .map<RoundWeatherHour>((item) => {
-      const weather = item.weather?.[0];
+  const hourly = data.hourly;
+  const times = hourly?.time ?? [];
+  return times
+    .map((timeValue, index) => ({ timeValue, index, timestamp: timestampFromOpenMeteoTime(timeValue) }))
+    .filter((item) => item.timestamp >= start && item.timestamp <= end)
+    .sort((a, b) => a.timestamp - b.timestamp)
+    .slice(0, 5)
+    .map<RoundWeatherHour>(({ index, timestamp }) => {
+      const weather = openMeteoCondition(hourly?.weather_code?.[index]);
+      const tempC = Number(hourly?.temperature_2m?.[index]);
+      const pop = hourly?.precipitation_probability?.[index];
+      const windMs = Number(hourly?.wind_speed_10m?.[index]);
       return {
-        time: formatHour(item.dt),
-        tempC: Math.round(item.main?.temp ?? 0),
-        condition: weather?.description ?? weather?.main ?? "날씨",
-        icon: weatherEmoji(weather?.icon, weather?.main),
-        windMs: typeof item.wind?.speed === "number" ? Math.round(item.wind.speed * 10) / 10 : undefined,
-        pop: typeof item.pop === "number" ? Math.round(item.pop * 100) : undefined,
+        time: formatHour(timestamp),
+        tempC: Number.isFinite(tempC) ? Math.round(tempC) : 0,
+        condition: weather.condition,
+        icon: weather.icon,
+        windMs: Number.isFinite(windMs) ? Math.round(windMs * 10) / 10 : undefined,
+        pop: typeof pop === "number" ? Math.round(pop) : undefined,
       };
     });
 }
@@ -176,13 +191,13 @@ function hasCoordinate(latitude?: number | null, longitude?: number | null) {
 }
 
 async function geocodeCourse(courseName: string, region?: string): Promise<GeoItem | null> {
-  if (!OPENWEATHER_API_KEY) return null;
   const normalizedName = normalizeCourseName(courseName);
   return getCachedAsync(`weather-geo:${normalizedName}:${region ?? ""}`, GEO_CACHE_TTL_MS, async () => {
-    const q = encodeURIComponent([normalizedName, region, "Korea"].filter(Boolean).join(" "));
-    const res = await fetch(`https://api.openweathermap.org/geo/1.0/direct?q=${q}&limit=1&appid=${OPENWEATHER_API_KEY}`);
+    const q = encodeURIComponent([normalizedName, region].filter(Boolean).join(" "));
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${q}&count=1&language=ko&format=json`);
     if (!res.ok) return null;
-    return ((await res.json()) as GeoItem[])?.[0] ?? null;
+    const item = ((await res.json()) as OpenMeteoGeoResponse).results?.[0];
+    return item ? { lat: item.latitude, lon: item.longitude, name: item.name } : null;
   }, { shouldCache: (value) => value !== null });
 }
 
@@ -194,11 +209,19 @@ async function fetchKmaForecast(latitude: number, longitude: number, date: strin
   return { hours: pickFiveKmaHours(data.hours, date, time), issuedAt: data.issuedAt };
 }
 
-async function fetchOpenWeatherForecast(geo: GeoItem | null, date: string, time?: string) {
-  if (!OPENWEATHER_API_KEY || !geo) return [] as RoundWeatherHour[];
-  const res = await fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${geo.lat}&lon=${geo.lon}&appid=${OPENWEATHER_API_KEY}&units=metric&lang=kr`);
+async function fetchOpenMeteoForecast(geo: GeoItem | null, date: string, time?: string) {
+  if (!geo) return [] as RoundWeatherHour[];
+  const params = new URLSearchParams({
+    latitude: String(geo.lat),
+    longitude: String(geo.lon),
+    hourly: "temperature_2m,precipitation_probability,weather_code,wind_speed_10m",
+    timezone: "Asia/Seoul",
+    wind_speed_unit: "ms",
+    forecast_days: "7",
+  });
+  const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`);
   if (!res.ok) return [] as RoundWeatherHour[];
-  return pickFiveOpenWeatherHours(((await res.json()) as ForecastResponse).list ?? [], date, time);
+  return pickFiveOpenMeteoHours((await res.json()) as OpenMeteoForecastResponse, date, time);
 }
 
 export async function getWeatherForRound(params: {
@@ -211,15 +234,15 @@ export async function getWeatherForRound(params: {
     : params.courseName?.trim() ? await geocodeCourse(params.courseName, params.region) : null;
   if (!geo) return null;
   const coordinateKey = `${geo.lat},${geo.lon}`;
-  const cacheKey = `@gogopar_weather_compare_v3:${coordinateKey}:${params.date}:${params.time ?? ""}`;
-  return getCachedAsync(`weather-compare-v3:${coordinateKey}:${params.date}:${params.time ?? ""}`, CACHE_TTL_MS, async () => {
+  const cacheKey = `@gogopar_weather_compare_v4:${coordinateKey}:${params.date}:${params.time ?? ""}`;
+  return getCachedAsync(`weather-compare-v4:${coordinateKey}:${params.date}:${params.time ?? ""}`, CACHE_TTL_MS, async () => {
     const cached = await readCache(cacheKey);
     if (cached) return cached;
-    const [kma, openWeatherHours] = await Promise.all([
+    const [kma, openMeteoHours] = await Promise.all([
       fetchKmaForecast(geo.lat, geo.lon, params.date, params.time).catch(() => ({ hours: [], issuedAt: undefined })),
-      fetchOpenWeatherForecast(geo, params.date, params.time).catch(() => []),
+      fetchOpenMeteoForecast(geo, params.date, params.time).catch(() => []),
     ]);
-    const primaryHours = kma.hours.length ? kma.hours : openWeatherHours;
+    const primaryHours = kma.hours.length ? kma.hours : openMeteoHours;
     if (!primaryHours.length) return null;
     const first = primaryHours[0];
     const fiveHour = summarizeFiveHourForecast(primaryHours);
@@ -228,7 +251,7 @@ export async function getWeatherForRound(params: {
       windMs: first.windMs, pop: first.pop,
       fiveHourSummary: fiveHour.summary, fiveHourDetail: fiveHour.detail,
       hourlyForecast: kma.hours,
-      openWeatherHourlyForecast: openWeatherHours,
+      openWeatherHourlyForecast: openMeteoHours,
       kmaIssuedAt: kma.issuedAt,
       fetchedAt: new Date().toISOString(),
     };

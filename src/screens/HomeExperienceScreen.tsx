@@ -1459,7 +1459,7 @@ function WeatherDetailModal({
 
           <View style={styles.weatherSectionHeader}>
             <Text style={[styles.weatherSectionTitle, { color: palette.text }]}>라운딩 시간대별 예보 비교</Text>
-            <Text style={[styles.weatherIntervalNote, { color: palette.muted }]}>기상청 시간별 · OpenWeather 3시간 간격</Text>
+            <Text style={[styles.weatherIntervalNote, { color: palette.muted }]}>기상청 시간별 · Open-Meteo 시간별</Text>
           </View>
 
           <View style={[styles.weatherTableWrap, { borderColor: palette.border, backgroundColor: palette.background }]}>
@@ -1475,7 +1475,7 @@ function WeatherDetailModal({
                 </View>
               </View>
               <View style={styles.weatherTableProviderHeader}>
-                <Text style={[styles.weatherTableProviderTitle, { color: palette.text }]}>OpenWeather</Text>
+                <Text style={[styles.weatherTableProviderTitle, { color: palette.text }]}>Open-Meteo</Text>
                 <View style={styles.weatherTableMetricRow}>
                   <Text style={[styles.weatherTableMetricLabel, { color: palette.muted }]}>날씨</Text>
                   <Text style={[styles.weatherTableMetricLabel, { color: palette.muted }]}>온도</Text>
@@ -1503,7 +1503,7 @@ function WeatherDetailModal({
               )}
             </ScrollView>
           </View>
-          <Text style={[styles.weatherSourceText, { color: palette.muted }]}>기상청 단기예보{round?.kmaIssuedAt ? ` · ${round.kmaIssuedAt} 발표` : ""}</Text>
+          <Text style={[styles.weatherSourceText, { color: palette.muted }]}>기상청 단기예보 · Open-Meteo{round?.kmaIssuedAt ? ` · ${round.kmaIssuedAt} 발표` : ""}</Text>
         </View>
       </View>
     </Modal>

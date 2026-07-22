@@ -985,9 +985,6 @@ function HeroBottomSummary({
                   activeOpacity={0.84}
                 >
                   <Image source={app.icon} style={styles.mapOptionIcon} resizeMode="cover" />
-                  <Text style={styles.mapOptionText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
-                    {app.label}
-                  </Text>
                   <Text style={styles.mapOptionEstimate} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78}>
                     {routeTimeByProvider?.[app.id] ?? fallbackMapEstimateText}
                   </Text>
@@ -1561,20 +1558,12 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     marginBottom: 9,
   },
-  mapOptionText: {
+  mapOptionEstimate: {
     color: "#111827",
     fontSize: 13,
     lineHeight: 17,
     fontWeight: "900",
     textAlign: "center",
-  },
-  mapOptionEstimate: {
-    color: "#6B7280",
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: "800",
-    textAlign: "center",
-    marginTop: 3,
   },
   mapCancel: {
     minHeight: 44,
