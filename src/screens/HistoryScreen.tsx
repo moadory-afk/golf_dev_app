@@ -21,11 +21,12 @@ import { getRoundSchedules, type ScheduledRound } from '../lib/roundSchedule'
 import { calcSettlement, fmtKRW } from '../features/settlement'
 import { C } from '../theme'
 import { EmojiIcon } from '../components/EmojiIcon'
-import { Icon } from '../components/Icon'
 import { TopActionButtons } from '../components/TopActionButtons'
 import { ImageCropModal, type ImageCropRect } from '../components/ImageCropModal'
+import { SegmentedIconTabs, type SegmentedIconTab } from '../components/SegmentedIconTabs'
 import { getCourseHeroImageSource } from '../data/courseHeroImages'
 import { uploadRoundPhoto } from '../lib/roundPhotos'
+import { getOptimizedRemoteImageUrl } from '../lib/imageOptimization'
 import type { MainTabParamList, RootStackParamList } from '../navigation/types'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
@@ -40,7 +41,7 @@ const MULTI_SPECIAL_AWARD_KEYS = new Set(
     .filter((item) => item.id !== 'last')
     .map((item) => item.id),
 )
-const HISTORY_TABS: Array<{ value: Tab; label: string; icon: string }> = [
+const HISTORY_TABS: Array<SegmentedIconTab<Tab>> = [
   { value: 'byRound', label: '라운딩', icon: 'flag' },
   { value: 'club', label: '클럽랭킹', icon: 'chart' },
   { value: 'hall', label: '기네스북', icon: 'trophy' },
@@ -397,16 +398,7 @@ export default function HistoryScreen() {
       <View style={[s.topActions, { paddingTop: insets.top + 10 }]}>
         <TopActionButtons />
       </View>
-      <View style={s.tabs}>
-        {HISTORY_TABS.map((item) => (
-          <TouchableOpacity key={item.value} style={[s.tab, tab === item.value && s.tabActive]} onPress={() => setTab(item.value)}>
-            <View style={s.tabContent}>
-              <Icon name={item.icon as any} size={13} color={tab === item.value ? C.green : C.muted} strokeWidth={2} />
-              <Text style={[s.tabText, tab === item.value && s.tabTextActive]}>{item.label}</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <SegmentedIconTabs items={HISTORY_TABS} value={tab} onChange={setTab} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
@@ -658,6 +650,10 @@ function ScheduledRoundCard({ schedule, index, totalCount, width, height }: { sc
   const courseName = schedule.courseName || schedule.course || ''
   const layoutName = schedule.layoutName || ''
   const courseLabel = [courseName, layoutName].filter(Boolean).join(' · ')
+  const optimizedHeroImageUrl = useMemo(
+    () => getOptimizedRemoteImageUrl(schedule.heroImageUrl, { width: 720, height: 360, quality: 76 }),
+    [schedule.heroImageUrl],
+  )
   const toggleFlip = () => {
     const next = !flipped
     Animated.spring(flip, { toValue: next ? 1 : 0, friction: 8, tension: 72, useNativeDriver: true }).start()
@@ -677,7 +673,7 @@ function ScheduledRoundCard({ schedule, index, totalCount, width, height }: { sc
       <Animated.View pointerEvents={flipped ? 'none' : 'auto'} style={[s.flipFace, { opacity: frontOpacity, transform: [{ perspective: 1200 }, { rotateY: frontRotate }] }]}>
         <TouchableOpacity activeOpacity={0.96} style={s.flipTouch} onPress={toggleFlip}>
           <View style={s.roundHero}>
-            <ImageBackground source={schedule.heroImageUrl ? { uri: schedule.heroImageUrl } : getCourseHeroImageSource(courseName)} style={s.roundPhotoHeader} imageStyle={s.roundHeroImage}>
+            <ImageBackground source={optimizedHeroImageUrl ? { uri: optimizedHeroImageUrl } : getCourseHeroImageSource(courseName)} style={s.roundPhotoHeader} imageStyle={s.roundHeroImage}>
               <View style={s.roundHeroShade} />
               <View style={s.roundHeroTopRow}>
                 <View style={s.roundCounter}><Text style={s.roundCounterText}>{index + 1} / {totalCount}</Text></View>
@@ -833,6 +829,10 @@ function RoundFlipCard({
   const scheduleHeroImageUrl = round.scheduleId
     ? schedules.find((item) => item.id === round.scheduleId)?.heroImageUrl
     : undefined
+  const optimizedScheduleHeroImageUrl = useMemo(
+    () => getOptimizedRemoteImageUrl(scheduleHeroImageUrl, { width: 720, height: 360, quality: 76 }),
+    [scheduleHeroImageUrl],
+  )
   const par = hasResults ? totalPar(round.pars) : 0
   const totals = hasResults ? round.players.map((p) => playerTotal(p.strokes)) : []
   const best = totals.length > 0 ? Math.min(...totals) : 0
@@ -1175,7 +1175,7 @@ function RoundFlipCard({
       <Animated.View pointerEvents={flipped ? 'none' : 'auto'} style={[s.flipFace, { opacity: frontOpacity, transform: [{ perspective: 1200 }, { rotateY: frontRotate }] }]}>
         <TouchableOpacity activeOpacity={0.96} style={s.flipTouch} onPress={toggleFlip}>
           <View style={s.roundHero}>
-            <ImageBackground source={coverPhoto ? { uri: coverPhoto } : scheduleHeroImageUrl ? { uri: scheduleHeroImageUrl } : getCourseHeroImageSource(round.courseName)} style={s.roundPhotoHeader} imageStyle={s.roundHeroImage}>
+            <ImageBackground source={coverPhoto ? { uri: coverPhoto } : optimizedScheduleHeroImageUrl ? { uri: optimizedScheduleHeroImageUrl } : getCourseHeroImageSource(round.courseName)} style={s.roundPhotoHeader} imageStyle={s.roundHeroImage}>
               <View style={s.roundHeroShade} />
               <View style={s.roundHeroTopRow}>
                 <View style={s.roundCounter}><Text style={s.roundCounterText}>{index + 1} / {totalCount}</Text></View>
@@ -2683,12 +2683,6 @@ const s = StyleSheet.create({
   headerTitle: { color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: -0.3 },
   profileBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' },
   profileInitial: { color: '#fff', fontSize: 16, fontWeight: '900' },
-  tabs: { flexDirection: 'row', backgroundColor: C.greenLight, marginHorizontal: 12, marginTop: 12, marginBottom: 0, borderRadius: 50, padding: 3 },
-  tab: { flex: 1, paddingVertical: 5, alignItems: 'center', borderRadius: 50 },
-  tabActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5, elevation: 2 },
-  tabContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
-  tabText: { fontSize: 15, color: C.muted, fontWeight: '700' },
-  tabTextActive: { color: C.green, fontWeight: '900' },
   card: {
     backgroundColor: C.card, borderRadius: 20, padding: 18, marginBottom: 14,
     shadowColor: '#1a6b44', shadowOpacity: 0.07, shadowRadius: 12, shadowOffset: { width: 0, height: 3 }, elevation: 3,

@@ -76,6 +76,7 @@ import {
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 import { isCompactWidth } from "../lib/responsive";
 import { notifyHomeDashboardChanged } from "../lib/homeDashboardEvents";
+import { getOptimizedRemoteImageUrl } from "../lib/imageOptimization";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type ClubRoute = RouteProp<MainTabParamList, "Club">;
@@ -98,6 +99,23 @@ const CLUB_HERO_MIN_WIDTH = 280;
 const APP_URL = "https://golf-seven-psi.vercel.app";
 const LOTTO_JACKPOT_BASE = 50000;
 const LOTTO_JACKPOT_STEP = 10000;
+
+async function uploadClubCoverImage(clubId: string, uri: string) {
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  const path = `club-covers/${clubId}.jpg`;
+
+  const { error } = await supabase.storage
+    .from("course-images")
+    .upload(path, blob, {
+      contentType: "image/jpeg",
+      upsert: true,
+    });
+  if (error) throw error;
+
+  const { data } = supabase.storage.from("course-images").getPublicUrl(path);
+  return `${data.publicUrl}?v=${Date.now()}`;
+}
 
 function formatNoticeDate(value: string) {
   if (!value) return "-";
@@ -1168,6 +1186,10 @@ export default function ClubScreen() {
                     }
 
                     const heroClub = item.club;
+                    const optimizedCoverImageUrl = getOptimizedRemoteImageUrl(
+                      heroClub.coverImage,
+                      { width: Math.ceil(clubHeroWidth), height: Math.ceil(clubHeroHeight), quality: 76 },
+                    );
                     return (
                       <View
                         style={[
@@ -1176,7 +1198,7 @@ export default function ClubScreen() {
                         ]}
                       >
                         <Image
-                          source={{ uri: heroClub.coverImage || CLUB_HERO_IMAGE }}
+                          source={{ uri: optimizedCoverImageUrl || CLUB_HERO_IMAGE }}
                           style={s.clubHeroImage}
                           resizeMode="cover"
                         />
@@ -1720,19 +1742,14 @@ function ClubInfoModal({
     try {
       const compressed = await ImageManipulator.manipulateAsync(
         pendingCoverCrop.uri,
-        [{ crop }, { resize: { width: 720 } }],
+        [{ crop }, { resize: { width: 1200 } }],
         {
-          compress: 0.45,
+          compress: 0.72,
           format: ImageManipulator.SaveFormat.JPEG,
-          base64: true,
         },
       );
-      const dataUri = `data:image/jpeg;base64,${compressed.base64}`;
-      if (dataUri.length > 220000) {
-        Alert.alert("사진이 너무 큽니다", "더 작은 사진을 선택해주세요.");
-        return;
-      }
-      setEditCoverImage(dataUri);
+      const publicUrl = await uploadClubCoverImage(club.id, compressed.uri);
+      setEditCoverImage(publicUrl);
     } catch {
       Alert.alert("오류", "사진 처리에 실패했습니다.");
     } finally {
@@ -1775,7 +1792,13 @@ function ClubInfoModal({
                     activeOpacity={0.86}
                   >
                     <Image
-                      source={{ uri: editCoverImage || CLUB_HERO_IMAGE }}
+                      source={{
+                        uri: getOptimizedRemoteImageUrl(editCoverImage, {
+                          width: 720,
+                          height: 420,
+                          quality: 76,
+                        }) || editCoverImage || CLUB_HERO_IMAGE,
+                      }}
                       style={s.clubCoverPreview}
                       resizeMode="cover"
                     />
@@ -2624,7 +2647,13 @@ function CourseSeasonImageModal({
                             >
                               {imageUrl ? (
                                 <Image
-                                  source={{ uri: imageUrl }}
+                                  source={{
+                                    uri: getOptimizedRemoteImageUrl(imageUrl, {
+                                      width: 520,
+                                      height: 260,
+                                      quality: 76,
+                                    }) || imageUrl,
+                                  }}
                                   style={s.seasonImagePreview}
                                   resizeMode="cover"
                                 />
