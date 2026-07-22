@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   useWindowDimensions,
   Platform,
+  PanResponder,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -23,7 +24,7 @@ import {
 } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import {
@@ -276,11 +277,11 @@ export default function ClubScreen() {
   );
   const { activeClub: club, myClubs, setActiveClub, refreshClubs } = useClub();
 
-  const clubHeroPageCount = myClubs.length + 1;
   const clubHeroItems: ClubHeroItem[] = [
-    ...myClubs.map((heroClub) => ({ kind: "club" as const, club: heroClub })),
+    ...(club ? [{ kind: "club" as const, club }] : []),
     { kind: "create" as const },
   ];
+  const clubHeroPageCount = clubHeroItems.length;
   const clubHeroClubIds = myClubs.map((item) => item.id).join("|");
   const forceClubScreenRefresh = refreshKey > 0;
   const { data, loading } = useAsync(
@@ -367,15 +368,10 @@ export default function ClubScreen() {
   }, [club?.id]);
 
   useEffect(() => {
-    if (!club?.id || clubHeroWidth <= 0 || myClubs.length === 0) return;
-    const nextIndex = myClubs.findIndex((item) => item.id === club.id);
-    if (nextIndex < 0) return;
-    setClubHeroIndex(nextIndex);
+    if (!club?.id || clubHeroWidth <= 0) return;
+    setClubHeroIndex(0);
     requestAnimationFrame(() => {
-      clubHeroScrollRef.current?.scrollToOffset({
-        offset: nextIndex * clubHeroWidth,
-        animated: false,
-      });
+      clubHeroScrollRef.current?.scrollToOffset({ offset: 0, animated: false });
     });
   }, [club?.id, clubHeroWidth, clubHeroClubIds]);
 
@@ -387,13 +383,38 @@ export default function ClubScreen() {
         Math.min(clubHeroPageCount - 1, Math.round(offsetX / clubHeroWidth)),
       );
       setClubHeroIndex(nextIndex);
-      const nextClub = myClubs[nextIndex];
-      if (nextClub && nextClub.id !== club?.id) {
-        setActiveClub(nextClub);
-        setRefreshKey((key) => key + 1);
-      }
     },
-    [club?.id, clubHeroPageCount, clubHeroWidth, myClubs, setActiveClub],
+    [clubHeroPageCount, clubHeroWidth],
+  );
+
+  const handleVerticalClubSwipe = useCallback((direction: "next" | "previous") => {
+    if (!club || myClubs.length < 2) return;
+    const currentIndex = myClubs.findIndex((item) => item.id === club.id);
+    if (currentIndex < 0) return;
+    const offset = direction === "next" ? 1 : -1;
+    const nextIndex = (currentIndex + offset + myClubs.length) % myClubs.length;
+    const nextClub = myClubs[nextIndex];
+    if (!nextClub || nextClub.id === club.id) return;
+    setActiveClub(nextClub);
+    setRefreshKey((key) => key + 1);
+  }, [club, myClubs, setActiveClub]);
+
+  const verticalClubPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponderCapture: (_event, gesture) =>
+          Math.abs(gesture.dy) >= 18 &&
+          Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.25,
+        onMoveShouldSetPanResponder: (_event, gesture) =>
+          Math.abs(gesture.dy) >= 18 &&
+          Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.25,
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderRelease: (_event, gesture) => {
+          if (Math.abs(gesture.dy) < 44) return;
+          handleVerticalClubSwipe(gesture.dy < 0 ? "next" : "previous");
+        },
+      }),
+    [handleVerticalClubSwipe],
   );
 
   const activeClubIdRef = useRef<string | null>(club?.id ?? null);
@@ -414,15 +435,7 @@ export default function ClubScreen() {
         (entry) => entry.isViewable && entry.index !== null,
       );
       if (!visibleItem || visibleItem.index === null) return;
-
       setClubHeroIndex(visibleItem.index);
-      if (visibleItem.item.kind !== "club") return;
-
-      const nextClub = visibleItem.item.club;
-      if (nextClub.id !== activeClubIdRef.current) {
-        setActiveClubRef.current(nextClub);
-        setRefreshKey((key) => key + 1);
-      }
     },
   ).current;
 

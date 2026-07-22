@@ -8,6 +8,7 @@ import {
   NativeSyntheticEvent,
   Linking,
   Modal,
+  PanResponder,
   Platform,
   ScrollView,
   StyleSheet,
@@ -108,6 +109,7 @@ type PremiumHomeHeroSectionProps = {
   activeIndex?: number;
   onActiveIndexChange?: (index: number) => void;
   departureBufferMinutes?: number;
+  onClubSwipe?: (direction: "next" | "previous") => void;
 };
 
 function PremiumHomeHeroSectionComponent({
@@ -134,6 +136,7 @@ function PremiumHomeHeroSectionComponent({
   activeIndex: controlledActiveIndex,
   onActiveIndexChange,
   departureBufferMinutes = 40,
+  onClubSwipe,
 }: PremiumHomeHeroSectionProps) {
   const { palette } = useSkin();
   const [internalActiveIndex, setInternalActiveIndex] = useState(0);
@@ -161,6 +164,26 @@ function PremiumHomeHeroSectionComponent({
     if (isAdmin) items.push({ kind: "create" });
     return items;
   }, [hasRounds, isAdmin, rounds]);
+
+  const verticalClubPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponderCapture: (_event, gesture) =>
+          Boolean(onClubSwipe) &&
+          Math.abs(gesture.dy) >= 18 &&
+          Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.25,
+        onMoveShouldSetPanResponder: (_event, gesture) =>
+          Boolean(onClubSwipe) &&
+          Math.abs(gesture.dy) >= 18 &&
+          Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.25,
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderRelease: (_event, gesture) => {
+          if (!onClubSwipe || Math.abs(gesture.dy) < 44) return;
+          onClubSwipe(gesture.dy < 0 ? "next" : "previous");
+        },
+      }),
+    [onClubSwipe],
+  );
 
   const updateActiveIndex = useCallback((nextIndex: number) => {
     const clampedIndex = Math.max(0, Math.min(nextIndex, totalCount - 1));
@@ -200,6 +223,7 @@ function PremiumHomeHeroSectionComponent({
   return (
     <View style={styles.shell}>
       <View
+        {...verticalClubPanResponder.panHandlers}
         onLayout={(event) => {
           const nextWidth = Math.round(event.nativeEvent.layout.width);
           if (nextWidth > 0 && nextWidth !== measuredHeroWidth)

@@ -751,7 +751,7 @@ export default function HomeExperienceScreen() {
   const { palette } = useSkin();
   const insets = useSafeAreaInsets();
   const nav = useNavigation<Nav>();
-  const { activeClub: club, clubsLoaded } = useClub();
+  const { activeClub: club, myClubs, clubsLoaded, setActiveClub } = useClub();
   const { name: myName, nickname, userId, homeLatitude, homeLongitude, departureBufferMinutes } = useUserProfile();
   const displayName = nickname || myName || "골퍼";
   const { dashboard, loading, error, refresh } = useHomeDashboard({
@@ -1072,6 +1072,19 @@ export default function HomeExperienceScreen() {
         .join("\n"),
     );
   }, []);
+
+  const handleHeroClubSwipe = useCallback((direction: "next" | "previous") => {
+    if (!club || myClubs.length < 2) return;
+    const currentIndex = myClubs.findIndex((item) => item.id === club.id);
+    if (currentIndex < 0) return;
+    const offset = direction === "next" ? 1 : -1;
+    const nextIndex = (currentIndex + offset + myClubs.length) % myClubs.length;
+    const nextClub = myClubs[nextIndex];
+    if (nextClub && nextClub.id !== club.id) {
+      setActiveRoundIndex(0);
+      setActiveClub(nextClub);
+    }
+  }, [club, myClubs, setActiveClub]);
 
   const handleHeroActiveIndexChange = useCallback((index: number) => {
     setActiveRoundIndex(index);
@@ -1413,6 +1426,7 @@ export default function HomeExperienceScreen() {
                   activeIndex={activeRoundIndex}
                   onActiveIndexChange={handleHeroActiveIndexChange}
                   departureBufferMinutes={departureBufferMinutes}
+                  onClubSwipe={handleHeroClubSwipe}
                 />
               </PremiumHomeMotion>
             ),

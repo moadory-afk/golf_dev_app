@@ -581,6 +581,9 @@ function scheduleParticipantCount(schedule: ScheduledRound) {
 }
 
 function ScheduledRoundCard({ schedule, index, totalCount, width, height }: { schedule: ScheduledRound; index: number; totalCount: number; width: number; height: number }) {
+  const nav = useNavigation<Nav>()
+  const { activeClub } = useClub()
+  const isAdmin = activeClub?.role === 'admin'
   const [flipped, setFlipped] = useState(false)
   const [detailTab, setDetailTab] = useState<RoundDetailTab>('regular')
   const flip = useRef(new Animated.Value(0)).current
@@ -617,6 +620,18 @@ function ScheduledRoundCard({ schedule, index, totalCount, width, height }: { sc
                 <View style={s.roundCounter}><Text style={s.roundCounterText}>{index + 1} / {totalCount}</Text></View>
                 <View style={s.heroProgressBadge}><Text style={s.heroStatusText}>기록 대기</Text></View>
               </View>
+              {isAdmin ? (
+                <TouchableOpacity
+                  style={s.roundManageButton}
+                  onPress={(event) => {
+                    event.stopPropagation()
+                    nav.navigate('RoundSchedulePrototype', { editScheduleId: schedule.id, modalOnly: true })
+                  }}
+                  activeOpacity={0.84}
+                >
+                  <Text style={s.roundManageButtonText}>수정</Text>
+                </TouchableOpacity>
+              ) : null}
               <View style={s.heroCourseBlock}>
                 <Text style={s.heroDate}>{schedule.date ? schedule.date.replace(/-/g, '.') : ''}{schedule.time ? `  ${schedule.time}` : ''}</Text>
                 <Text style={s.heroCourseName} numberOfLines={2}>{courseLabel}</Text>
@@ -716,6 +731,7 @@ function RoundFlipCard({
 }) {
   const nav = useNavigation<Nav>()
   const { activeClub } = useClub()
+  const isAdmin = activeClub?.role === 'admin'
   const [flipped, setFlipped] = useState(false)
   const [detailTab, setDetailTab] = useState<RoundDetailTab>('regular')
   const [regularBasis, setRegularBasis] = useState<'score' | 'handicap'>('score')
@@ -917,6 +933,18 @@ function RoundFlipCard({
                   <View style={round.isComplete ? s.heroCompleteBadge : s.heroProgressBadge}><Text style={s.heroStatusText}>{round.isComplete ? '라운드 완료' : isScheduleOnly ? '기록 대기' : '라운드 중'}</Text></View>
                 </View>
               </View>
+              {isAdmin && round.scheduleId ? (
+                <TouchableOpacity
+                  style={s.roundManageButton}
+                  onPress={(event) => {
+                    event.stopPropagation()
+                    nav.navigate('RoundSchedulePrototype', { editScheduleId: round.scheduleId, modalOnly: true })
+                  }}
+                  activeOpacity={0.84}
+                >
+                  <Text style={s.roundManageButtonText}>수정</Text>
+                </TouchableOpacity>
+              ) : null}
               <TouchableOpacity
                 activeOpacity={0.84}
                 disabled={photoSaving || isScheduleOnly}
@@ -2057,6 +2085,8 @@ const s = StyleSheet.create({
   roundHeroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   roundCounter: { backgroundColor: 'rgba(7,22,18,0.58)', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 6 },
   roundCounterText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  roundManageButton: { position: 'absolute', right: 14, bottom: 52, zIndex: 21, elevation: 21, minWidth: 62, minHeight: 31, borderRadius: 16, backgroundColor: 'rgba(221,245,231,0.94)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.72)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  roundManageButtonText: { color: '#123D2B', fontSize: 11, fontWeight: '900' },
   roundPhotoButton: { position: 'absolute', right: 14, bottom: 14, zIndex: 20, elevation: 20, minWidth: 78, minHeight: 31, borderRadius: 16, backgroundColor: 'rgba(7,22,18,0.58)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.34)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 11 },
   roundPhotoButtonText: { color: '#fff', fontSize: 11, fontWeight: '900' },
   roundSummaryBody: { flex: 1, padding: 14, gap: 10, justifyContent: 'space-between' },
