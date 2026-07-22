@@ -63,6 +63,8 @@ export type HomeScheduleRow = {
   created_at?: string | null;
   updated_at?: string | null;
   award_config?: { count?: number; items?: string[] } | null;
+  is_published?: boolean | null;
+  is_confirmed?: boolean | null;
 };
 
 export type HomeScheduleGroupRow = {
@@ -292,10 +294,10 @@ async function fetchHomeDashboardRawData(
   const { data: schedules, error: scheduleError } = await supabase
     .from("club_round_schedules")
     .select(
-      "id, round_date, course_id, course_name, layout_id, layout_name, tee_time, note, status, award_config, created_at, updated_at",
+      "id, round_date, course_id, course_name, layout_id, layout_name, tee_time, note, status, award_config, is_published, is_confirmed, created_at, updated_at",
     )
     .eq("club_id", clubId)
-    .gte("round_date", today)
+    .eq("is_confirmed", false)
     .in("status", ["planned", "recruiting", "closed", "finished"])
     .order("round_date", { ascending: true })
     .order("tee_time", { ascending: true })

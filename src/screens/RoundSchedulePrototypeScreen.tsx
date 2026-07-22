@@ -58,6 +58,7 @@ type Draft = {
   moneyConfig?: ScheduledRound['moneyConfig']
   awardConfig?: ScheduledRound['awardConfig']
   isPublished?: boolean
+  isConfirmed?: boolean
   groups: ScheduledRoundGroup[]
 }
 
@@ -91,6 +92,7 @@ function createEmptyDraft(): Draft {
     moneyConfig: null,
     awardConfig: null,
     isPublished: true,
+    isConfirmed: false,
     groups: [createGroup(1)],
   }
 }
@@ -442,6 +444,7 @@ export default function RoundSchedulePrototypeScreen() {
 
   const sortedItems = useMemo(
     () => items
+      .filter((item) => item.isConfirmed !== true)
       .sort((a, b) => `${a.date} ${a.time || '99:99'}`.localeCompare(`${b.date} ${b.time || '99:99'}`)),
     [items]
   )
@@ -557,6 +560,7 @@ export default function RoundSchedulePrototypeScreen() {
       moneyConfig: item.moneyConfig ?? null,
       awardConfig: item.awardConfig ?? null,
       isPublished: item.isPublished ?? true,
+      isConfirmed: item.isConfirmed ?? false,
       groups: item.groups.length > 0 ? item.groups : [createGroup(1)],
     })
     setMoneyGroupIds(item.groups
@@ -791,6 +795,7 @@ export default function RoundSchedulePrototypeScreen() {
       moneyConfig: draft.moneyConfig ?? currentSchedule?.moneyConfig ?? null,
       awardConfig: nextConfig,
       isPublished: draft.isPublished ?? currentSchedule?.isPublished ?? true,
+      isConfirmed: draft.isConfirmed ?? currentSchedule?.isConfirmed ?? false,
       groups: draft.groups.map((group, index) => ({
         ...group,
         name: group.name || `${index + 1}조`,
@@ -890,6 +895,7 @@ export default function RoundSchedulePrototypeScreen() {
           moneyConfig: draft.moneyConfig ?? currentSchedule?.moneyConfig ?? null,
           awardConfig,
           isPublished: draft.isPublished ?? currentSchedule?.isPublished ?? true,
+      isConfirmed: draft.isConfirmed ?? currentSchedule?.isConfirmed ?? false,
           groups: draft.groups.map((group, index) => ({
             ...group,
             name: group.name || `${index + 1}조`,
@@ -938,6 +944,7 @@ export default function RoundSchedulePrototypeScreen() {
           moneyConfig,
           awardConfig: draft.awardConfig ?? currentSchedule?.awardConfig ?? null,
           isPublished: draft.isPublished ?? currentSchedule?.isPublished ?? true,
+      isConfirmed: draft.isConfirmed ?? currentSchedule?.isConfirmed ?? false,
           groups: draft.groups.map((group, index) => ({
             ...group,
             name: group.name || `${index + 1}조`,
@@ -1469,6 +1476,7 @@ export default function RoundSchedulePrototypeScreen() {
         moneyConfig,
         awardConfig,
         isPublished: draft.isPublished ?? true,
+        isConfirmed: draft.isConfirmed ?? false,
         groups: draft.groups.map((group, index) => ({
           ...group,
           name: `${index + 1}조`,
@@ -1536,6 +1544,7 @@ export default function RoundSchedulePrototypeScreen() {
         },
         awardConfig: buildAwardConfig(),
         isPublished: draft.isPublished ?? true,
+        isConfirmed: draft.isConfirmed ?? false,
         groups: draft.groups.map((group, index) => ({
           ...group,
           name: group.name || `${index + 1}조`,
@@ -1623,6 +1632,7 @@ export default function RoundSchedulePrototypeScreen() {
         },
         awardConfig: buildAwardConfig(),
         isPublished: draft.isPublished ?? true,
+        isConfirmed: draft.isConfirmed ?? false,
         groups: draft.groups.map((group, index) => ({
           ...group,
           name: group.name || `${index + 1}조`,
@@ -1730,7 +1740,7 @@ export default function RoundSchedulePrototypeScreen() {
           <View style={s.modalSheet}>
             <View style={s.modalHeader}>
               <View>
-                <Text style={s.modalTitle}>라운드 수정</Text>
+                <Text style={s.modalTitle}>라운드 관리</Text>
                 {lastSavedAt ? <Text style={s.headerSavedText}>✓ 마지막 저장 {lastSavedAt}</Text> : null}
               </View>
               <View style={s.modalHeaderActions}>
@@ -1739,16 +1749,6 @@ export default function RoundSchedulePrototypeScreen() {
                     <Text style={s.headerDeleteText}>삭제</Text>
                   </TouchableOpacity>
                 ) : null}
-                <TouchableOpacity
-                  style={[s.headerActionButton, draft.isPublished === false ? s.headerPrivateButton : s.headerPublishButton]}
-                  onPress={handleTogglePublished}
-                  disabled={saving}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[s.headerPublishText, draft.isPublished === false && s.headerPrivateText]}>
-                    {draft.isPublished === false ? '비공개' : '공개'}
-                  </Text>
-                </TouchableOpacity>
                 <TouchableOpacity style={[s.headerActionButton, s.headerSaveButton]} onPress={handleSave} disabled={saving || scoreSaveBusy} activeOpacity={0.8}>
                   <Text style={s.headerSaveText}>{saving ? '저장 중' : '저장'}</Text>
                 </TouchableOpacity>

@@ -813,6 +813,12 @@ export default function ClubScreen() {
     nav.dispatch(CommonActions.setParams({ openCreateClub: false }));
   }, [route.params?.openCreateClub, nav]);
 
+  useEffect(() => {
+    if (!route.params?.openCourseImages || !isManagerView) return;
+    setCourseImagesOpen(true);
+    nav.dispatch(CommonActions.setParams({ openCourseImages: false }));
+  }, [route.params?.openCourseImages, isManagerView, nav]);
+
   const managementMenus = club
     ? [
         {
@@ -825,22 +831,6 @@ export default function ClubScreen() {
             nav.navigate("RoundSchedulePrototype", {
               returnToManageMenu: true,
             }),
-          featured: false,
-        },
-        {
-          key: "courseImages",
-          title: "골프장 사진 관리",
-          subtitle: "골프장 계절별 Hero 사진을 등록합니다",
-          icon: "camera" as const,
-          onPress: () => setCourseImagesOpen(true),
-          featured: false,
-        },
-        {
-          key: "heroLab",
-          title: "Hero Lab",
-          subtitle: "골프장 Hero 이미지를 미리보고 홈 화면에 적용합니다",
-          icon: "settings" as const,
-          onPress: () => nav.navigate("HeroLab"),
           featured: false,
         },
       ]

@@ -1876,6 +1876,39 @@ export default function ProfileScreen({
           <>
             <Text style={p.sectionLabel}>기타</Text>
             <View style={p.menuCard}>
+              {isAdmin && (
+                <>
+                  <TouchableOpacity
+                    style={p.menuRow}
+                    onPress={() =>
+                      navigation.navigate("Main", {
+                        screen: "Club",
+                        params: { openCourseImages: true },
+                      })
+                    }
+                  >
+                    <Text style={p.menuIcon}>📷</Text>
+                    <View style={p.menuTextArea}>
+                      <Text style={p.menuText}>골프장 사진 관리</Text>
+                      <Text style={p.menuSubText}>골프장 계절별 Hero 사진을 등록합니다</Text>
+                    </View>
+                    <Text style={p.menuArrow}>›</Text>
+                  </TouchableOpacity>
+                  <View style={p.menuDivider} />
+                  <TouchableOpacity
+                    style={p.menuRow}
+                    onPress={() => navigation.navigate("HeroLab")}
+                  >
+                    <Text style={p.menuIcon}>☀️</Text>
+                    <View style={p.menuTextArea}>
+                      <Text style={p.menuText}>Hero Lab</Text>
+                      <Text style={p.menuSubText}>Hero 이미지를 미리보고 홈 화면에 적용합니다</Text>
+                    </View>
+                    <Text style={p.menuArrow}>›</Text>
+                  </TouchableOpacity>
+                  <View style={p.menuDivider} />
+                </>
+              )}
               <TouchableOpacity
                 style={p.menuRow}
                 onPress={() =>

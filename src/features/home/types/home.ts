@@ -55,6 +55,8 @@ export type HomeUpcomingRound = {
   isLottoDrafter?: boolean
   resultSaved?: boolean
   resultComplete?: boolean
+  isPublished?: boolean
+  isConfirmed?: boolean
 }
 
 export type HomeHeroRound = HomeUpcomingRound & {

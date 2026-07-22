@@ -20,6 +20,7 @@ import { GPButton, GPCard } from "../design";
 import { useSkin } from "../skins";
 import { useClub } from "../lib/ClubContext";
 import { useUserProfile } from "../lib/UserProfileContext";
+import { supabase } from "../lib/supabase";
 import type { RootStackParamList } from "../navigation/types";
 import {
   PremiumGogoCaddieCard,
@@ -1031,6 +1032,36 @@ export default function HomeExperienceScreen() {
     [nav],
   );
 
+  const handleHeroToggleConfirmed = useCallback(async (round: HomeHeroRound) => {
+    if (!club?.id || club.role !== "admin") return;
+    const nextValue = !(round.isConfirmed ?? false);
+    const { error: updateError } = await supabase
+      .from("club_round_schedules")
+      .update({ is_confirmed: nextValue, updated_at: new Date().toISOString() })
+      .eq("club_id", club.id)
+      .eq("id", round.id);
+    if (updateError) {
+      Alert.alert("변경 실패", updateError.message);
+      return;
+    }
+    refresh();
+  }, [club?.id, club?.role, refresh]);
+
+  const handleHeroTogglePublished = useCallback(async (round: HomeHeroRound) => {
+    if (!club?.id || club.role !== "admin") return;
+    const nextValue = round.isPublished === false;
+    const { error: updateError } = await supabase
+      .from("club_round_schedules")
+      .update({ is_published: nextValue, updated_at: new Date().toISOString() })
+      .eq("club_id", club.id)
+      .eq("id", round.id);
+    if (updateError) {
+      Alert.alert("변경 실패", updateError.message);
+      return;
+    }
+    refresh();
+  }, [club?.id, club?.role, refresh]);
+
   const handleHeroWeatherPress = useCallback((round: HomeHeroRound) => {
     setWeatherDetailRound(round);
     setWeatherDetailHours(round.fiveHourWeatherHours ?? []);
@@ -1375,6 +1406,8 @@ export default function HomeExperienceScreen() {
                   onAwardPress={handleHeroAwardPress}
                   onEditRoundPress={handleHeroEditRoundPress}
                   onWeatherPress={handleHeroWeatherPress}
+                  onToggleConfirmed={handleHeroToggleConfirmed}
+                  onTogglePublished={handleHeroTogglePublished}
                   heroImageSource={activeHeroImageSource}
                   topInset={insets.top}
                   activeIndex={activeRoundIndex}

@@ -49,6 +49,7 @@ export type ScheduledRound = {
   groups: ScheduledRoundGroup[]
   heroImageUrl?: string
   isPublished?: boolean
+  isConfirmed?: boolean
 }
 
 type ScheduleRow = {
@@ -66,6 +67,7 @@ type ScheduleRow = {
   money_config?: ScheduleMoneyConfig | null
   award_config?: ScheduleAwardConfig | null
   is_published?: boolean | null
+  is_confirmed?: boolean | null
   created_at?: string | null
   updated_at?: string | null
 }
@@ -132,6 +134,7 @@ function normalizeSchedule(row: ScheduleRow, groups: ScheduledRoundGroup[], hero
     groups,
     heroImageUrl: heroImageUrl ?? undefined,
     isPublished: row.is_published ?? true,
+    isConfirmed: row.is_confirmed ?? false,
   }
 }
 
@@ -170,7 +173,7 @@ export async function getRoundSchedules(
 
   let query = supabase
     .from('club_round_schedules')
-    .select('id, round_date, course_id, course_name, layout_id, layout_name, tee_time, note, status, attendance_mode, money_group_ids, money_config, award_config, is_published, created_at, updated_at')
+    .select('id, round_date, course_id, course_name, layout_id, layout_name, tee_time, note, status, attendance_mode, money_group_ids, money_config, award_config, is_published, is_confirmed, created_at, updated_at')
     .eq('club_id', clubId)
     .order('round_date', { ascending: true })
     .order('tee_time', { ascending: true })
@@ -283,6 +286,7 @@ export async function upsertRoundSchedule(
     money_config: input.moneyConfig ?? null,
     award_config: input.awardConfig ?? null,
     is_published: input.isPublished ?? true,
+    is_confirmed: input.isConfirmed ?? false,
     updated_at: new Date().toISOString(),
   }
 

@@ -296,12 +296,12 @@ export default function HistoryScreen() {
   }, [allClubMembers])
   const schedules = scheduleData ?? []
   const hiddenScheduleIds = useMemo(
-    () => new Set(schedules.filter((schedule) => schedule.isPublished === false).map((schedule) => schedule.id)),
-    [schedules],
+    () => new Set(schedules.filter((schedule) => schedule.isPublished === false && activeClub?.role !== 'admin').map((schedule) => schedule.id)),
+    [activeClub?.role, schedules],
   )
   const visibleSchedules = useMemo(
-    () => schedules.filter((schedule) => schedule.isPublished !== false),
-    [schedules],
+    () => schedules.filter((schedule) => schedule.isPublished !== false || activeClub?.role === 'admin'),
+    [activeClub?.role, schedules],
   )
   const visibleRounds = useMemo(
     () => rounds.filter((round) => !round.scheduleId || !hiddenScheduleIds.has(round.scheduleId)),

@@ -311,6 +311,8 @@ function mapScheduleRound(raw: HomeDashboardRawData, schedule: HomeScheduleRow, 
     isLottoDrafter: !!raw.currentUserId && lottoDraw?.drafterUserId === raw.currentUserId,
     resultSaved: !!savedRound,
     resultComplete: !!savedRound?.isComplete,
+    isPublished: schedule.is_published ?? true,
+    isConfirmed: schedule.is_confirmed ?? false,
     urgencyTone: urgencyTone(schedule.round_date),
   }
 }

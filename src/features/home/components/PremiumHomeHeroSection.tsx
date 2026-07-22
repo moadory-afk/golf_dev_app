@@ -101,6 +101,8 @@ type PremiumHomeHeroSectionProps = {
   onAwardPress?: (round: HomeHeroRound) => void;
   onEditRoundPress?: (round: HomeHeroRound) => void;
   onWeatherPress?: (round: HomeHeroRound) => void;
+  onToggleConfirmed?: (round: HomeHeroRound) => void;
+  onTogglePublished?: (round: HomeHeroRound) => void;
   heroImageSource?: ImageSourcePropType;
   topInset?: number;
   activeIndex?: number;
@@ -125,6 +127,8 @@ function PremiumHomeHeroSectionComponent({
   onAwardPress,
   onEditRoundPress,
   onWeatherPress,
+  onToggleConfirmed,
+  onTogglePublished,
   heroImageSource,
   topInset = 0,
   activeIndex: controlledActiveIndex,
@@ -255,6 +259,8 @@ function PremiumHomeHeroSectionComponent({
                     onAwardPress={onAwardPress}
                     onEditRoundPress={onEditRoundPress}
                     onWeatherPress={onWeatherPress}
+                    onToggleConfirmed={onToggleConfirmed}
+                    onTogglePublished={onTogglePublished}
                     departureBufferMinutes={departureBufferMinutes}
                   />
                 );
@@ -337,6 +343,8 @@ const HeroRoundCard = memo(function HeroRoundCard({
   onAwardPress,
   onEditRoundPress,
   onWeatherPress,
+  onToggleConfirmed,
+  onTogglePublished,
   departureBufferMinutes,
 }: {
   width: number;
@@ -351,6 +359,8 @@ const HeroRoundCard = memo(function HeroRoundCard({
   onAwardPress?: (round: HomeHeroRound) => void;
   onEditRoundPress?: (round: HomeHeroRound) => void;
   onWeatherPress?: (round: HomeHeroRound) => void;
+  onToggleConfirmed?: (round: HomeHeroRound) => void;
+  onTogglePublished?: (round: HomeHeroRound) => void;
   departureBufferMinutes: number;
 }) {
   const optimizedHeroImageUrl = useMemo(
@@ -412,6 +422,24 @@ const HeroRoundCard = memo(function HeroRoundCard({
             <View style={styles.slideBackgroundPlaceholder} />
           )}
           <View style={styles.scrim} />
+          {isAdmin ? (
+            <View style={styles.adminStatusBadges}>
+              <TouchableOpacity
+                style={[styles.adminStatusBadge, round.isConfirmed ? styles.confirmedBadge : styles.unconfirmedBadge]}
+                onPress={(event) => { event.stopPropagation(); onToggleConfirmed?.(round); }}
+                activeOpacity={0.82}
+              >
+                <Text style={styles.adminStatusBadgeText}>{round.isConfirmed ? "확정" : "미확정"}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.adminStatusBadge, round.isPublished === false ? styles.privateBadge : styles.publicBadge]}
+                onPress={(event) => { event.stopPropagation(); onTogglePublished?.(round); }}
+                activeOpacity={0.82}
+              >
+                <Text style={styles.adminStatusBadgeText}>{round.isPublished === false ? "비공개" : "공개"}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
           <View style={[styles.frontSummaryWrap, { paddingHorizontal: isCompactWidth(width) ? 10 : 14, paddingBottom: isCompactWidth(width) ? 18 : 22 }]}>
             <HeroBottomSummary
               width={width}
@@ -1081,6 +1109,13 @@ const styles = StyleSheet.create({
   flipFace: { ...StyleSheet.absoluteFillObject, backfaceVisibility: "hidden" },
   flipBackFace: { backfaceVisibility: "hidden" },
   flipTouchable: { flex: 1, justifyContent: "flex-end" },
+  adminStatusBadges: { position: "absolute", top: 62, right: 14, zIndex: 4, flexDirection: "row", gap: 6 },
+  adminStatusBadge: { minWidth: 52, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: "rgba(255,255,255,0.72)", alignItems: "center" },
+  adminStatusBadgeText: { color: "#fff", fontSize: 11, fontWeight: "900" },
+  unconfirmedBadge: { backgroundColor: "rgba(217,119,6,0.92)" },
+  confirmedBadge: { backgroundColor: "rgba(22,101,52,0.92)" },
+  publicBadge: { backgroundColor: "rgba(2,132,199,0.92)" },
+  privateBadge: { backgroundColor: "rgba(71,85,105,0.92)" },
   frontSummaryWrap: {},
   heroBackgroundImage: {
     ...StyleSheet.absoluteFillObject,

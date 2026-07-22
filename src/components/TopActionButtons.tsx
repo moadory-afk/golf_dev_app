@@ -133,19 +133,6 @@ export function TopActionButtons({ topInset = 0, floating = false }: TopActionBu
                     style={styles.menuItem}
                     onPress={() => {
                       setMenu(null)
-                      nav.navigate('Main', { screen: 'Club', params: { openCreateClub: true } })
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.menuText, { color: palette.text, fontWeight: '800' }]} numberOfLines={1}>새 동호회 만들기</Text>
-                      <Text style={[styles.menuSub, { color: palette.muted }]} numberOfLines={1}>운영할 클럽을 추가합니다</Text>
-                    </View>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.menuItem}
-                    onPress={() => {
-                      setMenu(null)
                       nav.navigate('Main', { screen: 'Club', params: { openManageMenu: true } })
                     }}
                     activeOpacity={0.8}
