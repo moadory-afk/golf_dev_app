@@ -1,29 +1,54 @@
 import {
-  FlatList, ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Dimensions, TextInput, ImageBackground, Animated, Alert, ActivityIndicator,
+  ScrollView, View, Text, TouchableOpacity, StyleSheet, RefreshControl, Modal, Dimensions, TextInput, ImageBackground, Animated, Alert, ActivityIndicator,
 } from 'react-native'
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import type { RouteProp } from '@react-navigation/native'
-import { useState, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
-import Svg, { Polyline, Circle, Line, Text as SvgText, G, Polygon } from 'react-native-svg'
-import { DEFAULT_LOTTO_AWARD_CONFIG, getClubAwardConfig, getClubAwardSnapshots, getClubLottoAwardConfig, getClubMembers, getRoundLottoDraw, getRoundLottoEntries, getRoundHistoryCards, getRound, getPersonalRoundStat, playerTotal, totalPar, getHandicapsForRound, computeHandicaps, shortName, updateRound, type ClubAwardSnapshot, type LottoAwardConfig, type PersonalRoundFir, type PersonalRoundHoleStat, type RoundLottoDraw, type RoundLottoEntry, type SavedRound } from '../lib/store'
+import Svg, { Polyline, Circle, Line, Text as SvgText, G } from 'react-native-svg'
+import { DEFAULT_LOTTO_AWARD_CONFIG, getClubAwardConfig, getClubAwardSnapshots, getClubLottoAwardConfig, getClubMembers, getRoundLottoDraw, getRoundLottoEntries, getRoundHistoryCards, getRound, getPersonalRoundStat, playerTotal, totalPar, getHandicapsForRound, computeHandicaps, shortName, updateRound, type ClubAwardSnapshot, type LottoAwardConfig, type PersonalRoundHoleStat, type RoundLottoDraw, type RoundLottoEntry, type SavedRound } from '../lib/store'
 import { supabase } from '../lib/supabase'
 import { getPersonalRecordGoal, savePersonalRecordGoal } from '../lib/personalRecordGoal'
 import { useClub } from '../lib/ClubContext'
 import { useUserProfile } from '../lib/UserProfileContext'
 import { useAsync } from '../lib/useAsync'
 import { loadHandicapBasis, type HandicapBasis } from '../lib/handicapBasis'
-import { AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
-import { computeClubAwardResults } from '../lib/awardResults'
+import { AWARD_CATEGORIES } from '../lib/awardConfig'
 import { getRoundSchedules, type ScheduledRound } from '../lib/roundSchedule'
-import { calcSettlement, fmtKRW } from '../features/settlement'
+import {
+  buildRoundAwardMoneySummary,
+  buildRoundDetailSummary,
+  buildRoundFrontSummary,
+} from '../features/history/roundSummaries'
+import {
+  buildPlayerRoundsByName,
+  resolvePersonalPlayerName,
+} from '../features/history/personalRoundStats'
+import {
+  buildPersonalReportSummary,
+  getPersonalReportModalTitle,
+  type PersonalReportModal,
+} from '../features/history/personalReportSummary'
 import { C } from '../theme'
 import { EmojiIcon } from '../components/EmojiIcon'
 import { TopActionButtons } from '../components/TopActionButtons'
 import { ImageCropModal, type ImageCropRect } from '../components/ImageCropModal'
 import { SegmentedIconTabs, type SegmentedIconTab } from '../components/SegmentedIconTabs'
+import { RoundHistoryCarousel } from '../components/history/RoundHistoryCarousel'
+import { RegularRankTab, RoundAwardTab, ScoreSummaryTab, ShinperioRankTab } from '../components/history/RoundDetailTabs'
+import {
+  BulletText,
+  DonutGauge,
+  MetricCard,
+  ObDistribution,
+  PuttBars,
+  RadarChart,
+  ScoreDist,
+  ScoreDonut,
+  StackedScoreBars,
+} from '../components/history/PersonalReportWidgets'
 import { getCourseHeroImageSource } from '../data/courseHeroImages'
 import { uploadRoundPhoto } from '../lib/roundPhotos'
 import { getOptimizedRemoteImageUrl } from '../lib/imageOptimization'
@@ -52,37 +77,6 @@ function formatWon(value: number) {
   return `${Math.max(0, Math.round(value)).toLocaleString('ko-KR')}원`
 }
 
-function lottoPrizeForHits(hits: number, config: LottoAwardConfig, jackpot: number) {
-  if (hits === 6) return jackpot
-  if (hits === 3 || hits === 4 || hits === 5) return config.prizes[String(hits) as '3' | '4' | '5']
-  return 0
-}
-
-function awardWinnerDisplay(winner: string) {
-  return winner
-    .split(',')
-    .map((name) => name.trim())
-    .filter(Boolean)
-    .map(shortName)
-    .join(', ')
-}
-
-function applyManualAwardWinners<T extends { awardKey: string; winner: string; detail: string }>(
-  rows: T[],
-  manualWinners?: Record<string, string[]>,
-) {
-  if (!manualWinners) return rows
-  return rows.map((row) => {
-    const winners = manualWinners[row.awardKey]
-    if (!winners?.length) return row
-    return {
-      ...row,
-      winner: winners.map(shortName).join(', '),
-      detail: row.detail === '추첨' || row.detail === '현장 확인' ? '관리자 지정' : row.detail,
-    }
-  })
-}
-
 function diffText(d: number) { return d > 0 ? `+${d}` : `${d}` }
 
 function formatWinners(names: string[], value: string): string {
@@ -104,54 +98,6 @@ function splitHallValue(value: string) {
   return { record: match[2], member: match[1] }
 }
 
-
-function normalizeRecordName(name: string | null | undefined): string {
-  return (name ?? '').trim().replace(/\s+/g, '').toLowerCase()
-}
-
-function decodeGogoParEmailName(value: string | null | undefined): string {
-  const email = (value ?? '').trim()
-  const match = email.match(/^([0-9a-f]{4,})@gogopar\.app$/i)
-  if (!match) return ''
-  const hex = match[1]
-  try {
-    const chars: string[] = []
-    for (let i = 0; i < hex.length; i += 4) {
-      const code = Number.parseInt(hex.slice(i, i + 4), 16)
-      if (!Number.isFinite(code)) return ''
-      chars.push(String.fromCharCode(code))
-    }
-    return chars.join('').trim()
-  } catch {
-    return ''
-  }
-}
-
-function resolvePersonalPlayerName(
-  myName: string | null,
-  byName: Map<string, PlayerRound[]>,
-  scheduleMemberNames: string[] = [],
-): string | null {
-  if (byName.size === 0) return null
-
-  const candidates = [
-    myName,
-    decodeGogoParEmailName(myName),
-    ...scheduleMemberNames,
-  ].filter((value): value is string => !!value?.trim())
-
-  const names = [...byName.keys()]
-  for (const candidate of candidates) {
-    if (byName.has(candidate)) return candidate
-    const normalized = normalizeRecordName(candidate)
-    const matched = names.find((name) => normalizeRecordName(name) === normalized)
-    if (matched) return matched
-  }
-
-  // 실제 사용자명 또는 라운드 조편성의 member_user_id로 확인된 이름이 없으면
-  // 임의의 플레이어 기록을 개인 기록으로 표시하지 않는다.
-  return null
-}
 
 
 function holeStats(strokes: number[], pars: number[]) {
@@ -634,10 +580,6 @@ function EmptyHallOfFame() {
   )
 }
 
-type RoundCarouselItem =
-  | { kind: 'round'; key: string; date: string; round: SavedRound }
-  | { kind: 'schedule'; key: string; date: string; schedule: ScheduledRound }
-
 function scheduleParticipantCount(schedule: ScheduledRound) {
   return new Set(schedule.groups.flatMap((group) => group.members.map((member) => member.userId || member.name))).size
 }
@@ -733,62 +675,34 @@ function ScheduledRoundCard({ schedule, index, totalCount, width, height }: { sc
     </View>
   )
 }
-
 function ByRound({ rounds, schedules = [], handicapBasis = 5, members = [] }: { rounds: SavedRound[]; schedules?: ScheduledRound[]; handicapBasis?: number; members?: HistoryMember[] }) {
-  const [containerWidth, setContainerWidth] = useState(0)
-  const items = useMemo<RoundCarouselItem[]>(() => {
-    const roundScheduleIds = new Set(rounds.map((round) => round.scheduleId).filter((id): id is string => !!id))
-    return [
-      ...rounds.map((round): RoundCarouselItem => ({ kind: 'round', key: `round-${round.id}`, date: round.date, round })),
-      ...schedules
-        .filter((schedule) => !roundScheduleIds.has(schedule.id))
-        .map((schedule): RoundCarouselItem => ({ kind: 'schedule', key: `schedule-${schedule.id}`, date: schedule.date, schedule })),
-    ].sort((a, b) => b.date.localeCompare(a.date))
-  }, [rounds, schedules])
-
-  if (items.length === 0) return <EmptyByRound members={members} />
-
-  // 바깥 ScrollView의 좌우 padding(각 16px)을 제외한 캐러셀 실측 폭을 기준으로 계산한다.
-  // 현재 카드 1장과 오른쪽 다음 카드의 일부(약 20px)만 보이도록 유지한다.
-  const cardGap = 8
-  const nextCardPeek = 20
-  const cardWidth = containerWidth > 0
-    ? Math.min(Math.max(containerWidth - cardGap - nextCardPeek, 292), 442)
-    : 0
-  const snapInterval = cardWidth + cardGap
-  const cardHeight = Math.max(500, Math.min(590, Dimensions.get('window').height - 220))
-
   return (
-    <View style={s.roundCarouselWrap} onLayout={(event) => {
-      const nextWidth = Math.round(event.nativeEvent.layout.width)
-      if (nextWidth > 0 && nextWidth !== containerWidth) setContainerWidth(nextWidth)
-    }}>
-      {cardWidth > 0 ? (
-        <FlatList
-          horizontal
-          data={items}
-          keyExtractor={(item) => item.key}
-          decelerationRate="fast"
-          snapToInterval={snapInterval}
-          snapToAlignment="start"
-          disableIntervalMomentum
-          getItemLayout={(_, index) => ({ length: snapInterval, offset: snapInterval * index, index })}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.roundCarouselContent}
-          ItemSeparatorComponent={() => <View style={{ width: cardGap }} />}
-          initialNumToRender={2}
-          maxToRenderPerBatch={2}
-          windowSize={3}
-          removeClippedSubviews
-          renderItem={({ item, index }) => item.kind === 'round' ? (
-            <RoundFlipCard round={item.round} rounds={rounds} schedules={schedules} handicapBasis={handicapBasis} index={index} totalCount={items.length} width={cardWidth} height={cardHeight} />
-          ) : (
-            <ScheduledRoundCard schedule={item.schedule} index={index} totalCount={items.length} width={cardWidth} height={cardHeight} />
-          )}
+    <RoundHistoryCarousel
+      rounds={rounds}
+      schedules={schedules}
+      emptyFallback={<EmptyByRound members={members} />}
+      renderRoundCard={({ round, index, totalCount, width, height }) => (
+        <RoundFlipCard
+          round={round}
+          rounds={rounds}
+          schedules={schedules}
+          handicapBasis={handicapBasis}
+          index={index}
+          totalCount={totalCount}
+          width={width}
+          height={height}
         />
-      ) : <View style={[s.roundCarouselPlaceholder, { height: cardHeight }]} />}
-      <Text style={s.roundSwipeHint}>좌우로 스와이프해 다른 라운드를 확인하세요</Text>
-    </View>
+      )}
+      renderScheduleCard={({ schedule, index, totalCount, width, height }) => (
+        <ScheduledRoundCard
+          schedule={schedule}
+          index={index}
+          totalCount={totalCount}
+          width={width}
+          height={height}
+        />
+      )}
+    />
   )
 }
 
@@ -824,7 +738,6 @@ function RoundFlipCard({
   const flip = useRef(new Animated.Value(0)).current
   const effectiveRound = detailRound ?? round
   const isScheduleOnly = false
-  const hasResults = !isScheduleOnly && round.players.length > 0 && round.pars.length > 0
   const coverPhoto = photoData[0]
   const scheduleHeroImageUrl = round.scheduleId
     ? schedules.find((item) => item.id === round.scheduleId)?.heroImageUrl
@@ -833,115 +746,23 @@ function RoundFlipCard({
     () => getOptimizedRemoteImageUrl(scheduleHeroImageUrl, { width: 720, height: 360, quality: 76 }),
     [scheduleHeroImageUrl],
   )
-  const par = hasResults ? totalPar(round.pars) : 0
-  const totals = hasResults ? round.players.map((p) => playerTotal(p.strokes)) : []
-  const best = totals.length > 0 ? Math.min(...totals) : 0
-  const avg = totals.length > 0 ? Math.ceil(totals.reduce((a, b) => a + b, 0) / totals.length) : 0
-  const bestPlayer = round.players.find((p) => playerTotal(p.strokes) === best)
-  const roundHandicaps = getHandicapsForRound(round, rounds, handicapBasis)
-  const regularRank = round.players
-    .map((p) => {
-      const total = playerTotal(p.strokes)
-      const handicap = roundHandicaps.get(p.name) ?? 0
-      return { name: p.name, total, handicap, net: total - handicap }
-    })
-    .sort((a, b) => a.net - b.net)
-  const winner = regularRank[0]
-  const runnerUp = regularRank.find((row) => row.name !== winner?.name)
-
-  const playerHighlights = round.players.map((p) => {
-    const stats = holeStats(p.strokes, round.pars)
-    return { name: p.name, ...stats }
-  })
-  const birdieTop = [...playerHighlights].sort((a, b) => b.birdie - a.birdie)[0]
-  const parTop = [...playerHighlights].sort((a, b) => b.par - a.par)[0]
-  const frontBackTop = round.players
-    .map((p) => {
-      const front = p.strokes.slice(0, 9).reduce((sum, score) => sum + score, 0)
-      const back = p.strokes.slice(9, 18).reduce((sum, score) => sum + score, 0)
-      return { name: p.name, improvement: front - back }
-    })
-    .filter((row) => row.improvement > 0)
-    .sort((a, b) => b.improvement - a.improvement)[0]
-
-  const priorRounds = rounds.filter((r) => r.date < round.date)
-  const clubRecordRows: { icon: string; label: string; value: string }[] = []
-  const priorBest = priorRounds.length
-    ? Math.min(...priorRounds.flatMap((r) => r.players.map((p) => playerTotal(p.strokes))))
-    : Infinity
-  if (best < priorBest) clubRecordRows.push({ icon: '🏆', label: '최저타 갱신', value: `${shortName(bestPlayer?.name ?? '')} ${best}타` })
-  const priorBirdie = priorRounds.length ? Math.max(0, ...priorRounds.flatMap((r) => r.players.map((p) => holeStats(p.strokes, r.pars).birdie))) : 0
-  if ((birdieTop?.birdie ?? 0) > 0 && birdieTop!.birdie > priorBirdie) clubRecordRows.push({ icon: '🟡', label: '버디왕 갱신', value: `${shortName(birdieTop!.name)} ${birdieTop!.birdie}개` })
-  const priorPar = priorRounds.length ? Math.max(0, ...priorRounds.flatMap((r) => r.players.map((p) => holeStats(p.strokes, r.pars).par))) : 0
-  if ((parTop?.par ?? 0) > 0 && parTop!.par > priorPar) clubRecordRows.push({ icon: '⛳', label: '파왕 갱신', value: `${shortName(parTop!.name)} ${parTop!.par}개` })
-  const records = isScheduleOnly
-    ? Array.from({ length: 3 }, () => ({ icon: '', label: '', value: '' }))
-    : clubRecordRows.length > 0
-      ? clubRecordRows
-      : [{ icon: '—', label: '기록 갱신 없음', value: '다음 라운드 도전' }]
-  const frontHighlights = isScheduleOnly
-    ? Array.from({ length: 3 }, () => ({ icon: '', label: '', value: '' }))
-    : (() => {
-        type HighlightCandidate = { icon: string; label: string; value: string; priority: number }
-        const candidates: HighlightCandidate[] = []
-        const holeCount = Math.max(round.pars.length, 1)
-        const steadyParThreshold = Math.max(5, Math.ceil(holeCount * 0.5))
-
-        if (bestPlayer) {
-          candidates.push({
-            icon: '🏅',
-            label: '메달리스트',
-            value: `${shortName(bestPlayer.name)} ${best}타`,
-            priority: 95,
-          })
-        }
-
-        if ((birdieTop?.birdie ?? 0) >= 2) {
-          candidates.push({
-            icon: '🐦',
-            label: '버디 집중',
-            value: `${shortName(birdieTop!.name)} ${birdieTop!.birdie}개`,
-            priority: 80 + birdieTop!.birdie,
-          })
-        }
-
-        if ((parTop?.par ?? 0) >= steadyParThreshold) {
-          candidates.push({
-            icon: '⛳',
-            label: '파 세이브',
-            value: `${shortName(parTop!.name)} ${parTop!.par}개`,
-            priority: 70 + parTop!.par,
-          })
-        }
-
-        if ((frontBackTop?.improvement ?? 0) >= 3) {
-          candidates.push({
-            icon: '📈',
-            label: '후반 반등',
-            value: `${shortName(frontBackTop!.name)} ${frontBackTop!.improvement}타`,
-            priority: 75 + frontBackTop!.improvement,
-          })
-        }
-
-        if (candidates.length < 3 && (birdieTop?.birdie ?? 0) === 1) {
-          candidates.push({
-            icon: '🐦',
-            label: '오늘의 버디',
-            value: `${shortName(birdieTop!.name)} 1개`,
-            priority: 60,
-          })
-        }
-
-        if (candidates.length === 0) {
-          candidates.push({ icon: '✨', label: '라운드 완료', value: '다음 기록 도전', priority: 1 })
-        }
-
-        return candidates
-          .sort((a, b) => b.priority - a.priority)
-          .slice(0, 3)
-          .map(({ icon, label, value }) => ({ icon, label, value }))
-      })()
-
+  const frontSummary = useMemo(
+    () => buildRoundFrontSummary(round, rounds, handicapBasis),
+    [round, rounds, handicapBasis],
+  )
+  const {
+    par,
+    best,
+    avg,
+    bestPlayerName,
+    winnerName,
+    winnerDiff,
+    runnerUpName,
+    runnerUpDiff,
+    clubRecordRows,
+    records,
+    frontHighlights,
+  } = frontSummary
 
   const toggleFlip = async () => {
     const next = !flipped
@@ -1038,131 +859,48 @@ function RoundFlipCard({
     nav.navigate('RoundDetail', { id: round.id })
   }
 
-  const detailPar = effectiveRound.pars.length > 0 ? totalPar(effectiveRound.pars) : 0
-  const detailHandicaps = getHandicapsForRound(effectiveRound, rounds, handicapBasis)
-  const actualRegularRank = effectiveRound.players
-    .map((p) => {
-      const total = playerTotal(p.strokes)
-      return { name: p.name, total, diff: total - detailPar }
-    })
-    .sort((a, b) => a.total - b.total)
-  const handicapRegularRank = effectiveRound.players
-    .map((p) => {
-      const total = playerTotal(p.strokes)
-      const handicap = detailHandicaps.get(p.name) ?? 0
-      const net = total - handicap
-      return { name: p.name, total, handicap, net, diff: net - detailPar }
-    })
-    .sort((a, b) => a.net - b.net || a.total - b.total)
-
-  const hiddenHoles = effectiveRound.shinperioHoles.length
-    ? effectiveRound.shinperioHoles
-    : effectiveRound.pars.map((_, i) => i + 1)
-  const shinScoreRank = effectiveRound.players
-    .map((p) => {
-      const total = p.strokes.reduce(
-        (sum, stroke, index) => sum + (hiddenHoles.includes(index + 1) ? stroke : (effectiveRound.pars[index] ?? 0)),
-        0,
-      )
-      return { name: p.name, total, diff: total - detailPar }
-    })
-    .sort((a, b) => a.total - b.total)
-
-  const shinRank = effectiveRound.players
-    .map((p) => {
-      const hiddenScore = hiddenHoles.reduce(
-        (sum, hole) => sum + (p.strokes[hole - 1] ?? effectiveRound.pars[hole - 1] ?? 0),
-        0,
-      )
-      const hiddenPar = hiddenHoles.reduce(
-        (sum, hole) => sum + (effectiveRound.pars[hole - 1] ?? 0),
-        0,
-      )
-      const scaledScore = hiddenHoles.length > 0
-        ? hiddenScore * (effectiveRound.pars.length / hiddenHoles.length)
-        : hiddenScore
-      const scaledPar = hiddenHoles.length > 0
-        ? hiddenPar * (effectiveRound.pars.length / hiddenHoles.length)
-        : hiddenPar
-      const handicap = Math.max(0, Math.ceil((scaledScore - scaledPar) * 0.8))
-      const total = playerTotal(p.strokes)
-      const net = Math.ceil(total - handicap)
-      return { name: p.name, total, handicap, net }
-    })
-    .sort((a, b) => a.net - b.net || a.total - b.total)
-
-  const scoreRows = effectiveRound.players
-    .map((p) => {
-      const total = playerTotal(p.strokes)
-      const stats = holeStats(p.strokes, effectiveRound.pars)
-      return { name: p.name, total, diff: total - detailPar, stats }
-    })
-    .sort((a, b) => a.total - b.total)
-
-  const scheduleAwardConfig = effectiveRound.scheduleId
-    ? roundSchedules.find((item) => item.id === effectiveRound.scheduleId)?.awardConfig
-    : null
-  const effectiveAwardConfig = scheduleAwardConfig ?? clubAwardConfig
-  const fallbackAwardRows = effectiveAwardConfig
-    ? computeClubAwardResults(
-        fillToCount(effectiveAwardConfig.items, effectiveAwardConfig.count),
-        effectiveRound,
-        getHandicapsForRound(effectiveRound, rounds, handicapBasis),
-        detailPar,
-      ).map((award) => ({
-        awardKey: award.awardKey,
-        icon: award.icon,
-        label: award.label,
-        winner: awardWinnerDisplay(award.winner),
-        detail: award.detail,
-      }))
-    : []
-  const awardRows = applyManualAwardWinners(awardSnapshots.length > 0
-    ? awardSnapshots.map((award) => ({
-        awardKey: award.awardKey,
-        icon: award.icon,
-        label: award.label,
-        winner: awardWinnerDisplay(award.winner),
-        detail: award.detail,
-      }))
-    : fallbackAwardRows, effectiveAwardConfig?.manualWinners)
-  const lottoJackpot = lottoAwardConfig.prizes['6'] + (lottoAwardConfig.rollover ? lottoAwardConfig.carryoverAmount : 0)
-  const lottoAwardRows = lottoEntries.map((entry) => {
-    const member = clubMembers.find((item) => item.userId === entry.userId)
-    const name = member?.name ?? '회원'
-    const player = effectiveRound.players.find((item) => item.name === name)
-    const selectedHoles = [
-      ...entry.selectedHoles.par3,
-      ...entry.selectedHoles.par4,
-      ...entry.selectedHoles.par5,
-    ].sort((a, b) => a - b)
-    const hasScore = Boolean(player && lottoDraw?.drawStatus === 'COMPLETED' && lottoDraw.drawnScores)
-    const hits = hasScore
-      ? selectedHoles.filter((hole) => player!.strokes[hole - 1] === lottoDraw!.drawnScores?.[String(hole)]?.score).length
-      : 0
-    const prize = hasScore ? lottoPrizeForHits(hits, lottoAwardConfig, lottoJackpot) : 0
-    return { name, hits, prize, hasScore }
-  })
-  const lottoAwardGroups = [3, 4, 5, 6]
-    .map((hits) => ({
-      hits,
-      prize: hits === 6 ? lottoJackpot : lottoAwardConfig.prizes[String(hits) as '3' | '4' | '5'],
-      names: lottoAwardRows
-        .filter((row) => row.hasScore && row.hits === hits && row.prize > 0)
-        .map((row) => shortName(row.name))
-        .join(', '),
-    }))
-    .filter((group) => group.names)
-  const moneyGame = effectiveRound.settlement ? calcSettlement(effectiveRound.settlement, effectiveRound.pars, effectiveRound.players) : null
-  const moneyPairs = moneyGame
-    ? moneyGame.participants.flatMap((from, i) => moneyGame.participants.slice(i + 1).map((to) => {
-        const net = moneyGame.totals[from][to]
-        if (net > 0) return { from, to, amount: net }
-        if (net < 0) return { from: to, to: from, amount: -net }
-        return { from, to, amount: 0 }
-      }))
-    : []
-
+  const detailSummary = useMemo(
+    () => buildRoundDetailSummary(effectiveRound, rounds, handicapBasis),
+    [effectiveRound, rounds, handicapBasis],
+  )
+  const {
+    detailPar,
+    actualRegularRank,
+    handicapRegularRank,
+    hiddenHoles,
+    shinScoreRank,
+    shinRank,
+    scoreRows,
+  } = detailSummary
+  const awardMoneySummary = useMemo(
+    () => buildRoundAwardMoneySummary({
+      round: effectiveRound,
+      rounds,
+      handicapBasis,
+      detailPar,
+      roundSchedules,
+      clubAwardConfig,
+      awardSnapshots,
+      lottoEntries,
+      lottoDraw,
+      lottoAwardConfig,
+      clubMembers,
+    }),
+    [
+      effectiveRound,
+      rounds,
+      handicapBasis,
+      detailPar,
+      roundSchedules,
+      clubAwardConfig,
+      awardSnapshots,
+      lottoEntries,
+      lottoDraw,
+      lottoAwardConfig,
+      clubMembers,
+    ],
+  )
+  const { awardRows, lottoAwardGroups, moneyGame, moneyPairs } = awardMoneySummary
   const detailTabs: { key: RoundDetailTab; label: string }[] = [
     { key: 'regular', label: '정규' },
     { key: 'peoria', label: '신페리오' },
@@ -1201,9 +939,9 @@ function RoundFlipCard({
             </ImageBackground>
             <View style={s.roundSummaryBody}>
               <View style={s.heroSummaryPanel}>
-                <SummaryCell icon={isScheduleOnly ? '' : '🏆'} label={isScheduleOnly ? '' : shortName(bestPlayer?.name ?? '메달')} value={isScheduleOnly ? '' : String(best)} />
-                <SummaryCell icon={isScheduleOnly ? '' : '🥇'} label={isScheduleOnly ? '' : shortName(winner?.name ?? '우승')} value={isScheduleOnly ? '' : winner ? diffText(winner.net - par) : '-'} accent />
-                <SummaryCell icon={isScheduleOnly ? '' : '🥈'} label={isScheduleOnly ? '' : shortName(runnerUp?.name ?? '준우승')} value={isScheduleOnly ? '' : runnerUp ? diffText(runnerUp.net - par) : '-'} />
+                <SummaryCell icon={isScheduleOnly ? '' : '🏆'} label={isScheduleOnly ? '' : bestPlayerName} value={isScheduleOnly ? '' : String(best)} />
+                <SummaryCell icon={isScheduleOnly ? '' : '🥇'} label={isScheduleOnly ? '' : winnerName} value={isScheduleOnly ? '' : winnerDiff} accent />
+                <SummaryCell icon={isScheduleOnly ? '' : '🥈'} label={isScheduleOnly ? '' : runnerUpName} value={isScheduleOnly ? '' : runnerUpDiff} />
                 <SummaryCell label={isScheduleOnly ? '' : '평균'} value={isScheduleOnly ? '' : String(avg)} />
               </View>
               <View style={s.heroInfoPanel}>
@@ -1238,93 +976,41 @@ function RoundFlipCard({
             {detailTabs.map((item) => <TouchableOpacity key={item.key} style={[s.backTab, detailTab === item.key && s.backTabActive]} onPress={() => setDetailTab(item.key)}><Text style={[s.backTabText, detailTab === item.key && s.backTabTextActive]}>{item.label}</Text></TouchableOpacity>)}
           </View>
           <View style={s.backBody}>{!detailRound && !isScheduleOnly && <Text style={s.detailLoadingText}>라운드 상세 데이터를 불러오는 중입니다.</Text>}
-            {detailTab === 'regular' && <View style={s.detailPanel}>
-              <View style={s.detailPanelTopRow}>
-                <Text style={[s.detailPanelTitle, s.detailPanelTitleInline]}>{regularBasis === 'score' ? '정규 순위' : '핸디 기준 순위'}</Text>
-                <View style={s.detailBasisSwitch}>
-                  <TouchableOpacity style={[s.detailBasisBtn, regularBasis === 'score' && s.detailBasisBtnActive]} onPress={() => setRegularBasis('score')}><Text style={[s.detailBasisText, regularBasis === 'score' && s.detailBasisTextActive]}>스코어</Text></TouchableOpacity>
-                  <TouchableOpacity style={[s.detailBasisBtn, regularBasis === 'handicap' && s.detailBasisBtnActive]} onPress={() => setRegularBasis('handicap')}><Text style={[s.detailBasisText, regularBasis === 'handicap' && s.detailBasisTextActive]}>핸디</Text></TouchableOpacity>
-                </View>
-              </View>
-              <View style={s.detailTableHeader}><Text style={[s.detailTh,{width:34}]}>순위</Text><Text style={[s.detailTh,{flex:1}]}>이름</Text><Text style={[s.detailTh,{width:52,textAlign:'right'}]}>스코어</Text><Text style={[s.detailTh,{width:52,textAlign:'right'}]}>{regularBasis === 'score' ? '파대비' : '핸디Net'}</Text></View>
-              <ScrollView style={s.detailRankScroll} showsVerticalScrollIndicator={false}>
-                {(regularBasis === 'score' ? actualRegularRank : handicapRegularRank).map((row,i)=><View key={row.name} style={[s.detailTableRow,i<3&&s.detailPodiumRow]}><Text style={[s.detailRank,{width:34}]}>{i+1}</Text><Text style={s.detailPlayerName} numberOfLines={1}>{shortName(row.name)}</Text><Text style={s.detailScoreText}>{row.total}</Text><Text style={s.detailNetText}>{regularBasis === 'score' ? diffText(row.diff) : diffText(row.diff)}</Text></View>)}
-              </ScrollView>
-            </View>}
-            {detailTab === 'peoria' && <View style={s.detailPanel}>
-              <View style={s.detailPanelTopRow}>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={[s.detailPanelTitle, s.detailPanelTitleInline]}>{shinperioBasis === 'score' ? '신페리오 스코어' : '신페리오 핸디 기준'}</Text>
-                  <Text style={s.shinperioHoleText}>숨김홀 {hiddenHoles.join(', ')}</Text>
-                </View>
-                <View style={s.detailBasisSwitch}>
-                  <TouchableOpacity style={[s.detailBasisBtn, shinperioBasis === 'score' && s.detailBasisBtnActive]} onPress={() => setShinperioBasis('score')}><Text style={[s.detailBasisText, shinperioBasis === 'score' && s.detailBasisTextActive]}>스코어</Text></TouchableOpacity>
-                  <TouchableOpacity style={[s.detailBasisBtn, shinperioBasis === 'handicap' && s.detailBasisBtnActive]} onPress={() => setShinperioBasis('handicap')}><Text style={[s.detailBasisText, shinperioBasis === 'handicap' && s.detailBasisTextActive]}>핸디</Text></TouchableOpacity>
-                </View>
-              </View>
-              <View style={s.detailTableHeader}><Text style={[s.detailTh,{width:34}]}>순위</Text><Text style={[s.detailTh,{flex:1}]}>이름</Text><Text style={[s.detailTh,{width:48,textAlign:'right'}]}>총타</Text><Text style={[s.detailTh,{width:48,textAlign:'right'}]}>{shinperioBasis === 'score' ? '파대비' : '핸디'}</Text><Text style={[s.detailTh,{width:48,textAlign:'right'}]}>{shinperioBasis === 'score' ? '' : 'NET'}</Text></View>
-              <ScrollView style={s.detailRankScroll} showsVerticalScrollIndicator={false}>
-                {shinperioBasis === 'score'
-                  ? shinScoreRank.map((row,i)=><View key={row.name} style={[s.detailTableRow,i<3&&s.detailPodiumRow]}><Text style={[s.detailRank,{width:34}]}>{i+1}</Text><Text style={s.detailPlayerName} numberOfLines={1}>{shortName(row.name)}</Text><Text style={s.detailSmallScore}>{row.total}</Text><Text style={s.detailSmallScore}>{diffText(row.diff)}</Text><Text style={s.detailNetText}></Text></View>)
-                  : shinRank.map((row,i)=><View key={row.name} style={[s.detailTableRow,i<3&&s.detailPodiumRow]}><Text style={[s.detailRank,{width:34}]}>{i+1}</Text><Text style={s.detailPlayerName} numberOfLines={1}>{shortName(row.name)}</Text><Text style={s.detailSmallScore}>{row.total}</Text><Text style={s.detailSmallScore}>{row.handicap}</Text><Text style={s.detailNetText}>{row.net}</Text></View>)}
-              </ScrollView>
-            </View>}
-            {detailTab === 'score' && <View style={s.detailPanel}><View style={s.scoreSummaryGrid}>{scoreRows.slice(0,6).map((row)=><View key={row.name} style={s.scoreSummaryCard}><View style={{flex:1,minWidth:0}}><Text style={s.scoreSummaryName} numberOfLines={1}>{shortName(row.name)}</Text><Text style={s.scoreSummarySub}>버디 {row.stats.birdie} · 파 {row.stats.par} · 보기 {row.stats.bogey}</Text></View><View style={{alignItems:'flex-end'}}><Text style={s.scoreSummaryTotal}>{row.total}</Text><Text style={s.scoreSummaryDiff}>{diffText(row.diff)}</Text></View></View>)}</View></View>}
-            {detailTab === 'award' && <ScrollView style={s.backAwardScroll} contentContainerStyle={s.backAwardStack} showsVerticalScrollIndicator={false}>
-              <AwardCard title={`${activeClub?.name ?? '클럽'} 기준 기록`} icon="👑">
-                {clubRecordRows.length === 0 ? (
-                  <Text style={s.backAwardMuted}>이번 라운드 신규 클럽 기록이 없습니다.</Text>
-                ) : clubRecordRows.map((record, i) => (
-                  <AwardRow key={`${record.label}-${i}`} icon={record.icon} label={record.label} winner={record.value.split(' ')[0] ?? '-'} detail={record.value.replace(/^\S+\s*/, '')} first={i === 0} />
-                ))}
-              </AwardCard>
-              <AwardCard title="클럽 시상" icon="🏆">
-                {awardRows.length === 0 ? (
-                  <Text style={s.backAwardMuted}>설정된 시상 항목이 없습니다.</Text>
-                ) : awardRows.map((award, i) => (
-                  <AwardRow key={`${award.label}-${i}`} awardKey={award.awardKey} icon={award.icon} label={award.label} winner={award.winner} detail={award.detail} first={i === 0} />
-                ))}
-              </AwardCard>
-              <AwardCard title="Lotto 6/18" icon="◎">
-                {!effectiveRound.scheduleId ? (
-                  <Text style={s.backAwardMuted}>라운드 일정 연결이 없습니다.</Text>
-                ) : lottoEntries.length === 0 ? (
-                  <Text style={s.backAwardMuted}>구매 내역이 없습니다.</Text>
-                ) : lottoDraw?.drawStatus !== 'COMPLETED' ? (
-                  <Text style={s.backAwardMuted}>추첨 완료 후 구매자별 적중 현황이 표시됩니다.</Text>
-                ) : lottoAwardGroups.length === 0 ? (
-                  <Text style={s.backAwardMuted}>시상 대상자가 없습니다.</Text>
-                ) : lottoAwardGroups.map((group, i) => (
-                  <View key={group.hits} style={[s.lottoAwardGroupRow, i === 0 && { borderTopWidth: 0 }]}>
-                    <Text style={s.lottoAwardGroupText}>{group.hits}개 적중 시상금 {formatWon(group.prize)}</Text>
-                    <Text style={s.lottoAwardGroupNames} numberOfLines={2}>{group.names}</Text>
-                  </View>
-                ))}
-              </AwardCard>
-              {effectiveRound.settlement ? (
-                <>
-                  <View style={s.backMoneySummary}>
-                    <Text style={s.backAwardMuted}>타당 {effectiveRound.settlement.strokeFee.toLocaleString('ko-KR')}원 · 버디 {effectiveRound.settlement.birdieBonus.toLocaleString('ko-KR')}원 · 참가 {moneyGame?.participants.length ?? 0}명</Text>
-                  </View>
-                  <AwardCard title="머니게임">
-                    {moneyPairs.length === 0 ? (
-                      <Text style={s.backAwardMuted}>참가자 이름이 선수와 맞지 않습니다.</Text>
-                    ) : moneyPairs.map((pair, i) => (
-                      <View key={`${pair.from}-${pair.to}-${i}`} style={[s.moneyPairRow, i === 0 && { borderTopWidth: 0 }]}>
-                        <Text style={s.moneyPairName}>{shortName(pair.from)}</Text>
-                        <Text style={s.moneyPairArrow}>→</Text>
-                        <Text style={s.moneyPairName}>{shortName(pair.to)}</Text>
-                        <Text style={[s.moneyPairAmount, { color: pair.amount === 0 ? C.muted : C.text }]}>{pair.amount === 0 ? '동점' : fmtKRW(pair.amount)}</Text>
-                      </View>
-                    ))}
-                  </AwardCard>
-                </>
-              ) : (
-                <AwardCard title="머니게임">
-                  <Text style={s.backAwardMuted}>이 라운드에는 정산 설정이 없습니다.</Text>
-                </AwardCard>
-              )}
-            </ScrollView>}
+            {detailTab === 'regular' && (
+              <RegularRankTab
+                basis={regularBasis}
+                onBasisChange={setRegularBasis}
+                actualRows={actualRegularRank}
+                handicapRows={handicapRegularRank}
+                styles={s}
+              />
+            )}
+            {detailTab === 'peoria' && (
+              <ShinperioRankTab
+                basis={shinperioBasis}
+                onBasisChange={setShinperioBasis}
+                hiddenHoles={hiddenHoles}
+                scoreRows={shinScoreRank}
+                handicapRows={shinRank}
+                styles={s}
+              />
+            )}
+            {detailTab === 'score' && <ScoreSummaryTab rows={scoreRows} styles={s} />}
+            {detailTab === 'award' && (
+              <RoundAwardTab
+                clubName={activeClub?.name}
+                clubRecordRows={clubRecordRows}
+                awardRows={awardRows}
+                round={effectiveRound}
+                lottoEntries={lottoEntries}
+                lottoDraw={lottoDraw}
+                lottoAwardGroups={lottoAwardGroups}
+                moneyGame={moneyGame}
+                moneyPairs={moneyPairs}
+                multiSpecialAwardKeys={MULTI_SPECIAL_AWARD_KEYS}
+                styles={s}
+              />
+            )}
           </View>
           <TouchableOpacity style={s.flipBackHint} onPress={toggleFlip}><Text style={s.flipBackHintText}>↻ 앞면 요약으로 돌아가기</Text></TouchableOpacity>
         </TouchableOpacity>
@@ -1352,45 +1038,21 @@ function SummaryCell({ icon, label, value, accent = false }: { icon?: string; la
 function Highlight({ icon, label, value }: { icon: string; label: string; value: string }) {
   return <View style={s.highlightCard}><Text style={s.highlightIcon}>{icon}</Text><Text style={s.highlightLabel}>{label}</Text><Text style={s.highlightValue}>{value}</Text></View>
 }
+
 function RankingPanel({ title, rows }: { title: string; rows: { name: string; main: string; sub: string }[] }) {
   return <View style={s.detailPanel}><Text style={s.detailPanelTitle}>{title}</Text>{rows.map((row, i) => <View key={`${row.name}-${i}`} style={s.rankRow}><View style={[s.rankNo, i === 0 && s.rankNoFirst]}><Text style={[s.rankNoText, i === 0 && { color: '#fff' }]}>{i + 1}</Text></View><View style={{ flex: 1 }}><Text style={s.rankName}>{row.name}</Text><Text style={s.rankSub}>{row.sub}</Text></View><Text style={s.rankMain}>{row.main}</Text></View>)}</View>
 }
-function AwardCard({ title, icon, children }: { title: string; icon?: string; children: ReactNode }) {
-  return <View style={s.backAwardCard}><View style={s.backAwardHeader}>{icon ? <Text style={s.backAwardHeaderIcon}>{icon}</Text> : null}<Text style={s.backAwardTitle}>{title}</Text></View>{children}</View>
-}
-function AwardRow({ awardKey, icon, label, winner, detail, first = false }: { awardKey?: string; icon: string; label: string; winner: string; detail: string; first?: boolean }) {
-  const hideDetail = awardKey ? MULTI_SPECIAL_AWARD_KEYS.has(awardKey) : false
-  return <View style={[s.awardRow, first && { borderTopWidth: 0 }]}><View style={s.awardIconWrap}><Text style={s.awardIcon}>{icon}</Text></View><Text style={s.awardLabel}>{label}</Text><Text style={s.awardWinner}>{winner}</Text>{hideDetail ? null : <View style={s.awardDetailWrap}><Text style={s.awardDetail} numberOfLines={1}>{detail}</Text></View>}</View>
-}
-
 // ─── 개인별 ──────────────────────────────────────────────────────────────────
-
-interface PlayerRound {
-  roundId: string; date: string; courseName: string
-  total: number; diff: number; strokes: number[]; pars: number[]
-  front: number; back: number; birdie: number; parCount: number; bogey: number; double: number; triplePlus: number
-}
-
-function firLabel(value: PersonalRoundFir) {
-  if (value === 'center') return '중앙'
-  if (value === 'long') return '상'
-  if (value === 'short') return '하'
-  if (value === 'left_ob') return '좌 OB'
-  if (value === 'right_ob') return '우 OB'
-  if (value === 'other_ob') return '기타 OB'
-  if (value === 'hazard') return '해저드'
-  return '미입력'
-}
 
 function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: SavedRound[]; handicapBasis?: number; myName: string | null; myUserId: string | null }) {
   const [targetScore, setTargetScore] = useState('')
   const [targetScoreLoading, setTargetScoreLoading] = useState(false)
   const [targetScoreSaving, setTargetScoreSaving] = useState(false)
-  const [detailModal, setDetailModal] = useState<'target' | 'trend' | 'hole' | 'score' | 'rank' | 'improve' | 'rounds' | 'shot' | null>(null)
+  const [detailModal, setDetailModal] = useState<PersonalReportModal | null>(null)
   const [reportSectionWidth, setReportSectionWidth] = useState(0)
   const [personalStatsBySchedule, setPersonalStatsBySchedule] = useState<Record<string, PersonalRoundHoleStat[]>>({})
   const [memberNamesBySchedule, setMemberNamesBySchedule] = useState<Record<string, string>>({})
-  const byName = new Map<string, PlayerRound[]>()
+  const byName = useMemo(() => buildPlayerRoundsByName(rounds), [rounds])
 
   useEffect(() => {
     if (!myUserId) {
@@ -1437,33 +1099,10 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
     }
   }, [myUserId, targetScore])
 
-  for (const r of rounds) {
-    const coursePar = totalPar(r.pars)
-    for (const p of r.players) {
-      const total = playerTotal(p.strokes)
-      const stats = holeStats(p.strokes, r.pars)
-      const arr = byName.get(p.name) ?? []
-      arr.push({
-        roundId: r.id,
-        date: r.date,
-        courseName: r.courseName,
-        total,
-        diff: total - coursePar,
-        strokes: p.strokes,
-        pars: r.pars,
-        front: p.strokes.slice(0, 9).reduce((sum, score) => sum + score, 0),
-        back: p.strokes.slice(9, 18).reduce((sum, score) => sum + score, 0),
-        birdie: stats.birdie,
-        parCount: stats.par,
-        bogey: stats.bogey,
-        double: stats.dbl,
-        triplePlus: stats.dblPlus,
-      })
-      byName.set(p.name, arr)
-    }
-  }
-
-  const allScheduleIds = Array.from(new Set(rounds.map((round) => round.scheduleId).filter((id): id is string => !!id)))
+  const allScheduleIds = useMemo(
+    () => Array.from(new Set(rounds.map((round) => round.scheduleId).filter((id): id is string => !!id))),
+    [rounds],
+  )
 
   useEffect(() => {
     if (!myUserId || allScheduleIds.length === 0) {
@@ -1494,12 +1133,24 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
     return () => { cancelled = true }
   }, [myUserId, allScheduleIds.join('|')])
 
-  const scheduleMemberNames = Array.from(new Set(Object.values(memberNamesBySchedule).filter(Boolean)))
-  const personalPlayerName = resolvePersonalPlayerName(myName, byName, scheduleMemberNames)
-  const playerRounds = personalPlayerName ? [...(byName.get(personalPlayerName) ?? [])].sort((a, b) => b.date.localeCompare(a.date)) : []
-  const scheduleIds = playerRounds
-    .map((round) => rounds.find((item) => item.id === round.roundId)?.scheduleId)
-    .filter((id): id is string => !!id)
+  const scheduleMemberNames = useMemo(
+    () => Array.from(new Set(Object.values(memberNamesBySchedule).filter(Boolean))),
+    [memberNamesBySchedule],
+  )
+  const personalPlayerName = useMemo(
+    () => resolvePersonalPlayerName(myName, byName, scheduleMemberNames),
+    [byName, myName, scheduleMemberNames],
+  )
+  const playerRounds = useMemo(
+    () => personalPlayerName ? [...(byName.get(personalPlayerName) ?? [])].sort((a, b) => b.date.localeCompare(a.date)) : [],
+    [byName, personalPlayerName],
+  )
+  const scheduleIds = useMemo(
+    () => playerRounds
+      .map((round) => rounds.find((item) => item.id === round.roundId)?.scheduleId)
+      .filter((id): id is string => !!id),
+    [playerRounds, rounds],
+  )
 
   useEffect(() => {
     if (!myUserId || scheduleIds.length === 0) {
@@ -1520,180 +1171,61 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
     return () => { cancelled = true }
   }, [myUserId, scheduleIds.join('|')])
 
+  const personalSummary = useMemo(() => buildPersonalReportSummary({
+    playerRounds,
+    byName,
+    personalPlayerName: personalPlayerName ?? '',
+    rounds,
+    handicapBasis,
+    scheduleIds,
+    personalStatsBySchedule,
+    targetScore,
+    scoreColors: {
+      birdie: C.info,
+      par: C.green,
+      bogey: C.warn,
+      doublePlus: C.danger,
+    },
+  }), [byName, handicapBasis, personalPlayerName, personalStatsBySchedule, playerRounds, rounds, scheduleIds.join('|'), targetScore])
+  const {
+    avg,
+    best,
+    recent5Avg,
+    trendText,
+    avgParType,
+    frontAvg,
+    backAvg,
+    strength,
+    weakness,
+    rankSummary,
+    totalPlayers,
+    target,
+    targetGap,
+    firRate,
+    girRate,
+    obCount,
+    hazardCount,
+    avgPutts,
+    threePuttCount,
+    penaltyTotal,
+    mainMissText,
+    trendRounds,
+    puttTrendData,
+    obDistributionData,
+    parRadarData,
+    scoreTotals,
+    scoreDistributionData,
+    scoreStackData,
+    aiComments,
+    improvementItems,
+    personalReportCards,
+  } = personalSummary
+  const modalTitle = detailModal ? getPersonalReportModalTitle(detailModal) : ''
+
   if (!personalPlayerName || playerRounds.length === 0) return <EmptyByPlayer />
-
-  const totals = playerRounds.map((round) => round.total)
-  const avg = Math.ceil(totals.reduce((sum, total) => sum + total, 0) / totals.length)
-  const best = Math.min(...totals)
-  const lastN = [...playerRounds].sort((a, b) => a.date.localeCompare(b.date)).slice(-handicapBasis)
-  const handicap = Math.ceil(lastN.reduce((sum, round) => sum + round.diff, 0) / lastN.length)
-  const recent5 = playerRounds.slice(0, 5)
-  const recent5Avg = Math.ceil(recent5.reduce((sum, round) => sum + round.total, 0) / recent5.length)
-  const oldestRecent = recent5[recent5.length - 1]
-  const latestRecent = recent5[0]
-  const trendText = oldestRecent && latestRecent
-    ? latestRecent.total < oldestRecent.total
-      ? `최근 흐름이 ${oldestRecent.total - latestRecent.total}타 개선됐습니다.`
-      : latestRecent.total > oldestRecent.total
-        ? `최근 흐름이 ${latestRecent.total - oldestRecent.total}타 높아졌습니다.`
-        : '최근 흐름이 안정적으로 유지되고 있습니다.'
-    : '최근 흐름을 분석할 기록이 부족합니다.'
-  const parType = { 3: { total: 0, count: 0 }, 4: { total: 0, count: 0 }, 5: { total: 0, count: 0 } }
-  const scoreTotals = { birdie: 0, par: 0, bogey: 0, double: 0, triplePlus: 0 }
-  let frontTotal = 0, backTotal = 0
-  for (const round of playerRounds) {
-    round.strokes.forEach((score, index) => {
-      const par = round.pars[index] as 3 | 4 | 5
-      if (parType[par]) {
-        parType[par].total += score
-        parType[par].count += 1
-      }
-    })
-    scoreTotals.birdie += round.birdie
-    scoreTotals.par += round.parCount
-    scoreTotals.bogey += round.bogey
-    scoreTotals.double += round.double
-    scoreTotals.triplePlus += round.triplePlus
-    frontTotal += round.front
-    backTotal += round.back
-  }
-  const avgParType = (par: 3 | 4 | 5) => parType[par].count ? (parType[par].total / parType[par].count).toFixed(1) : '-'
-  const frontAvg = Math.round(frontTotal / playerRounds.length)
-  const backAvg = Math.round(backTotal / playerRounds.length)
-  const parAverages = [
-    { label: 'Par 3', value: Number(avgParType(3)) },
-    { label: 'Par 4', value: Number(avgParType(4)) },
-    { label: 'Par 5', value: Number(avgParType(5)) },
-  ].filter((item) => !Number.isNaN(item.value))
-  const strength = [...parAverages].sort((a, b) => a.value - b.value)[0]
-  const weakness = [...parAverages].sort((a, b) => b.value - a.value)[0]
-  const playerStats = [...byName.entries()].map(([name, list]) => {
-    const sorted = [...list].sort((a, b) => a.date.localeCompare(b.date))
-    const playerTotals = sorted.map((round) => round.total)
-    const playerLastN = sorted.slice(-handicapBasis)
-    return {
-      name,
-      avg: Math.ceil(playerTotals.reduce((sum, total) => sum + total, 0) / playerTotals.length),
-      handicap: Math.ceil(playerLastN.reduce((sum, round) => sum + round.diff, 0) / playerLastN.length),
-      birdie: sorted.reduce((sum, round) => sum + round.birdie, 0),
-    }
-  })
-  const rankOf = (items: typeof playerStats, key: 'avg' | 'handicap' | 'birdie', lowerBetter: boolean) => {
-    const sorted = [...items].sort((a, b) => lowerBetter ? a[key] - b[key] : b[key] - a[key])
-    return sorted.findIndex((item) => item.name === personalPlayerName) + 1
-  }
-  const totalPlayers = playerStats.length
-  const target = Number(targetScore.replace(/[^0-9]/g, ''))
-  const targetGap = target ? avg - target : 0
-  const personalHoleStats = scheduleIds.flatMap((scheduleId) => personalStatsBySchedule[scheduleId] ?? [])
-  const personalHoleStatsWithScore = scheduleIds.flatMap((scheduleId) => {
-    const round = rounds.find((item) => item.scheduleId === scheduleId)
-    const playerRound = round ? playerRounds.find((item) => item.roundId === round.id) : null
-    return (personalStatsBySchedule[scheduleId] ?? []).map((item) => ({
-      ...item,
-      score: playerRound?.strokes[item.hole - 1] ?? null,
-    }))
-  })
-  const firTargets = personalHoleStats.filter((item) => item.par !== 3)
-  const firSuccess = firTargets.filter((item) => !item.fir || item.fir === 'center').length
-  const firRate = firTargets.length ? Math.round((firSuccess / firTargets.length) * 100) : null
-  const girTargets = personalHoleStatsWithScore.filter((item) => item.score !== null && item.putts > 0)
-  const girSuccess = girTargets.filter((item) => item.score !== null && item.score - item.putts <= item.par - 2).length
-  const girRate = girTargets.length ? Math.round((girSuccess / girTargets.length) * 100) : null
-  const obCount = personalHoleStats.filter((item) => item.fir === 'left_ob' || item.fir === 'right_ob' || item.fir === 'other_ob').length
-  const hazardCount = personalHoleStats.filter((item) => item.fir === 'hazard').length
-  const avgPutts = personalHoleStats.length ? (personalHoleStats.reduce((sum, item) => sum + item.putts, 0) / personalHoleStats.length).toFixed(1) : '-'
-  const threePuttCount = personalHoleStats.filter((item) => item.putts >= 3).length
-  const penaltyTotal = personalHoleStats.reduce((sum, item) => sum + item.penalties, 0)
-  const firCounts = new Map<PersonalRoundFir, number>()
-  for (const item of personalHoleStats) if (item.fir) firCounts.set(item.fir, (firCounts.get(item.fir) ?? 0) + 1)
-  const mainMiss = [...firCounts.entries()].filter(([key]) => key !== 'center').sort((a, b) => b[1] - a[1])[0]
-  const mainMissText = mainMiss ? firLabel(mainMiss[0]) : '미입력'
-  const roundsOldToNew = [...playerRounds].sort((a, b) => a.date.localeCompare(b.date))
-  const trendRounds = roundsOldToNew.slice(-6)
-  const trendWithStats = trendRounds.map((round) => {
-    const scheduleId = rounds.find((item) => item.id === round.roundId)?.scheduleId
-    const holeStats = scheduleId ? personalStatsBySchedule[scheduleId] ?? [] : []
-    const holeStatsWithScore = holeStats.map((item) => ({ ...item, score: round.strokes[item.hole - 1] ?? null }))
-    const roundFirTargets = holeStats.filter((item) => item.par !== 3)
-    const roundGirTargets = holeStatsWithScore.filter((item) => item.score !== null && item.putts > 0)
-    return {
-      round,
-      fir: roundFirTargets.length ? Math.round((roundFirTargets.filter((item) => !item.fir || item.fir === 'center').length / roundFirTargets.length) * 100) : null,
-      gir: roundGirTargets.length ? Math.round((roundGirTargets.filter((item) => item.score !== null && item.score - item.putts <= item.par - 2).length / roundGirTargets.length) * 100) : null,
-      putts: holeStats.length ? Number((holeStats.reduce((sum, item) => sum + item.putts, 0) / holeStats.length).toFixed(1)) : null,
-    }
-  })
-  const toTrendData = <T extends { round: PlayerRound }>(items: T[], valueOf: (item: T) => number | null) => (
-    items.map((item) => {
-      const value = valueOf(item)
-      return value === null ? null : { date: item.round.date, value }
-    }).filter((item): item is { date: string; value: number } => !!item)
-  )
-  const puttTrendData = toTrendData(trendWithStats, (item) => item.putts)
-  const obDistributionData = [
-    { label: '좌 OB', value: firCounts.get('left_ob') ?? 0 },
-    { label: '우 OB', value: firCounts.get('right_ob') ?? 0 },
-    { label: '기타 OB', value: firCounts.get('other_ob') ?? 0 },
-    { label: '해저드', value: firCounts.get('hazard') ?? 0 },
-  ]
-  const parRadarData = ([3, 4, 5] as const).map((par) => ({ label: `Par ${par}`, value: Number(avgParType(par)) })).filter((item) => !Number.isNaN(item.value))
-  const scoreDistributionData = [
-    { label: '버디', value: scoreTotals.birdie, color: C.info },
-    { label: '파', value: scoreTotals.par, color: C.green },
-    { label: '보기', value: scoreTotals.bogey, color: C.warn },
-    { label: '더블+', value: scoreTotals.double + scoreTotals.triplePlus, color: C.danger },
-  ]
-  const scoreStackData = trendRounds.map((round) => ({
-    date: round.date,
-    birdie: round.birdie,
-    par: round.parCount,
-    bogey: round.bogey,
-    doublePlus: round.double + round.triplePlus,
-  }))
-  const aiComments = [
-    recent5Avg < avg
-      ? `최근 5경기 평균이 전체 평균보다 ${avg - recent5Avg}타 낮아져 흐름이 좋습니다.`
-      : recent5Avg > avg
-        ? `최근 5경기 평균이 전체 평균보다 ${recent5Avg - avg}타 높아졌습니다.`
-        : '최근 5경기 평균이 전체 평균과 비슷하게 유지되고 있습니다.',
-    backAvg > frontAvg
-      ? `후반이 전반보다 ${backAvg - frontAvg}타 높아 후반 집중 관리가 필요합니다.`
-      : backAvg < frontAvg
-        ? `후반이 전반보다 ${frontAvg - backAvg}타 낮아 마무리 흐름이 좋습니다.`
-        : '전후반 타수 균형이 안정적입니다.',
-    scoreTotals.double + scoreTotals.triplePlus > playerRounds.length * 3
-      ? '더블 이상 홀이 많은 편이라 큰 실수를 줄이는 전략이 효과적입니다.'
-      : '더블 이상 관리가 비교적 안정적입니다.',
-  ]
-  const improvementItems = [
-    `1순위: ${weakness?.label ?? '취약 홀'}에서 안전한 공략으로 평균 타수를 낮추기`,
-    `2순위: 후반 평균 ${backAvg}타를 전반 평균 ${frontAvg}타에 가깝게 만들기`,
-    `3순위: 더블/트리플+ ${scoreTotals.double + scoreTotals.triplePlus}개를 줄이기`,
-  ]
-
-  const modalTitle = detailModal === 'target' ? '목표 설정'
-    : detailModal === 'trend' ? '추이 분석'
-      : detailModal === 'hole' ? '홀 유형별 평균'
-        : detailModal === 'score' ? '스코어 분포'
-          : detailModal === 'rank' ? '클럽 내 순위'
-            : detailModal === 'improve' ? '개선 리포트'
-              : detailModal === 'shot' ? '샷/퍼팅 분석'
-                : '라운드별 상세'
 
   const reportBaseWidth = reportSectionWidth > 0 ? reportSectionWidth : 360
   const reportCardWidth = Math.min(270, Math.max(224, reportBaseWidth * 0.64))
-  const personalReportCards = [
-    { key: 'target', icon: '🎯', title: '목표 설정', subtitle: `${targetScore || '100'}타 목표 관리`, modal: 'target' },
-    { key: 'trend', icon: '📈', title: '스코어 추이', subtitle: `최근5 평균 ${recent5Avg}타`, modal: 'trend' },
-    { key: 'shot', icon: '🏌️', title: '샷·퍼팅', subtitle: `FIR ${firRate === null ? '-' : `${firRate}%`} · 퍼팅 ${avgPutts === '-' ? '-' : `${avgPutts}개`}`, modal: 'shot' },
-    { key: 'hole', icon: '⛳', title: '홀 유형', subtitle: weakness ? `${weakness.label} 보완 필요` : 'Par3/4/5 분석', modal: 'hole' },
-    { key: 'score', icon: '📊', title: '스코어 분포', subtitle: `Par ${scoreTotals.par} · Bogey ${scoreTotals.bogey}`, modal: 'score' },
-    { key: 'rank', icon: '🏆', title: '클럽 순위', subtitle: `${playerStats.length}명 비교`, modal: 'rank' },
-    { key: 'rounds', icon: '📖', title: '라운드 상세', subtitle: `${playerRounds.length}경기 기록`, modal: 'rounds' },
-    { key: 'improve', icon: '🤖', title: '개선 리포트', subtitle: `OB ${obCount}회 · 패널티 ${penaltyTotal}개`, modal: 'improve' },
-  ] as const
-
 
   return (
     <>
@@ -1739,7 +1271,7 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
                   <>
                     <Text style={s.insightText}>{trendText}</Text>
                     <View style={s.miniTrendRow}>
-                      {[...playerRounds].sort((a, b) => a.date.localeCompare(b.date)).slice(-6).map((round) => (
+                      {trendRounds.map((round) => (
                         <View key={round.roundId} style={s.miniTrendItem}>
                           <Text style={s.miniTrendValue}>{round.total}</Text>
                           <View style={[s.miniTrendBar, { height: Math.max(18, 72 - (round.total - best) * 2) }]} />
@@ -1753,49 +1285,49 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
                 )}
                 {detailModal === 'hole' && (
                   <>
-                    <RadarChart data={parRadarData} />
+                    <RadarChart data={parRadarData}  styles={s} />
                     <View style={s.metricGrid}>
-                      <MetricCard label="Par 3" value={`${avgParType(3)}타`} />
-                      <MetricCard label="Par 4" value={`${avgParType(4)}타`} />
-                      <MetricCard label="Par 5" value={`${avgParType(5)}타`} />
+                      <MetricCard label="Par 3" value={`${avgParType[3]}타`}  styles={s} />
+                      <MetricCard label="Par 4" value={`${avgParType[4]}타`}  styles={s} />
+                      <MetricCard label="Par 5" value={`${avgParType[5]}타`}  styles={s} />
                     </View>
                     {strength && weakness && <Text style={s.insightText}>강점은 {strength.label}, 보완 포인트는 {weakness.label}입니다.</Text>}
                   </>
                 )}
                 {detailModal === 'score' && (
                   <>
-                    <ScoreDonut data={scoreDistributionData} />
-                    <StackedScoreBars data={scoreStackData} />
+                    <ScoreDonut data={scoreDistributionData}  styles={s} />
+                    <StackedScoreBars data={scoreStackData}  styles={s} />
                     <View style={s.scoreDistRow}>
-                      <ScoreDist label="버디" value={scoreTotals.birdie} color={C.info} />
-                      <ScoreDist label="파" value={scoreTotals.par} color={C.green} />
-                      <ScoreDist label="보기" value={scoreTotals.bogey} color={C.warn} />
-                      <ScoreDist label="더블" value={scoreTotals.double} color={C.danger} />
-                      <ScoreDist label="트리플+" value={scoreTotals.triplePlus} color={C.text} />
+                      <ScoreDist label="버디" value={scoreTotals.birdie} color={C.info}  styles={s} />
+                      <ScoreDist label="파" value={scoreTotals.par} color={C.green}  styles={s} />
+                      <ScoreDist label="보기" value={scoreTotals.bogey} color={C.warn}  styles={s} />
+                      <ScoreDist label="더블" value={scoreTotals.double} color={C.danger}  styles={s} />
+                      <ScoreDist label="트리플+" value={scoreTotals.triplePlus} color={C.text}  styles={s} />
                     </View>
                   </>
                 )}
                 {detailModal === 'rank' && (
                   <>
-                    <View style={s.analysisRow}><Text style={s.analysisLabel}>평균 순위</Text><Text style={s.analysisValue}>{rankOf(playerStats, 'avg', true)} / {totalPlayers}</Text></View>
-                    <View style={s.analysisRow}><Text style={s.analysisLabel}>핸디 순위</Text><Text style={s.analysisValue}>{rankOf(playerStats, 'handicap', true)} / {totalPlayers}</Text></View>
-                    <View style={s.analysisRow}><Text style={s.analysisLabel}>버디 순위</Text><Text style={s.analysisValue}>{rankOf(playerStats, 'birdie', false)} / {totalPlayers}</Text></View>
+                    <View style={s.analysisRow}><Text style={s.analysisLabel}>평균 순위</Text><Text style={s.analysisValue}>{rankSummary.avg} / {totalPlayers}</Text></View>
+                    <View style={s.analysisRow}><Text style={s.analysisLabel}>핸디 순위</Text><Text style={s.analysisValue}>{rankSummary.handicap} / {totalPlayers}</Text></View>
+                    <View style={s.analysisRow}><Text style={s.analysisLabel}>버디 순위</Text><Text style={s.analysisValue}>{rankSummary.birdie} / {totalPlayers}</Text></View>
                   </>
                 )}
                 {detailModal === 'shot' && (
                   <>
                     <View style={s.gaugeRow}>
-                      <DonutGauge label="FIR" value={firRate} />
-                      <DonutGauge label="GIR" value={girRate} />
+                      <DonutGauge label="FIR" value={firRate}  styles={s} />
+                      <DonutGauge label="GIR" value={girRate}  styles={s} />
                     </View>
-                    <PuttBars data={puttTrendData} />
-                    <ObDistribution data={obDistributionData} />
+                    <PuttBars data={puttTrendData}  styles={s} />
+                    <ObDistribution data={obDistributionData}  styles={s} />
                     <View style={s.metricGrid}>
-                      <MetricCard label="FIR 성공률" value={firRate === null ? '-' : `${firRate}%`} />
-                      <MetricCard label="GIR 성공률" value={girRate === null ? '-' : `${girRate}%`} />
-                      <MetricCard label="평균 퍼팅" value={avgPutts === '-' ? '-' : `${avgPutts}개`} />
-                      <MetricCard label="OB/해저드" value={`${obCount}/${hazardCount}`} />
-                      <MetricCard label="패널티" value={`${penaltyTotal}개`} />
+                      <MetricCard label="FIR 성공률" value={firRate === null ? '-' : `${firRate}%`}  styles={s} />
+                      <MetricCard label="GIR 성공률" value={girRate === null ? '-' : `${girRate}%`}  styles={s} />
+                      <MetricCard label="평균 퍼팅" value={avgPutts === '-' ? '-' : `${avgPutts}개`}  styles={s} />
+                      <MetricCard label="OB/해저드" value={`${obCount}/${hazardCount}`}  styles={s} />
+                      <MetricCard label="패널티" value={`${penaltyTotal}개`}  styles={s} />
                     </View>
                     <View style={s.analysisRow}><Text style={s.analysisLabel}>주요 미스</Text><Text style={s.analysisValue}>{mainMissText}</Text></View>
                     <View style={s.analysisRow}><Text style={s.analysisLabel}>3퍼트 이상</Text><Text style={s.analysisValue}>{threePuttCount}회</Text></View>
@@ -1803,7 +1335,7 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
                   </>
                 )}
                 {detailModal === 'improve' && improvementItems.map((item) => (
-                  <BulletText key={item} text={item} />
+                  <BulletText key={item} text={item}  styles={s} />
                 ))}
                 {detailModal === 'rounds' && (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -1902,235 +1434,6 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
         </ScrollView>
       </View>
     </>
-  )
-}
-
-function MetricCard({ label, value, tone }: { label: string; value: string; tone?: string }) {
-  return (
-    <View style={s.metricCard}>
-      <Text style={s.metricLabel}>{label}</Text>
-      <Text style={[s.metricValue, tone ? { color: tone } : null]}>{value}</Text>
-    </View>
-  )
-}
-
-function CompactMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={s.compactMetric}>
-      <Text style={s.compactMetricLabel}>{label}</Text>
-      <Text style={s.compactMetricValue}>{value}</Text>
-    </View>
-  )
-}
-
-function CompactActionButton({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <TouchableOpacity style={s.compactActionButton} activeOpacity={0.82} onPress={onPress}>
-      <Text style={s.compactActionText}>{label}</Text>
-      <Text style={s.compactActionArrow}>›</Text>
-    </TouchableOpacity>
-  )
-}
-
-function DonutGauge({ label, value }: { label: string; value: number | null }) {
-  const size = 104
-  const radius = 34
-  const center = size / 2
-  const circumference = 2 * Math.PI * radius
-  const progress = Math.max(0, Math.min(100, value ?? 0))
-  return (
-    <View style={s.gaugeCard}>
-      <Svg width={size} height={size}>
-        <Circle cx={center} cy={center} r={radius} stroke={C.border} strokeWidth={11} fill="none" />
-        <Circle
-          cx={center}
-          cy={center}
-          r={radius}
-          stroke={C.green}
-          strokeWidth={11}
-          fill="none"
-          strokeLinecap="round"
-          strokeDasharray={`${(circumference * progress) / 100},${circumference}`}
-          transform={`rotate(-90 ${center} ${center})`}
-        />
-        <SvgText x={center} y={center - 4} textAnchor="middle" fontSize={12} fontWeight="800" fill={C.muted}>{label}</SvgText>
-        <SvgText x={center} y={center + 18} textAnchor="middle" fontSize={18} fontWeight="900" fill={C.text}>{value === null ? '-' : `${value}%`}</SvgText>
-      </Svg>
-    </View>
-  )
-}
-
-function PuttBars({ data }: { data: { date: string; value: number }[] }) {
-  const max = Math.max(4, ...data.map((item) => item.value))
-  return (
-    <View style={s.visualCard}>
-      <View style={s.visualHeader}><Text style={s.visualTitle}>퍼팅 추세</Text><Text style={s.visualValue}>{data.length ? `${data[data.length - 1].value}개` : '-'}</Text></View>
-      <View style={s.puttBarRow}>
-        {data.length === 0 ? <Text style={s.visualEmpty}>추세 데이터가 없습니다.</Text> : data.map((item) => (
-          <View key={item.date} style={s.puttBarItem}>
-            <Text style={s.puttBarValue}>{item.value}</Text>
-            <View style={[s.puttBar, { height: Math.max(12, (item.value / max) * 58) }]} />
-            <Text style={s.puttBarDate}>{item.date.slice(5)}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  )
-}
-
-function ObDistribution({ data }: { data: { label: string; value: number }[] }) {
-  return (
-    <View style={s.visualCard}>
-      <View style={s.visualHeader}><Text style={s.visualTitle}>OB/해저드 분포</Text><Text style={s.visualValue}>{data.reduce((sum, item) => sum + item.value, 0)}회</Text></View>
-      <View style={s.obGrid}>
-        {data.map((item) => (
-          <View key={item.label} style={s.obCell}>
-            <Text style={s.obLabel}>{item.label}</Text>
-            <Text style={s.obValue}>{item.value}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  )
-}
-
-function RadarChart({ data }: { data: { label: string; value: number }[] }) {
-  const size = 190
-  const center = size / 2
-  const radius = 58
-  const values = data.map((item) => item.value)
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const normalized = (value: number) => max === min ? 0.72 : 0.35 + ((max - value) / (max - min)) * 0.5
-  const point = (index: number, ratio: number) => {
-    const angle = -Math.PI / 2 + (Math.PI * 2 * index) / data.length
-    return { x: center + Math.cos(angle) * radius * ratio, y: center + Math.sin(angle) * radius * ratio }
-  }
-  const outerPoints = data.map((_, index) => point(index, 1)).map((p) => `${p.x},${p.y}`).join(' ')
-  const valuePoints = data.map((item, index) => point(index, normalized(item.value))).map((p) => `${p.x},${p.y}`).join(' ')
-  return (
-    <View style={s.visualCard}>
-      <View style={s.visualHeader}><Text style={s.visualTitle}>홀 유형 밸런스</Text><Text style={s.visualValue}>낮을수록 강점</Text></View>
-      {data.length < 3 ? <Text style={s.visualEmpty}>분석 데이터가 부족합니다.</Text> : (
-        <Svg width={size} height={size}>
-          <Polygon points={outerPoints} fill="none" stroke={C.border} strokeWidth={1} />
-          <Polygon points={valuePoints} fill="rgba(32, 160, 91, 0.18)" stroke={C.green} strokeWidth={2} />
-          {data.map((item, index) => {
-            const p = point(index, 1.24)
-            const dot = point(index, normalized(item.value))
-            return (
-              <G key={item.label}>
-                <Line x1={center} y1={center} x2={point(index, 1).x} y2={point(index, 1).y} stroke={C.border} strokeWidth={1} />
-                <Circle cx={dot.x} cy={dot.y} r={3} fill={C.green} />
-                <SvgText x={p.x} y={p.y + 4} textAnchor="middle" fontSize={10} fontWeight="800" fill={C.muted}>{item.label}</SvgText>
-                <SvgText x={p.x} y={p.y + 18} textAnchor="middle" fontSize={10} fill={C.text}>{item.value.toFixed(1)}</SvgText>
-              </G>
-            )
-          })}
-        </Svg>
-      )}
-    </View>
-  )
-}
-
-function ScoreDonut({ data }: { data: { label: string; value: number; color: string }[] }) {
-  const size = 156
-  const center = size / 2
-  const radius = 48
-  const circumference = 2 * Math.PI * radius
-  const total = data.reduce((sum, item) => sum + item.value, 0)
-  let offset = 0
-  return (
-    <View style={s.visualCard}>
-      <View style={s.visualHeader}><Text style={s.visualTitle}>스코어 구성</Text><Text style={s.visualValue}>{total}홀</Text></View>
-      {total === 0 ? <Text style={s.visualEmpty}>스코어 데이터가 없습니다.</Text> : (
-        <View style={s.donutRow}>
-          <Svg width={size} height={size}>
-            <Circle cx={center} cy={center} r={radius} stroke={C.border} strokeWidth={18} fill="none" />
-            {data.map((item) => {
-              const dash = (item.value / total) * circumference
-              const segment = (
-                <Circle
-                  key={item.label}
-                  cx={center}
-                  cy={center}
-                  r={radius}
-                  stroke={item.color}
-                  strokeWidth={18}
-                  fill="none"
-                  strokeDasharray={`${dash},${circumference}`}
-                  strokeDashoffset={-offset}
-                  transform={`rotate(-90 ${center} ${center})`}
-                />
-              )
-              offset += dash
-              return segment
-            })}
-            <SvgText x={center} y={center - 2} textAnchor="middle" fontSize={13} fontWeight="900" fill={C.text}>총 {total}</SvgText>
-            <SvgText x={center} y={center + 16} textAnchor="middle" fontSize={10} fill={C.muted}>holes</SvgText>
-          </Svg>
-          <View style={s.donutLegend}>
-            {data.map((item) => (
-              <View key={item.label} style={s.legendRow}>
-                <View style={[s.legendDot, { backgroundColor: item.color }]} />
-                <Text style={s.legendLabel}>{item.label}</Text>
-                <Text style={s.legendValue}>{item.value}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
-    </View>
-  )
-}
-
-function StackedScoreBars({ data }: { data: { date: string; birdie: number; par: number; bogey: number; doublePlus: number }[] }) {
-  return (
-    <View style={s.visualCard}>
-      <View style={s.visualHeader}><Text style={s.visualTitle}>최근 라운드 구성</Text><Text style={s.visualValue}>스택</Text></View>
-      {data.length === 0 ? <Text style={s.visualEmpty}>추세 데이터가 없습니다.</Text> : data.map((item) => {
-        const total = Math.max(1, item.birdie + item.par + item.bogey + item.doublePlus)
-        return (
-          <View key={item.date} style={s.stackRow}>
-            <Text style={s.stackDate}>{item.date.slice(5)}</Text>
-            <View style={s.stackTrack}>
-              <View style={[s.stackSeg, { flex: item.birdie, backgroundColor: C.info }]} />
-              <View style={[s.stackSeg, { flex: item.par, backgroundColor: C.green }]} />
-              <View style={[s.stackSeg, { flex: item.bogey, backgroundColor: C.warn }]} />
-              <View style={[s.stackSeg, { flex: item.doublePlus, backgroundColor: C.danger }]} />
-              {total === 1 && item.birdie + item.par + item.bogey + item.doublePlus === 0 && <View style={[s.stackSeg, { flex: 1, backgroundColor: C.border }]} />}
-            </View>
-          </View>
-        )
-      })}
-    </View>
-  )
-}
-
-function ScoreDist({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <View style={s.scoreDistItem}>
-      <Text style={[s.scoreDistValue, { color }]}>{value}</Text>
-      <Text style={s.scoreDistLabel}>{label}</Text>
-    </View>
-  )
-}
-
-function BulletText({ text }: { text: string }) {
-  return (
-    <View style={s.bulletRow}>
-      <Text style={s.bulletDot}>•</Text>
-      <Text style={s.bulletText}>{text}</Text>
-    </View>
-  )
-}
-
-function DetailButton({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <TouchableOpacity style={s.detailButton} activeOpacity={0.82} onPress={onPress}>
-      <Text style={s.detailButtonText}>{label}</Text>
-      <Text style={s.detailButtonArrow}>›</Text>
-    </TouchableOpacity>
   )
 }
 
@@ -2743,10 +2046,6 @@ const s = StyleSheet.create({
   aiCaddieRecommendText: { flex: 1, fontSize: 12, lineHeight: 18, fontWeight: '800', color: C.text },
   roundCarouselWrap: { width: '100%', alignSelf: 'stretch', marginHorizontal: 0, overflow: 'hidden' },
   roundCarouselPlaceholder: { marginHorizontal: 24, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.42)' },
-  roundCarouselContent: {
-    paddingLeft: 0,
-    paddingRight: 20,
-  },
   roundSwipeHint: { textAlign: 'center', marginTop: 10, fontSize: 11, fontWeight: '700', color: C.muted },
   roundCardShell: { marginHorizontal: 0, flexShrink: 0 },
   flipCardScene: { position: 'relative' },
