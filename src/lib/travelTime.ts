@@ -1,4 +1,5 @@
 import { getCachedAsync } from "./asyncCache";
+import { supabase } from "./supabase";
 
 type Coordinate = {
   latitude?: number | null;
@@ -69,24 +70,10 @@ function tmapAppKey() {
   return String(process.env.EXPO_PUBLIC_TMAP_APP_KEY || "").trim();
 }
 
-function naverClientId() {
-  return String(process.env.EXPO_PUBLIC_NAVER_MAPS_CLIENT_ID || "").trim();
-}
-
-function naverClientSecret() {
-  return String(process.env.EXPO_PUBLIC_NAVER_MAPS_CLIENT_SECRET || "").trim();
-}
-
 function minutesFromSeconds(seconds: unknown) {
   const value = Number(seconds);
   if (!Number.isFinite(value) || value <= 0) return null;
   return Math.ceil(value / 60);
-}
-
-function minutesFromMilliseconds(milliseconds: unknown) {
-  const value = Number(milliseconds);
-  if (!Number.isFinite(value) || value <= 0) return null;
-  return Math.ceil(value / 1000 / 60);
 }
 
 export async function getDrivingTravelTimeMinutes(
@@ -174,9 +161,7 @@ export async function getNaverDrivingTravelTimeMinutes(
   origin: Coordinate,
   destination: Coordinate,
 ): Promise<number | null> {
-  const clientId = naverClientId();
-  const clientSecret = naverClientSecret();
-  if (!clientId || !clientSecret || !hasCoordinate(origin) || !hasCoordinate(destination))
+  if (!hasCoordinate(origin) || !hasCoordinate(destination))
     return null;
 
   const cacheKey = `travel:naver:${coordinateCacheKey(origin)}:${coordinateCacheKey(destination)}`;
@@ -184,26 +169,12 @@ export async function getNaverDrivingTravelTimeMinutes(
     cacheKey,
     TRAVEL_CACHE_TTL_MS,
     async () => {
-      const params = new URLSearchParams({
-        start: `${origin.longitude},${origin.latitude}`,
-        goal: `${destination.longitude},${destination.latitude}`,
-        option: "trafast",
+      const { data, error } = await supabase.functions.invoke("route-travel-times", {
+        body: { origin, destination },
       });
-
-      const response = await fetch(
-        `https://maps.apigw.ntruss.com/map-direction/v1/driving?${params.toString()}`,
-        {
-          headers: {
-            "X-NCP-APIGW-API-KEY-ID": clientId,
-            "X-NCP-APIGW-API-KEY": clientSecret,
-          },
-        },
-      );
-      if (!response.ok) return null;
-
-      const json = await response.json();
-      const duration = json?.route?.trafast?.[0]?.summary?.duration;
-      return minutesFromMilliseconds(duration);
+      if (error) return null;
+      const minutes = Number(data?.naver);
+      return Number.isFinite(minutes) && minutes > 0 ? minutes : null;
     },
     { shouldCache: (value) => value !== null },
   );
