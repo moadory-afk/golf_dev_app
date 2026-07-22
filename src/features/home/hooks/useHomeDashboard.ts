@@ -7,6 +7,7 @@ import {
   mergeHomeAiCaddie,
   mergeHomeTravel,
   mergeHomeWeather,
+  refreshHomeRoundState,
 } from "../services/homeService";
 import { createEmptyHomeDashboard } from "../mappers/homeMapper";
 import type { HomeDashboard, HomeDashboardState } from "../types/home";
@@ -35,6 +36,47 @@ function errorMessage(error: unknown) {
   return "홈 데이터를 불러오지 못했습니다.";
 }
 
+const ROUND_ENRICHMENT_KEYS = [
+  "weatherText",
+  "temperature",
+  "windText",
+  "fiveHourWeatherSummary",
+  "fiveHourWeatherDetail",
+  "fiveHourWeatherHours",
+  "openWeatherHours",
+  "kmaIssuedAt",
+  "routeTimeText",
+  "routeTimeByProvider",
+  "departureTimeText",
+] as const;
+
+function preserveRoundEnrichment(current: HomeDashboard, next: HomeDashboard): HomeDashboard {
+  const currentById = new Map(current.hero.rounds.map((round) => [round.id, round]));
+  const rounds = next.hero.rounds.map((round) => {
+    const previous = currentById.get(round.id);
+    if (!previous) return round;
+    const enrichment = ROUND_ENRICHMENT_KEYS.reduce<Record<string, unknown>>((acc, key) => {
+      const value = previous[key];
+      if (value !== undefined && value !== null) acc[key] = value;
+      return acc;
+    }, {});
+    return { ...round, ...enrichment };
+  });
+  const upcomingRound = next.upcomingRound
+    ? rounds.find((round) => round.id === next.upcomingRound?.id) ?? next.upcomingRound
+    : null;
+  return {
+    ...next,
+    hero: {
+      ...next.hero,
+      rounds,
+      weatherText: rounds[0]?.weatherText ?? next.hero.weatherText,
+      temperature: rounds[0]?.temperature ?? next.hero.temperature,
+    },
+    upcomingRound,
+  };
+}
+
 export function useHomeDashboard({
   clubId,
   userName,
@@ -50,6 +92,10 @@ export function useHomeDashboard({
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const partialRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rawRef = useRef<Awaited<ReturnType<typeof getHomeDashboardBase>>["raw"]>(null);
+  const partialRefreshRunningRef = useRef(false);
+  const partialRefreshQueuedRef = useRef(false);
   const realtimeChannelIdRef = useRef<string | null>(null);
 
   if (!realtimeChannelIdRef.current) {
@@ -68,6 +114,7 @@ export function useHomeDashboard({
         if (!mounted) return;
 
         // 일정·기록 등 기본 데이터가 준비되는 즉시 홈을 먼저 표시한다.
+        rawRef.current = raw;
         setDashboard(baseDashboard);
         setLoading(false);
 
@@ -134,6 +181,41 @@ export function useHomeDashboard({
     }, 700);
   }, [refresh]);
 
+  const runPartialRefresh = useCallback(async () => {
+    const raw = rawRef.current;
+    if (!clubId || !raw) {
+      refresh();
+      return;
+    }
+    if (partialRefreshRunningRef.current) {
+      partialRefreshQueuedRef.current = true;
+      return;
+    }
+
+    partialRefreshRunningRef.current = true;
+    try {
+      const result = await refreshHomeRoundState(raw, clubId, userName, userId);
+      rawRef.current = result.raw;
+      setDashboard((current) => preserveRoundEnrichment(current, result.dashboard));
+    } catch {
+      // 부분 갱신 실패 시 다음 명시적 새로고침에서 전체 데이터를 복구한다.
+    } finally {
+      partialRefreshRunningRef.current = false;
+      if (partialRefreshQueuedRef.current) {
+        partialRefreshQueuedRef.current = false;
+        void runPartialRefresh();
+      }
+    }
+  }, [clubId, refresh, userId, userName]);
+
+  const queuePartialRefresh = useCallback(() => {
+    if (partialRefreshTimerRef.current) clearTimeout(partialRefreshTimerRef.current);
+    partialRefreshTimerRef.current = setTimeout(() => {
+      partialRefreshTimerRef.current = null;
+      void runPartialRefresh();
+    }, 500);
+  }, [runPartialRefresh]);
+
   useEffect(() => {
     if (!clubId) return;
 
@@ -159,7 +241,7 @@ export function useHomeDashboard({
           table: "club_round_groups",
           filter: `club_id=eq.${clubId}`,
         },
-        queueRefresh,
+        queuePartialRefresh,
       )
       .on(
         "postgres_changes",
@@ -169,7 +251,7 @@ export function useHomeDashboard({
           table: "club_round_group_members",
           filter: `club_id=eq.${clubId}`,
         },
-        queueRefresh,
+        queuePartialRefresh,
       )
       .on(
         "postgres_changes",
@@ -179,7 +261,7 @@ export function useHomeDashboard({
           table: "club_round_attendances",
           filter: `club_id=eq.${clubId}`,
         },
-        queueRefresh,
+        queuePartialRefresh,
       )
       .subscribe();
 
@@ -188,15 +270,19 @@ export function useHomeDashboard({
         clearTimeout(refreshTimerRef.current);
         refreshTimerRef.current = null;
       }
+      if (partialRefreshTimerRef.current) {
+        clearTimeout(partialRefreshTimerRef.current);
+        partialRefreshTimerRef.current = null;
+      }
       void supabase.removeChannel(channel);
     };
-  }, [clubId, queueRefresh]);
+  }, [clubId, queuePartialRefresh, queueRefresh]);
 
   useEffect(() => {
     return subscribeHomeDashboardChanged((changedClubId) => {
       if (!changedClubId || changedClubId === clubId) queueRefresh();
     });
-  }, [clubId, queueRefresh]);
+  }, [clubId, queuePartialRefresh, queueRefresh]);
 
   return useMemo(
     () => ({ dashboard, loading, error, refresh }),

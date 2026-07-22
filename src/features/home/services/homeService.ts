@@ -11,6 +11,7 @@ import { getHomeAICaddiePreview } from "../../caddie/services/caddieService";
 import {
   buildWeatherByCourseId,
   fetchWeatherByScheduleId,
+  fetchHomeRoundStateData,
   getHomeDashboardRawData,
   type HomeDashboardRawData,
 } from "../api/homeRepository";
@@ -51,6 +52,22 @@ export async function getHomeDashboardBase(
     dashboard: mapHomeDashboard(raw, userName, userId),
     raw,
   };
+}
+
+
+export async function refreshHomeRoundState(
+  raw: HomeDashboardRawData,
+  clubId: string,
+  userName?: string | null,
+  userId?: string | null,
+): Promise<HomeDashboardBaseResult> {
+  const state = await fetchHomeRoundStateData(
+    clubId,
+    raw.schedules.map((schedule) => schedule.id),
+    userId,
+  );
+  const nextRaw: HomeDashboardRawData = { ...raw, ...state };
+  return { dashboard: mapHomeDashboard(nextRaw, userName, userId), raw: nextRaw };
 }
 
 export async function getHomeWeatherDashboard(

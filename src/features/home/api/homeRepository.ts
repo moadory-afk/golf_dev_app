@@ -396,6 +396,86 @@ async function fetchHomeDashboardRawData(
   };
 }
 
+
+export type HomeRoundStateData = Pick<
+  HomeDashboardRawData,
+  "groups" | "members" | "attendances" | "lottoEntries" | "lottoDraws"
+>;
+
+/**
+ * 실시간 참석/조 편성 변경 시 홈 전체 원본을 다시 읽지 않고
+ * 현재 표시 중인 일정의 동적 상태만 갱신한다.
+ */
+export async function fetchHomeRoundStateData(
+  clubId: string,
+  scheduleIds: string[],
+  userId?: string | null,
+): Promise<HomeRoundStateData> {
+  if (!scheduleIds.length) {
+    return { groups: [], members: [], attendances: [], lottoEntries: [], lottoDraws: [] };
+  }
+
+  const [groupResult, memberResult, attendanceResult, lottoEntryResult, lottoDrawResult] =
+    await Promise.all([
+      supabase
+        .from("club_round_groups")
+        .select("id, schedule_id, group_no, group_name, tee_time, front_layout_name, back_layout_name")
+        .eq("club_id", clubId)
+        .in("schedule_id", scheduleIds)
+        .order("group_no", { ascending: true }),
+      supabase
+        .from("club_round_group_members")
+        .select("group_id, schedule_id, member_user_id, member_name")
+        .eq("club_id", clubId)
+        .in("schedule_id", scheduleIds)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("club_round_attendances")
+        .select("schedule_id, member_user_id, status")
+        .eq("club_id", clubId)
+        .in("schedule_id", scheduleIds),
+      userId
+        ? supabase
+            .from("round_lotto_entries")
+            .select("schedule_id, user_id")
+            .in("schedule_id", scheduleIds)
+            .eq("user_id", userId)
+        : Promise.resolve({ data: [], error: null }),
+      supabase
+        .from("round_lotto_draws")
+        .select("schedule_id, drafter_user_id, draw_status")
+        .in("schedule_id", scheduleIds),
+    ]);
+
+  if (groupResult.error) throw groupResult.error;
+  if (memberResult.error) throw memberResult.error;
+  if (attendanceResult.error) throw attendanceResult.error;
+  if (lottoEntryResult.error) throw lottoEntryResult.error;
+  if (lottoDrawResult.error) throw lottoDrawResult.error;
+
+  return {
+    groups: (groupResult.data ?? []) as HomeScheduleGroupRow[],
+    members: (memberResult.data ?? []) as HomeScheduleGroupMemberRow[],
+    attendances: ((attendanceResult.data ?? []) as HomeAttendanceRow[]).map((row) => ({
+      scheduleId: row.schedule_id,
+      userId: row.member_user_id,
+      status: mapAttendanceStatus(row.status),
+    })),
+    lottoEntries: ((lottoEntryResult.data ?? []) as Array<{ schedule_id: string; user_id: string }>).map(
+      (row) => ({ scheduleId: row.schedule_id, userId: row.user_id }),
+    ),
+    lottoDraws: ((lottoDrawResult.data ?? []) as Array<{
+      schedule_id: string;
+      drafter_user_id?: string | null;
+      draw_status?: string | null;
+    }>).map((row) => ({
+      scheduleId: row.schedule_id,
+      drafterUserId: row.drafter_user_id ?? null,
+      drawStatus: row.draw_status === "COMPLETED" ? "COMPLETED" : "PENDING",
+    })),
+  };
+}
+
 export function getHomeDashboardRawData(
   clubId: string,
   userId?: string | null,
