@@ -458,7 +458,7 @@ function PremiumHomeHeroSectionComponent({
     const previousIndex = activeIndexRef.current;
     const index = Math.round(event.nativeEvent.contentOffset.x / heroWidth);
     const nextIndex = updateActiveIndex(index);
-    if (tutorialStep === "swipe" && (tutorialSwipeStartedRef.current || nextIndex !== previousIndex)) {
+    if (tutorialStep === "swipe" && (tutorialSwipeStartedRef.current || nextIndex !== previousIndex || totalCount <= 1)) {
       tutorialSwipeStartedRef.current = false;
       completeHeroSwipeTutorial();
     }
