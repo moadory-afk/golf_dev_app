@@ -393,6 +393,7 @@ function PremiumHomeHeroSectionComponent({
   const dotsScrollRef = useRef<ScrollView>(null);
   const activeIndexRef = useRef(0);
   const tutorialSwipeStartedRef = useRef(false);
+  const [tutorialSwipeInProgress, setTutorialSwipeInProgress] = useState(false);
   const fallbackHeroWidth = HERO_MIN_WIDTH;
   const heroWidth = measuredHeroWidth || fallbackHeroWidth;
   const heroHeight = Math.round(
@@ -458,11 +459,14 @@ function PremiumHomeHeroSectionComponent({
     const previousIndex = activeIndexRef.current;
     const index = Math.round(event.nativeEvent.contentOffset.x / heroWidth);
     const nextIndex = updateActiveIndex(index);
-    if (tutorialStep === "swipe" && (tutorialSwipeStartedRef.current || nextIndex !== previousIndex || totalCount <= 1)) {
-      tutorialSwipeStartedRef.current = false;
-      completeHeroSwipeTutorial();
+    if (tutorialStep === "swipe") {
+      setTutorialSwipeInProgress(false);
+      if (tutorialSwipeStartedRef.current || nextIndex !== previousIndex || totalCount <= 1) {
+        tutorialSwipeStartedRef.current = false;
+        completeHeroSwipeTutorial();
+      }
     }
-  }, [completeHeroSwipeTutorial, heroWidth, tutorialStep, updateActiveIndex]);
+  }, [completeHeroSwipeTutorial, heroWidth, tutorialStep, totalCount, updateActiveIndex]);
 
   useEffect(() => {
     const dotStep = 15;
@@ -571,13 +575,20 @@ function PremiumHomeHeroSectionComponent({
             showsHorizontalScrollIndicator={false}
 
             onScroll={(event) => {
+              // 4/5 튜토리얼 중에는 카드가 이동하는 도중 activeIndex를 바꾸지 않는다.
+              // 중간 프레임에서 다음 카드의 앵커가 다시 등록되면 안내 레이어가 두 카드 위에
+              // 겹쳐 보일 수 있으므로, 최종 인덱스는 드래그/모멘텀 종료 시에만 반영한다.
+              if (tutorialStep === "swipe") return;
               const index = Math.round(event.nativeEvent.contentOffset.x / heroWidth);
               if (index !== activeIndexRef.current) {
                 updateActiveIndex(index);
               }
             }}
             onScrollBeginDrag={() => {
-              if (tutorialStep === "swipe") tutorialSwipeStartedRef.current = true;
+              if (tutorialStep === "swipe") {
+                tutorialSwipeStartedRef.current = true;
+                setTutorialSwipeInProgress(true);
+              }
             }}
             onMomentumScrollEnd={handleScrollEnd}
             onScrollEndDrag={(event) => {
@@ -690,7 +701,7 @@ function PremiumHomeHeroSectionComponent({
       </View>
 
       <TutorialOverlay
-        step={tutorialDefinition}
+        step={tutorialSwipeInProgress ? null : tutorialDefinition}
         targetRect={targetRect}
         containerWidth={tutorialContainerSize.width}
         containerHeight={tutorialContainerSize.height}
