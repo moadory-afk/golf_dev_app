@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Modal,
   PanResponder,
   RefreshControl,
@@ -1557,6 +1558,48 @@ const WeatherDetailModal = memo(function WeatherDetailModal({
   onClose: () => void;
 }) {
   const { palette } = useSkin();
+  const sheetTranslateY = useRef(new Animated.Value(680)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!visible) return;
+    sheetTranslateY.setValue(680);
+    backdropOpacity.setValue(0);
+    requestAnimationFrame(() => {
+      Animated.parallel([
+        Animated.spring(sheetTranslateY, {
+          toValue: 0,
+          useNativeDriver: true,
+          damping: 25,
+          stiffness: 220,
+          mass: 0.95,
+        }),
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+  }, [backdropOpacity, sheetTranslateY, visible]);
+
+  const closeSheet = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(sheetTranslateY, {
+        toValue: 680,
+        duration: 230,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) onClose();
+    });
+  }, [backdropOpacity, onClose, sheetTranslateY]);
+
   const compareTimes = Array.from(new Set([
     ...hours.map((item) => item.time),
     ...openWeatherHours.map((item) => item.time),
@@ -1571,9 +1614,20 @@ const WeatherDetailModal = memo(function WeatherDetailModal({
     </View>
   );
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.weatherModalBackdrop}>
-        <View style={[styles.weatherModalCard, { backgroundColor: palette.card, borderColor: palette.border }]}>
+    <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={closeSheet}>
+      <Animated.View style={[styles.weatherModalBackdrop, { opacity: backdropOpacity }]}>
+        <TouchableOpacity activeOpacity={1} onPress={closeSheet} style={StyleSheet.absoluteFill} />
+        <Animated.View
+          style={[
+            styles.weatherModalCard,
+            {
+              backgroundColor: palette.card,
+              borderColor: palette.border,
+              transform: [{ translateY: sheetTranslateY }],
+            },
+          ]}
+        >
+          <View style={[styles.weatherSheetHandle, { backgroundColor: palette.border }]} />
           <View style={styles.weatherModalHeader}>
             <View style={styles.weatherModalHeaderText}>
               <Text style={[styles.weatherModalTitle, { color: palette.text }]}>날씨 상세 정보</Text>
@@ -1581,7 +1635,7 @@ const WeatherDetailModal = memo(function WeatherDetailModal({
                 {round ? `${round.courseName} · ${round.teeTime}` : '라운드 날씨 상세 정보'}
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={[styles.weatherModalClose, { borderColor: palette.border }]}>
+            <TouchableOpacity onPress={closeSheet} style={[styles.weatherModalClose, { borderColor: palette.border }]}>
               <Text style={[styles.weatherModalCloseText, { color: palette.text }]}>닫기</Text>
             </TouchableOpacity>
           </View>
@@ -1593,8 +1647,7 @@ const WeatherDetailModal = memo(function WeatherDetailModal({
           ) : null}
 
           <View style={styles.weatherSectionHeader}>
-            <Text style={[styles.weatherSectionTitle, { color: palette.text }]}>라운딩 시간대별 예보 비교</Text>
-            <Text style={[styles.weatherIntervalNote, { color: palette.muted }]}>기상청 시간별 · Open-Meteo 시간별</Text>
+
           </View>
 
           <View style={[styles.weatherTableWrap, { borderColor: palette.border, backgroundColor: palette.bg }]}>
@@ -1639,8 +1692,8 @@ const WeatherDetailModal = memo(function WeatherDetailModal({
             </ScrollView>
           </View>
           <Text style={[styles.weatherSourceText, { color: palette.muted }]}>기상청 단기예보 · Open-Meteo{round?.kmaIssuedAt ? ` · ${round.kmaIssuedAt} 발표` : ""}</Text>
-        </View>
-      </View>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 });
@@ -1679,6 +1732,17 @@ const HomeRecordDetailModal = memo(function HomeRecordDetailModal({
         : null,
     [personalRows],
   );
+  const recentAverage = useMemo(
+    () => latestRows.length
+      ? Math.round(latestRows.reduce((sum, row) => sum + row.total, 0) / latestRows.length)
+      : null,
+    [latestRows],
+  );
+  const bestScore = useMemo(
+    () => personalRows.length ? Math.min(...personalRows.map((row) => row.total)) : null,
+    [personalRows],
+  );
+  const latestScore = latestRows[0]?.total ?? null;
   const handicaps = useMemo(() => computeHandicaps(rounds, 5), [rounds]);
   const myHandicap = userName ? handicaps.get(userName) ?? 0 : 0;
   const guinnessRows = useMemo(
@@ -1714,21 +1778,39 @@ const HomeRecordDetailModal = memo(function HomeRecordDetailModal({
     </View>
   );
 
-  const renderHandicap = () => (
-    <>
-      <Text style={[styles.detailSectionTitle, { color: palette.text }]}>↗ 핸디캡 추이 (5경기 슬라이딩)</Text>
-      <View style={[styles.handicapTrendBox, { backgroundColor: "rgba(31,160,92,0.10)", borderColor: palette.border }]}> 
-        {basisRows.length ? basisRows.map((row, index) => (
-          <View key={row.id} style={styles.handicapTrendItem}>
-            <Text style={[styles.handicapTrendValue, { color: palette.muted }]}>{diffText(row.diff)}</Text>
-            <View style={[styles.handicapTrendLine, { backgroundColor: index === basisRows.length - 1 ? palette.green : "rgba(25,156,89,0.18)" }]} />
+  const renderHandicap = () => {
+    const previous = basisRows.length > 1 ? (basisRows[basisRows.length - 2]?.diff ?? null) : null;
+    const current = basisRows.length ? (basisRows[basisRows.length - 1]?.diff ?? null) : null;
+    const change = previous !== null && current !== null ? current - previous : null;
+    return (
+      <>
+        <View style={styles.detailSummaryGrid}>
+          <View style={[styles.detailSummaryCard, { backgroundColor: "rgba(31,160,92,0.10)", borderColor: palette.border }]}>
+            <Text style={[styles.detailSummaryLabel, { color: palette.muted }]}>현재 핸디캡</Text>
+            <Text style={[styles.detailSummaryValue, { color: palette.green }]}>{diffText(myHandicap)}</Text>
           </View>
-        )) : <Text style={[styles.detailEmpty, { color: palette.muted }]}>핸디캡 추이 데이터가 없습니다.</Text>}
-        {!!basisRows.length && <Text style={[styles.handicapTrendCaption, { color: palette.muted }]}>← 과거   최근 →</Text>}
-      </View>
-      {renderRows([...basisRows].reverse())}
-    </>
-  );
+          <View style={[styles.detailSummaryCard, { backgroundColor: "rgba(31,160,92,0.06)", borderColor: palette.border }]}>
+            <Text style={[styles.detailSummaryLabel, { color: palette.muted }]}>최근 변화</Text>
+            <Text style={[styles.detailSummaryValueSmall, { color: change !== null && change <= 0 ? palette.green : "#E68A2E" }]}>
+              {change === null ? "-" : `${change > 0 ? "+" : ""}${change}타`}
+            </Text>
+          </View>
+        </View>
+        <Text style={[styles.detailSectionTitle, { color: palette.text }]}>핸디캡 추이 · 최근 5경기</Text>
+        <View style={[styles.handicapTrendBox, { backgroundColor: "rgba(31,160,92,0.08)", borderColor: palette.border }]}> 
+          {basisRows.length ? basisRows.map((row, index) => (
+            <View key={row.id} style={styles.handicapTrendItem}>
+              <Text style={[styles.handicapTrendValue, { color: index === basisRows.length - 1 ? palette.green : palette.text }]}>{diffText(row.diff)}</Text>
+              <View style={[styles.handicapTrendDot, { backgroundColor: index === basisRows.length - 1 ? palette.green : "rgba(31,160,92,0.28)" }]} />
+              {index < basisRows.length - 1 ? <View style={[styles.handicapTrendConnector, { backgroundColor: "rgba(31,160,92,0.22)" }]} /> : null}
+              <Text style={[styles.handicapTrendDate, { color: palette.muted }]}>{formatShortDate(row.date)}</Text>
+            </View>
+          )) : <Text style={[styles.detailEmpty, { color: palette.muted }]}>핸디캡 추이 데이터가 없습니다.</Text>}
+        </View>
+        {renderRows([...basisRows].reverse())}
+      </>
+    );
+  };
 
   const renderMatchup = () => {
     const records = new Map<string, { played: number; wins: number; draws: number; losses: number; handicap: number; diff: number }>();
@@ -1806,12 +1888,33 @@ const HomeRecordDetailModal = memo(function HomeRecordDetailModal({
     </View>
   );
 
+  const renderScoreSummary = (kind: "average" | "recent" | "best") => {
+    const primary = kind === "average" ? average : kind === "recent" ? recentAverage : bestScore;
+    const label = kind === "average" ? "전체 평균" : kind === "recent" ? "최근 5경기 평균" : "베스트 스코어";
+    const compare = average !== null && recentAverage !== null ? recentAverage - average : null;
+    return (
+      <View style={styles.detailSummaryGrid}>
+        <View style={[styles.detailSummaryCardWide, { backgroundColor: "rgba(31,160,92,0.10)", borderColor: palette.border }]}>
+          <Text style={[styles.detailSummaryLabel, { color: palette.muted }]}>{label}</Text>
+          <Text style={[styles.detailSummaryValue, { color: palette.text }]}>{primary === null ? "-" : `${primary}타`}</Text>
+          <Text style={[styles.detailSummaryCaption, { color: palette.muted }]}>총 {personalRows.length}경기 기준</Text>
+        </View>
+        <View style={[styles.detailSummaryCard, { backgroundColor: "rgba(31,160,92,0.06)", borderColor: palette.border }]}>
+          <Text style={[styles.detailSummaryLabel, { color: palette.muted }]}>{kind === "best" ? "최근 경기" : "전체 대비"}</Text>
+          <Text style={[styles.detailSummaryValueSmall, { color: compare !== null && compare <= 0 ? palette.green : "#E68A2E" }]}>
+            {kind === "best" ? (latestScore === null ? "-" : `${latestScore}타`) : (compare === null ? "-" : `${compare > 0 ? "+" : ""}${compare}타`)}
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
   const titleByMode: Record<HomeRecordDetailMode, string> = {
-    handicap: "핸디캡 근거 (최근 5경기)",
-    average: average === null ? "전체 라운드 기록" : `전체 라운드 기록 (평균 ${average}타)`,
+    handicap: "핸디캡 근거",
+    average: "전체 평균",
     awards: `수상현황 (${myAwardRows.length}회)`,
-    recent: "최근 라운드 기록",
-    best: "베스트 스코어 순위",
+    recent: "최근 5경기",
+    best: "베스트 스코어",
     matchup: `역대 전적 (핸디 ${diffText(myHandicap)})`,
     records: "보유 기록",
   };
@@ -1823,9 +1926,9 @@ const HomeRecordDetailModal = memo(function HomeRecordDetailModal({
     if (mode === "matchup") return renderMatchup();
     if (mode === "records") return renderRecords();
     if (mode === "awards") return renderAwards();
-    if (mode === "average") return renderRows(personalRows, true);
-    if (mode === "best") return renderRows([...personalRows].sort((a, b) => a.total - b.total));
-    return renderRows(latestRows);
+    if (mode === "average") return <>{renderScoreSummary("average")}{renderRows(personalRows, true)}</>;
+    if (mode === "best") return <>{renderScoreSummary("best")}{renderRows([...personalRows].sort((a, b) => a.total - b.total))}</>;
+    return <>{renderScoreSummary("recent")}{renderRows(latestRows)}</>;
   };
 
   return (
@@ -2849,12 +2952,12 @@ const styles = StyleSheet.create({
   },
   detailModalCard: {
     width: "100%",
-    maxWidth: 720,
-    maxHeight: "84%",
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 14,
+    maxWidth: 680,
+    maxHeight: "88%",
+    borderRadius: 24,
+    paddingHorizontal: 22,
+    paddingTop: 20,
+    paddingBottom: 18,
   },
   detailModalHeader: {
     flexDirection: "row",
@@ -2865,48 +2968,118 @@ const styles = StyleSheet.create({
   },
   detailModalTitle: {
     flex: 1,
-    fontSize: 16,
-    lineHeight: 21,
+    fontSize: 24,
+    lineHeight: 31,
     fontWeight: "900",
-    letterSpacing: -0.4,
+    letterSpacing: -0.7,
   },
   detailCloseButton: {
-    minWidth: 62,
-    minHeight: 34,
-    borderRadius: 17,
+    minWidth: 74,
+    minHeight: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 14,
   },
   detailCloseText: {
     color: "#fff",
-    fontSize: 13,
-    lineHeight: 17,
+    fontSize: 16,
+    lineHeight: 21,
     fontWeight: "900",
   },
-  detailSectionTitle: {
+  detailSummaryGrid: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 22,
+  },
+  detailSummaryCard: {
+    flex: 1,
+    minHeight: 108,
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    justifyContent: "center",
+  },
+  detailSummaryCardWide: {
+    flex: 1.55,
+    minHeight: 108,
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    justifyContent: "center",
+  },
+  detailSummaryLabel: {
     fontSize: 14,
     lineHeight: 19,
+    fontWeight: "900",
+  },
+  detailSummaryValue: {
+    fontSize: 32,
+    lineHeight: 39,
+    fontWeight: "900",
+    letterSpacing: -1,
+    marginTop: 2,
+  },
+  detailSummaryValueSmall: {
+    fontSize: 24,
+    lineHeight: 31,
+    fontWeight: "900",
+    letterSpacing: -0.6,
+    marginTop: 5,
+  },
+  detailSummaryCaption: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "800",
+    marginTop: 2,
+  },
+  detailSectionTitle: {
+    fontSize: 19,
+    lineHeight: 25,
     fontWeight: "900",
     marginBottom: 12,
   },
   handicapTrendBox: {
-    minHeight: 74,
+    minHeight: 116,
     borderWidth: 1,
-    borderRadius: 6,
+    borderRadius: 18,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 10,
-    marginBottom: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    marginBottom: 20,
   },
   handicapTrendItem: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
+  handicapTrendDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    marginTop: 2,
+    marginBottom: 8,
+    zIndex: 2,
+  },
+  handicapTrendConnector: {
+    position: "absolute",
+    top: 39,
+    left: "55%",
+    width: "90%",
+    height: 3,
+    borderRadius: 2,
+  },
+  handicapTrendDate: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "800",
+  },
   handicapTrendValue: {
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 17,
+    lineHeight: 22,
     fontWeight: "900",
     marginBottom: 5,
   },
@@ -2933,22 +3106,22 @@ const styles = StyleSheet.create({
   detailTableRow: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 38,
+    minHeight: 58,
     borderTopWidth: 1,
   },
   detailTh: {
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 14,
+    lineHeight: 19,
     fontWeight: "900",
   },
   detailTd: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 16,
+    lineHeight: 22,
     fontWeight: "700",
   },
   detailTdStrong: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 18,
+    lineHeight: 24,
     fontWeight: "900",
   },
   detailEmpty: {
@@ -2968,33 +3141,33 @@ const styles = StyleSheet.create({
   h2hRow: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 36,
+    minHeight: 54,
     borderTopWidth: 1,
   },
   h2hTh: {
     width: 42,
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 17,
     fontWeight: "900",
     textAlign: "center",
   },
   h2hTdName: {
     width: 42,
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 15,
+    lineHeight: 21,
     fontWeight: "800",
   },
   h2hTd: {
     width: 42,
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: "700",
     textAlign: "center",
   },
   h2hTdStrong: {
     width: 42,
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 15,
+    lineHeight: 21,
     fontWeight: "900",
     textAlign: "center",
   },
@@ -3007,44 +3180,57 @@ const styles = StyleSheet.create({
     flexBasis: "47%",
     flexGrow: 1,
     minWidth: 0,
-    minHeight: 92,
+    minHeight: 118,
     borderWidth: 1,
     borderRadius: 16,
     padding: 14,
     justifyContent: "center",
   },
   recordBadgeLabel: {
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 14,
+    lineHeight: 19,
     fontWeight: "900",
   },
   recordBadgeValue: {
-    fontSize: 24,
-    lineHeight: 30,
+    fontSize: 30,
+    lineHeight: 37,
     fontWeight: "900",
     letterSpacing: -0.7,
     marginTop: 2,
   },
   recordBadgeSub: {
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: "800",
     marginTop: 4,
   },
   weatherModalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "center",
-    paddingHorizontal: 18,
+    justifyContent: "flex-end",
+    paddingHorizontal: 12,
+    paddingTop: 42,
   },
   weatherModalCard: {
     borderWidth: 1,
-    borderRadius: 22,
-    padding: 16,
-    maxWidth: 620,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 16,
+    maxWidth: 720,
     width: "100%",
     alignSelf: "center",
-    maxHeight: "82%",
+    maxHeight: "90%",
+  },
+  weatherSheetHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    alignSelf: "center",
+    marginBottom: 12,
   },
   weatherModalHeader: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
   weatherModalHeaderText: { flex: 1, minWidth: 0 },

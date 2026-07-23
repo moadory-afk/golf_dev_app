@@ -826,11 +826,52 @@ function HeroBottomSummary({
       : "";
   const fallbackMapEstimateText = travelTimeText.includes("준비중") ? "예상 준비중" : `예상 ${travelTimeText}`;
   const [mapChooserVisible, setMapChooserVisible] = useState(false);
+  const mapSheetTranslateY = useRef(new Animated.Value(520)).current;
+  const mapBackdropOpacity = useRef(new Animated.Value(0)).current;
   const hasDestination =
     typeof courseLatitude === "number" &&
     Number.isFinite(courseLatitude) &&
     typeof courseLongitude === "number" &&
     Number.isFinite(courseLongitude);
+
+  const openMapChooser = () => {
+    mapSheetTranslateY.setValue(520);
+    mapBackdropOpacity.setValue(0);
+    setMapChooserVisible(true);
+    requestAnimationFrame(() => {
+      Animated.parallel([
+        Animated.spring(mapSheetTranslateY, {
+          toValue: 0,
+          useNativeDriver: true,
+          damping: 24,
+          stiffness: 230,
+          mass: 0.9,
+        }),
+        Animated.timing(mapBackdropOpacity, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+  };
+
+  const closeMapChooser = () => {
+    Animated.parallel([
+      Animated.timing(mapSheetTranslateY, {
+        toValue: 520,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.timing(mapBackdropOpacity, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) setMapChooserVisible(false);
+    });
+  };
 
   const openNavigation = async (provider: NavigationProvider) => {
     if (!hasDestination) {
@@ -978,7 +1019,7 @@ function HeroBottomSummary({
           disabled={!hasDestination}
           onPress={(event) => {
             event.stopPropagation?.();
-            setMapChooserVisible(true);
+            openMapChooser();
           }}
           style={[styles.travelSummary, { paddingHorizontal: isCompact ? 4 : 8 }]}
         >
@@ -1017,17 +1058,22 @@ function HeroBottomSummary({
       </View>
 
       <Modal
-        animationType="fade"
+        animationType="none"
         transparent
         visible={mapChooserVisible}
-        onRequestClose={() => setMapChooserVisible(false)}
+        statusBarTranslucent
+        onRequestClose={closeMapChooser}
       >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={() => setMapChooserVisible(false)}
-          style={styles.mapModalBackdrop}
-        >
-          <TouchableOpacity activeOpacity={1} style={styles.mapChooser}>
+        <Animated.View style={[styles.mapModalBackdrop, { opacity: mapBackdropOpacity }]}>
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={closeMapChooser}
+            style={StyleSheet.absoluteFill}
+          />
+          <Animated.View
+            style={[styles.mapChooser, { transform: [{ translateY: mapSheetTranslateY }] }]}
+          >
+            <View style={styles.mapSheetHandle} />
             <Text style={styles.mapChooserTitle}>길안내 앱 선택</Text>
             <Text style={styles.mapChooserCourse} numberOfLines={1}>{courseName}</Text>
             <View style={styles.mapOptionRow}>
@@ -1045,11 +1091,11 @@ function HeroBottomSummary({
                 </TouchableOpacity>
               ))}
             </View>
-            <TouchableOpacity style={styles.mapCancel} onPress={() => setMapChooserVisible(false)}>
+            <TouchableOpacity style={styles.mapCancel} onPress={closeMapChooser}>
               <Text style={styles.mapCancelText}>취소</Text>
             </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </Animated.View>
+        </Animated.View>
       </Modal>
     </View>
   );
@@ -1579,10 +1625,26 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   mapChooser: {
-    borderRadius: 18,
+    width: "100%",
+    maxWidth: 620,
+    alignSelf: "center",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
     backgroundColor: "#FFFFFF",
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 16,
     gap: 10,
+  },
+  mapSheetHandle: {
+    width: 42,
+    height: 5,
+    borderRadius: 999,
+    alignSelf: "center",
+    backgroundColor: "#D5DDD8",
+    marginBottom: 4,
   },
   mapChooserTitle: {
     color: "#111827",

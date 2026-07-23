@@ -1023,8 +1023,84 @@ export default function ProfileScreen({
     const savingProfileSettings =
       savingHome || savingDistances || savingPreferences;
     navigation.setOptions({
+      headerTitle: () => (
+        <View style={p.headerProfileArea}>
+          <TouchableOpacity
+            onPress={() => setShowAvatarOptions(true)}
+            style={p.headerAvatarWrap}
+            activeOpacity={0.82}
+          >
+            <View style={p.headerAvatar}>
+              {uploadingPhoto ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={p.headerAvatarImage} />
+              ) : profileIcon ? (
+                <Text style={p.headerAvatarEmoji}>{profileIcon}</Text>
+              ) : (
+                <Text style={p.headerAvatarInitial}>{userInitial}</Text>
+              )}
+            </View>
+            <View style={p.headerAvatarEditBadge}>
+              <EmojiIcon char="✏️" size={9} color={C.text} />
+            </View>
+          </TouchableOpacity>
+
+          <View style={p.headerNameArea}>
+            {editingName ? (
+              <>
+                <TextInput
+                  style={p.headerNameInput}
+                  value={editNameVal}
+                  onChangeText={setEditNameVal}
+                  autoFocus
+                  maxLength={20}
+                  placeholder="닉네임"
+                  placeholderTextColor="rgba(255,255,255,0.5)"
+                />
+                <View style={p.headerNameActions}>
+                  <TouchableOpacity
+                    onPress={handleSaveName}
+                    disabled={savingName}
+                    activeOpacity={0.82}
+                  >
+                    <Text style={p.headerNameSaveText}>{savingName ? "저장 중" : "저장"}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setEditingName(false)} activeOpacity={0.82}>
+                    <Text style={p.headerNameCancelText}>취소</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={p.headerProfileName} numberOfLines={1}>
+                  {userName || "닉네임 없음"}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setEditNameVal(userName);
+                    setEditingName(true);
+                  }}
+                  activeOpacity={0.82}
+                >
+                  <Text style={p.headerProfileEditHint}>닉네임 수정</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      ),
+      headerTitleAlign: "left",
+      headerTitleContainerStyle: p.headerTitleContainer,
       headerRight: () => (
         <View style={p.headerActions}>
+          <TouchableOpacity
+            style={p.headerTopLogoutButton}
+            onPress={handleLogout}
+            activeOpacity={0.82}
+          >
+            <Text style={p.headerTopLogoutText}>로그아웃</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[
               p.headerSaveButton,
@@ -1388,80 +1464,6 @@ export default function ProfileScreen({
         onClose={() => setShowAddressSearch(false)}
       />
       <ScrollView ref={profileScrollRef} contentContainerStyle={p.content}>
-        <View style={p.profileSection}>
-          <TouchableOpacity
-            onPress={() => setShowAvatarOptions(true)}
-            style={p.avatarWrap}
-          >
-            <View style={p.avatar}>
-              {uploadingPhoto ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : avatarUrl ? (
-                <Image source={{ uri: avatarUrl }} style={p.avatarImage} />
-              ) : profileIcon ? (
-                <Text style={p.avatarEmoji}>{profileIcon}</Text>
-              ) : (
-                <Text style={p.avatarInitial}>{userInitial}</Text>
-              )}
-            </View>
-            <View style={p.avatarEditBadge}>
-              <EmojiIcon char="✏️" size={11} color={C.text} />
-            </View>
-          </TouchableOpacity>
-
-          <View style={p.nameArea}>
-            {editingName ? (
-              <>
-                <TextInput
-                  style={p.nameInput}
-                  value={editNameVal}
-                  onChangeText={setEditNameVal}
-                  autoFocus
-                  maxLength={20}
-                  placeholder="닉네임"
-                  placeholderTextColor="rgba(255,255,255,0.5)"
-                />
-                <View style={p.nameActions}>
-                  <TouchableOpacity
-                    style={[p.nameSaveBtn, savingName && { opacity: 0.6 }]}
-                    onPress={handleSaveName}
-                    disabled={savingName}
-                  >
-                    {savingName ? (
-                      <ActivityIndicator color="#fff" size="small" />
-                    ) : (
-                      <Text style={p.nameSaveBtnText}>저장</Text>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setEditingName(false)}>
-                    <Text style={p.nameCancelText}>취소</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            ) : (
-              <>
-                <Text style={p.profileName}>{userName || "닉네임 없음"}</Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    setEditNameVal(userName);
-                    setEditingName(true);
-                  }}
-                >
-                  <Text style={p.profileEditHint}>닉네임 수정</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-
-          <TouchableOpacity
-            style={p.headerLogoutButton}
-            onPress={handleLogout}
-            activeOpacity={0.82}
-          >
-            <Text style={p.headerLogoutText}>로그아웃</Text>
-          </TouchableOpacity>
-        </View>
-
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -2016,6 +2018,71 @@ const p = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 28,
   },
+  headerTitleContainer: {
+    left: 16,
+    right: 210,
+  },
+  headerProfileArea: {
+    flexDirection: "row",
+    alignItems: "center",
+    minWidth: 0,
+    gap: 10,
+  },
+  headerAvatarWrap: { position: "relative" },
+  headerAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: C.gold,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.34)",
+    overflow: "hidden",
+  },
+  headerAvatarImage: { width: 46, height: 46, borderRadius: 23 },
+  headerAvatarEmoji: { fontSize: 23 },
+  headerAvatarInitial: { fontSize: 20, fontWeight: "900", color: "#fff" },
+  headerAvatarEditBadge: {
+    position: "absolute",
+    right: -2,
+    bottom: -2,
+    width: 17,
+    height: 17,
+    borderRadius: 9,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: C.greenDark,
+  },
+  headerNameArea: { minWidth: 0, flexShrink: 1 },
+  headerProfileName: { color: "#fff", fontSize: 17, lineHeight: 21, fontWeight: "900" },
+  headerProfileEditHint: { color: "rgba(255,255,255,0.62)", fontSize: 11, lineHeight: 15, marginTop: 1 },
+  headerNameInput: {
+    minWidth: 92,
+    maxWidth: 150,
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "800",
+    paddingVertical: 1,
+    paddingHorizontal: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.55)",
+  },
+  headerNameActions: { flexDirection: "row", alignItems: "center", gap: 9, marginTop: 2 },
+  headerNameSaveText: { color: "#fff", fontSize: 11, fontWeight: "900" },
+  headerNameCancelText: { color: "rgba(255,255,255,0.68)", fontSize: 11, fontWeight: "700" },
+  headerTopLogoutButton: {
+    minHeight: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.42)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 11,
+  },
+  headerTopLogoutText: { color: "#fff", fontSize: 12, fontWeight: "900" },
   avatarWrap: { position: "relative" },
   headerLogoutButton: { marginLeft: "auto", alignSelf: "center", paddingHorizontal: 13, paddingVertical: 8, borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.42)" },
   headerLogoutText: { color: "#fff", fontSize: 12, fontWeight: "900" },
@@ -2056,8 +2123,8 @@ const p = StyleSheet.create({
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginRight: 16,
+    gap: 7,
+    marginRight: 12,
   },
   headerSaveButton: {
     minWidth: 54,

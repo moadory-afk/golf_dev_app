@@ -524,8 +524,8 @@ function EmptyClub({ members, handicapBasis }: { members: HistoryMember[]; handi
       </View>
       <View style={s.card}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <Text style={[s.cardTitle, { marginBottom: 0 }]}>클럽 랭킹</Text>
-          <Text style={{ fontSize: 12, color: C.muted, fontWeight: '800' }}>핸디 {handicapBasis}경기</Text>
+          <Text style={s.clubRankingTitle}>클럽 랭킹</Text>
+          <Text style={s.clubRankingBasisLabel}>핸디 {handicapBasis}경기</Text>
         </View>
         <View style={s.tableHeader}>
           <Text style={[s.th, { flex: 0.6 }]}>순위</Text>
@@ -652,7 +652,7 @@ function ScheduledRoundCard({ schedule, index, totalCount, width, height }: { sc
                 <View style={s.highlightCard}><Text style={s.highlightLabel}>신페리오</Text><Text style={s.highlightValue}></Text></View>
                 <View style={s.highlightCard}><Text style={s.highlightLabel}>시상</Text><Text style={s.highlightValue}></Text></View>
               </View>
-              <Text style={s.flipHint}>탭하면 라운드 상세 보기 ↻</Text>
+              <Text style={s.flipHint}>카드를 눌러 상세 기록 보기  ↻</Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -680,7 +680,7 @@ function ScheduledRoundCard({ schedule, index, totalCount, width, height }: { sc
               <Text style={s.detailLoadingText}>경기 결과 등록 후 표시됩니다.</Text>
             </View>
           </View>
-          <TouchableOpacity style={s.flipBackHint} onPress={toggleFlip}><Text style={s.flipBackHintText}>↻ 앞면 요약으로 돌아가기</Text></TouchableOpacity>
+          <TouchableOpacity style={s.flipBackHint} onPress={toggleFlip}><Text style={s.flipBackHintText}>↻ 앞면으로 돌아가기</Text></TouchableOpacity>
         </TouchableOpacity>
       </Animated.View>
     </View>
@@ -980,7 +980,7 @@ function RoundFlipCard({
                   ))}
                 </View>
               </View>
-              <Text style={s.flipHint}>탭하면 라운드 상세 보기 ↻</Text>
+              <Text style={s.flipHint}>카드를 눌러 상세 기록 보기  ↻</Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -1036,7 +1036,7 @@ function RoundFlipCard({
               />
             )}
           </View>
-          <TouchableOpacity style={s.flipBackHint} onPress={toggleFlip}><Text style={s.flipBackHintText}>↻ 앞면 요약으로 돌아가기</Text></TouchableOpacity>
+          <TouchableOpacity style={s.flipBackHint} onPress={toggleFlip}><Text style={s.flipBackHintText}>↻ 앞면으로 돌아가기</Text></TouchableOpacity>
         </TouchableOpacity>
       </Animated.View>
     </View>
@@ -1589,9 +1589,9 @@ function Club({ rounds, handicapBasis: currentHandicapBasis, members = [] }: { r
 
       <View style={s.card}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, zIndex: 99 }}>
-          <Text style={[s.cardTitle, { marginBottom: 0 }]}>클럽 랭킹</Text>
+          <Text style={s.clubRankingTitle}>클럽 랭킹</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, zIndex: 99 }}>
-            <Text style={{ fontSize: 12, color: C.muted, fontWeight: '600' }}>핸디</Text>
+            <Text style={s.clubRankingBasisLabel}>핸디</Text>
             <View>
               <TouchableOpacity
                 onPress={() => setShowBasisDropdown(v => !v)}
@@ -1652,18 +1652,19 @@ function Club({ rounds, handicapBasis: currentHandicapBasis, members = [] }: { r
             >
               <View style={{ flex: 0.6, alignItems: 'center' }}>
                 {isMedal
-                  ? <EmojiIcon char={['🥇','🥈','🥉'][(rank ?? 1) - 1]} size={17} />
-                  : <Text style={[s.td, { fontSize: 13 }]}>{rank ?? '-'}</Text>}
+                  ? <EmojiIcon char={['🥇','🥈','🥉'][(rank ?? 1) - 1]} size={20} />
+                  : <Text style={s.clubRankNumber}>{rank ?? '-'}</Text>}
               </View>
-              <Text style={[s.td, { flex: 2, fontWeight: isMedal ? '700' : '400' }]}>{shortName(stat.name)}</Text>
-              <Text style={[s.td, { flex: 1, textAlign: 'center' }]}>{stat.rounds || '-'}</Text>
-              <Text style={[s.td, { flex: 1.2, textAlign: 'center', fontWeight: '700', color: rank === 1 ? C.gold : C.text }]}>{stat.avg ?? '-'}</Text>
-              <Text style={[s.td, { flex: 1, textAlign: 'center' }]}>{stat.worst ?? '-'}</Text>
-              <Text style={[s.td, { flex: 1, textAlign: 'center' }]}>{stat.best ?? '-'}</Text>
+              <Text style={[s.td, s.clubRankName, { flex: 2, fontWeight: isMedal ? '900' : '700' }]}>{shortName(stat.name)}</Text>
+              <Text style={[s.td, s.clubRankValue, { flex: 1, textAlign: 'center' }]}>{stat.rounds || '-'}</Text>
+              <Text style={[s.td, s.clubRankAverage, { flex: 1.2, textAlign: 'center', color: rank === 1 ? C.gold : C.text }]}>{stat.avg ?? '-'}</Text>
+              <Text style={[s.td, s.clubRankValue, { flex: 1, textAlign: 'center' }]}>{stat.worst ?? '-'}</Text>
+              <Text style={[s.td, s.clubRankValue, { flex: 1, textAlign: 'center' }]}>{stat.best ?? '-'}</Text>
               <Text style={[s.td, {
                 flex: 1.2,
                 textAlign: 'center',
-                fontWeight: '600',
+                fontSize: 16,
+                fontWeight: '800',
                 color: stat.handicap === null ? C.muted : stat.handicap > 0 ? C.warn : stat.handicap < 0 ? C.info : C.text,
               }]}>
                 {handicapText}
@@ -1887,7 +1888,7 @@ function HallRecordRow({ icon, label, value, onPress }: { icon: string; label: s
   const { record, member } = splitHallValue(value)
   const content = (
     <>
-      <View style={s.hallIconWrap}><EmojiIcon char={icon} size={15} color={C.green} /></View>
+      <View style={s.hallIconWrap}><EmojiIcon char={icon} size={20} color={C.green} /></View>
       <Text style={s.hallLabel}>{label}</Text>
       <Text style={s.hallRecord}>{record}</Text>
       <Text style={s.hallMember}>{member}</Text>
@@ -2084,88 +2085,88 @@ const s = StyleSheet.create({
   roundHeroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(3,30,18,0.34)' },
   roundHeroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   roundCounter: { backgroundColor: 'rgba(7,22,18,0.58)', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 6 },
-  roundCounterText: { color: '#fff', fontSize: 12, fontWeight: '800' },
-  roundManageButton: { position: 'absolute', right: 14, bottom: 52, zIndex: 21, elevation: 21, minWidth: 62, minHeight: 31, borderRadius: 16, backgroundColor: 'rgba(221,245,231,0.94)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.72)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
-  roundManageButtonText: { color: '#123D2B', fontSize: 11, fontWeight: '900' },
-  roundPhotoButton: { position: 'absolute', right: 14, bottom: 14, zIndex: 20, elevation: 20, minWidth: 78, minHeight: 31, borderRadius: 16, backgroundColor: 'rgba(7,22,18,0.58)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.34)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 11 },
-  roundPhotoButtonText: { color: '#fff', fontSize: 11, fontWeight: '900' },
+  roundCounterText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  roundManageButton: { position: 'absolute', right: 14, bottom: 56, zIndex: 21, elevation: 21, minWidth: 66, minHeight: 36, borderRadius: 16, backgroundColor: 'rgba(221,245,231,0.94)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.72)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  roundManageButtonText: { color: '#123D2B', fontSize: 13, fontWeight: '900' },
+  roundPhotoButton: { position: 'absolute', right: 14, bottom: 14, zIndex: 20, elevation: 20, minWidth: 84, minHeight: 36, borderRadius: 16, backgroundColor: 'rgba(7,22,18,0.58)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.34)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 11 },
+  roundPhotoButtonText: { color: '#fff', fontSize: 13, fontWeight: '900' },
   roundSummaryBody: { flex: 1, padding: 14, gap: 10, justifyContent: 'space-between' },
   heroCompleteBadge: { backgroundColor: 'rgba(237,248,242,0.9)', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 6 },
   heroProgressBadge: { backgroundColor: 'rgba(27,158,94,0.92)', borderRadius: 18, paddingHorizontal: 12, paddingVertical: 6 },
-  heroStatusText: { color: '#173c2b', fontSize: 12, fontWeight: '800' },
-  heroDate: { color: 'rgba(255,255,255,0.92)', fontSize: 12, fontWeight: '800', textAlign: 'left', textShadowColor: 'rgba(0,0,0,0.36)', textShadowRadius: 5 },
+  heroStatusText: { color: '#173c2b', fontSize: 14, fontWeight: '800' },
+  heroDate: { color: 'rgba(255,255,255,0.92)', fontSize: 15, fontWeight: '800', textAlign: 'left', textShadowColor: 'rgba(0,0,0,0.36)', textShadowRadius: 5 },
   heroCourseBlock: { alignItems: 'flex-start' },
-  heroCourseName: { color: '#fff', fontSize: 25, lineHeight: 30, fontWeight: '900', textAlign: 'left', textShadowColor: 'rgba(0,0,0,0.38)', textShadowRadius: 7 },
+  heroCourseName: { color: '#fff', fontSize: 28, lineHeight: 34, fontWeight: '900', textAlign: 'left', textShadowColor: 'rgba(0,0,0,0.38)', textShadowRadius: 7 },
   heroSummaryPanel: { flexDirection: 'row', backgroundColor: C.greenLight, borderWidth: 1, borderColor: C.border, borderRadius: 17, paddingVertical: 9 },
   summaryCell: { flex: 1, alignItems: 'center', borderRightWidth: 1, borderRightColor: C.border },
-  summaryLabel: { color: C.muted, fontSize: 10, fontWeight: '800' },
-  summaryValue: { color: C.text, fontSize: 20, lineHeight: 24, fontWeight: '900', marginTop: 5 },
+  summaryLabel: { color: C.muted, fontSize: 13, fontWeight: '800' },
+  summaryValue: { color: C.text, fontSize: 23, lineHeight: 27, fontWeight: '900', marginTop: 5 },
   heroInfoPanel: { backgroundColor: '#f8faf8', borderWidth: 1, borderColor: C.border, borderRadius: 17, padding: 9 },
-  heroSectionTitle: { color: C.text, fontSize: 14, fontWeight: '900' },
+  heroSectionTitle: { color: C.text, fontSize: 18, fontWeight: '900' },
   recordGrid: { flexDirection: 'row', gap: 6, marginTop: 8 },
-  recordMiniCard: { flex: 1, minHeight: 58, borderRadius: 13, backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, padding: 7, alignItems: 'center', justifyContent: 'center' },
-  recordMiniIcon: { fontSize: 16 },
-  recordMiniLabel: { fontSize: 9, color: C.muted, fontWeight: '800', textAlign: 'center', marginTop: 3 },
-  recordMiniValue: { fontSize: 10, color: C.text, fontWeight: '900', textAlign: 'center', marginTop: 3 },
+  recordMiniCard: { flex: 1, minHeight: 64, borderRadius: 13, backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, padding: 7, alignItems: 'center', justifyContent: 'center' },
+  recordMiniIcon: { fontSize: 20 },
+  recordMiniLabel: { fontSize: 12, color: C.muted, fontWeight: '800', textAlign: 'center', marginTop: 3 },
+  recordMiniValue: { fontSize: 14, color: C.text, fontWeight: '900', textAlign: 'center', marginTop: 3 },
   highlightRow: { flexDirection: 'row', gap: 7, marginTop: 8 },
-  highlightCard: { flex: 1, minHeight: 54, borderRadius: 13, backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center', padding: 7 },
-  highlightIcon: { fontSize: 15 },
-  highlightLabel: { color: C.muted, fontSize: 9, fontWeight: '800', marginTop: 3 },
-  highlightValue: { color: C.text, fontSize: 11, fontWeight: '900', textAlign: 'center', marginTop: 3 },
-  flipHint: { color: C.muted, textAlign: 'center', fontSize: 10, fontWeight: '800' },
+  highlightCard: { flex: 1, minHeight: 62, borderRadius: 13, backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, alignItems: 'center', justifyContent: 'center', padding: 7 },
+  highlightIcon: { fontSize: 19 },
+  highlightLabel: { color: C.muted, fontSize: 12, fontWeight: '800', marginTop: 3 },
+  highlightValue: { color: C.text, fontSize: 14, fontWeight: '900', textAlign: 'center', marginTop: 3 },
+  flipHint: { color: C.muted, textAlign: 'center', fontSize: 13, fontWeight: '800' },
   backCard: { flex: 1, backgroundColor: '#fff', borderRadius: 26, padding: 13, shadowColor: '#163d2b', shadowOpacity: 0.14, shadowRadius: 16, shadowOffset: { width: 0, height: 7 }, elevation: 7 },
   backHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
   backIconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
-  backIconText: { fontSize: 23, color: C.text, fontWeight: '600' },
-  backCourseName: { fontSize: 20, fontWeight: '900', color: C.text },
-  backDate: { fontSize: 11, color: C.muted, fontWeight: '700', marginTop: 2 },
+  backIconText: { fontSize: 25, color: C.text, fontWeight: '600' },
+  backCourseName: { fontSize: 23, fontWeight: '900', color: C.text },
+  backDate: { fontSize: 14, color: C.muted, fontWeight: '700', marginTop: 2 },
   detailOpenBtn: { borderRadius: 14, backgroundColor: C.greenLight, paddingHorizontal: 10, paddingVertical: 7 },
-  detailOpenText: { fontSize: 11, fontWeight: '900', color: C.green },
-  backTabs: { flexDirection: 'row', backgroundColor: '#f3f5f4', borderRadius: 16, padding: 4, marginBottom: 12 },
-  backTab: { flex: 1, minHeight: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  detailOpenText: { fontSize: 13, fontWeight: '900', color: C.green },
+  backTabs: { flexDirection: 'row', backgroundColor: '#f3f5f4', borderRadius: 16, padding: 4, marginBottom: 10 },
+  backTab: { flex: 1, minHeight: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   backTabActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 5, elevation: 2 },
-  backTabText: { color: C.muted, fontSize: 12, fontWeight: '800' },
+  backTabText: { color: C.muted, fontSize: 17, fontWeight: '800' },
   backTabTextActive: { color: C.green, fontWeight: '900' },
   backBody: { flex: 1 },
-  detailPanel: { flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 10 },
-  detailPanelTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 9 },
-  detailPanelTitle: { fontSize: 15, fontWeight: '900', color: C.text, marginBottom: 10 },
+  detailPanel: { flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, borderRadius: 16, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8 },
+  detailPanelTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 },
+  detailPanelTitle: { fontSize: 22, lineHeight: 27, fontWeight: '900', color: C.text, marginBottom: 10 },
   detailPanelTitleInline: { marginBottom: 0 },
-  detailBasisSwitch: { flexDirection: 'row', backgroundColor: C.greenLight, borderRadius: 14, padding: 3 },
-  detailBasisBtn: { minWidth: 46, minHeight: 27, borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  detailBasisSwitch: { flexDirection: 'row', backgroundColor: C.greenLight, borderRadius: 16, padding: 3 },
+  detailBasisBtn: { minWidth: 55, minHeight: 36, borderRadius: 13, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   detailBasisBtnActive: { backgroundColor: C.green },
-  detailBasisText: { fontSize: 11, fontWeight: '900', color: C.muted },
+  detailBasisText: { fontSize: 15, fontWeight: '900', color: C.muted },
   detailBasisTextActive: { color: '#fff' },
-  rankRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 58, borderTopWidth: 1, borderTopColor: '#eef1ef' },
+  rankRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 62, borderTopWidth: 1, borderTopColor: '#eef1ef' },
   rankNo: { width: 29, height: 29, borderRadius: 15, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
   rankNoFirst: { backgroundColor: C.green },
-  rankNoText: { fontSize: 12, fontWeight: '900', color: C.green },
-  rankName: { fontSize: 13, fontWeight: '900', color: C.text },
-  rankSub: { fontSize: 10, color: C.muted, marginTop: 2 },
-  rankMain: { fontSize: 16, fontWeight: '900', color: C.green },
-  scorePlayerRow: { flexDirection: 'row', alignItems: 'center', minHeight: 45, borderTopWidth: 1, borderTopColor: '#eef1ef' },
-  scorePlayerName: { flex: 1, fontSize: 13, fontWeight: '900', color: C.text },
-  scorePlayerTotal: { fontSize: 15, fontWeight: '900', color: C.text },
-  scorePlayerDiff: { width: 48, textAlign: 'right', fontSize: 12, fontWeight: '900', color: C.green },
+  rankNoText: { fontSize: 14, fontWeight: '900', color: C.green },
+  rankName: { fontSize: 16, fontWeight: '900', color: C.text },
+  rankSub: { fontSize: 12, color: C.muted, marginTop: 2 },
+  rankMain: { fontSize: 19, fontWeight: '900', color: C.green },
+  scorePlayerRow: { flexDirection: 'row', alignItems: 'center', minHeight: 50, borderTopWidth: 1, borderTopColor: '#eef1ef' },
+  scorePlayerName: { flex: 1, fontSize: 16, fontWeight: '900', color: C.text },
+  scorePlayerTotal: { fontSize: 18, fontWeight: '900', color: C.text },
+  scorePlayerDiff: { width: 52, textAlign: 'right', fontSize: 15, fontWeight: '900', color: C.green },
   scoreMiniGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 12 },
-  scoreHoleCell: { width: '10.3%', minHeight: 38, borderRadius: 8, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
-  scoreHoleNo: { fontSize: 9, fontWeight: '900', color: C.text },
-  scoreHolePar: { fontSize: 8, color: C.muted, marginTop: 2 },
+  scoreHoleCell: { width: '10.3%', minHeight: 41, borderRadius: 8, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
+  scoreHoleNo: { fontSize: 11, fontWeight: '900', color: C.text },
+  scoreHolePar: { fontSize: 10, color: C.muted, marginTop: 2 },
   backAwardScroll: { flex: 1 },
   backAwardStack: { gap: 10, paddingBottom: 8 },
   backAwardCard: { backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 10 },
   backAwardHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 8 },
-  backAwardHeaderIcon: { fontSize: 16 },
-  backAwardTitle: { fontSize: 15, fontWeight: '900', color: C.text },
-  backAwardMuted: { fontSize: 12, lineHeight: 18, fontWeight: '700', color: C.muted },
+  backAwardHeaderIcon: { fontSize: 20 },
+  backAwardTitle: { fontSize: 18, fontWeight: '900', color: C.text },
+  backAwardMuted: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: C.muted },
   backMoneySummary: { backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10 },
-  awardRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 48, borderTopWidth: 1, borderTopColor: '#eef1ef' },
+  awardRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 54, borderTopWidth: 1, borderTopColor: '#eef1ef' },
   awardIconWrap: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#fffbe8', borderWidth: 1, borderColor: '#f0e0a0', alignItems: 'center', justifyContent: 'center' },
-  awardIcon: { fontSize: 19 },
-  awardLabel: { width: 64, fontSize: 12, color: C.muted, fontWeight: '800' },
-  awardWinner: { flex: 1, fontSize: 14, color: C.text, fontWeight: '900' },
+  awardIcon: { fontSize: 22 },
+  awardLabel: { width: 68, fontSize: 14, color: C.muted, fontWeight: '800' },
+  awardWinner: { flex: 1, fontSize: 17, color: C.text, fontWeight: '900' },
   awardDetailWrap: { borderRadius: 12, backgroundColor: C.greenLight, paddingHorizontal: 9, paddingVertical: 5, maxWidth: 82 },
-  awardDetail: { fontSize: 12, color: C.green, fontWeight: '900' },
+  awardDetail: { fontSize: 14, color: C.green, fontWeight: '900' },
   lottoAwardGroupRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 42, borderTopWidth: 1, borderTopColor: '#eef1ef' },
   lottoAwardGroupText: { flex: 1.35, fontSize: 12, lineHeight: 17, fontWeight: '900', color: C.text },
   lottoAwardGroupNames: { flex: 1, fontSize: 12, lineHeight: 17, fontWeight: '800', color: C.green, textAlign: 'right' },
@@ -2173,8 +2174,8 @@ const s = StyleSheet.create({
   moneyPairName: { width: 48, fontSize: 13, fontWeight: '900', color: C.text },
   moneyPairArrow: { width: 22, fontSize: 13, color: C.muted, textAlign: 'center' },
   moneyPairAmount: { marginLeft: 'auto', fontSize: 13, fontWeight: '900' },
-  flipBackHint: { minHeight: 38, alignItems: 'center', justifyContent: 'center', marginTop: 10 },
-  flipBackHintText: { fontSize: 11, fontWeight: '800', color: C.muted },
+  flipBackHint: { minHeight: 42, alignItems: 'center', justifyContent: 'center', marginTop: 10 },
+  flipBackHintText: { fontSize: 13, fontWeight: '800', color: C.muted },
   roundDetailPreview: { flex: 1, gap: 10 },
   previewSection: { backgroundColor: '#fff', borderWidth: 1, borderColor: C.border, borderRadius: 18, padding: 12 },
   previewSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
@@ -2197,17 +2198,17 @@ const s = StyleSheet.create({
   previewScoreLabel: { minHeight: 28, paddingHorizontal: 4, textAlignVertical: 'center', fontSize: 9, color: C.muted, fontWeight: '900' },
   previewScoreCell: { width: 28, minHeight: 28, textAlign: 'center', textAlignVertical: 'center', fontSize: 9, color: C.text },
   detailLoadingText: { fontSize: 11, color: C.muted, textAlign: 'center', marginBottom: 6 },
-  shinperioHoleText: { fontSize: 10, color: C.muted, fontWeight: '700', marginBottom: 7 },
-  detailTableHeader: { flexDirection: 'row', alignItems: 'center', paddingBottom: 7, borderBottomWidth: 1, borderBottomColor: C.border },
+  shinperioHoleText: { fontSize: 12, lineHeight: 17, color: C.muted, fontWeight: '800', marginTop: 2, marginBottom: 5 },
+  detailTableHeader: { flexDirection: 'row', alignItems: 'center', minHeight: 31, paddingBottom: 7, borderBottomWidth: 1, borderBottomColor: C.border },
   detailRankScroll: { flex: 1 },
-  detailTableRow: { minHeight: 46, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#edf1ee', paddingHorizontal: 4 },
+  detailTableRow: { minHeight: 54, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#edf1ee', paddingHorizontal: 4 },
   detailPodiumRow: { backgroundColor: 'rgba(32,160,91,0.06)', borderRadius: 10 },
-  detailTh: { fontSize: 10, fontWeight: '800', color: C.muted },
-  detailRank: { fontSize: 12, fontWeight: '900', color: C.muted, textAlign: 'center' },
-  detailPlayerName: { flex: 1, fontSize: 13, fontWeight: '900', color: C.text },
-  detailScoreText: { width: 52, textAlign: 'right', fontSize: 14, fontWeight: '900', color: C.text },
-  detailSmallScore: { width: 48, textAlign: 'right', fontSize: 12, fontWeight: '800', color: C.text },
-  detailNetText: { width: 52, textAlign: 'right', fontSize: 14, fontWeight: '900', color: C.green },
+  detailTh: { fontSize: 13, fontWeight: '900', color: C.muted },
+  detailRank: { fontSize: 16, fontWeight: '900', color: C.muted, textAlign: 'center' },
+  detailPlayerName: { flex: 1, fontSize: 18, fontWeight: '900', color: C.text },
+  detailScoreText: { width: 52, textAlign: 'right', fontSize: 18, fontWeight: '900', color: C.text },
+  detailSmallScore: { width: 48, textAlign: 'right', fontSize: 16, fontWeight: '900', color: C.text },
+  detailNetText: { width: 52, textAlign: 'right', fontSize: 17, fontWeight: '900', color: C.green },
   scoreSummaryGrid: { gap: 6 },
   scoreSummaryCard: { minHeight: 52, borderRadius: 12, backgroundColor: C.greenLight, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center' },
   scoreSummaryName: { fontSize: 13, fontWeight: '900', color: C.text },
@@ -2355,14 +2356,14 @@ const s = StyleSheet.create({
   },
   detailButtonText: { fontSize: 13, fontWeight: '800', color: C.text },
   detailButtonArrow: { fontSize: 18, fontWeight: '700', color: C.muted },
-  hallSection: { marginTop: 8 },
-  hallSectionTitle: { fontSize: 12, fontWeight: '900', color: C.text, marginBottom: 4 },
-  hallRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.border, gap: 10 },
-  hallIconWrap: { width: 32, height: 32, borderRadius: 16, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
-  hallLabel: { flex: 1.45, fontSize: 13, color: C.muted, textAlign: 'left' },
-  hallRecord: { flex: 0.8, fontSize: 13, fontWeight: '900', color: C.text, textAlign: 'center' },
-  hallMember: { flex: 1.1, fontSize: 13, fontWeight: '900', color: C.text, textAlign: 'right' },
-  hallValue: { fontSize: 13, fontWeight: '600', color: C.text, textAlign: 'right', flexShrink: 1 },
+  hallSection: { marginTop: 14 },
+  hallSectionTitle: { fontSize: 20, lineHeight: 26, fontWeight: '900', color: C.text, marginBottom: 7, letterSpacing: -0.45 },
+  hallRow: { flexDirection: 'row', alignItems: 'center', minHeight: 70, paddingVertical: 13, borderTopWidth: 1, borderTopColor: C.border, gap: 11 },
+  hallIconWrap: { width: 42, height: 42, borderRadius: 21, backgroundColor: C.greenLight, alignItems: 'center', justifyContent: 'center' },
+  hallLabel: { flex: 1.45, fontSize: 17, lineHeight: 22, fontWeight: '700', color: C.muted, textAlign: 'left', letterSpacing: -0.3 },
+  hallRecord: { flex: 0.8, fontSize: 20, lineHeight: 25, fontWeight: '900', color: C.text, textAlign: 'center', letterSpacing: -0.35 },
+  hallMember: { flex: 1.1, fontSize: 17, lineHeight: 22, fontWeight: '900', color: C.text, textAlign: 'right', letterSpacing: -0.3 },
+  hallValue: { fontSize: 17, lineHeight: 22, fontWeight: '800', color: C.text, textAlign: 'right', flexShrink: 1 },
   smallBtn: { backgroundColor: C.green, borderRadius: 20, paddingVertical: 6, paddingHorizontal: 14 },
   smallBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   yearNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 24, paddingVertical: 10, marginBottom: 4 },
@@ -2370,17 +2371,23 @@ const s = StyleSheet.create({
   yearBtnText: { color: '#fff', fontSize: 18, fontWeight: '700' },
   yearText: { fontWeight: '800', fontSize: 18, color: C.text },
   dropdownTrigger: { paddingVertical: 4, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1, borderColor: C.green, backgroundColor: C.green },
-  dropdownTriggerText: { fontSize: 12, color: '#fff', fontWeight: '600' },
+  dropdownTriggerText: { fontSize: 15, color: '#fff', fontWeight: '800' },
   dropdownMenu: { position: 'absolute', top: 32, right: 0, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: C.border, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 10, zIndex: 100, minWidth: 90 },
   dropdownItem: { paddingVertical: 10, paddingHorizontal: 16 },
   dropdownItemText: { fontSize: 13, color: C.text },
   dropdownItemActive: { color: C.green, fontWeight: '700' } as const,
-  tableHeader: { flexDirection: 'row', borderBottomWidth: 1.5, borderBottomColor: C.border, paddingBottom: 7, marginBottom: 2 },
-  clubRankingScroll: { maxHeight: 430 },
+  clubRankingTitle: { fontSize: 24, lineHeight: 30, fontWeight: '900', color: C.text, marginBottom: 0, letterSpacing: -0.7 },
+  clubRankingBasisLabel: { fontSize: 16, lineHeight: 21, color: C.muted, fontWeight: '800' },
+  tableHeader: { flexDirection: 'row', alignItems: 'center', minHeight: 38, borderBottomWidth: 1.5, borderBottomColor: C.border, paddingBottom: 8, marginBottom: 2 },
+  clubRankingScroll: { maxHeight: 500 },
   clubRankingScrollContent: { paddingBottom: 2 },
-  tableRow: { flexDirection: 'row', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.border },
-  th: { fontSize: 11, color: C.muted, fontWeight: '700', letterSpacing: 0.3 },
-  td: { fontSize: 13, color: C.text },
+  tableRow: { flexDirection: 'row', alignItems: 'center', minHeight: 56, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: C.border },
+  th: { fontSize: 14, lineHeight: 18, color: C.muted, fontWeight: '800', letterSpacing: -0.15 },
+  td: { fontSize: 16, lineHeight: 21, color: C.text },
+  clubRankNumber: { fontSize: 16, lineHeight: 21, fontWeight: '700', color: C.text },
+  clubRankName: { fontSize: 17, lineHeight: 22, letterSpacing: -0.35 },
+  clubRankValue: { fontSize: 16, lineHeight: 21, fontWeight: '600' },
+  clubRankAverage: { fontSize: 18, lineHeight: 23, fontWeight: '900', letterSpacing: -0.2 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   modalCard: { backgroundColor: C.card, borderRadius: 20, padding: 20, width: '90%', maxHeight: '78%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
