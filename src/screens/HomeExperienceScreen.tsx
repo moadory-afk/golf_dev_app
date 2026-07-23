@@ -2536,15 +2536,6 @@ const RoundInfoModal = memo(function RoundInfoModal({
             </ScrollView>
           ) : null}
 
-          {isGroups && isAdmin ? (
-            <TouchableOpacity
-              activeOpacity={0.86}
-              onPress={onManage}
-              style={[styles.modalAction, { backgroundColor: palette.green }]}
-            >
-              <Text style={styles.modalActionText}>조편성 관리로 이동</Text>
-            </TouchableOpacity>
-          ) : null}
         </View>
       </View>
     </Modal>
