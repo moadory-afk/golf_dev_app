@@ -11,6 +11,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  Vibration,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -79,6 +80,7 @@ import {
 import { AWARD_CATEGORIES, fillToCount } from "../lib/awardConfig";
 import { computeClubAwardResults } from "../lib/awardResults";
 import { subscribeHomeRecordsChanged } from "../lib/homeRecordEvents";
+import { findGuinnessChangesForRound, type GuinnessRecordChange } from "../lib/guinnessAnnouncement";
 import type { HomeFeedAction, HomeFeedEvent } from "../features/home/engine";
 import { getCachedAsync } from "../lib/asyncCache";
 
@@ -802,6 +804,8 @@ export default function HomeExperienceScreen() {
   const focusedClubIdRef = useRef<string | null | undefined>(undefined);
   const defaultUpcomingClubResolvedRef = useRef(false);
   const recordRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [guinnessAnnouncement, setGuinnessAnnouncement] = useState<{ roundId: string; changes: GuinnessRecordChange[] } | null>(null);
+  const guinnessBurst = useRef(Array.from({ length: 28 }, (_, index) => new Animated.Value(index % 2 ? 0 : 1))).current;
 
 
   useEffect(() => {
@@ -930,6 +934,56 @@ export default function HomeExperienceScreen() {
       setRecordCardsReady(true);
     }
   }, [club?.id, userId]);
+
+  useEffect(() => {
+    if (!club?.id || !userId || !recordCardsReady || recordDetailRounds.length === 0 || guinnessAnnouncement) return;
+    let cancelled = false;
+
+    const detectPublishedGuinness = async () => {
+      const scheduleIds = recordDetailRounds.map((round) => round.scheduleId).filter((value): value is string => !!value);
+      if (scheduleIds.length === 0) return;
+
+      const recentThreshold = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      const { data } = await supabase
+        .from("club_round_schedules")
+        .select("id, is_published, updated_at")
+        .eq("club_id", club.id)
+        .in("id", scheduleIds)
+        .eq("is_published", true)
+        .gte("updated_at", recentThreshold)
+        .order("updated_at", { ascending: false });
+
+      for (const schedule of data ?? []) {
+        const round = recordDetailRounds.find((item) => item.scheduleId === schedule.id);
+        if (!round?.isComplete) continue;
+        const seenKey = `gogopar:guinness-announcement:${club.id}:${userId}:${round.id}:${schedule.updated_at}`;
+        const alreadySeen = await AsyncStorage.getItem(seenKey);
+        if (alreadySeen) continue;
+
+        const changes = findGuinnessChangesForRound(recordDetailRounds, round.id);
+        await AsyncStorage.setItem(seenKey, "1");
+        if (!changes.length) continue;
+        if (cancelled) return;
+
+        setGuinnessAnnouncement({ roundId: round.id, changes });
+        Vibration.vibrate([0, 180, 90, 240, 100, 320]);
+        guinnessBurst.forEach((value, index) => {
+          value.setValue(index % 2 ? 0 : 1);
+          Animated.loop(
+            Animated.sequence([
+              Animated.timing(value, { toValue: index % 2 ? 1 : 0, duration: 520 + (index % 5) * 70, useNativeDriver: true }),
+              Animated.timing(value, { toValue: index % 2 ? 0 : 1, duration: 520 + (index % 5) * 70, useNativeDriver: true }),
+            ]),
+            { iterations: 4 },
+          ).start();
+        });
+        return;
+      }
+    };
+
+    void detectPublishedGuinness();
+    return () => { cancelled = true; };
+  }, [club?.id, guinnessAnnouncement, guinnessBurst, recordCardsReady, recordDetailRounds, userId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1151,7 +1205,10 @@ export default function HomeExperienceScreen() {
       return;
     }
     refresh();
-  }, [club?.id, club?.role, refresh]);
+    if (nextValue) {
+      await loadRecordCards({ force: true });
+    }
+  }, [club?.id, club?.role, loadRecordCards, refresh]);
 
   const handleHeroWeatherPress = useCallback((round: HomeHeroRound) => {
     setWeatherDetailRound(round);
@@ -1613,6 +1670,70 @@ export default function HomeExperienceScreen() {
               onPress={() => void hideTutorialForever()}
             >
               <Text style={[styles.tutorialCompleteHideText, { color: palette.muted }]}>튜토리얼 다시 보지 않기</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={guinnessAnnouncement !== null}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setGuinnessAnnouncement(null)}
+      >
+        <View style={styles.guinnessBackdrop}>
+          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+            {guinnessBurst.map((value, index) => {
+              const angle = (index / guinnessBurst.length) * Math.PI * 2;
+              const distance = 90 + (index % 6) * 28;
+              return (
+                <Animated.View
+                  key={`burst-${index}`}
+                  style={[
+                    styles.guinnessConfetti,
+                    {
+                      left: `${48 + Math.cos(angle) * 35}%`,
+                      top: `${42 + Math.sin(angle) * 28}%`,
+                      opacity: value,
+                      transform: [
+                        { translateX: value.interpolate({ inputRange: [0, 1], outputRange: [0, Math.cos(angle) * distance] }) },
+                        { translateY: value.interpolate({ inputRange: [0, 1], outputRange: [0, Math.sin(angle) * distance] }) },
+                        { rotate: `${index * 23}deg` },
+                      ],
+                    },
+                  ]}
+                />
+              );
+            })}
+          </View>
+          <View style={[styles.guinnessCard, { backgroundColor: palette.card }]}>
+            <Text style={styles.guinnessTrophy}>🏆</Text>
+            <Text style={[styles.guinnessTitle, { color: palette.text }]}>기네스북 신기록</Text>
+            <Text style={[styles.guinnessSubtitle, { color: palette.muted }]}>이번 라운드에서 {guinnessAnnouncement?.changes.length ?? 0}개의 기록이 갱신되었습니다.</Text>
+            <ScrollView style={styles.guinnessList} showsVerticalScrollIndicator={false}>
+              {guinnessAnnouncement?.changes.map((change) => (
+                <View key={change.key} style={[styles.guinnessRow, { borderColor: palette.border }]}>
+                  <Text style={[styles.guinnessRecordLabel, { color: palette.green }]}>{change.label}</Text>
+                  <Text style={[styles.guinnessHolder, { color: palette.text }]}>{change.holder}</Text>
+                  <Text style={[styles.guinnessValue, { color: palette.text }]}>
+                    {change.previousValue ? `${change.previousValue} → ` : ""}{change.newValue}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+            <TouchableOpacity
+              activeOpacity={0.86}
+              style={[styles.guinnessButton, { backgroundColor: palette.green }]}
+              onPress={() => {
+                setGuinnessAnnouncement(null);
+                nav.navigate("History");
+              }}
+            >
+              <Text style={styles.guinnessButtonText}>기네스북 보기</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setGuinnessAnnouncement(null)} style={styles.guinnessClose}>
+              <Text style={[styles.guinnessCloseText, { color: palette.muted }]}>닫기</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -3546,4 +3667,40 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   errorButton: { marginTop: 14 },
+  guinnessBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(3, 12, 9, 0.82)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 22,
+  },
+  guinnessCard: {
+    width: "100%",
+    maxWidth: 420,
+    maxHeight: "76%",
+    borderRadius: 26,
+    paddingHorizontal: 22,
+    paddingTop: 22,
+    paddingBottom: 16,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 14,
+  },
+  guinnessTrophy: { fontSize: 54, marginBottom: 4 },
+  guinnessTitle: { fontSize: 25, fontWeight: "900", letterSpacing: -0.7 },
+  guinnessSubtitle: { marginTop: 7, marginBottom: 14, fontSize: 14, lineHeight: 20, textAlign: "center", fontWeight: "700" },
+  guinnessList: { width: "100%", maxHeight: 280 },
+  guinnessRow: { width: "100%", borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11, marginBottom: 8 },
+  guinnessRecordLabel: { fontSize: 12, fontWeight: "900", marginBottom: 3 },
+  guinnessHolder: { fontSize: 17, fontWeight: "900" },
+  guinnessValue: { marginTop: 3, fontSize: 14, fontWeight: "800" },
+  guinnessButton: { width: "100%", height: 48, borderRadius: 14, marginTop: 14, alignItems: "center", justifyContent: "center" },
+  guinnessButtonText: { color: "#fff", fontSize: 16, fontWeight: "900" },
+  guinnessClose: { paddingHorizontal: 16, paddingVertical: 9, marginTop: 2 },
+  guinnessCloseText: { fontSize: 13, fontWeight: "800" },
+  guinnessConfetti: { position: "absolute", width: 9, height: 18, borderRadius: 3, backgroundColor: "#FFD84D" },
+
 });
