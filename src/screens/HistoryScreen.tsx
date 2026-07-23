@@ -450,11 +450,12 @@ function EmptyByPlayer() {
   return (
     <>
       {selectedCard && (
-        <Modal transparent animationType="fade" onRequestClose={() => setSelectedCard(null)}>
-          <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setSelectedCard(null)}>
-            <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+        <Modal transparent animationType="slide" onRequestClose={() => setSelectedCard(null)}>
+          <TouchableOpacity style={s.personalReportSheetOverlay} activeOpacity={1} onPress={() => setSelectedCard(null)}>
+            <TouchableOpacity style={s.personalReportSheet} activeOpacity={1} onPress={() => {}}>
+              <View style={s.personalReportSheetHandle} />
               <View style={s.modalHeader}>
-                <Text style={s.modalTitle}>{selectedCard.title}</Text>
+                <Text style={s.personalReportSheetTitle}>{selectedCard.title}</Text>
                 <TouchableOpacity style={s.closeBtn} onPress={() => setSelectedCard(null)}><Text style={s.closeBtnText}>닫기</Text></TouchableOpacity>
               </View>
               {selectedCard.rows.map((row) => (
@@ -497,10 +498,10 @@ function EmptyByPlayer() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} decelerationRate="fast" snapToInterval={280} contentContainerStyle={s.personalReportCarousel}>
           {emptyReportCards.map((card) => (
             <TouchableOpacity key={card.key} activeOpacity={0.86} onPress={() => setSelectedCard({ title: card.title, rows: card.rows })} style={[s.personalReportCard, { width: 270 }]}>
+              <Text style={s.personalReportCardAction}>자세히 보기 ›</Text>
               <View style={s.personalReportIconWrap}><Text style={s.personalReportIcon}>{card.icon}</Text></View>
               <Text style={s.personalReportCardTitle}>{card.title}</Text>
-              <Text style={s.personalReportCardSubtitle} numberOfLines={2}>{card.subtitle}</Text>
-              <Text style={s.personalReportCardAction}>자세히 보기 ›</Text>
+              <Text style={s.personalReportCardSubtitle} numberOfLines={1}>{card.subtitle}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -1256,11 +1257,12 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
   return (
     <>
       {detailModal && (
-        <Modal transparent animationType="fade" onRequestClose={() => setDetailModal(null)}>
-          <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={() => setDetailModal(null)}>
-            <TouchableOpacity style={s.modalCard} activeOpacity={1} onPress={() => {}}>
+        <Modal transparent animationType="slide" onRequestClose={() => setDetailModal(null)}>
+          <TouchableOpacity style={s.personalReportSheetOverlay} activeOpacity={1} onPress={() => setDetailModal(null)}>
+            <TouchableOpacity style={s.personalReportSheet} activeOpacity={1} onPress={() => {}}>
+              <View style={s.personalReportSheetHandle} />
               <View style={s.modalHeader}>
-                <Text style={s.modalTitle}>{modalTitle}</Text>
+                <Text style={s.personalReportSheetTitle}>{modalTitle}</Text>
                 <TouchableOpacity style={s.closeBtn} onPress={() => setDetailModal(null)}><Text style={s.closeBtnText}>닫기</Text></TouchableOpacity>
               </View>
               <ScrollView showsVerticalScrollIndicator={false}>
@@ -1449,12 +1451,12 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
               style={[s.personalReportCard, { width: reportCardWidth }]}
               onPress={() => setDetailModal(card.modal)}
             >
+              <Text style={s.personalReportCardAction}>자세히 보기 ›</Text>
               <View style={s.personalReportIconWrap}>
                 <Text style={s.personalReportIcon}>{card.icon}</Text>
               </View>
               <Text style={s.personalReportCardTitle}>{card.title}</Text>
-              <Text style={s.personalReportCardSubtitle} numberOfLines={2}>{card.subtitle}</Text>
-              <Text style={s.personalReportCardAction}>자세히 보기 ›</Text>
+              <Text style={s.personalReportCardSubtitle} numberOfLines={1}>{card.subtitle}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -2021,7 +2023,9 @@ const s = StyleSheet.create({
   aiCaddieCard: {
     backgroundColor: C.card,
     borderRadius: 22,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 15,
+    paddingBottom: 13,
     marginBottom: 22,
     borderWidth: 1,
     borderColor: 'rgba(32,160,91,0.18)',
@@ -2298,7 +2302,7 @@ const s = StyleSheet.create({
   personalReportHint: { fontSize: 13, lineHeight: 18, fontWeight: '800', color: C.muted },
   personalReportCarousel: { gap: 14, paddingRight: 18 },
   personalReportCard: {
-    minHeight: 156,
+    minHeight: 124,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: C.border,
@@ -2317,12 +2321,12 @@ const s = StyleSheet.create({
     backgroundColor: C.greenLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 9,
   },
-  personalReportIcon: { fontSize: 23, lineHeight: 28 },
-  personalReportCardTitle: { fontSize: 21, lineHeight: 27, fontWeight: '900', color: C.text, letterSpacing: -0.6 },
-  personalReportCardSubtitle: { minHeight: 42, fontSize: 15, lineHeight: 21, fontWeight: '800', color: C.muted, marginTop: 5 },
-  personalReportCardAction: { fontSize: 15, lineHeight: 20, fontWeight: '900', color: C.green, marginTop: 'auto' },
+  personalReportIcon: { fontSize: 22, lineHeight: 27 },
+  personalReportCardTitle: { fontSize: 20, lineHeight: 25, fontWeight: '900', color: C.text, letterSpacing: -0.6 },
+  personalReportCardSubtitle: { minHeight: 21, fontSize: 14, lineHeight: 20, fontWeight: '800', color: C.muted, marginTop: 3, paddingRight: 4 },
+  personalReportCardAction: { position: 'absolute', top: 16, right: 15, zIndex: 2, fontSize: 13, lineHeight: 18, fontWeight: '900', color: C.green },
   analysisRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: C.border },
   analysisLabel: { fontSize: 13, fontWeight: '700', color: C.muted },
   analysisValue: { fontSize: 14, fontWeight: '900', color: C.text },
@@ -2388,6 +2392,24 @@ const s = StyleSheet.create({
   clubRankName: { fontSize: 17, lineHeight: 22, letterSpacing: -0.35 },
   clubRankValue: { fontSize: 16, lineHeight: 21, fontWeight: '600' },
   clubRankAverage: { fontSize: 18, lineHeight: 23, fontWeight: '900', letterSpacing: -0.2 },
+  personalReportSheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.46)', justifyContent: 'flex-end' },
+  personalReportSheet: {
+    width: '100%',
+    maxHeight: '84%',
+    backgroundColor: C.card,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 16,
+  },
+  personalReportSheetHandle: { width: 46, height: 5, borderRadius: 3, backgroundColor: C.border, alignSelf: 'center', marginBottom: 14 },
+  personalReportSheetTitle: { flex: 1, marginRight: 10, fontSize: 22, lineHeight: 28, fontWeight: '900', color: C.text, letterSpacing: -0.5 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   modalCard: { backgroundColor: C.card, borderRadius: 20, padding: 20, width: '90%', maxHeight: '78%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
