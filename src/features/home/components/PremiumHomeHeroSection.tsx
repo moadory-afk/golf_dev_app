@@ -47,6 +47,97 @@ type NavigationProvider = "kakao" | "tmap" | "naver";
 type HomeTutorialStepId = "weather" | "travel" | "flip" | "swipe";
 type HomeTutorialStep = HomeTutorialStepId | null;
 
+function tutorialDate(daysFromToday: number) {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + daysFromToday);
+  return date.toISOString().slice(0, 10);
+}
+
+function createTutorialRounds(): HomeHeroRound[] {
+  const firstDate = tutorialDate(3);
+  const secondDate = tutorialDate(10);
+  return [
+    {
+      id: "tutorial-demo-round-1",
+      courseName: "튜터리얼 CC",
+      layoutName: "IN / OUT",
+      courseLine: "IN / OUT 코스",
+      date: firstDate,
+      dateLabel: "3일 후 (토)",
+      teeTime: "08:12",
+      dday: "D-3",
+      status: "closed",
+      statusLabel: "조편성 완료",
+      memberCount: 8,
+      groupCount: 2,
+      memberNames: ["김철수", "김영희", "홍길동", "이몽룡"],
+      attendanceStatus: "참석",
+      groupingComplete: true,
+      courseRegistered: true,
+      assignedParticipant: true,
+      note: "튜토리얼용 체험 라운드",
+      weatherText: "맑음",
+      temperature: "24°",
+      windText: "남서풍 2.1m/s",
+      fiveHourWeatherSummary: "라운딩 시간대 대체로 맑음",
+      fiveHourWeatherDetail: "강수확률 10%, 바람 2.1m/s",
+      fiveHourWeatherHours: [
+        { time: "07:00", icon: "☀️", condition: "맑음", tempC: 21, pop: 10, windMs: 1.8 },
+        { time: "08:00", icon: "☀️", condition: "맑음", tempC: 22, pop: 10, windMs: 2.0 },
+        { time: "09:00", icon: "🌤️", condition: "구름조금", tempC: 24, pop: 10, windMs: 2.1 },
+      ],
+      locationLabel: "가상 골프장 · IN / OUT 코스",
+      routeTimeText: "자동차 48분",
+      routeTimeByProvider: { kakao: "48분", tmap: "51분", naver: "49분" },
+      departureTimeText: "06:44 출발 추천",
+      urgencyTone: "soon",
+      awardPlanReady: true,
+      lottoPurchased: true,
+      lottoDrawStatus: "PENDING",
+      resultSaved: false,
+      resultComplete: false,
+      isPublished: true,
+      isConfirmed: false,
+    },
+    {
+      id: "tutorial-demo-round-2",
+      courseName: "튜터리얼 CC",
+      layoutName: "SKY / HILL",
+      courseLine: "SKY / HILL 코스",
+      date: secondDate,
+      dateLabel: "10일 후 (일)",
+      teeTime: "12:24",
+      dday: "D-10",
+      status: "recruiting",
+      statusLabel: "참석 접수중",
+      memberCount: 12,
+      groupCount: 3,
+      memberNames: ["성춘향", "박민수", "최유리", "정다은"],
+      attendanceStatus: "미정",
+      groupingComplete: false,
+      courseRegistered: true,
+      assignedParticipant: false,
+      note: "튜토리얼용 두 번째 라운드",
+      weatherText: "구름조금",
+      temperature: "26°",
+      windText: "동풍 1.7m/s",
+      locationLabel: "가상 골프장 · SKY / HILL 코스",
+      routeTimeText: "자동차 55분",
+      routeTimeByProvider: { kakao: "55분", tmap: "58분", naver: "56분" },
+      departureTimeText: "10:49 출발 추천",
+      urgencyTone: "calm",
+      awardPlanReady: true,
+      lottoPurchased: false,
+      lottoDrawStatus: "PENDING",
+      resultSaved: false,
+      resultComplete: false,
+      isPublished: true,
+      isConfirmed: false,
+    },
+  ];
+}
+
 const HOME_TUTORIAL_STEPS: readonly TutorialStepDefinition<HomeTutorialStepId>[] = [
   {
     id: "weather",
@@ -157,6 +248,9 @@ type PremiumHomeHeroSectionProps = {
   departureBufferMinutes?: number;
   onClubSwipe?: (direction: "next" | "previous") => void;
   tutorialUserId?: string | null;
+  onTutorialStarted?: () => void;
+  tutorialDemoActive?: boolean;
+  onTutorialCancelled?: () => void;
   onTutorialHeroComplete?: () => void;
 };
 
@@ -186,6 +280,9 @@ function PremiumHomeHeroSectionComponent({
   departureBufferMinutes = 40,
   onClubSwipe,
   tutorialUserId,
+  onTutorialStarted,
+  tutorialDemoActive = false,
+  onTutorialCancelled,
   onTutorialHeroComplete,
 }: PremiumHomeHeroSectionProps) {
   const { palette } = useSkin();
@@ -248,8 +345,9 @@ function PremiumHomeHeroSectionComponent({
   const startTutorial = useCallback(() => {
     setShowTutorialPrompt(false);
     setDoNotAskTutorialAgain(false);
+    onTutorialStarted?.();
     startTutorialFlow();
-  }, [startTutorialFlow]);
+  }, [onTutorialStarted, startTutorialFlow]);
 
   const postponeTutorial = useCallback(async () => {
     setShowTutorialPrompt(false);
@@ -280,10 +378,11 @@ function PremiumHomeHeroSectionComponent({
   }, [onTutorialHeroComplete, stopTutorial, tutorialStep]);
 
   const skipTutorial = useCallback(() => {
-    // 건너뛰기는 현재 실행만 종료한다.
+    // 건너뛰기는 현재 실행만 종료하고 가상 라운드도 제거한다.
     // 영구 완료 처리는 사용자가 명시적으로 "다시 보지 않기"를 선택한 경우에만 저장한다.
     stopTutorial();
-  }, [stopTutorial]);
+    onTutorialCancelled?.();
+  }, [onTutorialCancelled, stopTutorial]);
 
   const [internalActiveIndex, setInternalActiveIndex] = useState(0);
   const activeIndex = controlledActiveIndex ?? internalActiveIndex;
@@ -305,21 +404,25 @@ function PremiumHomeHeroSectionComponent({
     }
     const cancelMeasure = measureAnchor(tutorialDefinition.targetId);
     return cancelMeasure;
-  }, [activeIndex, clearAnchor, heroHeight, heroWidth, measureAnchor, tutorialDefinition]);
-  const hasRounds = rounds.length > 0;
+  }, [activeIndex, clearAnchor, heroHeight, heroWidth, measureAnchor, tutorialDefinition, tutorialDemoActive]);
+  const tutorialRounds = useMemo(() => createTutorialRounds(), []);
+  // 실제 등록 라운드가 없는 사용자가 튜토리얼을 실행하는 동안에만
+  // 가상 라운드를 메모리에서 표시한다. 튜토리얼 종료 즉시 제거된다.
+  const displayRounds = rounds.length === 0 && tutorialDemoActive ? tutorialRounds : rounds;
+  const hasRounds = displayRounds.length > 0;
   const totalCount = hasRounds
-    ? rounds.length + (isAdmin ? 1 : 0)
+    ? displayRounds.length + (isAdmin && rounds.length > 0 ? 1 : 0)
     : 1;
   const dots = Array.from({ length: totalCount });
   const carouselItems = useMemo<HomeHeroCarouselItem[]>(() => {
     if (!hasRounds) return [{ kind: "empty" }];
-    const items: HomeHeroCarouselItem[] = rounds.map((round) => ({
+    const items: HomeHeroCarouselItem[] = displayRounds.map((round) => ({
       kind: "round",
       round,
     }));
-    if (isAdmin) items.push({ kind: "create" });
+    if (isAdmin && rounds.length > 0) items.push({ kind: "create" });
     return items;
-  }, [hasRounds, isAdmin, rounds]);
+  }, [displayRounds, hasRounds, isAdmin, rounds.length]);
 
   const verticalClubPanResponder = useMemo(
     () =>
@@ -378,6 +481,51 @@ function PremiumHomeHeroSectionComponent({
       });
     }
   }, [activeIndex, controlledActiveIndex, heroWidth, totalCount]);
+
+
+  const showTutorialCaddieBook = useCallback((round: HomeHeroRound) => {
+    if (!round.id.startsWith("tutorial-demo-round")) {
+      onCaddieBookPress?.(round);
+      return;
+    }
+    Alert.alert(
+      "튜터리얼 캐디북",
+      "튜터리얼 CC의 18홀 가상 공략 정보입니다.\n실제 라운드와 기록에는 반영되지 않습니다.",
+    );
+  }, [onCaddieBookPress]);
+
+  const showTutorialGroups = useCallback((round: HomeHeroRound) => {
+    if (!round.id.startsWith("tutorial-demo-round")) {
+      onGroupsPress?.(round);
+      return;
+    }
+    Alert.alert(
+      "튜토리얼 조편성",
+      "1조 08:12 · 김철수, 김영희, 홍길동, 이몽룡\n2조 08:20 · 성춘향, 박민수, 최유리, 정다은",
+    );
+  }, [onGroupsPress]);
+
+  const showTutorialLotto = useCallback((round: HomeHeroRound) => {
+    if (!round.id.startsWith("tutorial-demo-round")) {
+      onLottoPress?.(round);
+      return;
+    }
+    Alert.alert(
+      "튜토리얼 LOTTO 6/18",
+      "구매번호: 2, 5, 8, 11, 14, 17\n현재 누적 당첨금: 120,000원\n추첨은 라운드 종료 후 진행됩니다.",
+    );
+  }, [onLottoPress]);
+
+  const showTutorialAwards = useCallback((round: HomeHeroRound) => {
+    if (!round.id.startsWith("tutorial-demo-round")) {
+      onAwardPress?.(round);
+      return;
+    }
+    Alert.alert(
+      "튜토리얼 시상 계획",
+      "메달리스트 · 우승 · 롱기스트 · 니어리스트 · 행운상 · 우정상\n라운드 종료 후 기록을 기준으로 수상자가 결정됩니다.",
+    );
+  }, [onAwardPress]);
 
 
 
@@ -450,10 +598,10 @@ function PremiumHomeHeroSectionComponent({
                     round={item.round}
                     shouldLoadImage={true}
                     isAdmin={isAdmin}
-                    onCaddieBookPress={onCaddieBookPress}
-                    onGroupsPress={onGroupsPress}
-                    onLottoPress={onLottoPress}
-                    onAwardPress={onAwardPress}
+                    onCaddieBookPress={showTutorialCaddieBook}
+                    onGroupsPress={showTutorialGroups}
+                    onLottoPress={showTutorialLotto}
+                    onAwardPress={showTutorialAwards}
                     onEditRoundPress={onEditRoundPress}
                     onWeatherPress={onWeatherPress}
                     onToggleConfirmed={onToggleConfirmed}
@@ -728,7 +876,12 @@ const HeroRoundCard = memo(function HeroRoundCard({
             <View style={styles.slideBackgroundPlaceholder} />
           )}
           <View style={styles.scrim} />
-          {isAdmin ? (
+          {round.id.startsWith("tutorial-demo-round") ? (
+            <View style={styles.tutorialDemoBadge}>
+              <Text style={styles.tutorialDemoBadgeText}>튜토리얼 · 가상 라운드</Text>
+            </View>
+          ) : null}
+          {isAdmin && !round.id.startsWith("tutorial-demo-round") ? (
             <View style={styles.adminStatusBadges}>
               <TouchableOpacity
                 style={[styles.adminStatusBadge, round.isConfirmed ? styles.confirmedBadge : styles.unconfirmedBadge]}
@@ -1767,6 +1920,19 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
+  tutorialDemoBadge: {
+    position: "absolute",
+    top: 58,
+    left: 14,
+    zIndex: 5,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: "rgba(20, 116, 82, 0.92)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.78)",
+  },
+  tutorialDemoBadgeText: { color: "#fff", fontSize: 11, fontWeight: "900" },
   adminStatusBadges: { position: "absolute", top: 62, right: 14, zIndex: 4, flexDirection: "row", gap: 6 },
   adminStatusBadge: { minWidth: 52, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: "rgba(255,255,255,0.72)", alignItems: "center" },
   adminStatusBadgeText: { color: "#fff", fontSize: 11, fontWeight: "900" },

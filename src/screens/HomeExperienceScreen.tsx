@@ -791,6 +791,7 @@ export default function HomeExperienceScreen() {
   const [weatherDetailOpenHours, setWeatherDetailOpenHours] = useState<HomeWeatherHour[]>([]);
   const [weatherDetailSummary, setWeatherDetailSummary] = useState("");
   const [showCaddieTutorial, setShowCaddieTutorial] = useState(false);
+  const [tutorialDemoActive, setTutorialDemoActive] = useState(false);
   const [showTutorialComplete, setShowTutorialComplete] = useState(false);
   const [recordDetailMode, setRecordDetailMode] = useState<HomeRecordDetailMode | null>(null);
   const [recordDetailRounds, setRecordDetailRounds] = useState<SavedRound[]>([]);
@@ -798,7 +799,42 @@ export default function HomeExperienceScreen() {
   const [recordCardsReady, setRecordCardsReady] = useState(false);
   const [recordDetailLoading, setRecordDetailLoading] = useState(false);
   const focusedClubIdRef = useRef<string | null | undefined>(undefined);
+  const defaultUpcomingClubResolvedRef = useRef(false);
   const recordRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!clubsLoaded || myClubs.length === 0 || defaultUpcomingClubResolvedRef.current) return;
+    defaultUpcomingClubResolvedRef.current = true;
+
+    let cancelled = false;
+    const resolveDefaultClub = async () => {
+      const today = new Date().toISOString().slice(0, 10);
+      const clubIds = myClubs.map((item) => item.id);
+      const { data, error: scheduleError } = await supabase
+        .from("club_round_schedules")
+        .select("club_id, round_date, tee_time")
+        .in("club_id", clubIds)
+        .gte("round_date", today)
+        .in("status", ["planned", "recruiting", "closed", "finished"])
+        .eq("is_confirmed", false)
+        .order("round_date", { ascending: true })
+        .order("tee_time", { ascending: true })
+        .limit(1);
+
+      if (cancelled || scheduleError) return;
+      const nextClubId = data?.[0]?.club_id as string | undefined;
+      const nextClub = nextClubId ? myClubs.find((item) => item.id === nextClubId) : undefined;
+      if (nextClub && nextClub.id !== club?.id) {
+        setActiveRoundIndex(0);
+        setActiveClub(nextClub);
+      }
+    };
+
+    void resolveDefaultClub();
+    return () => {
+      cancelled = true;
+    };
+  }, [club?.id, clubsLoaded, myClubs, setActiveClub]);
 
   const loadRecordCards = useCallback(async (options?: { force?: boolean }) => {
     if (!club?.id) {
@@ -1354,13 +1390,15 @@ export default function HomeExperienceScreen() {
 
   const completeHomeTutorial = useCallback(() => {
     setShowCaddieTutorial(false);
-    // 5/5 완료는 이번 실행만 종료한다. 다음 접속 시에는 다시 1/5부터 시작한다.
+    setTutorialDemoActive(false);
+    // 5/5 완료와 동시에 튜토리얼용 가상 라운드 카드를 제거한다.
     setShowTutorialComplete(true);
   }, []);
 
   const skipHomeTutorial = useCallback(() => {
-    // 건너뛰기는 영구 완료로 저장하지 않는다.
+    // 건너뛰기는 현재 실행만 종료하고 가상 라운드도 즉시 제거한다.
     setShowCaddieTutorial(false);
+    setTutorialDemoActive(false);
   }, []);
 
   const hideTutorialForever = useCallback(async () => {
@@ -1447,6 +1485,13 @@ export default function HomeExperienceScreen() {
                   departureBufferMinutes={departureBufferMinutes}
                   onClubSwipe={handleHeroClubSwipe}
                   tutorialUserId={userId}
+                  tutorialDemoActive={tutorialDemoActive}
+                  onTutorialStarted={() => {
+                    setTutorialDemoActive(true);
+                    setShowCaddieTutorial(false);
+                    setActiveRoundIndex(0);
+                  }}
+                  onTutorialCancelled={() => setTutorialDemoActive(false)}
                   onTutorialHeroComplete={() => setShowCaddieTutorial(true)}
                 />
               </PremiumHomeMotion>
