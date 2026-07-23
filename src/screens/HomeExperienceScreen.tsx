@@ -253,7 +253,7 @@ function resolveFeedNavigation(
   if (actionType === "open_caddie_map") {
     const params = caddieBookParams(round);
     if (params) return nav.navigate("CaddieBook", params);
-    return nav.navigate("RoundSchedulePrototype", { openCreate: true });
+    return nav.navigate("RoundSchedulePrototype", { openCreate: true, modalOnly: true });
   }
   if (actionType === "open_attendance" && round)
     return nav.navigate("RoundSchedulePrototype", { editScheduleId: round.id, modalOnly: true });
@@ -267,7 +267,7 @@ function resolveFeedNavigation(
   if (actionType === "open_score_entry") return nav.navigate("ScoreCapture");
   if (actionType === "open_result")
     return nav.navigate("Main", { screen: "History", params: { initialTab: "byRound" } });
-  return nav.navigate("RoundSchedulePrototype", { openCreate: true });
+  return nav.navigate("RoundSchedulePrototype", { openCreate: true, modalOnly: true });
 }
 
 type HomeRecordDetailMode = "handicap" | "average" | "recent" | "best" | "matchup" | "records" | "awards";
@@ -1001,7 +1001,7 @@ export default function HomeExperienceScreen() {
   );
 
   const handleHeroCreateRound = useCallback(() => {
-    nav.navigate("RoundSchedulePrototype", { openCreate: true });
+    nav.navigate("RoundSchedulePrototype", { openCreate: true, modalOnly: true });
   }, [nav]);
 
   const handleHeroCaddieBookPress = useCallback(
