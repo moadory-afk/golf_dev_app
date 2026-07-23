@@ -128,20 +128,6 @@ export function TopActionButtons({ topInset = 0, floating = false }: TopActionBu
                       </TouchableOpacity>
                     )
                   })}
-                  <View style={[styles.menuDivider, { backgroundColor: palette.border }]} />
-                  <TouchableOpacity
-                    style={styles.menuItem}
-                    onPress={() => {
-                      setMenu(null)
-                      nav.navigate('Main', { screen: 'Club', params: { openManageMenu: true } })
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.menuText, { color: palette.text, fontWeight: '800' }]} numberOfLines={1}>기타관리 메뉴</Text>
-                      <Text style={[styles.menuSub, { color: palette.muted }]} numberOfLines={1}>관리 메뉴에서 바로 확인</Text>
-                    </View>
-                  </TouchableOpacity>
                 </>
               )}
             </View>
@@ -211,7 +197,6 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.16)' },
   menu: { position: 'absolute', borderRadius: 16, paddingVertical: 6, maxWidth: 280, borderWidth: 1, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
   menuItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingHorizontal: 14, paddingVertical: 11 },
-  menuDivider: { height: 1, marginHorizontal: 14, marginVertical: 4 },
   menuText: { fontSize: 14 },
   menuSub: { fontSize: 11, marginTop: 2 },
   menuEmpty: { paddingHorizontal: 14, paddingVertical: 12, fontSize: 13 },

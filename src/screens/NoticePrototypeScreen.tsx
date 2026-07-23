@@ -163,12 +163,6 @@ export default function NoticePrototypeScreen() {
 
   return (
     <ScrollView style={s.screen} contentContainerStyle={s.content}>
-      <View style={s.hero}>
-        <Text style={s.heroEyebrow}>{activeClub?.name ?? '클럽'}</Text>
-        <Text style={s.heroTitle}>공지사항</Text>
-        <Text style={s.heroSub}>클럽 운영 공지와 안내사항을 확인합니다.</Text>
-      </View>
-
       <View style={s.card}>
         <View style={s.sectionHeader}>
           <Text style={s.sectionTitle}>공지 목록</Text>
@@ -294,10 +288,6 @@ export default function NoticePrototypeScreen() {
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   content: { padding: 16, gap: 14, paddingBottom: 28 },
-  hero: { backgroundColor: C.greenDark, borderRadius: 20, padding: 18 },
-  heroEyebrow: { color: 'rgba(255,255,255,0.65)', fontSize: 12, fontWeight: '700' },
-  heroTitle: { color: '#fff', fontSize: 24, fontWeight: '900', marginTop: 6 },
-  heroSub: { color: 'rgba(255,255,255,0.72)', fontSize: 12, marginTop: 8, lineHeight: 18 },
   card: { backgroundColor: C.card, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: C.border },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   installNotice: { flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderColor: '#B9DDC8', backgroundColor: '#F0F8F3', borderRadius: 16, padding: 13, marginBottom: 10 },
