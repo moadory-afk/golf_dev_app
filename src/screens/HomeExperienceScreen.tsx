@@ -1716,6 +1716,92 @@ const HomeRecordDetailModal = memo(function HomeRecordDetailModal({
   onClose: () => void;
 }) {
   const { palette } = useSkin();
+  const sheetTranslateY = useRef(new Animated.Value(760)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const scrollOffsetY = useRef(0);
+  const closingRef = useRef(false);
+
+  useEffect(() => {
+    if (!visible) {
+      closingRef.current = false;
+      return;
+    }
+    closingRef.current = false;
+    scrollOffsetY.current = 0;
+    sheetTranslateY.setValue(760);
+    backdropOpacity.setValue(0);
+    requestAnimationFrame(() => {
+      Animated.parallel([
+        Animated.spring(sheetTranslateY, {
+          toValue: 0,
+          useNativeDriver: true,
+          damping: 25,
+          stiffness: 220,
+          mass: 0.95,
+        }),
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+  }, [backdropOpacity, sheetTranslateY, visible]);
+
+  const closeSheet = useCallback(() => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    Animated.parallel([
+      Animated.timing(sheetTranslateY, {
+        toValue: 760,
+        duration: 230,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      closingRef.current = false;
+      if (finished) onClose();
+    });
+  }, [backdropOpacity, onClose, sheetTranslateY]);
+
+  const sheetPanResponder = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponderCapture: (_event, gesture) => {
+      const verticalDrag = gesture.dy > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.15;
+      return verticalDrag && scrollOffsetY.current <= 1;
+    },
+    onPanResponderGrant: () => {
+      sheetTranslateY.stopAnimation();
+    },
+    onPanResponderMove: (_event, gesture) => {
+      if (gesture.dy > 0) sheetTranslateY.setValue(gesture.dy);
+    },
+    onPanResponderRelease: (_event, gesture) => {
+      const shouldClose = gesture.dy > 120 || gesture.vy > 0.9;
+      if (shouldClose) {
+        closeSheet();
+        return;
+      }
+      Animated.spring(sheetTranslateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        damping: 24,
+        stiffness: 230,
+      }).start();
+    },
+    onPanResponderTerminate: () => {
+      Animated.spring(sheetTranslateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        damping: 24,
+        stiffness: 230,
+      }).start();
+    },
+  }), [closeSheet, sheetTranslateY]);
+
   const personalRows = useMemo(
     () => getPersonalRoundRows(rounds, userName),
     [rounds, userName],
@@ -1932,20 +2018,38 @@ const HomeRecordDetailModal = memo(function HomeRecordDetailModal({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.detailModalBackdrop}>
-        <View style={[styles.detailModalCard, { backgroundColor: palette.card }]}> 
+    <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={closeSheet}>
+      <Animated.View style={[styles.detailModalBackdrop, { opacity: backdropOpacity }]}>
+        <TouchableOpacity activeOpacity={1} onPress={closeSheet} style={StyleSheet.absoluteFill} />
+        <Animated.View
+          {...sheetPanResponder.panHandlers}
+          style={[
+            styles.detailModalCard,
+            {
+              backgroundColor: palette.card,
+              transform: [{ translateY: sheetTranslateY }],
+            },
+          ]}
+        >
+          <View style={[styles.detailSheetHandle, { backgroundColor: palette.border }]} />
           <View style={styles.detailModalHeader}>
             <Text style={[styles.detailModalTitle, { color: palette.text }]}>{mode ? titleByMode[mode] : "기록 상세"}</Text>
-            <TouchableOpacity activeOpacity={0.86} onPress={onClose} style={[styles.detailCloseButton, { backgroundColor: palette.green }]}> 
+            <TouchableOpacity activeOpacity={0.86} onPress={closeSheet} style={[styles.detailCloseButton, { backgroundColor: palette.green }]}> 
               <Text style={styles.detailCloseText}>닫기</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onScroll={(event) => {
+              scrollOffsetY.current = event.nativeEvent.contentOffset.y;
+            }}
+            contentContainerStyle={styles.detailModalContent}
+          >
             {content()}
           </ScrollView>
-        </View>
-      </View>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 });
@@ -2947,16 +3051,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(11,24,18,0.64)",
     alignItems: "center",
-    justifyContent: "center",
-    padding: 16,
+    justifyContent: "flex-end",
   },
   detailModalCard: {
     width: "100%",
-    maxWidth: 680,
-    maxHeight: "88%",
-    borderRadius: 24,
+    maxWidth: 760,
+    maxHeight: "91%",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingHorizontal: 22,
-    paddingTop: 20,
+    paddingTop: 10,
+    paddingBottom: 18,
+    overflow: "hidden",
+  },
+  detailSheetHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    alignSelf: "center",
+    marginBottom: 12,
+  },
+  detailModalContent: {
     paddingBottom: 18,
   },
   detailModalHeader: {
