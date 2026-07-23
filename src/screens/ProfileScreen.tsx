@@ -1969,7 +1969,13 @@ export default function ProfileScreen({
                 <Text style={p.menuArrow}>›</Text>
               </TouchableOpacity>
               <View style={p.menuDivider} />
-              <TouchableOpacity style={p.menuRow} onPress={requestTutorialOpen}>
+              <TouchableOpacity
+                style={p.menuRow}
+                onPress={async () => {
+                  await requestTutorialOpen();
+                  navigation.navigate("Main", { screen: "Home" });
+                }}
+              >
                 <Text style={p.menuIcon}>📖</Text>
                 <Text style={p.menuText}>튜토리얼 다시 보기</Text>
                 <Text style={p.menuArrow}>›</Text>

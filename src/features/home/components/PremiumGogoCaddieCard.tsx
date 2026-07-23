@@ -1,9 +1,10 @@
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, type LayoutRectangle } from 'react-native'
 import { useEffect, useMemo, useState } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createShadow, radius, spacing } from '../../../design/tokens'
 import { useSkin } from '../../../skins'
 import type { HomeFeedAction, HomeFeedEvent } from '../engine'
+import { TutorialFinger } from '../../../components/tutorial/TutorialFinger'
 
 const caddieCharacter = require('../../../../assets/caddy.png')
 
@@ -31,6 +32,9 @@ type PremiumGogoCaddieCardProps = {
   actions?: ConciergeAction[]
   roundLabel?: string | null
   userId?: string | null
+  tutorialActive?: boolean
+  onTutorialCompleted?: () => void
+  onTutorialSkip?: () => void
 }
 
 function fallbackFeed({
@@ -74,12 +78,17 @@ export function PremiumGogoCaddieCard({
   actions = [],
   roundLabel,
   userId,
+  tutorialActive = false,
+  onTutorialCompleted,
+  onTutorialSkip,
 }: PremiumGogoCaddieCardProps) {
   const { palette } = useSkin()
   const [page, setPage] = useState(0)
   const [slideWidth, setSlideWidth] = useState(0)
   const [cardWidth, setCardWidth] = useState(0)
   const [readIds, setReadIds] = useState<Set<string>>(new Set())
+  const [tutorialTarget, setTutorialTarget] = useState<LayoutRectangle | null>(null)
+  const [rightColumnLayout, setRightColumnLayout] = useState<LayoutRectangle | null>(null)
   const compact = cardWidth > 0 && cardWidth < 350
 
   const fallback = useMemo(() => fallbackFeed({
@@ -100,6 +109,10 @@ export function PremiumGogoCaddieCard({
   useEffect(() => {
     setPage(0)
   }, [roundLabel, feedItems[0]?.id])
+
+  useEffect(() => {
+    setTutorialTarget(null)
+  }, [page, tutorialActive])
 
 
   const readStorageKey = `@gogopar_caddie_read:${userId ?? 'guest'}`
@@ -131,6 +144,7 @@ export function PremiumGogoCaddieCard({
   const runFeedAction = (item: HomeFeedEvent, action?: HomeFeedAction) => {
     // NEW 배지는 카드가 보였을 때가 아니라 사용자가 실제로 클릭했을 때만 제거한다.
     markAsRead(item.id)
+    if (tutorialActive) onTutorialCompleted?.()
     if (onFeedAction) onFeedAction(item, action)
     else onPress()
   }
@@ -155,7 +169,14 @@ export function PremiumGogoCaddieCard({
           <Image source={caddieCharacter} style={[styles.characterImage, compact && styles.characterImageCompact]} resizeMode="contain" />
         </TouchableOpacity>
 
-        <View style={styles.rightColumn} onLayout={(event) => setSlideWidth(event.nativeEvent.layout.width)}>
+        <View
+          style={styles.rightColumn}
+          onLayout={(event) => {
+            const layout = event.nativeEvent.layout
+            setSlideWidth(layout.width)
+            setRightColumnLayout(layout)
+          }}
+        >
           <ScrollView
             style={styles.feedPager}
             horizontal
@@ -197,6 +218,17 @@ export function PremiumGogoCaddieCard({
                         key={action.id}
                         activeOpacity={0.86}
                         onPress={() => runFeedAction(item, action)}
+                        onLayout={(event) => {
+                          if (tutorialActive && item.id === feedItems[page]?.id && !tutorialTarget) {
+                            const layout = event.nativeEvent.layout
+                            setTutorialTarget({
+                              x: (rightColumnLayout?.x ?? 0) + layout.x,
+                              y: (rightColumnLayout?.y ?? 0) + layout.y,
+                              width: layout.width,
+                              height: layout.height,
+                            })
+                          }
+                        }}
                         style={[
                           styles.choiceAction,
                           action.secondary && styles.choiceActionSecondary,
@@ -221,6 +253,17 @@ export function PremiumGogoCaddieCard({
                   <TouchableOpacity
                     activeOpacity={0.86}
                     onPress={() => runFeedAction(item)}
+                    onLayout={(event) => {
+                      if (tutorialActive && item.id === feedItems[page]?.id) {
+                        const layout = event.nativeEvent.layout
+                        setTutorialTarget({
+                          x: (rightColumnLayout?.x ?? 0) + layout.x,
+                          y: (rightColumnLayout?.y ?? 0) + layout.y,
+                          width: layout.width,
+                          height: layout.height,
+                        })
+                      }
+                    }}
                     style={[styles.primaryAction, compact && styles.primaryActionCompact, { backgroundColor: palette.green }]}
                   >
                     <Text style={styles.primaryActionText}>{item.ctaLabel}</Text>
@@ -249,6 +292,50 @@ export function PremiumGogoCaddieCard({
 
         </View>
       </View>
+
+      {tutorialActive ? (
+        <View pointerEvents="box-none" style={styles.tutorialLayer}>
+          {tutorialTarget ? (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.tutorialHighlight,
+                {
+                  left: tutorialTarget.x - 4,
+                  top: tutorialTarget.y - 4,
+                  width: tutorialTarget.width + 8,
+                  height: tutorialTarget.height + 8,
+                },
+              ]}
+            />
+          ) : null}
+          <View style={styles.tutorialMessage}>
+            <View style={styles.tutorialHeader}>
+              <Text style={styles.tutorialProgress}>5 / 5</Text>
+              <TouchableOpacity onPress={onTutorialSkip} hitSlop={10}>
+                <Text style={styles.tutorialSkip}>건너뛰기</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.tutorialTitle}>AI 캐디가 필요한 일을 알려드려요</Text>
+            <Text style={styles.tutorialDescription}>아래 안내 버튼을 눌러 라운드 준비를 바로 진행해 보세요.</Text>
+            <View style={styles.tutorialArrow} />
+          </View>
+          {tutorialTarget ? (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.tutorialFinger,
+                {
+                  left: tutorialTarget.x + tutorialTarget.width / 2 - 20,
+                  top: tutorialTarget.y + tutorialTarget.height / 2 - 22,
+                },
+              ]}
+            >
+              <TutorialFinger gesture="tap" />
+            </View>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   )
 }
@@ -256,6 +343,7 @@ export function PremiumGogoCaddieCard({
 const styles = StyleSheet.create({
   card: {
     height: 150,
+    position: 'relative',
     borderWidth: 1,
     paddingHorizontal: spacing.md,
     paddingTop: 6,
@@ -349,4 +437,14 @@ const styles = StyleSheet.create({
   paginationDot: { width: 5, height: 5, borderRadius: 3 },
   paginationDotActive: { width: 16 },
   pageText: { fontSize: 11, lineHeight: 13, fontWeight: '900', marginLeft: 3 },
+  tutorialLayer: { ...StyleSheet.absoluteFillObject, zIndex: 50 },
+  tutorialHighlight: { position: 'absolute', borderWidth: 2, borderColor: 'rgba(255,255,255,0.98)', borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.08)' },
+  tutorialMessage: { position: 'absolute', top: 4, left: 104, right: 8, minHeight: 86, borderRadius: 16, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 11, backgroundColor: 'rgba(24,116,84,0.78)' },
+  tutorialHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 },
+  tutorialProgress: { color: 'rgba(255,255,255,0.68)', fontSize: 10, fontWeight: '900' },
+  tutorialSkip: { color: 'rgba(255,255,255,0.78)', fontSize: 10, fontWeight: '900' },
+  tutorialTitle: { color: '#F6F1DF', fontSize: 14, lineHeight: 18, fontWeight: '900', marginBottom: 3 },
+  tutorialDescription: { color: 'rgba(255,255,255,0.88)', fontSize: 11, lineHeight: 15, fontWeight: '700' },
+  tutorialArrow: { position: 'absolute', bottom: -8, right: 28, width: 0, height: 0, borderLeftWidth: 8, borderRightWidth: 8, borderTopWidth: 9, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: 'rgba(24,116,84,0.78)' },
+  tutorialFinger: { position: 'absolute' },
 })

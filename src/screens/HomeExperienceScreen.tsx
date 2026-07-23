@@ -38,6 +38,7 @@ import type {
   HomeWeatherHour,
 } from "../features/home/types/home";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { markTutorialCompleted } from "../lib/tutorial";
 import {
   COURSE_HERO_STORAGE_KEY,
   getCourseHeroAssetByKey,
@@ -789,6 +790,8 @@ export default function HomeExperienceScreen() {
   const [weatherDetailHours, setWeatherDetailHours] = useState<HomeWeatherHour[]>([]);
   const [weatherDetailOpenHours, setWeatherDetailOpenHours] = useState<HomeWeatherHour[]>([]);
   const [weatherDetailSummary, setWeatherDetailSummary] = useState("");
+  const [showCaddieTutorial, setShowCaddieTutorial] = useState(false);
+  const [showTutorialComplete, setShowTutorialComplete] = useState(false);
   const [recordDetailMode, setRecordDetailMode] = useState<HomeRecordDetailMode | null>(null);
   const [recordDetailRounds, setRecordDetailRounds] = useState<SavedRound[]>([]);
   const [recordAwardRows, setRecordAwardRows] = useState<AwardDetailRow[]>([]);
@@ -1349,6 +1352,21 @@ export default function HomeExperienceScreen() {
 
   const visibleRecordExtraCards = recordCardsReady ? recordExtraCards : RECORD_EXTRA_PLACEHOLDERS;
 
+  const completeHomeTutorial = useCallback(() => {
+    setShowCaddieTutorial(false);
+    // 5/5 완료는 이번 실행만 종료한다. 다음 접속 시에는 다시 1/5부터 시작한다.
+    setShowTutorialComplete(true);
+  }, []);
+
+  const skipHomeTutorial = useCallback(() => {
+    // 건너뛰기는 영구 완료로 저장하지 않는다.
+    setShowCaddieTutorial(false);
+  }, []);
+
+  const hideTutorialForever = useCallback(async () => {
+    await markTutorialCompleted(userId);
+    setShowTutorialComplete(false);
+  }, [userId]);
 
   if (clubsLoaded && !club) {
     return (
@@ -1428,6 +1446,8 @@ export default function HomeExperienceScreen() {
                   onActiveIndexChange={handleHeroActiveIndexChange}
                   departureBufferMinutes={departureBufferMinutes}
                   onClubSwipe={handleHeroClubSwipe}
+                  tutorialUserId={userId}
+                  onTutorialHeroComplete={() => setShowCaddieTutorial(true)}
                 />
               </PremiumHomeMotion>
             ),
@@ -1450,6 +1470,9 @@ export default function HomeExperienceScreen() {
                   userId={userId}
                   onFeedAction={handleCaddieFeedAction}
                   onPress={() => handleCaddieFeedAction(activeFeed)}
+                  tutorialActive={showCaddieTutorial}
+                  onTutorialCompleted={completeHomeTutorial}
+                  onTutorialSkip={skipHomeTutorial}
                 />
               </PremiumHomeMotion>
             ),
@@ -1467,6 +1490,36 @@ export default function HomeExperienceScreen() {
         />
       </ScrollView>
 
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={showTutorialComplete}
+        statusBarTranslucent
+        onRequestClose={() => setShowTutorialComplete(false)}
+      >
+        <View style={styles.tutorialCompleteBackdrop}>
+          <View style={[styles.tutorialCompleteCard, { backgroundColor: palette.card }]}> 
+            <Text style={styles.tutorialCompleteEmoji}>🎉</Text>
+            <Text style={[styles.tutorialCompleteTitle, { color: palette.text }]}>튜토리얼을 완료했어요</Text>
+            <Text style={[styles.tutorialCompleteText, { color: palette.muted }]}>이제 GogoPar와 함께 라운드를 준비해 보세요.</Text>
+            <TouchableOpacity
+              activeOpacity={0.86}
+              style={[styles.tutorialCompleteButton, { backgroundColor: palette.green }]}
+              onPress={() => setShowTutorialComplete(false)}
+            >
+              <Text style={styles.tutorialCompleteButtonText}>시작하기</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.tutorialCompleteHideButton}
+              onPress={() => void hideTutorialForever()}
+            >
+              <Text style={[styles.tutorialCompleteHideText, { color: palette.muted }]}>튜토리얼 다시 보지 않기</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <WeatherDetailModal
         visible={weatherDetailRound !== null}
@@ -2572,6 +2625,15 @@ function ScratchLottoResultCard({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  tutorialCompleteBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, backgroundColor: 'rgba(0,0,0,0.58)' },
+  tutorialCompleteCard: { width: '100%', maxWidth: 340, borderRadius: 24, paddingHorizontal: 24, paddingVertical: 26, alignItems: 'center' },
+  tutorialCompleteEmoji: { fontSize: 38, marginBottom: 10 },
+  tutorialCompleteTitle: { fontSize: 21, lineHeight: 27, fontWeight: '900', marginBottom: 7 },
+  tutorialCompleteText: { fontSize: 14, lineHeight: 20, fontWeight: '700', textAlign: 'center', marginBottom: 20 },
+  tutorialCompleteButton: { minWidth: 150, height: 44, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  tutorialCompleteButtonText: { color: '#fff', fontSize: 15, fontWeight: '900' },
+  tutorialCompleteHideButton: { marginTop: 14, minHeight: 34, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
+  tutorialCompleteHideText: { fontSize: 13, lineHeight: 18, fontWeight: '800', textDecorationLine: 'underline' },
   content: { paddingHorizontal: 0, paddingTop: 0 },
   center: {
     flex: 1,

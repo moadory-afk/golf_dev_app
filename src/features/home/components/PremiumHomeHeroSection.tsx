@@ -21,10 +21,19 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { colorLayers, radius, spacing } from "../../../design/tokens";
 import { getCourseHeroImageSource } from "../../../data/courseHeroImages";
 import { useSkin } from "../../../skins";
+import {
+  consumeTutorialOpenRequest,
+  hasCompletedTutorial,
+  markTutorialCompleted,
+  subscribeTutorialOpen,
+} from "../../../lib/tutorial";
 import { TopActionButtons } from "../../../components/TopActionButtons";
 import type { HomeHeroRound } from "../types/home";
 import { isCompactWidth } from "../../../lib/responsive";
 import { getOptimizedRemoteImageUrl } from "../../../lib/imageOptimization";
+import { TutorialOverlay, type TutorialStepDefinition } from "../../../components/tutorial";
+import { useTutorialAnchors } from "../../../hooks/useTutorialAnchors";
+import { useTutorialFlow } from "../../../hooks/useTutorialFlow";
 
 const HERO_DISPLAY_HEIGHT_RATIO = 0.7;
 const HERO_MIN_WIDTH = 280;
@@ -35,6 +44,43 @@ type HomeHeroCarouselItem =
   | { kind: "create" };
 
 type NavigationProvider = "kakao" | "tmap" | "naver";
+type HomeTutorialStepId = "weather" | "travel" | "flip" | "swipe";
+type HomeTutorialStep = HomeTutorialStepId | null;
+
+const HOME_TUTORIAL_STEPS: readonly TutorialStepDefinition<HomeTutorialStepId>[] = [
+  {
+    id: "weather",
+    targetId: "home-weather",
+    title: "라운드 날씨를 확인해 보세요",
+    description: "기온·바람·강수예보를 시간대별로 확인할 수 있어요.",
+    placement: "auto",
+    gesture: "tap",
+  },
+  {
+    id: "travel",
+    targetId: "home-travel",
+    title: "출발시간을 확인해 보세요",
+    description: "예상 이동시간을 확인하고 내비게이션을 실행할 수 있어요.",
+    placement: "auto",
+    gesture: "tap",
+  },
+  {
+    id: "flip",
+    targetId: "home-hero-card",
+    title: "라운드 카드를 눌러보세요",
+    description: "카드 뒷면에서 라운드 메뉴를 확인할 수 있어요.",
+    placement: "auto",
+    gesture: "tap",
+  },
+  {
+    id: "swipe",
+    targetId: "home-hero-card",
+    title: "다른 라운드도 확인해 보세요",
+    description: "라운드 카드를 좌우로 밀어 예정된 일정을 확인할 수 있어요.",
+    placement: "auto",
+    gesture: "swipe",
+  },
+];
 
 const MAP_NAVIGATION_APPS: Array<{
   id: NavigationProvider;
@@ -110,6 +156,8 @@ type PremiumHomeHeroSectionProps = {
   onActiveIndexChange?: (index: number) => void;
   departureBufferMinutes?: number;
   onClubSwipe?: (direction: "next" | "previous") => void;
+  tutorialUserId?: string | null;
+  onTutorialHeroComplete?: () => void;
 };
 
 function PremiumHomeHeroSectionComponent({
@@ -137,19 +185,127 @@ function PremiumHomeHeroSectionComponent({
   onActiveIndexChange,
   departureBufferMinutes = 40,
   onClubSwipe,
+  tutorialUserId,
+  onTutorialHeroComplete,
 }: PremiumHomeHeroSectionProps) {
   const { palette } = useSkin();
+  const [showTutorialPrompt, setShowTutorialPrompt] = useState(false);
+  const [doNotAskTutorialAgain, setDoNotAskTutorialAgain] = useState(false);
+  const {
+    currentStepId: tutorialStep,
+    currentStep: tutorialDefinition,
+    currentIndex: tutorialStepIndex,
+    totalSteps: tutorialStepCount,
+    setCurrentStepId: setTutorialStep,
+    start: startTutorialFlow,
+    next: advanceTutorial,
+    skip: stopTutorial,
+  } = useTutorialFlow(HOME_TUTORIAL_STEPS);
+  const { rootRef: tutorialRootRef, registerAnchor, measureAnchor, clearAnchor, targetRect } = useTutorialAnchors();
+  const [tutorialContainerSize, setTutorialContainerSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    let active = true;
+    let promptTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const openPromptWhenNeeded = async () => {
+      const replayRequested = await consumeTutorialOpenRequest();
+      if (!active) return;
+
+      if (replayRequested) {
+        setDoNotAskTutorialAgain(false);
+        setTutorialStep(null);
+        setShowTutorialPrompt(true);
+        return;
+      }
+
+      const hiddenForever = await hasCompletedTutorial(tutorialUserId);
+      if (!active || hiddenForever) return;
+      promptTimer = setTimeout(() => {
+        if (!active) return;
+        setDoNotAskTutorialAgain(false);
+        setTutorialStep(null);
+        setShowTutorialPrompt(true);
+      }, 500);
+    };
+
+    void openPromptWhenNeeded();
+
+    const unsubscribe = subscribeTutorialOpen(() => {
+      if (!active) return;
+      setDoNotAskTutorialAgain(false);
+      setTutorialStep(null);
+      setShowTutorialPrompt(true);
+    });
+
+    return () => {
+      active = false;
+      if (promptTimer) clearTimeout(promptTimer);
+      unsubscribe();
+    };
+  }, [tutorialUserId]);
+
+  const startTutorial = useCallback(() => {
+    setShowTutorialPrompt(false);
+    setDoNotAskTutorialAgain(false);
+    startTutorialFlow();
+  }, [startTutorialFlow]);
+
+  const postponeTutorial = useCallback(async () => {
+    setShowTutorialPrompt(false);
+    if (doNotAskTutorialAgain) {
+      await markTutorialCompleted(tutorialUserId);
+    }
+  }, [doNotAskTutorialAgain, tutorialUserId]);
+
+  const advanceFromWeatherTutorial = useCallback(() => {
+    if (tutorialStep === "weather") advanceTutorial();
+  }, [advanceTutorial, tutorialStep]);
+
+  const advanceFromTravelTutorial = useCallback(() => {
+    if (tutorialStep === "travel") advanceTutorial();
+  }, [advanceTutorial, tutorialStep]);
+
+  const completeHeroFlipTutorial = useCallback(() => {
+    if (tutorialStep !== "flip") return;
+    // 카드가 한 장뿐이어도 4/5(스와이프 안내)를 반드시 표시한다.
+    // 실제 스와이프 동작은 카드 수와 관계없이 아래 드래그 종료 처리에서 완료된다.
+    advanceTutorial();
+  }, [advanceTutorial, tutorialStep]);
+
+  const completeHeroSwipeTutorial = useCallback(() => {
+    if (tutorialStep !== "swipe") return;
+    stopTutorial();
+    onTutorialHeroComplete?.();
+  }, [onTutorialHeroComplete, stopTutorial, tutorialStep]);
+
+  const skipTutorial = useCallback(() => {
+    // 건너뛰기는 현재 실행만 종료한다.
+    // 영구 완료 처리는 사용자가 명시적으로 "다시 보지 않기"를 선택한 경우에만 저장한다.
+    stopTutorial();
+  }, [stopTutorial]);
+
   const [internalActiveIndex, setInternalActiveIndex] = useState(0);
   const activeIndex = controlledActiveIndex ?? internalActiveIndex;
   const [measuredHeroWidth, setMeasuredHeroWidth] = useState(0);
   const scrollRef = useRef<FlatList<HomeHeroCarouselItem>>(null);
   const dotsScrollRef = useRef<ScrollView>(null);
   const activeIndexRef = useRef(0);
+  const tutorialSwipeStartedRef = useRef(false);
   const fallbackHeroWidth = HERO_MIN_WIDTH;
   const heroWidth = measuredHeroWidth || fallbackHeroWidth;
   const heroHeight = Math.round(
     heroWidth * HERO_DISPLAY_HEIGHT_RATIO + topInset,
   );
+
+  useEffect(() => {
+    if (!tutorialDefinition) {
+      clearAnchor();
+      return;
+    }
+    const cancelMeasure = measureAnchor(tutorialDefinition.targetId);
+    return cancelMeasure;
+  }, [activeIndex, clearAnchor, heroHeight, heroWidth, measureAnchor, tutorialDefinition]);
   const hasRounds = rounds.length > 0;
   const totalCount = hasRounds
     ? rounds.length + (isAdmin ? 1 : 0)
@@ -194,9 +350,14 @@ function PremiumHomeHeroSectionComponent({
   }, [onActiveIndexChange, totalCount]);
 
   const handleScrollEnd = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const previousIndex = activeIndexRef.current;
     const index = Math.round(event.nativeEvent.contentOffset.x / heroWidth);
-    updateActiveIndex(index);
-  }, [heroWidth, updateActiveIndex]);
+    const nextIndex = updateActiveIndex(index);
+    if (tutorialStep === "swipe" && (tutorialSwipeStartedRef.current || nextIndex !== previousIndex)) {
+      tutorialSwipeStartedRef.current = false;
+      completeHeroSwipeTutorial();
+    }
+  }, [completeHeroSwipeTutorial, heroWidth, tutorialStep, updateActiveIndex]);
 
   useEffect(() => {
     const dotStep = 15;
@@ -221,7 +382,16 @@ function PremiumHomeHeroSectionComponent({
 
 
   return (
-    <View style={styles.shell}>
+    <View
+      ref={tutorialRootRef as any}
+      collapsable={false}
+      style={styles.shell}
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout;
+        setTutorialContainerSize({ width, height });
+        if (tutorialDefinition) requestAnimationFrame(() => measureAnchor(tutorialDefinition.targetId));
+      }}
+    >
       <View
         {...verticalClubPanResponder.panHandlers}
         onLayout={(event) => {
@@ -256,6 +426,9 @@ function PremiumHomeHeroSectionComponent({
                 updateActiveIndex(index);
               }
             }}
+            onScrollBeginDrag={() => {
+              if (tutorialStep === "swipe") tutorialSwipeStartedRef.current = true;
+            }}
             onMomentumScrollEnd={handleScrollEnd}
             onScrollEndDrag={(event) => {
               const velocityX = event.nativeEvent.velocity?.x ?? 0;
@@ -286,6 +459,11 @@ function PremiumHomeHeroSectionComponent({
                     onToggleConfirmed={onToggleConfirmed}
                     onTogglePublished={onTogglePublished}
                     departureBufferMinutes={departureBufferMinutes}
+                    tutorialStep={index === activeIndex ? tutorialStep : null}
+                    onWeatherTutorialCompleted={advanceFromWeatherTutorial}
+                    onTravelTutorialCompleted={advanceFromTravelTutorial}
+                    onFlipTutorialCompleted={completeHeroFlipTutorial}
+                    registerTutorialAnchor={registerAnchor}
                   />
                 );
               }
@@ -315,6 +493,11 @@ function PremiumHomeHeroSectionComponent({
                   onCreateRound={onCreateRound}
                   heroImageSource={heroImageSource}
                   departureBufferMinutes={departureBufferMinutes}
+                  tutorialStep={index === activeIndex ? tutorialStep : null}
+                  onWeatherTutorialCompleted={advanceFromWeatherTutorial}
+                  onTravelTutorialCompleted={advanceFromTravelTutorial}
+                  onFlipTutorialCompleted={completeHeroFlipTutorial}
+                  registerTutorialAnchor={registerAnchor}
                 />
               );
             }}
@@ -348,6 +531,70 @@ function PremiumHomeHeroSectionComponent({
           </View>
         </View>
       </View>
+
+      <TutorialOverlay
+        step={tutorialDefinition}
+        targetRect={targetRect}
+        containerWidth={tutorialContainerSize.width}
+        containerHeight={tutorialContainerSize.height}
+        currentIndex={tutorialStepIndex}
+        totalSteps={tutorialStepCount + 1}
+        onSkip={skipTutorial}
+      />
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={showTutorialPrompt}
+        statusBarTranslucent
+        onRequestClose={() => setShowTutorialPrompt(false)}
+      >
+        <View style={styles.tutorialPromptBackdrop}>
+          <View style={styles.tutorialPromptCard}>
+            <Text style={styles.tutorialPromptEmoji}>🏌️</Text>
+            <Text style={styles.tutorialPromptTitle}>GogoPar 사용법을 알아볼까요?</Text>
+            <Text style={styles.tutorialPromptText}>
+              날씨와 이동시간, 라운드 카드 등 주요 기능을 짧게 안내해 드려요.
+            </Text>
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.tutorialPromptCheckRow}
+              onPress={() => setDoNotAskTutorialAgain((current) => !current)}
+            >
+              <View
+                style={[
+                  styles.tutorialPromptCheckbox,
+                  doNotAskTutorialAgain && styles.tutorialPromptCheckboxChecked,
+                ]}
+              >
+                {doNotAskTutorialAgain ? (
+                  <Text style={styles.tutorialPromptCheckmark}>✓</Text>
+                ) : null}
+              </View>
+              <Text style={styles.tutorialPromptCheckText}>다음부터 묻지 않기</Text>
+            </TouchableOpacity>
+
+            <View style={styles.tutorialPromptButtons}>
+              <TouchableOpacity
+                activeOpacity={0.82}
+                style={[styles.tutorialPromptButton, styles.tutorialPromptLaterButton]}
+                onPress={() => void postponeTutorial()}
+              >
+                <Text style={styles.tutorialPromptLaterText}>나중에</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.84}
+                style={[styles.tutorialPromptButton, styles.tutorialPromptStartButton]}
+                onPress={startTutorial}
+              >
+                <Text style={styles.tutorialPromptStartText}>시작하기</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -370,6 +617,11 @@ const HeroRoundCard = memo(function HeroRoundCard({
   onToggleConfirmed,
   onTogglePublished,
   departureBufferMinutes,
+  tutorialStep = null,
+  onWeatherTutorialCompleted,
+  onTravelTutorialCompleted,
+  onFlipTutorialCompleted,
+  registerTutorialAnchor,
 }: {
   width: number;
   height: number;
@@ -386,6 +638,11 @@ const HeroRoundCard = memo(function HeroRoundCard({
   onToggleConfirmed?: (round: HomeHeroRound) => void;
   onTogglePublished?: (round: HomeHeroRound) => void;
   departureBufferMinutes: number;
+  tutorialStep?: HomeTutorialStep;
+  onWeatherTutorialCompleted?: () => void;
+  onTravelTutorialCompleted?: () => void;
+  onFlipTutorialCompleted?: () => void;
+  registerTutorialAnchor?: (id: string) => (node: any) => void;
 }) {
   const optimizedHeroImageUrl = useMemo(
     () =>
@@ -403,6 +660,25 @@ const HeroRoundCard = memo(function HeroRoundCard({
     : getCourseHeroImageSource(round.courseName);
   const [flipped, setFlipped] = useState(false);
   const flip = useRef(new Animated.Value(0)).current;
+  const tutorialPulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (tutorialStep !== "flip" || flipped) {
+      tutorialPulse.stopAnimation();
+      tutorialPulse.setValue(0);
+      return;
+    }
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(tutorialPulse, { toValue: 1, duration: 520, useNativeDriver: true }),
+        Animated.timing(tutorialPulse, { toValue: 0, duration: 520, useNativeDriver: true }),
+        Animated.delay(450),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [flipped, tutorialStep, tutorialPulse]);
 
   useEffect(() => {
     Animated.spring(flip, {
@@ -431,8 +707,14 @@ const HeroRoundCard = memo(function HeroRoundCard({
         ]}
       >
         <TouchableOpacity
+          ref={registerTutorialAnchor?.("home-hero-card")}
+          collapsable={false}
           activeOpacity={0.96}
-          onPress={() => setFlipped(true)}
+          onPress={() => {
+            if (tutorialStep === "weather" || tutorialStep === "travel") return;
+            setFlipped(true);
+            if (tutorialStep === "flip") onFlipTutorialCompleted?.();
+          }}
           style={styles.flipTouchable}
         >
           {shouldLoadImage && roundHeroImageSource ? (
@@ -481,8 +763,13 @@ const HeroRoundCard = memo(function HeroRoundCard({
               courseLatitude={round.courseLatitude}
               courseLongitude={round.courseLongitude}
               onWeatherPress={() => onWeatherPress?.(round)}
+              tutorialStep={tutorialStep}
+              onWeatherTutorialCompleted={onWeatherTutorialCompleted}
+              onTravelTutorialCompleted={onTravelTutorialCompleted}
+              registerTutorialAnchor={registerTutorialAnchor}
             />
           </View>
+
         </TouchableOpacity>
       </Animated.View>
 
@@ -689,6 +976,11 @@ function HeroEmptyCard({
   topInset,
   heroImageSource,
   departureBufferMinutes,
+  tutorialStep = null,
+  onWeatherTutorialCompleted,
+  onTravelTutorialCompleted,
+  onFlipTutorialCompleted,
+  registerTutorialAnchor,
 }: {
   width: number;
   height: number;
@@ -709,13 +1001,26 @@ function HeroEmptyCard({
   onEditRoundPress?: (round: HomeHeroRound) => void;
   heroImageSource?: ImageSourcePropType;
   departureBufferMinutes: number;
+  tutorialStep?: HomeTutorialStep;
+  onWeatherTutorialCompleted?: () => void;
+  onTravelTutorialCompleted?: () => void;
+  onFlipTutorialCompleted?: () => void;
+  registerTutorialAnchor?: (id: string) => (node: any) => void;
 }) {
   const { palette } = useSkin();
   void address;
   void weatherText;
 
   return (
-    <View style={[styles.slide, { width, height, paddingTop: topInset + 52 }]}>
+    <TouchableOpacity
+      ref={registerTutorialAnchor?.("home-hero-card")}
+      collapsable={false}
+      activeOpacity={1}
+      onPress={() => {
+        if (tutorialStep === "flip") onFlipTutorialCompleted?.();
+      }}
+      style={[styles.slide, { width, height, paddingTop: topInset + 52 }]}
+    >
       {heroImageSource ? (
         <Image
           source={heroImageSource}
@@ -733,6 +1038,10 @@ function HeroEmptyCard({
         dateLabel={roundDate}
         teeTime={teeTime}
         departureBufferMinutes={departureBufferMinutes}
+        tutorialStep={tutorialStep}
+        onWeatherTutorialCompleted={onWeatherTutorialCompleted}
+        onTravelTutorialCompleted={onTravelTutorialCompleted}
+        registerTutorialAnchor={registerTutorialAnchor}
       />
 
       {isAdmin && (
@@ -744,7 +1053,7 @@ function HeroEmptyCard({
           <Text style={styles.emptyCreateText}>＋ 새 라운딩 등록</Text>
         </TouchableOpacity>
       )}
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -796,6 +1105,10 @@ function HeroBottomSummary({
   courseLatitude,
   courseLongitude,
   onWeatherPress,
+  tutorialStep = null,
+  onWeatherTutorialCompleted,
+  onTravelTutorialCompleted,
+  registerTutorialAnchor,
 }: {
   width: number;
   courseName: string;
@@ -812,6 +1125,10 @@ function HeroBottomSummary({
   courseLatitude?: number | null;
   courseLongitude?: number | null;
   onWeatherPress?: () => void;
+  tutorialStep?: HomeTutorialStep;
+  onWeatherTutorialCompleted?: () => void;
+  onTravelTutorialCompleted?: () => void;
+  registerTutorialAnchor?: (id: string) => (node: any) => void;
 }) {
   const isCompact = isCompactWidth(width);
   const scheduleLine = teeTime ? `Tee Off ${teeTime}` : "Tee Off --:--";
@@ -828,6 +1145,24 @@ function HeroBottomSummary({
   const [mapChooserVisible, setMapChooserVisible] = useState(false);
   const mapSheetTranslateY = useRef(new Animated.Value(520)).current;
   const mapBackdropOpacity = useRef(new Animated.Value(0)).current;
+  const summaryTutorialPulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (tutorialStep !== "weather" && tutorialStep !== "travel") {
+      summaryTutorialPulse.stopAnimation();
+      summaryTutorialPulse.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(summaryTutorialPulse, { toValue: 1, duration: 520, useNativeDriver: true }),
+        Animated.timing(summaryTutorialPulse, { toValue: 0, duration: 520, useNativeDriver: true }),
+        Animated.delay(380),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [summaryTutorialPulse, tutorialStep]);
   const hasDestination =
     typeof courseLatitude === "number" &&
     Number.isFinite(courseLatitude) &&
@@ -933,9 +1268,12 @@ function HeroBottomSummary({
       </Text>
       <View style={styles.summaryContentRow}>
         <TouchableOpacity
+          ref={registerTutorialAnchor?.("home-weather")}
+          collapsable={false}
           activeOpacity={0.72}
           onPress={(event) => {
             event.stopPropagation?.();
+            if (tutorialStep === "weather") onWeatherTutorialCompleted?.();
             onWeatherPress?.();
           }}
           style={[
@@ -1015,10 +1353,13 @@ function HeroBottomSummary({
         <View style={[styles.summaryDivider, { marginHorizontal: isCompact ? 3 : 6 }]} />
 
         <TouchableOpacity
+          ref={registerTutorialAnchor?.("home-travel")}
+          collapsable={false}
           activeOpacity={0.72}
-          disabled={!hasDestination}
+          disabled={!hasDestination && tutorialStep !== "travel"}
           onPress={(event) => {
             event.stopPropagation?.();
+            if (tutorialStep === "travel") onTravelTutorialCompleted?.();
             openMapChooser();
           }}
           style={[styles.travelSummary, { paddingHorizontal: isCompact ? 4 : 8 }]}
@@ -1056,6 +1397,10 @@ function HeroBottomSummary({
           </Text>
         </TouchableOpacity>
       </View>
+
+
+
+
 
       <Modal
         animationType="none"
@@ -1179,6 +1524,249 @@ const styles = StyleSheet.create({
   flipFace: { ...StyleSheet.absoluteFillObject, backfaceVisibility: "hidden" },
   flipBackFace: { backfaceVisibility: "hidden" },
   flipTouchable: { flex: 1, justifyContent: "flex-end" },
+  tutorialPromptBackdrop: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    backgroundColor: "rgba(4,18,12,0.58)",
+  },
+  tutorialPromptCard: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 26,
+    paddingHorizontal: 22,
+    paddingTop: 24,
+    paddingBottom: 18,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.9)",
+    shadowColor: "#000",
+    shadowOpacity: 0.22,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 12,
+  },
+  tutorialPromptEmoji: {
+    fontSize: 32,
+    lineHeight: 40,
+    textAlign: "center",
+    marginBottom: 7,
+  },
+  tutorialPromptTitle: {
+    color: "#123D2A",
+    fontFamily: Platform.select({
+      ios: "Arial Rounded MT Bold",
+      android: "sans-serif-medium",
+      web: '"Arial Rounded MT Bold", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif',
+      default: undefined,
+    }),
+    fontSize: 20,
+    lineHeight: 27,
+    fontWeight: "900",
+    letterSpacing: -0.55,
+    textAlign: "center",
+  },
+  tutorialPromptText: {
+    color: "#496158",
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: "600",
+    letterSpacing: -0.25,
+    textAlign: "center",
+    marginTop: 9,
+  },
+  tutorialPromptCheckRow: {
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 18,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+  },
+  tutorialPromptCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "#8AA399",
+    backgroundColor: "#FFFFFF",
+  },
+  tutorialPromptCheckboxChecked: {
+    borderColor: "#168A56",
+    backgroundColor: "#168A56",
+  },
+  tutorialPromptCheckmark: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: "900",
+  },
+  tutorialPromptCheckText: {
+    color: "#52675F",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700",
+  },
+  tutorialPromptButtons: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 17,
+  },
+  tutorialPromptButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tutorialPromptLaterButton: {
+    backgroundColor: "#EDF2EF",
+  },
+  tutorialPromptStartButton: {
+    backgroundColor: "#168A56",
+    shadowColor: "#0A5E39",
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  tutorialPromptLaterText: {
+    color: "#4E625A",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  tutorialPromptStartText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  summaryTutorialLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 40,
+  },
+  summaryTutorialWeatherLayer: {
+    alignItems: "flex-start",
+  },
+  summaryTutorialTravelLayer: {
+    alignItems: "flex-end",
+  },
+  summaryTutorialMessage: {
+    position: "absolute",
+    bottom: 72,
+    width: "72%",
+    maxWidth: 280,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "rgba(18,45,32,0.78)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.58)",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 8,
+  },
+  summaryTutorialHandWrap: {
+    position: "absolute",
+    bottom: 8,
+    width: 56,
+    height: 56,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  summaryTutorialWeatherHand: {
+    left: "8%",
+  },
+  summaryTutorialTravelHand: {
+    right: "8%",
+  },
+  heroTutorialLayer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    zIndex: 30,
+  },
+  heroTutorialMessage: {
+    position: "absolute",
+    top: "30%",
+    maxWidth: 300,
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 13,
+    backgroundColor: "rgba(255,255,255,0.34)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.56)",
+    shadowColor: "#000",
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+  heroTutorialMessageTitle: {
+    color: "#FFF4BF",
+    fontFamily: Platform.select({
+      ios: "Arial Rounded MT Bold",
+      android: "sans-serif-medium",
+      web: '"Arial Rounded MT Bold", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif',
+      default: undefined,
+    }),
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: "800",
+    letterSpacing: -0.35,
+    textAlign: "center",
+    textShadowColor: "rgba(0,0,0,0.52)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  heroTutorialMessageText: {
+    color: "#FFFFFF",
+    fontFamily: Platform.select({
+      ios: "Apple SD Gothic Neo",
+      android: "sans-serif",
+      web: '"Noto Sans KR", "Apple SD Gothic Neo", sans-serif',
+      default: undefined,
+    }),
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: "600",
+    letterSpacing: -0.2,
+    textAlign: "center",
+    marginTop: 5,
+    textShadowColor: "rgba(0,0,0,0.45)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  heroTutorialHandWrap: {
+    position: "absolute",
+    top: "55%",
+    width: 56,
+    height: 56,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroTutorialRipple: {
+    position: "absolute",
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.88)",
+    backgroundColor: "rgba(31,160,92,0.14)",
+  },
+  heroTutorialHand: {
+    fontSize: 34,
+    lineHeight: 42,
+    textShadowColor: "rgba(0,0,0,0.28)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
   adminStatusBadges: { position: "absolute", top: 62, right: 14, zIndex: 4, flexDirection: "row", gap: 6 },
   adminStatusBadge: { minWidth: 52, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: "rgba(255,255,255,0.72)", alignItems: "center" },
   adminStatusBadgeText: { color: "#fff", fontSize: 11, fontWeight: "900" },
@@ -1262,6 +1850,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   bottomSummary: {
+    position: "relative",
     width: "100%",
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.26)",
