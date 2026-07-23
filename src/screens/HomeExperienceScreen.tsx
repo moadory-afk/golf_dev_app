@@ -792,6 +792,7 @@ export default function HomeExperienceScreen() {
   const [weatherDetailSummary, setWeatherDetailSummary] = useState("");
   const [showCaddieTutorial, setShowCaddieTutorial] = useState(false);
   const [tutorialDemoActive, setTutorialDemoActive] = useState(false);
+  const [userHasUpcomingRound, setUserHasUpcomingRound] = useState(false);
   const [showTutorialComplete, setShowTutorialComplete] = useState(false);
   const [recordDetailMode, setRecordDetailMode] = useState<HomeRecordDetailMode | null>(null);
   const [recordDetailRounds, setRecordDetailRounds] = useState<SavedRound[]>([]);
@@ -801,6 +802,56 @@ export default function HomeExperienceScreen() {
   const focusedClubIdRef = useRef<string | null | undefined>(undefined);
   const defaultUpcomingClubResolvedRef = useRef(false);
   const recordRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const resolveUserUpcomingRounds = async () => {
+      if (!userId) {
+        if (!cancelled) setUserHasUpcomingRound(false);
+        return;
+      }
+
+      const today = new Date().toISOString().slice(0, 10);
+      const [{ data: attendanceRows }, { data: groupRows }] = await Promise.all([
+        supabase
+          .from("club_round_attendances")
+          .select("schedule_id, status")
+          .eq("member_user_id", userId)
+          .neq("status", "absent"),
+        supabase
+          .from("club_round_group_members")
+          .select("schedule_id")
+          .eq("member_user_id", userId),
+      ]);
+
+      const scheduleIds = Array.from(new Set([
+        ...((attendanceRows ?? []).map((row: any) => row.schedule_id)),
+        ...((groupRows ?? []).map((row: any) => row.schedule_id)),
+      ].filter(Boolean)));
+
+      if (scheduleIds.length === 0) {
+        if (!cancelled) setUserHasUpcomingRound(false);
+        return;
+      }
+
+      const { data: upcomingRows } = await supabase
+        .from("club_round_schedules")
+        .select("id")
+        .in("id", scheduleIds)
+        .gte("round_date", today)
+        .in("status", ["planned", "recruiting", "closed", "finished"])
+        .limit(1);
+
+      if (!cancelled) setUserHasUpcomingRound((upcomingRows?.length ?? 0) > 0);
+    };
+
+    void resolveUserUpcomingRounds();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   useEffect(() => {
     if (!clubsLoaded || myClubs.length === 0 || defaultUpcomingClubResolvedRef.current) return;
@@ -1486,6 +1537,7 @@ export default function HomeExperienceScreen() {
                   onClubSwipe={handleHeroClubSwipe}
                   tutorialUserId={userId}
                   tutorialDemoActive={tutorialDemoActive}
+                  userHasUpcomingRound={userHasUpcomingRound}
                   onTutorialStarted={() => {
                     setTutorialDemoActive(true);
                     setShowCaddieTutorial(false);

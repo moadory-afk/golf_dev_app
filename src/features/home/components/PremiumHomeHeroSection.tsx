@@ -250,6 +250,7 @@ type PremiumHomeHeroSectionProps = {
   tutorialUserId?: string | null;
   onTutorialStarted?: () => void;
   tutorialDemoActive?: boolean;
+  userHasUpcomingRound?: boolean;
   onTutorialCancelled?: () => void;
   onTutorialHeroComplete?: () => void;
 };
@@ -282,6 +283,7 @@ function PremiumHomeHeroSectionComponent({
   tutorialUserId,
   onTutorialStarted,
   tutorialDemoActive = false,
+  userHasUpcomingRound = false,
   onTutorialCancelled,
   onTutorialHeroComplete,
 }: PremiumHomeHeroSectionProps) {
@@ -408,7 +410,7 @@ function PremiumHomeHeroSectionComponent({
   const tutorialRounds = useMemo(() => createTutorialRounds(), []);
   // 실제 등록 라운드가 없는 사용자가 튜토리얼을 실행하는 동안에만
   // 가상 라운드를 메모리에서 표시한다. 튜토리얼 종료 즉시 제거된다.
-  const displayRounds = rounds.length === 0 && tutorialDemoActive ? tutorialRounds : rounds;
+  const displayRounds = tutorialDemoActive && !userHasUpcomingRound ? tutorialRounds : rounds;
   const hasRounds = displayRounds.length > 0;
   const totalCount = hasRounds
     ? displayRounds.length + (isAdmin && rounds.length > 0 ? 1 : 0)
@@ -579,6 +581,13 @@ function PremiumHomeHeroSectionComponent({
             }}
             onMomentumScrollEnd={handleScrollEnd}
             onScrollEndDrag={(event) => {
+              // 4/5 스와이프 단계는 모멘텀 유무와 관계없이 드래그 종료 시 판정한다.
+              // 웹/일부 모바일 환경에서는 onMomentumScrollEnd가 호출되지 않아
+              // 5/5 단계로 넘어가지 않던 문제를 방지한다.
+              if (tutorialStep === "swipe") {
+                handleScrollEnd(event);
+                return;
+              }
               const velocityX = event.nativeEvent.velocity?.x ?? 0;
               if (Math.abs(velocityX) < 0.05) handleScrollEnd(event);
             }}
@@ -611,7 +620,7 @@ function PremiumHomeHeroSectionComponent({
                     onWeatherTutorialCompleted={advanceFromWeatherTutorial}
                     onTravelTutorialCompleted={advanceFromTravelTutorial}
                     onFlipTutorialCompleted={completeHeroFlipTutorial}
-                    registerTutorialAnchor={registerAnchor}
+                    registerTutorialAnchor={index === activeIndex ? registerAnchor : undefined}
                   />
                 );
               }
@@ -645,7 +654,7 @@ function PremiumHomeHeroSectionComponent({
                   onWeatherTutorialCompleted={advanceFromWeatherTutorial}
                   onTravelTutorialCompleted={advanceFromTravelTutorial}
                   onFlipTutorialCompleted={completeHeroFlipTutorial}
-                  registerTutorialAnchor={registerAnchor}
+                  registerTutorialAnchor={index === activeIndex ? registerAnchor : undefined}
                 />
               );
             }}
