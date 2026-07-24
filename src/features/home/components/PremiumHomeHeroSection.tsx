@@ -1364,7 +1364,7 @@ function HeroBottomSummary({
     });
   };
 
-  const closeMapChooser = () => {
+  const closeMapChooser = useCallback(() => {
     Animated.parallel([
       Animated.timing(mapSheetTranslateY, {
         toValue: 520,
@@ -1379,7 +1379,19 @@ function HeroBottomSummary({
     ]).start(({ finished }) => {
       if (finished) setMapChooserVisible(false);
     });
-  };
+  }, [mapBackdropOpacity, mapSheetTranslateY]);
+
+  const mapSheetPanResponder = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponderCapture: (_event, gesture) =>
+      gesture.dy > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.15,
+    onPanResponderGrant: () => mapSheetTranslateY.stopAnimation(),
+    onPanResponderMove: (_event, gesture) => { if (gesture.dy > 0) mapSheetTranslateY.setValue(gesture.dy); },
+    onPanResponderRelease: (_event, gesture) => {
+      if (gesture.dy > 100 || gesture.vy > 0.85) return closeMapChooser();
+      Animated.spring(mapSheetTranslateY, { toValue: 0, useNativeDriver: true, damping: 24, stiffness: 230 }).start();
+    },
+    onPanResponderTerminate: () => Animated.spring(mapSheetTranslateY, { toValue: 0, useNativeDriver: true, damping: 24, stiffness: 230 }).start(),
+  }), [closeMapChooser, mapSheetTranslateY]);
 
   const openNavigation = async (provider: NavigationProvider) => {
     if (!hasDestination) {
@@ -1589,6 +1601,7 @@ function HeroBottomSummary({
             style={StyleSheet.absoluteFill}
           />
           <Animated.View
+            {...mapSheetPanResponder.panHandlers}
             style={[styles.mapChooser, { transform: [{ translateY: mapSheetTranslateY }] }]}
           >
             <View style={styles.mapSheetHandle} />

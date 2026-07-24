@@ -1727,7 +1727,7 @@ export default function HomeExperienceScreen() {
               style={[styles.guinnessButton, { backgroundColor: palette.green }]}
               onPress={() => {
                 setGuinnessAnnouncement(null);
-                nav.navigate("History");
+                nav.navigate("History", { initialTab: "hall" });
               }}
             >
               <Text style={styles.guinnessButtonText}>기네스북 보기</Text>
@@ -1871,6 +1871,35 @@ const WeatherDetailModal = memo(function WeatherDetailModal({
     });
   }, [backdropOpacity, onClose, sheetTranslateY]);
 
+  const weatherSheetPanResponder = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponderCapture: (_event, gesture) =>
+      gesture.dy > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.15,
+    onPanResponderGrant: () => sheetTranslateY.stopAnimation(),
+    onPanResponderMove: (_event, gesture) => {
+      if (gesture.dy > 0) sheetTranslateY.setValue(gesture.dy);
+    },
+    onPanResponderRelease: (_event, gesture) => {
+      if (gesture.dy > 110 || gesture.vy > 0.85) {
+        closeSheet();
+        return;
+      }
+      Animated.spring(sheetTranslateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        damping: 24,
+        stiffness: 230,
+      }).start();
+    },
+    onPanResponderTerminate: () => {
+      Animated.spring(sheetTranslateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        damping: 24,
+        stiffness: 230,
+      }).start();
+    },
+  }), [closeSheet, sheetTranslateY]);
+
   const compareTimes = Array.from(new Set([
     ...hours.map((item) => item.time),
     ...openWeatherHours.map((item) => item.time),
@@ -1889,6 +1918,7 @@ const WeatherDetailModal = memo(function WeatherDetailModal({
       <Animated.View style={[styles.weatherModalBackdrop, { opacity: backdropOpacity }]}>
         <TouchableOpacity activeOpacity={1} onPress={closeSheet} style={StyleSheet.absoluteFill} />
         <Animated.View
+          {...weatherSheetPanResponder.panHandlers}
           style={[
             styles.weatherModalCard,
             {
@@ -2435,6 +2465,8 @@ const RoundInfoModal = memo(function RoundInfoModal({
   onManage: () => void;
 }) {
   const { palette } = useSkin();
+  const sheetTranslateY = useRef(new Animated.Value(760)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
   const [revealedLottoHoles, setRevealedLottoHoles] = useState<number[]>([]);
   const groups = groupLines(round);
   const isGroups = mode === "groups";
@@ -2516,6 +2548,37 @@ const RoundInfoModal = memo(function RoundInfoModal({
     setRevealedLottoHoles([]);
   }, [visible, round?.id, lottoDraw?.drawStatus]);
 
+  useEffect(() => {
+    if (!visible) return;
+    sheetTranslateY.setValue(760);
+    backdropOpacity.setValue(0);
+    requestAnimationFrame(() => {
+      Animated.parallel([
+        Animated.spring(sheetTranslateY, { toValue: 0, useNativeDriver: true, damping: 25, stiffness: 220 }),
+        Animated.timing(backdropOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+      ]).start();
+    });
+  }, [backdropOpacity, sheetTranslateY, visible]);
+
+  const closeRoundSheet = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(sheetTranslateY, { toValue: 760, duration: 230, useNativeDriver: true }),
+      Animated.timing(backdropOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+    ]).start(({ finished }) => { if (finished) onClose(); });
+  }, [backdropOpacity, onClose, sheetTranslateY]);
+
+  const roundSheetPanResponder = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponderCapture: (_event, gesture) =>
+      gesture.dy > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.15,
+    onPanResponderGrant: () => sheetTranslateY.stopAnimation(),
+    onPanResponderMove: (_event, gesture) => { if (gesture.dy > 0) sheetTranslateY.setValue(gesture.dy); },
+    onPanResponderRelease: (_event, gesture) => {
+      if (gesture.dy > 120 || gesture.vy > 0.9) return closeRoundSheet();
+      Animated.spring(sheetTranslateY, { toValue: 0, useNativeDriver: true, damping: 24, stiffness: 230 }).start();
+    },
+    onPanResponderTerminate: () => Animated.spring(sheetTranslateY, { toValue: 0, useNativeDriver: true, damping: 24, stiffness: 230 }).start(),
+  }), [closeRoundSheet, sheetTranslateY]);
+
   const modalTitle = isGroups
     ? "조편성 결과"
     : isAward
@@ -2526,17 +2589,23 @@ const RoundInfoModal = memo(function RoundInfoModal({
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
-      onRequestClose={onClose}
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={closeRoundSheet}
     >
-      <View style={styles.modalBackdrop}>
-        <View style={[styles.modalCard, { backgroundColor: palette.card }]}>
+      <Animated.View style={[styles.modalBackdrop, { opacity: backdropOpacity }]}>
+        <TouchableOpacity activeOpacity={1} onPress={closeRoundSheet} style={StyleSheet.absoluteFill} />
+        <Animated.View
+          {...roundSheetPanResponder.panHandlers}
+          style={[styles.modalCard, { backgroundColor: palette.card, transform: [{ translateY: sheetTranslateY }] }]}
+        >
+          <View style={[styles.detailSheetHandle, { backgroundColor: palette.border }]} />
           <View style={styles.modalHeader}>
             <Text style={[styles.modalTitle, { color: palette.text }]}>
               {modalTitle}
             </Text>
             <TouchableOpacity
-              onPress={onClose}
+              onPress={closeRoundSheet}
               style={styles.modalClose}
               activeOpacity={0.8}
             >
@@ -2754,8 +2823,8 @@ const RoundInfoModal = memo(function RoundInfoModal({
             </ScrollView>
           ) : null}
 
-        </View>
-      </View>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 });
@@ -2926,10 +2995,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.42)",
     alignItems: "center",
-    justifyContent: "center",
-    padding: 22,
+    justifyContent: "flex-end",
+    paddingHorizontal: 12,
   },
-  modalCard: { width: "100%", maxWidth: 420, borderRadius: 24, padding: 18 },
+  modalCard: { width: "100%", maxWidth: 520, maxHeight: "90%", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 18, paddingBottom: 24 },
   modalHeader: {
     flexDirection: "row",
     alignItems: "center",

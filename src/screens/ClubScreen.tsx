@@ -65,6 +65,7 @@ import { C } from "../theme";
 import { TopActionButtons } from "../components/TopActionButtons";
 import { PwaInstallGuide } from "../components/PwaInstallGuide";
 import { Icon } from "../components/Icon";
+import { SwipeDownSheet } from "../components/SwipeDownSheet";
 import { EmojiIcon } from "../components/EmojiIcon";
 import {
   disableWebPushSubscriptionForClub,
@@ -1071,19 +1072,10 @@ export default function ClubScreen() {
       {showHallCriteria && (
         <Modal
           transparent
-          animationType="fade"
+          animationType="none"
           onRequestClose={() => setShowHallCriteria(false)}
         >
-          <TouchableOpacity
-            style={s.overlay}
-            activeOpacity={1}
-            onPress={() => setShowHallCriteria(false)}
-          >
-            <TouchableOpacity
-              style={s.modalCard}
-              activeOpacity={1}
-              onPress={() => {}}
-            >
+          <SwipeDownSheet visible onClose={() => setShowHallCriteria(false)} overlayStyle={s.overlay} sheetStyle={s.modalCard}>
               <View style={s.modalHeader}>
                 <Text style={s.modalTitle}>기네스북 기록 기준</Text>
                 <TouchableOpacity
@@ -1119,8 +1111,7 @@ export default function ClubScreen() {
                   <Text style={s.ruleValue}>최근 {handicapBasis}경기</Text>
                 </View>
               </ScrollView>
-            </TouchableOpacity>
-          </TouchableOpacity>
+          </SwipeDownSheet>
         </Modal>
       )}
 

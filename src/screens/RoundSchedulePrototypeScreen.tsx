@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker'
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator'
 import DateField, { todayLocal } from '../components/DateField'
 import { Icon } from '../components/Icon'
+import { SwipeDownSheet } from '../components/SwipeDownSheet'
 import { useNavigation, useRoute } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import type { RouteProp } from '@react-navigation/native'
@@ -1735,9 +1736,8 @@ export default function RoundSchedulePrototypeScreen() {
       </ScrollView>
       ) : null}
 
-      <Modal transparent animationType="slide" visible={editorOpen} onRequestClose={closeEditor}>
-        <View style={s.modalBackdrop}>
-          <View style={s.modalSheet}>
+      <Modal transparent animationType="none" visible={editorOpen} onRequestClose={closeEditor}>
+        <SwipeDownSheet visible={editorOpen} onClose={closeEditor} overlayStyle={s.modalBackdrop} sheetStyle={s.modalSheet}>
             <View style={s.modalHeader}>
               <View>
                 <Text style={s.modalTitle}>라운드 관리</Text>
@@ -2306,8 +2306,7 @@ export default function RoundSchedulePrototypeScreen() {
                 </View>
               </ScrollView>
             )}
-          </View>
-        </View>
+        </SwipeDownSheet>
       </Modal>
 
       <Modal transparent animationType="fade" visible={awardCountPickerOpen} onRequestClose={() => setAwardCountPickerOpen(false)}>

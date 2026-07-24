@@ -33,6 +33,7 @@ import {
 } from '../features/history/personalReportSummary'
 import { C } from '../theme'
 import { EmojiIcon } from '../components/EmojiIcon'
+import { SwipeDownSheet } from '../components/SwipeDownSheet'
 import { TopActionButtons } from '../components/TopActionButtons'
 import { ImageCropModal, type ImageCropRect } from '../components/ImageCropModal'
 import { SegmentedIconTabs, type SegmentedIconTab } from '../components/SegmentedIconTabs'
@@ -450,9 +451,8 @@ function EmptyByPlayer() {
   return (
     <>
       {selectedCard && (
-        <Modal transparent animationType="slide" onRequestClose={() => setSelectedCard(null)}>
-          <TouchableOpacity style={s.personalReportSheetOverlay} activeOpacity={1} onPress={() => setSelectedCard(null)}>
-            <TouchableOpacity style={s.personalReportSheet} activeOpacity={1} onPress={() => {}}>
+        <Modal transparent animationType="none" onRequestClose={() => setSelectedCard(null)}>
+          <SwipeDownSheet visible onClose={() => setSelectedCard(null)} overlayStyle={s.personalReportSheetOverlay} sheetStyle={s.personalReportSheet}>
               <View style={s.personalReportSheetHandle} />
               <View style={s.modalHeader}>
                 <Text style={s.personalReportSheetTitle}>{selectedCard.title}</Text>
@@ -464,8 +464,7 @@ function EmptyByPlayer() {
                   <Text style={s.analysisValue}>{row.value}</Text>
                 </View>
               ))}
-            </TouchableOpacity>
-          </TouchableOpacity>
+          </SwipeDownSheet>
         </Modal>
       )}
       <View style={s.aiCaddieCard}>
@@ -1257,9 +1256,8 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
   return (
     <>
       {detailModal && (
-        <Modal transparent animationType="slide" onRequestClose={() => setDetailModal(null)}>
-          <TouchableOpacity style={s.personalReportSheetOverlay} activeOpacity={1} onPress={() => setDetailModal(null)}>
-            <TouchableOpacity style={s.personalReportSheet} activeOpacity={1} onPress={() => {}}>
+        <Modal transparent animationType="none" onRequestClose={() => setDetailModal(null)}>
+          <SwipeDownSheet visible onClose={() => setDetailModal(null)} overlayStyle={s.personalReportSheetOverlay} sheetStyle={s.personalReportSheet}>
               <View style={s.personalReportSheetHandle} />
               <View style={s.modalHeader}>
                 <Text style={s.personalReportSheetTitle}>{modalTitle}</Text>
@@ -1388,8 +1386,7 @@ function ByPlayer({ rounds, handicapBasis = 5, myName, myUserId }: { rounds: Sav
                   </ScrollView>
                 )}
               </ScrollView>
-            </TouchableOpacity>
-          </TouchableOpacity>
+          </SwipeDownSheet>
         </Modal>
       )}
 
