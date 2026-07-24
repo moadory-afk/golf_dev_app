@@ -176,8 +176,8 @@ export async function getHomeTravelUpdates(
         ? courseById.get(schedule.course_id)
         : undefined;
       const providerMinutes = await getProviderDrivingTravelTimeMinutes(home, {
-        latitude: course?.latitude,
-        longitude: course?.longitude,
+        latitude: course?.clubhouse_latitude ?? course?.latitude,
+        longitude: course?.clubhouse_longitude ?? course?.longitude,
       }).catch(() => null);
       const primaryMinutes = providerMinutes?.kakao
         ?? providerMinutes?.tmap

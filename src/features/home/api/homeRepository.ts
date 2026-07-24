@@ -103,6 +103,10 @@ export type HomeCourseRow = {
   region: string;
   latitude?: number | null;
   longitude?: number | null;
+  clubhouse_latitude?: number | null;
+  clubhouse_longitude?: number | null;
+  navigation_name?: string | null;
+  navigation_address?: string | null;
   hero_image_url?: string | null;
   hero_image_source?: string | null;
 };
@@ -259,13 +263,21 @@ async function fetchHomeCourses(courseIds: string[]) {
   const extendedResult = await supabase
     .from("golf_courses")
     .select(
-      "id, name, region, latitude, longitude, hero_image_url, hero_image_source",
+      "id, name, region, latitude, longitude, clubhouse_latitude, clubhouse_longitude, navigation_name, navigation_address, hero_image_url, hero_image_source",
     )
     .in("id", courseIds);
 
   if (!extendedResult.error) return extendedResult;
 
-  // 좌표 컬럼 마이그레이션 전 환경에서도 Home 전체가 깨지지 않도록 기존 컬럼만 fallback 조회한다.
+  // 클럽하우스 목적지 컬럼 마이그레이션 전에도 기존 골프장 좌표는 계속 사용한다.
+  const legacyCoordinateResult = await supabase
+    .from("golf_courses")
+    .select("id, name, region, latitude, longitude, hero_image_url, hero_image_source")
+    .in("id", courseIds);
+
+  if (!legacyCoordinateResult.error) return legacyCoordinateResult;
+
+  // 기존 좌표 컬럼도 없는 초기 환경에서는 최소 정보만 조회한다.
   return supabase
     .from("golf_courses")
     .select("id, name, region")

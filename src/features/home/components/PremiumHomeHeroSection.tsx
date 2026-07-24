@@ -935,6 +935,9 @@ const HeroRoundCard = memo(function HeroRoundCard({
               departureBufferMinutes={departureBufferMinutes}
               courseLatitude={round.courseLatitude}
               courseLongitude={round.courseLongitude}
+              clubhouseLatitude={round.clubhouseLatitude}
+              clubhouseLongitude={round.clubhouseLongitude}
+              navigationName={round.navigationName}
               onWeatherPress={() => onWeatherPress?.(round)}
               tutorialStep={tutorialStep}
               onWeatherTutorialCompleted={onWeatherTutorialCompleted}
@@ -1277,6 +1280,9 @@ function HeroBottomSummary({
   departureBufferMinutes,
   courseLatitude,
   courseLongitude,
+  clubhouseLatitude,
+  clubhouseLongitude,
+  navigationName,
   onWeatherPress,
   tutorialStep = null,
   onWeatherTutorialCompleted,
@@ -1297,6 +1303,9 @@ function HeroBottomSummary({
   departureBufferMinutes: number;
   courseLatitude?: number | null;
   courseLongitude?: number | null;
+  clubhouseLatitude?: number | null;
+  clubhouseLongitude?: number | null;
+  navigationName?: string | null;
   onWeatherPress?: () => void;
   tutorialStep?: HomeTutorialStep;
   onWeatherTutorialCompleted?: () => void;
@@ -1336,11 +1345,14 @@ function HeroBottomSummary({
     loop.start();
     return () => loop.stop();
   }, [summaryTutorialPulse, tutorialStep]);
+  const destinationLatitude = clubhouseLatitude ?? courseLatitude;
+  const destinationLongitude = clubhouseLongitude ?? courseLongitude;
+  const destinationName = navigationName?.trim() || `${courseName} 클럽하우스`;
   const hasDestination =
-    typeof courseLatitude === "number" &&
-    Number.isFinite(courseLatitude) &&
-    typeof courseLongitude === "number" &&
-    Number.isFinite(courseLongitude);
+    typeof destinationLatitude === "number" &&
+    Number.isFinite(destinationLatitude) &&
+    typeof destinationLongitude === "number" &&
+    Number.isFinite(destinationLongitude);
 
   const openMapChooser = () => {
     mapSheetTranslateY.setValue(520);
@@ -1399,9 +1411,9 @@ function HeroBottomSummary({
       return;
     }
 
-    const name = encodeURIComponent(courseName);
-    const lat = courseLatitude;
-    const lng = courseLongitude;
+    const name = encodeURIComponent(destinationName);
+    const lat = destinationLatitude;
+    const lng = destinationLongitude;
     const urls = {
       kakao: {
         app: `kakaomap://route?ep=${lat},${lng}&by=CAR`,

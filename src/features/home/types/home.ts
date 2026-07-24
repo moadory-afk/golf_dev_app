@@ -43,6 +43,10 @@ export type HomeUpcomingRound = {
   courseId?: string
   courseLatitude?: number | null
   courseLongitude?: number | null
+  clubhouseLatitude?: number | null
+  clubhouseLongitude?: number | null
+  navigationName?: string | null
+  navigationAddress?: string | null
   layoutId?: string
   heroImageUrl?: string | null
   routeTimeText?: string
