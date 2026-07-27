@@ -180,6 +180,8 @@ export interface SavedRound {
   scheduleId?: string
   holeLabels?: string[]
   isComplete: boolean
+  /** 기록 화면에서 같은 일정으로 묶인 원본 rounds 행 ID */
+  sourceRoundIds?: string[]
 }
 
 interface RoundRow {
@@ -241,6 +243,64 @@ export async function getRoundSummaries(clubId: string): Promise<SavedRound[]> {
   return (data ?? []).map(fromRow)
 }
 
+function mergeRoundHistoryRows(rows: SavedRound[]): SavedRound[] {
+  const grouped = new Map<string, SavedRound[]>()
+
+  for (const round of rows) {
+    // 일정과 연결된 기록만 schedule_id 기준으로 합친다.
+    // 일정이 없는 과거 수기 기록은 기존처럼 rounds.id 단위로 유지한다.
+    const key = round.scheduleId ? `schedule:${round.scheduleId}` : `round:${round.id}`
+    const bucket = grouped.get(key)
+    if (bucket) bucket.push(round)
+    else grouped.set(key, [round])
+  }
+
+  return Array.from(grouped.values()).map((bucket) => {
+    if (bucket.length === 1) {
+      const only = bucket[0]
+      return { ...only, sourceRoundIds: [only.id] }
+    }
+
+    const base = bucket[0]
+    const canonicalLabels = base.holeLabels ?? []
+    const playerMap = new Map<string, PlayerScore>()
+    const handicaps: Record<string, number> = {}
+    const photos: string[] = []
+
+    for (const row of bucket) {
+      const rowLabels = row.holeLabels ?? []
+      const labelIndex = new Map(rowLabels.map((label, index) => [label, index]))
+      const canRemap = canonicalLabels.length > 0
+        && rowLabels.length > 0
+        && canonicalLabels.every((label) => labelIndex.has(label))
+
+      for (const player of row.players) {
+        const normalizedStrokes = canRemap
+          ? canonicalLabels.map((label) => player.strokes[labelIndex.get(label)!] ?? 0)
+          : [...player.strokes]
+        const existing = playerMap.get(player.name)
+        playerMap.set(player.name, existing
+          ? { name: player.name, strokes: mergeStrokes(existing.strokes, normalizedStrokes) }
+          : { name: player.name, strokes: normalizedStrokes })
+      }
+
+      Object.assign(handicaps, row.handicaps ?? {})
+      for (const photo of row.photoData ?? []) {
+        if (photo && !photos.includes(photo)) photos.push(photo)
+      }
+    }
+
+    return {
+      ...base,
+      players: Array.from(playerMap.values()),
+      handicaps: Object.keys(handicaps).length > 0 ? handicaps : undefined,
+      photoData: photos,
+      isComplete: bucket.every((row) => row.isComplete),
+      sourceRoundIds: bucket.map((row) => row.id),
+    }
+  }).sort((a, b) => b.date.localeCompare(a.date))
+}
+
 export async function getRoundHistoryCards(clubId: string): Promise<SavedRound[]> {
   const { data, error } = await supabase
     .from('rounds')
@@ -248,7 +308,7 @@ export async function getRoundHistoryCards(clubId: string): Promise<SavedRound[]
     .eq('club_id', clubId)
     .order('date', { ascending: false })
   if (error) throw error
-  return (data ?? []).map(fromRow)
+  return mergeRoundHistoryRows((data ?? []).map(fromRow))
 }
 
 export async function getRound(id: string): Promise<SavedRound | null> {
@@ -259,6 +319,22 @@ export async function getRound(id: string): Promise<SavedRound | null> {
     .maybeSingle()
   if (error) throw error
   return data ? fromRow(data) : null
+}
+
+
+export async function getRoundHistoryDetail(id: string): Promise<SavedRound | null> {
+  const base = await getRound(id)
+  if (!base?.scheduleId) return base
+
+  const { data, error } = await supabase
+    .from('rounds')
+    .select('*')
+    .eq('schedule_id', base.scheduleId)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+
+  const merged = mergeRoundHistoryRows((data ?? []).map(fromRow))
+  return merged[0] ?? base
 }
 
 // 같은 홀은 기존 값 유지, 새로 채워진 홀(타수>0)만 반영 → "변경분만 업데이트"

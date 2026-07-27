@@ -1,7 +1,7 @@
 import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Alert, Image, Platform } from 'react-native'
 import { useRoute, useNavigation } from '@react-navigation/native'
 import { useState, useEffect, useRef } from 'react'
-import { DEFAULT_LOTTO_AWARD_CONFIG, getClubAwardConfig, getClubAwardSnapshots, getClubLottoAwardConfig, getClubMembers, getRound, getRoundLottoDraw, getRoundLottoEntries, getRoundSummaries, deleteRound, updateRoundSettlement, playerTotal, totalPar, getHandicapsForRound, shortName, saveClubAwardSnapshots, type LottoAwardConfig } from '../lib/store'
+import { DEFAULT_LOTTO_AWARD_CONFIG, getClubAwardConfig, getClubAwardSnapshots, getClubLottoAwardConfig, getClubMembers, getRound, getRoundHistoryDetail, getRoundLottoDraw, getRoundLottoEntries, getRoundSummaries, deleteRound, updateRoundSettlement, playerTotal, totalPar, getHandicapsForRound, shortName, saveClubAwardSnapshots, type LottoAwardConfig } from '../lib/store'
 import { getRoundSchedules } from '../lib/roundSchedule'
 import { AWARD_CATEGORIES, fillToCount } from '../lib/awardConfig'
 import { computeClubAwardResults } from '../lib/awardResults'
@@ -220,7 +220,7 @@ export default function RoundDetailScreen() {
       .finally(() => setAwardConfigLoaded(true))
   }, [activeClub?.id])
   const isAdmin = activeClub?.role === 'admin'
-  const { data: round, loading } = useAsync(() => getRound(route.params.id), [route.params.id, recalcKey])
+  const { data: round, loading } = useAsync(() => getRoundHistoryDetail(route.params.id), [route.params.id, recalcKey])
   const { data: allRounds } = useAsync(async () => {
     if (!activeClub) return []
     return getRoundSummaries(activeClub.id)

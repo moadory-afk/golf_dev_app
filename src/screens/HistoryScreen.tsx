@@ -779,9 +779,10 @@ function RoundFlipCard({
   const toggleFlip = async () => {
     const next = !flipped
     if (next && !detailRound && !isScheduleOnly) {
+      const sourceRoundIds = round.sourceRoundIds?.length ? round.sourceRoundIds : [round.id]
       const [full, snapshots, entries, draw, members, lottoConfig, schedules, awardConfig] = await Promise.all([
-        getRound(round.id),
-        getClubAwardSnapshots(round.id).catch(() => []),
+        sourceRoundIds.length > 1 ? Promise.resolve(round) : getRound(round.id),
+        Promise.all(sourceRoundIds.map((id) => getClubAwardSnapshots(id).catch(() => []))).then((items) => items.flat()),
         round.scheduleId ? getRoundLottoEntries(round.scheduleId).catch(() => []) : Promise.resolve([]),
         round.scheduleId ? getRoundLottoDraw(round.scheduleId).catch(() => null) : Promise.resolve(null),
         activeClub?.id ? getClubMembers(activeClub.id).catch(() => []) : Promise.resolve([]),

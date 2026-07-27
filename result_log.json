@@ -1,0 +1,2939 @@
+[
+  {
+    "query": "가야 CC 경남 김해시",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경남 김해시 삼방동 산 1-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "27302337",
+          "phone": "055-337-0091",
+          "place_name": "가야CC",
+          "place_url": "http://place.map.kakao.com/27302337",
+          "road_address_name": "경남 김해시 인제로 502",
+          "x": "128.89838394990886",
+          "y": "35.27397158170206"
+        },
+        {
+          "address_name": "경남 김해시 삼방동 산 7-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "25039206",
+          "phone": "055-337-8611",
+          "place_name": "가야퍼블릭골프클럽",
+          "place_url": "http://place.map.kakao.com/25039206",
+          "road_address_name": "경남 김해시 인제로 495",
+          "x": "128.8922293651953",
+          "y": "35.27063454541513"
+        },
+        {
+          "address_name": "경남 김해시 삼방동 산 1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프연습장",
+          "distance": "",
+          "id": "13928300",
+          "phone": "055-338-8723",
+          "place_name": "가야CC 골프연습장",
+          "place_url": "http://place.map.kakao.com/13928300",
+          "road_address_name": "경남 김해시 인제로 502",
+          "x": "128.89658219338386",
+          "y": "35.27399083846395"
+        },
+        {
+          "address_name": "경남 김해시 삼방동 산 1",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "1537273100",
+          "phone": "",
+          "place_name": "가야CC 주차장",
+          "place_url": "http://place.map.kakao.com/1537273100",
+          "road_address_name": "경남 김해시 인제로 502",
+          "x": "128.897490645774",
+          "y": "35.2733637885652"
+        },
+        {
+          "address_name": "경남 김해시 삼방동 산 1-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프연습장",
+          "distance": "",
+          "id": "728040528",
+          "phone": "",
+          "place_name": "가야CC골프아카데미 제니스",
+          "place_url": "http://place.map.kakao.com/728040528",
+          "road_address_name": "경남 김해시 인제로 502",
+          "x": "128.898405814839",
+          "y": "35.2739667326064"
+        }
+      ],
+      "meta": {
+        "is_end": false,
+        "pageable_count": 14,
+        "same_name": {
+          "keyword": "가야 CC ",
+          "region": [],
+          "selected_region": "경남 김해시"
+        },
+        "total_count": 14
+      }
+    }
+  },
+  {
+    "query": "거제뷰 CC 경남 거제",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경남 거제시 거제면 옥산리 산 5-18",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "27134403",
+          "phone": "055-639-2223",
+          "place_name": "거제뷰CC",
+          "place_url": "http://place.map.kakao.com/27134403",
+          "road_address_name": "경남 거제시 거제면 두동로 259-80",
+          "x": "128.590635152289",
+          "y": "34.8811113732799"
+        },
+        {
+          "address_name": "경남 거제시 거제면 옥산리 산 2-3",
+          "category_group_code": "AD5",
+          "category_group_name": "숙박",
+          "category_name": "여행 > 숙박 > 콘도,리조트",
+          "distance": "",
+          "id": "1066591091",
+          "phone": "055-639-2222",
+          "place_name": "거제뷰컨트리클럽 골프텔",
+          "place_url": "http://place.map.kakao.com/1066591091",
+          "road_address_name": "경남 거제시 거제면 두동로 259-80",
+          "x": "128.59150273131456",
+          "y": "34.88038800554733"
+        },
+        {
+          "address_name": "경남 거제시 거제면 옥산리 산 2-3",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "1249123921",
+          "phone": "",
+          "place_name": "경남거제 거제뷰컨트리클럽 1 전기차충전소",
+          "place_url": "http://place.map.kakao.com/1249123921",
+          "road_address_name": "경남 거제시 거제면 두동로 259-80",
+          "x": "128.59061475862654",
+          "y": "34.88107468763051"
+        },
+        {
+          "address_name": "경남 거제시 거제면 옥산리 산 2-3",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "474794438",
+          "phone": "",
+          "place_name": "경남거제 거제뷰컨트리클럽 2 전기차충전소",
+          "place_url": "http://place.map.kakao.com/474794438",
+          "road_address_name": "경남 거제시 거제면 두동로 259-80",
+          "x": "128.590614758627",
+          "y": "34.8810746876305"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 4,
+        "same_name": {
+          "keyword": "거제뷰 CC ",
+          "region": [],
+          "selected_region": "경남 거제시"
+        },
+        "total_count": 4
+      }
+    }
+  },
+  {
+    "query": "경산 CC 경북 경산시",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경북 경산시 하양읍 대조리 921-51",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 파크골프장",
+          "distance": "",
+          "id": "1074248685",
+          "phone": "053-810-5416",
+          "place_name": "경산하양물빛파크골프장",
+          "place_url": "http://place.map.kakao.com/1074248685",
+          "road_address_name": "",
+          "x": "128.79212186382114",
+          "y": "35.89281937522164"
+        },
+        {
+          "address_name": "경북 경산시 옥곡동 751-77",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 파크골프장",
+          "distance": "",
+          "id": "467477460",
+          "phone": "",
+          "place_name": "경산남천옥빛파크골프장",
+          "place_url": "http://place.map.kakao.com/467477460",
+          "road_address_name": "",
+          "x": "128.735439415919",
+          "y": "35.8060968959696"
+        },
+        {
+          "address_name": "경북 경산시 용성면 가척리 287-4",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프",
+          "distance": "",
+          "id": "12930751",
+          "phone": "053-743-1166",
+          "place_name": "경산컨트리클럽",
+          "place_url": "http://place.map.kakao.com/12930751",
+          "road_address_name": "경북 경산시 용성면 용림로 17",
+          "x": "128.904112506976",
+          "y": "35.7710472147158"
+        },
+        {
+          "address_name": "경북 경산시 백천동 574-5",
+          "category_group_code": "CE7",
+          "category_group_name": "카페",
+          "category_name": "음식점 > 카페 > 커피전문점 > 천씨씨커피",
+          "distance": "",
+          "id": "1315150404",
+          "phone": "053-812-1030",
+          "place_name": "천씨씨커피 경산백천점",
+          "place_url": "http://place.map.kakao.com/1315150404",
+          "road_address_name": "경북 경산시 경청로 1105",
+          "x": "128.73880794696305",
+          "y": "35.803765643943684"
+        },
+        {
+          "address_name": "경북 경산시 사동 588-10",
+          "category_group_code": "CE7",
+          "category_group_name": "카페",
+          "category_name": "음식점 > 카페 > 커피전문점 > 천씨씨커피",
+          "distance": "",
+          "id": "1494754429",
+          "phone": "0503-7152-9965",
+          "place_name": "천씨씨커피 경산사동계양점",
+          "place_url": "http://place.map.kakao.com/1494754429",
+          "road_address_name": "경북 경산시 장산로 257",
+          "x": "128.75251759934494",
+          "y": "35.81778452263722"
+        }
+      ],
+      "meta": {
+        "is_end": false,
+        "pageable_count": 24,
+        "same_name": {
+          "keyword": "경산 CC ",
+          "region": [],
+          "selected_region": "경북 경산시"
+        },
+        "total_count": 24
+      }
+    }
+  },
+  {
+    "query": "경주 CC 경북 경주시",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경북 경주시 북군동 375-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "8179014",
+          "phone": "054-778-8900",
+          "place_name": "경주CC",
+          "place_url": "http://place.map.kakao.com/8179014",
+          "road_address_name": "경북 경주시 보문로 182-98",
+          "x": "129.26291648197778",
+          "y": "35.864640611880944"
+        },
+        {
+          "address_name": "경북 경주시 신평동 462-6",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "26955544",
+          "phone": "054-740-7114",
+          "place_name": "경주신라컨트리클럽",
+          "place_url": "http://place.map.kakao.com/26955544",
+          "road_address_name": "경북 경주시 보문로 319",
+          "x": "129.2846738638408",
+          "y": "35.85051496685564"
+        },
+        {
+          "address_name": "경북 경주시 북군동 375-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프",
+          "distance": "",
+          "id": "26963446",
+          "phone": "",
+          "place_name": "경주CC 클럽하우스",
+          "place_url": "http://place.map.kakao.com/26963446",
+          "road_address_name": "경북 경주시 보문로 182-98",
+          "x": "129.262957651992",
+          "y": "35.864609200939"
+        },
+        {
+          "address_name": "경북 경주시 산내면 대현리 756",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 파크골프장",
+          "distance": "",
+          "id": "1601812016",
+          "phone": "054-751-4300",
+          "place_name": "피닉스경주산내파크골프장",
+          "place_url": "http://place.map.kakao.com/1601812016",
+          "road_address_name": "경북 경주시 산내면 문복로 1280-8",
+          "x": "129.062237967869",
+          "y": "35.740130415791"
+        },
+        {
+          "address_name": "경북 경주시 신평동 462-6",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "250661548",
+          "phone": "",
+          "place_name": "경주신라CC 주차장",
+          "place_url": "http://place.map.kakao.com/250661548",
+          "road_address_name": "경북 경주시 보문로 319",
+          "x": "129.284304555923",
+          "y": "35.8492154988174"
+        }
+      ],
+      "meta": {
+        "is_end": false,
+        "pageable_count": 45,
+        "same_name": {
+          "keyword": "경주 CC ",
+          "region": [],
+          "selected_region": "경북 경주시"
+        },
+        "total_count": 57
+      }
+    }
+  },
+  {
+    "query": "고성 CC 경남 고성",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경남 고성군 고성읍 월평리 산 48",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "7983453",
+          "phone": "1666-0072",
+          "place_name": "고성CC",
+          "place_url": "http://place.map.kakao.com/7983453",
+          "road_address_name": "",
+          "x": "128.356982941454",
+          "y": "34.9477498261196"
+        },
+        {
+          "address_name": "경남 고성군 회화면 봉동리 산 98",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "25047985",
+          "phone": "055-670-8000",
+          "place_name": "고성노벨CC",
+          "place_url": "http://place.map.kakao.com/25047985",
+          "road_address_name": "경남 고성군 회화면 회진로 567",
+          "x": "128.40528858293743",
+          "y": "35.06985959885955"
+        },
+        {
+          "address_name": "경남 고성군 고성읍 수남리 546-3",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 파크골프장",
+          "distance": "",
+          "id": "1849633107",
+          "phone": "",
+          "place_name": "고성파크골프장",
+          "place_url": "http://place.map.kakao.com/1849633107",
+          "road_address_name": "",
+          "x": "128.31638041252705",
+          "y": "34.969767667317704"
+        },
+        {
+          "address_name": "경남 고성군 회화면 봉동리 산 98",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "20513233",
+          "phone": "",
+          "place_name": "고성노벨CC 주차장",
+          "place_url": "http://place.map.kakao.com/20513233",
+          "road_address_name": "경남 고성군 회화면 회진로 567",
+          "x": "128.40449480965674",
+          "y": "35.07055827427246"
+        },
+        {
+          "address_name": "경남 고성군 고성읍 월평리 1117",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "1021471281",
+          "phone": "",
+          "place_name": "고성CC 주차장",
+          "place_url": "http://place.map.kakao.com/1021471281",
+          "road_address_name": "경남 고성군 고성읍 월평3길 250",
+          "x": "128.356805320774",
+          "y": "34.9473336056167"
+        }
+      ],
+      "meta": {
+        "is_end": false,
+        "pageable_count": 11,
+        "same_name": {
+          "keyword": "고성 CC ",
+          "region": [],
+          "selected_region": "경남 고성군"
+        },
+        "total_count": 11
+      }
+    }
+  },
+  {
+    "query": "골프존카운티 감포 경북 경주시",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경북 경주시 감포읍 나정리 233-20",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "8074219",
+          "phone": "054-777-9000",
+          "place_name": "골프존카운티 감포",
+          "place_url": "http://place.map.kakao.com/8074219",
+          "road_address_name": "경북 경주시 감포읍 동해안로 1819-59",
+          "x": "129.48611522106515",
+          "y": "35.77316853081643"
+        },
+        {
+          "address_name": "경북 경주시 감포읍 나정리 233-20",
+          "category_group_code": "AD5",
+          "category_group_name": "숙박",
+          "category_name": "여행 > 숙박",
+          "distance": "",
+          "id": "1612438462",
+          "phone": "054-777-9730",
+          "place_name": "골프존카운티 감포 스테이",
+          "place_url": "http://place.map.kakao.com/1612438462",
+          "road_address_name": "경북 경주시 감포읍 동해안로 1819-59",
+          "x": "129.48759381040688",
+          "y": "35.773074868356886"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 2,
+        "same_name": {
+          "keyword": "골프존카운티 감포 ",
+          "region": [],
+          "selected_region": "경북 경주시"
+        },
+        "total_count": 2
+      }
+    }
+  },
+  {
+    "query": "골프존카운티 경남 경남 함안군",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경남 함안군 칠원읍 운곡리 1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "1094120603",
+          "phone": "055-589-8888",
+          "place_name": "골프존카운티 경남",
+          "place_url": "http://place.map.kakao.com/1094120603",
+          "road_address_name": "경남 함안군 칠원읍 운무로 470",
+          "x": "128.57409528174193",
+          "y": "35.30861527706368"
+        },
+        {
+          "address_name": "경남 함안군 칠원읍 운곡리 1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "431932475",
+          "phone": "",
+          "place_name": "골프존카운티 경남 전기차충전소",
+          "place_url": "http://place.map.kakao.com/431932475",
+          "road_address_name": "경남 함안군 칠원읍 운무로 470",
+          "x": "128.57384346975599",
+          "y": "35.308669924968655"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 2,
+        "same_name": {
+          "keyword": "골프존카운티 경남 ",
+          "region": [],
+          "selected_region": "경남 함안군"
+        },
+        "total_count": 2
+      }
+    }
+  },
+  {
+    "query": "골프존카운티 구미 경북 구미시",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경북 구미시 산동읍 신당리 1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "1197188455",
+          "phone": "054-473-8161",
+          "place_name": "골프존카운티 구미",
+          "place_url": "http://place.map.kakao.com/1197188455",
+          "road_address_name": "경북 구미시 산동읍 강동로 953-74",
+          "x": "128.44257931097886",
+          "y": "36.15771415746903"
+        },
+        {
+          "address_name": "경북 구미시 산동읍 신당리 435-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "7951485",
+          "phone": "054-473-6200",
+          "place_name": "골프존카운티 선산",
+          "place_url": "http://place.map.kakao.com/7951485",
+          "road_address_name": "경북 구미시 산동읍 강동로 953-73",
+          "x": "128.44994683360645",
+          "y": "36.16177031564155"
+        },
+        {
+          "address_name": "경북 구미시 산동읍 신당리 1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "1252323535",
+          "phone": "1533-2522",
+          "place_name": "골프존카운티 구미 전기차충전소",
+          "place_url": "http://place.map.kakao.com/1252323535",
+          "road_address_name": "경북 구미시 산동읍 강동로 953-74",
+          "x": "128.44288178610117",
+          "y": "36.15796913459673"
+        },
+        {
+          "address_name": "경북 구미시 산동읍 신당리 435-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "1972951337",
+          "phone": "",
+          "place_name": "골프존카운티 선산 전기차충전소",
+          "place_url": "http://place.map.kakao.com/1972951337",
+          "road_address_name": "경북 구미시 산동읍 강동로 953-73",
+          "x": "128.4454970307964",
+          "y": "36.158424193537144"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 4,
+        "same_name": {
+          "keyword": "골프존카운티 구미 ",
+          "region": [],
+          "selected_region": "경북 구미시"
+        },
+        "total_count": 4
+      }
+    }
+  },
+  {
+    "query": "골프존카운티 더골프 울산 울주군",
+    "response": {
+      "documents": [
+        {
+          "address_name": "울산 울주군 서생면 위양리 259-2",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "333191618",
+          "phone": "052-240-0100",
+          "place_name": "골프존카운티 더골프",
+          "place_url": "http://place.map.kakao.com/333191618",
+          "road_address_name": "울산 울주군 서생면 용연길 206-52",
+          "x": "129.3104027896072",
+          "y": "35.36528229283605"
+        },
+        {
+          "address_name": "울산 울주군 서생면 위양리 259-2",
+          "category_group_code": "FD6",
+          "category_group_name": "음식점",
+          "category_name": "음식점 > 구내식당",
+          "distance": "",
+          "id": "1512759662",
+          "phone": "",
+          "place_name": "본우리집밥 골프존카운티 더골프직원식당점",
+          "place_url": "http://place.map.kakao.com/1512759662",
+          "road_address_name": "울산 울주군 서생면 용연길 206-52",
+          "x": "129.310407059026",
+          "y": "35.3652777057432"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 2,
+        "same_name": {
+          "keyword": "골프존카운티 더골프 ",
+          "region": [],
+          "selected_region": "울산 울주군"
+        },
+        "total_count": 2
+      }
+    }
+  },
+  {
+    "query": "골프존카운티 사천 경남 사천시",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경남 사천시 서포면 다평리 1464",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "1705971974",
+          "phone": "055-851-5001",
+          "place_name": "골프존카운티 사천",
+          "place_url": "http://place.map.kakao.com/1705971974",
+          "road_address_name": "경남 사천시 서포면 구송로 151",
+          "x": "127.95755671370546",
+          "y": "35.015325631699696"
+        },
+        {
+          "address_name": "경남 사천시 서포면 다평리 1464",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "311749633",
+          "phone": "",
+          "place_name": "골프존카운티 사천 주차장",
+          "place_url": "http://place.map.kakao.com/311749633",
+          "road_address_name": "",
+          "x": "127.95835093493068",
+          "y": "35.01550684087539"
+        },
+        {
+          "address_name": "경남 사천시 서포면 다평리 1464",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 스포츠용품 > 골프용품",
+          "distance": "",
+          "id": "683790525",
+          "phone": "",
+          "place_name": "버니버니글로벌 골프",
+          "place_url": "http://place.map.kakao.com/683790525",
+          "road_address_name": "경남 사천시 서포면 구송로 151",
+          "x": "127.957629002324",
+          "y": "35.0154178991092"
+        },
+        {
+          "address_name": "경남 사천시 서포면 다평리 1464",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "360288137",
+          "phone": "",
+          "place_name": "골프존카운티 사천 전기차충전소",
+          "place_url": "http://place.map.kakao.com/360288137",
+          "road_address_name": "경남 사천시 서포면 구송로 151",
+          "x": "127.95762900231777",
+          "y": "35.01541789906348"
+        },
+        {
+          "address_name": "경남 사천시 서포면 다평리 1464",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "1472614943",
+          "phone": "1833-4577",
+          "place_name": "골프존카운티 사천 한올 전기차충전소",
+          "place_url": "http://place.map.kakao.com/1472614943",
+          "road_address_name": "경남 사천시 서포면 구송로 151",
+          "x": "127.95799760589532",
+          "y": "35.01564753510679"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 5,
+        "same_name": {
+          "keyword": "골프존카운티 사천 ",
+          "region": [],
+          "selected_region": "경남 사천시"
+        },
+        "total_count": 5
+      }
+    }
+  },
+  {
+    "query": "골프존카운티 선산 경북 구미시",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경북 구미시 산동읍 신당리 435-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "7951485",
+          "phone": "054-473-6200",
+          "place_name": "골프존카운티 선산",
+          "place_url": "http://place.map.kakao.com/7951485",
+          "road_address_name": "경북 구미시 산동읍 강동로 953-73",
+          "x": "128.44994683360645",
+          "y": "36.16177031564155"
+        },
+        {
+          "address_name": "경북 구미시 산동읍 신당리 435-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "1972951337",
+          "phone": "",
+          "place_name": "골프존카운티 선산 전기차충전소",
+          "place_url": "http://place.map.kakao.com/1972951337",
+          "road_address_name": "경북 구미시 산동읍 강동로 953-73",
+          "x": "128.4454970307964",
+          "y": "36.158424193537144"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 2,
+        "same_name": {
+          "keyword": "골프존카운티 선산 ",
+          "region": [],
+          "selected_region": "경북 구미시"
+        },
+        "total_count": 2
+      }
+    }
+  },
+  {
+    "query": "구미 CC 경북 구미시",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경북 구미시 장천면 상림리 산 81-3",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "17152144",
+          "phone": "054-470-6800",
+          "place_name": "구미CC",
+          "place_url": "http://place.map.kakao.com/17152144",
+          "road_address_name": "경북 구미시 장천면 송백로 229",
+          "x": "128.486843485625",
+          "y": "36.169750403394"
+        },
+        {
+          "address_name": "경북 구미시 고아읍 괴평리 1123",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 파크골프장",
+          "distance": "",
+          "id": "765959941",
+          "phone": "",
+          "place_name": "구미파크골프장",
+          "place_url": "http://place.map.kakao.com/765959941",
+          "road_address_name": "",
+          "x": "128.3732118112189",
+          "y": "36.14271952710652"
+        },
+        {
+          "address_name": "경북 구미시 장천면 상림리 산 81-3",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프",
+          "distance": "",
+          "id": "1773323683",
+          "phone": "054-470-6800",
+          "place_name": "구미CC 클럽하우스",
+          "place_url": "http://place.map.kakao.com/1773323683",
+          "road_address_name": "경북 구미시 장천면 송백로 229",
+          "x": "128.486832068197",
+          "y": "36.1697343251309"
+        },
+        {
+          "address_name": "경북 구미시 장천면 상림리 산 81-3",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "20593788",
+          "phone": "",
+          "place_name": "구미CC 주차장",
+          "place_url": "http://place.map.kakao.com/20593788",
+          "road_address_name": "경북 구미시 장천면 송백로 229",
+          "x": "128.48705577548543",
+          "y": "36.170398371609416"
+        },
+        {
+          "address_name": "경북 구미시 원평동 964-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 파크골프장",
+          "distance": "",
+          "id": "66042679",
+          "phone": "",
+          "place_name": "구미시장애인파크골프장",
+          "place_url": "http://place.map.kakao.com/66042679",
+          "road_address_name": "",
+          "x": "128.356562452624",
+          "y": "36.1262067458169"
+        }
+      ],
+      "meta": {
+        "is_end": false,
+        "pageable_count": 45,
+        "same_name": {
+          "keyword": "구미 CC ",
+          "region": [],
+          "selected_region": "경북 구미시"
+        },
+        "total_count": 54
+      }
+    }
+  },
+  {
+    "query": "동래베네스트 GC 부산 금정구",
+    "response": {
+      "documents": [
+        {
+          "address_name": "부산 금정구 선동 1052",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "7841156",
+          "phone": "051-580-0300",
+          "place_name": "동래베네스트CC",
+          "place_url": "http://place.map.kakao.com/7841156",
+          "road_address_name": "",
+          "x": "129.09644432664243",
+          "y": "35.2643698906837"
+        },
+        {
+          "address_name": "부산 금정구 선동 1052",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "1934969521",
+          "phone": "",
+          "place_name": "동래베네스트CC 주차장",
+          "place_url": "http://place.map.kakao.com/1934969521",
+          "road_address_name": "",
+          "x": "129.09671981495623",
+          "y": "35.26495536257021"
+        },
+        {
+          "address_name": "부산 금정구 선동 834-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "서비스,산업 > 관리,운영",
+          "distance": "",
+          "id": "1703673051",
+          "phone": "",
+          "place_name": "동래배네스트CC 코스관리팀",
+          "place_url": "http://place.map.kakao.com/1703673051",
+          "road_address_name": "부산 금정구 하정로 66",
+          "x": "129.100411101827",
+          "y": "35.2651922937659"
+        },
+        {
+          "address_name": "부산 금정구 선동 834-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "789317439",
+          "phone": "",
+          "place_name": "부산금정 동래베네스트골프클럽 전기차충전소",
+          "place_url": "http://place.map.kakao.com/789317439",
+          "road_address_name": "부산 금정구 하정로 66",
+          "x": "129.100411101815",
+          "y": "35.2651922937203"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 4,
+        "same_name": {
+          "keyword": "동래베네스트 GC ",
+          "region": [],
+          "selected_region": "부산 금정구"
+        },
+        "total_count": 4
+      }
+    }
+  },
+  {
+    "query": "동부산 CC 부산 기장군",
+    "response": {
+      "documents": [
+        {
+          "address_name": "부산 기장군 기장읍 연화리 509",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "23699473",
+          "phone": "051-726-0707",
+          "place_name": "해운대비치골프&리조트",
+          "place_url": "http://place.map.kakao.com/23699473",
+          "road_address_name": "부산 기장군 기장읍 대변로 74",
+          "x": "129.22032211500095",
+          "y": "35.22492938715379"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 1,
+        "same_name": {
+          "keyword": "동부산 CC ",
+          "region": [],
+          "selected_region": "부산 기장군"
+        },
+        "total_count": 1
+      }
+    }
+  },
+  {
+    "query": "문경 CC 경북 문경",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경북 문경시 마성면 외어리 산 4-6",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "8189122",
+          "phone": "054-550-5000",
+          "place_name": "문경골프클럽",
+          "place_url": "http://place.map.kakao.com/8189122",
+          "road_address_name": "경북 문경시 마성면 문경골프장길 240",
+          "x": "128.161681461554",
+          "y": "36.7155211168178"
+        },
+        {
+          "address_name": "경북 문경시 흥덕동 729-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 파크골프장",
+          "distance": "",
+          "id": "100100483",
+          "phone": "",
+          "place_name": "문경시파크골프장",
+          "place_url": "http://place.map.kakao.com/100100483",
+          "road_address_name": "",
+          "x": "128.20987967493068",
+          "y": "36.6139889606543"
+        },
+        {
+          "address_name": "경북 문경시 마성면 외어리 189",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "서비스,산업 > 관리,운영",
+          "distance": "",
+          "id": "599371020",
+          "phone": "",
+          "place_name": "문경골프클럽 관리동",
+          "place_url": "http://place.map.kakao.com/599371020",
+          "road_address_name": "경북 문경시 마성면 봉명길 406",
+          "x": "128.147885687726",
+          "y": "36.7075344847708"
+        },
+        {
+          "address_name": "경북 문경시 마성면 외어리 산 1-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "907646473",
+          "phone": "054-550-5000",
+          "place_name": "문경레저타운",
+          "place_url": "http://place.map.kakao.com/907646473",
+          "road_address_name": "경북 문경시 마성면 문경골프장길 240",
+          "x": "128.16187308528524",
+          "y": "36.7154624788289"
+        },
+        {
+          "address_name": "경북 문경시 농암면 종곡리 536-5",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 파크골프장",
+          "distance": "",
+          "id": "1739508994",
+          "phone": "",
+          "place_name": "농암대정파크골프장",
+          "place_url": "http://place.map.kakao.com/1739508994",
+          "road_address_name": "",
+          "x": "128.004262418113",
+          "y": "36.5935214798277"
+        }
+      ],
+      "meta": {
+        "is_end": false,
+        "pageable_count": 11,
+        "same_name": {
+          "keyword": "문경 CC ",
+          "region": [],
+          "selected_region": "경북 문경시"
+        },
+        "total_count": 11
+      }
+    }
+  },
+  {
+    "query": "밀양리더스 CC 경남 밀양",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경남 밀양시 활성동 22",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "25070283",
+          "phone": "055-350-3000",
+          "place_name": "리더스컨트리클럽",
+          "place_url": "http://place.map.kakao.com/25070283",
+          "road_address_name": "경남 밀양시 활성로 455",
+          "x": "128.8122027614496",
+          "y": "35.473632044033636"
+        },
+        {
+          "address_name": "경남 밀양시 활성동 22",
+          "category_group_code": "FD6",
+          "category_group_name": "음식점",
+          "category_name": "음식점 > 한식",
+          "distance": "",
+          "id": "26389685",
+          "phone": "055-350-3000",
+          "place_name": "리더스CC 클럽하우스",
+          "place_url": "http://place.map.kakao.com/26389685",
+          "road_address_name": "경남 밀양시 활성로 455",
+          "x": "128.81224885285107",
+          "y": "35.47362414241784"
+        },
+        {
+          "address_name": "경남 밀양시 활성동 22",
+          "category_group_code": "BK9",
+          "category_group_name": "은행",
+          "category_name": "금융,보험 > 금융서비스 > 은행 > ATM",
+          "distance": "",
+          "id": "749397903",
+          "phone": "",
+          "place_name": "롯데ATM BNK부산은행 리더스CC",
+          "place_url": "http://place.map.kakao.com/749397903",
+          "road_address_name": "",
+          "x": "128.813064712648",
+          "y": "35.4741435720313"
+        },
+        {
+          "address_name": "경남 밀양시 활성동 22",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "382566191",
+          "phone": "",
+          "place_name": "BMW차징스테이션 리더스CC by동성모터스 전기차충전소",
+          "place_url": "http://place.map.kakao.com/382566191",
+          "road_address_name": "경남 밀양시 활성로 455",
+          "x": "128.8129516069051",
+          "y": "35.47808425911959"
+        },
+        {
+          "address_name": "경남 밀양시 활성동 22",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "1024986649",
+          "phone": "",
+          "place_name": "BMW차징스테이션 리더스컨트리클럽 전기차충전소",
+          "place_url": "http://place.map.kakao.com/1024986649",
+          "road_address_name": "경남 밀양시 활성로 455",
+          "x": "128.8129516069051",
+          "y": "35.47808425911959"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 5,
+        "same_name": {
+          "keyword": "밀양리더스 CC ",
+          "region": [],
+          "selected_region": "경남 밀양시"
+        },
+        "total_count": 5
+      }
+    }
+  },
+  {
+    "query": "보문 CC 경북 경주시",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경북 경주시 북군동 5-4",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "20487071",
+          "phone": "054-745-1680",
+          "place_name": "보문GC",
+          "place_url": "http://place.map.kakao.com/20487071",
+          "road_address_name": "경북 경주시 보문로 182-14",
+          "x": "129.2732079584432",
+          "y": "35.86124306558614"
+        },
+        {
+          "address_name": "경북 경주시 북군동 5-4",
+          "category_group_code": "FD6",
+          "category_group_name": "음식점",
+          "category_name": "음식점 > 한식",
+          "distance": "",
+          "id": "21487872",
+          "phone": "",
+          "place_name": "보문골프클럽 그늘집",
+          "place_url": "http://place.map.kakao.com/21487872",
+          "road_address_name": "경북 경주시 보문로 182-14",
+          "x": "129.2737362463948",
+          "y": "35.86489484992807"
+        },
+        {
+          "address_name": "경북 경주시 북군동 375-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "8179014",
+          "phone": "054-778-8900",
+          "place_name": "경주CC",
+          "place_url": "http://place.map.kakao.com/8179014",
+          "road_address_name": "경북 경주시 보문로 182-98",
+          "x": "129.26291648197778",
+          "y": "35.864640611880944"
+        },
+        {
+          "address_name": "경북 경주시 천군동 산 30-4",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "17180318",
+          "phone": "054-778-9000",
+          "place_name": "강동디아너스CC",
+          "place_url": "http://place.map.kakao.com/17180318",
+          "road_address_name": "경북 경주시 보불로 391",
+          "x": "129.2955928124428",
+          "y": "35.822719048345746"
+        },
+        {
+          "address_name": "경북 경주시 북군동 5-4",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "1139220809",
+          "phone": "",
+          "place_name": "경주시 보문CC 전기차충전소",
+          "place_url": "http://place.map.kakao.com/1139220809",
+          "road_address_name": "경북 경주시 보문로 182-14",
+          "x": "129.276854470808",
+          "y": "35.8538693303467"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 5,
+        "same_name": {
+          "keyword": "보문 CC ",
+          "region": [],
+          "selected_region": "경북 경주시"
+        },
+        "total_count": 5
+      }
+    }
+  },
+  {
+    "query": "부곡 CC 경남 창녕",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경남 창녕군 부곡면 거문리 산 263",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "8615722",
+          "phone": "055-521-0707",
+          "place_name": "부곡컨트리클럽",
+          "place_url": "http://place.map.kakao.com/8615722",
+          "road_address_name": "경남 창녕군 부곡면 온천로 445",
+          "x": "128.57789899557406",
+          "y": "35.450369801440786"
+        },
+        {
+          "address_name": "경남 창녕군 부곡면 거문리 산 263",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "20516774",
+          "phone": "",
+          "place_name": "부곡CC 주차장",
+          "place_url": "http://place.map.kakao.com/20516774",
+          "road_address_name": "경남 창녕군 부곡면 온천로 445",
+          "x": "128.5778067256565",
+          "y": "35.4500438708031"
+        },
+        {
+          "address_name": "경남 창녕군 부곡면 거문리 산 263",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "20589601",
+          "phone": "",
+          "place_name": "부곡컨트리클럽 주차장",
+          "place_url": "http://place.map.kakao.com/20589601",
+          "road_address_name": "경남 창녕군 부곡면 온천로 445",
+          "x": "128.5778457004828",
+          "y": "35.448655507711834"
+        },
+        {
+          "address_name": "경남 창녕군 부곡면 거문리 산 15",
+          "category_group_code": "AG2",
+          "category_group_name": "중개업소",
+          "category_name": "부동산 > 부동산서비스 > 부동산중개업",
+          "distance": "",
+          "id": "712850582",
+          "phone": "",
+          "place_name": "아코스 부곡씨씨지점",
+          "place_url": "http://place.map.kakao.com/712850582",
+          "road_address_name": "경남 창녕군 부곡면 온천로 445",
+          "x": "128.577914533875",
+          "y": "35.4503759067271"
+        },
+        {
+          "address_name": "경남 창녕군 부곡면 거문리 산 263",
+          "category_group_code": "BK9",
+          "category_group_name": "은행",
+          "category_name": "금융,보험 > 금융서비스 > 은행 > ATM",
+          "distance": "",
+          "id": "2039434870",
+          "phone": "",
+          "place_name": "롯데ATM BNK부산은행 부곡CC",
+          "place_url": "http://place.map.kakao.com/2039434870",
+          "road_address_name": "",
+          "x": "128.574485344418",
+          "y": "35.4475728841741"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 5,
+        "same_name": {
+          "keyword": "부곡 CC ",
+          "region": [],
+          "selected_region": "경남 창녕군"
+        },
+        "total_count": 5
+      }
+    }
+  },
+  {
+    "query": "부산 CC 부산 금정",
+    "response": {
+      "documents": [
+        {
+          "address_name": "부산 금정구 노포동 368",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "7908422",
+          "phone": "051-509-0707",
+          "place_name": "부산컨트리클럽",
+          "place_url": "http://place.map.kakao.com/7908422",
+          "road_address_name": "부산 금정구 중앙대로2327번길 112",
+          "x": "129.094333596075",
+          "y": "35.2995211598539"
+        },
+        {
+          "address_name": "부산 금정구 노포동 368",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "20516801",
+          "phone": "",
+          "place_name": "부산CC 주차장",
+          "place_url": "http://place.map.kakao.com/20516801",
+          "road_address_name": "부산 금정구 중앙대로2327번길 112",
+          "x": "129.094474949344",
+          "y": "35.3002288070106"
+        },
+        {
+          "address_name": "부산 금정구 부곡동 269-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "서비스,산업 > 건설,건축 > 인테리어",
+          "distance": "",
+          "id": "26806983",
+          "phone": "051-580-5288",
+          "place_name": "홈씨씨인테리어 부산금정점",
+          "place_url": "http://place.map.kakao.com/26806983",
+          "road_address_name": "부산 금정구 중앙대로 1628",
+          "x": "129.091438097471",
+          "y": "35.2295056744682"
+        },
+        {
+          "address_name": "부산 금정구 남산동 332-4",
+          "category_group_code": "CE7",
+          "category_group_name": "카페",
+          "category_name": "음식점 > 카페 > 커피전문점 > 천씨씨커피",
+          "distance": "",
+          "id": "1823667376",
+          "phone": "051-516-1006",
+          "place_name": "천씨씨커피 부산남산점",
+          "place_url": "http://place.map.kakao.com/1823667376",
+          "road_address_name": "부산 금정구 금강로 691",
+          "x": "129.088860052354",
+          "y": "35.2692158952719"
+        },
+        {
+          "address_name": "부산 금정구 노포동 368",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "가정,생활 > 슈퍼마켓",
+          "distance": "",
+          "id": "21334410",
+          "phone": "",
+          "place_name": "부산컨트리클럽 15홀티매점",
+          "place_url": "http://place.map.kakao.com/21334410",
+          "road_address_name": "부산 금정구 중앙대로2327번길 112",
+          "x": "129.094356127647",
+          "y": "35.2995423968092"
+        }
+      ],
+      "meta": {
+        "is_end": false,
+        "pageable_count": 45,
+        "same_name": {
+          "keyword": "부산 CC ",
+          "region": [],
+          "selected_region": "부산 금정구"
+        },
+        "total_count": 49
+      }
+    }
+  },
+  {
+    "query": "강동디아너스CC 경북 경주시",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경북 경주시 천군동 산 30-4",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "17180318",
+          "phone": "054-778-9000",
+          "place_name": "강동디아너스CC",
+          "place_url": "http://place.map.kakao.com/17180318",
+          "road_address_name": "경북 경주시 보불로 391",
+          "x": "129.2955928124428",
+          "y": "35.822719048345746"
+        },
+        {
+          "address_name": "경북 경주시 천군동 산 30-4",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "서비스,산업 > 관리,운영",
+          "distance": "",
+          "id": "912988187",
+          "phone": "",
+          "place_name": "강동디아너스CC 코스관리동",
+          "place_url": "http://place.map.kakao.com/912988187",
+          "road_address_name": "경북 경주시 보불로 391",
+          "x": "129.30368612181312",
+          "y": "35.816955217799844"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 2,
+        "same_name": {
+          "keyword": "강동디아너스CC ",
+          "region": [],
+          "selected_region": "경북 경주시"
+        },
+        "total_count": 2
+      }
+    }
+  },
+  {
+    "query": "블루원상주 CC 경북 상주",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경북 상주시 모서면 삼포리 462-8",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "17174415",
+          "phone": "1899-1888",
+          "place_name": "블루원 상주CC",
+          "place_url": "http://place.map.kakao.com/17174415",
+          "road_address_name": "경북 상주시 모서면 화현3길 127",
+          "x": "127.94436862544742",
+          "y": "36.33531097616022"
+        },
+        {
+          "address_name": "경북 상주시 모서면 삼포리 462-8",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프",
+          "distance": "",
+          "id": "227554234",
+          "phone": "",
+          "place_name": "블루원상주CC 클럽하우스",
+          "place_url": "http://place.map.kakao.com/227554234",
+          "road_address_name": "경북 상주시 모서면 화현3길 127",
+          "x": "127.944346515071",
+          "y": "36.3353246680752"
+        },
+        {
+          "address_name": "경북 상주시 모서면 삼포리 462-8",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "1497257379",
+          "phone": "",
+          "place_name": "블루원 상주CC 주차장",
+          "place_url": "http://place.map.kakao.com/1497257379",
+          "road_address_name": "경북 상주시 모서면 화현3길 127",
+          "x": "127.94341059188",
+          "y": "36.3352960142476"
+        },
+        {
+          "address_name": "경북 상주시 모서면 삼포리 462-8",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "241799871",
+          "phone": "1600-4047",
+          "place_name": "상주시 블루원상주CC 전기차충전소",
+          "place_url": "http://place.map.kakao.com/241799871",
+          "road_address_name": "경북 상주시 모서면 화현3길 127",
+          "x": "127.94438186364212",
+          "y": "36.33400871483888"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 4,
+        "same_name": {
+          "keyword": "블루원상주 CC ",
+          "region": [],
+          "selected_region": "경북 상주시"
+        },
+        "total_count": 4
+      }
+    }
+  },
+  {
+    "query": "사우스케이프 CC 경남 남해",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경남 남해군 창선면 진동리 1361",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "19975143",
+          "phone": "1644-0280",
+          "place_name": "사우스케이프오너스클럽",
+          "place_url": "http://place.map.kakao.com/19975143",
+          "road_address_name": "",
+          "x": "128.07440602348757",
+          "y": "34.83647618478586"
+        },
+        {
+          "address_name": "경남 남해군 창선면 상신리 1-25",
+          "category_group_code": "FD6",
+          "category_group_name": "음식점",
+          "category_name": "음식점 > 한식",
+          "distance": "",
+          "id": "1018284893",
+          "phone": "055-867-7017",
+          "place_name": "한국관",
+          "place_url": "http://place.map.kakao.com/1018284893",
+          "road_address_name": "경남 남해군 창선면 동부대로 2312",
+          "x": "128.013966793783",
+          "y": "34.8629793308186"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 2,
+        "same_name": {
+          "keyword": "사우스케이프 CC ",
+          "region": [],
+          "selected_region": "경남 남해군"
+        },
+        "total_count": 2
+      }
+    }
+  },
+  {
+    "query": "서라벌 CC 경북 경주시",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경북 경주시 외동읍 석계리 산 1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "27581504",
+          "phone": "054-773-7000",
+          "place_name": "서라벌골프클럽",
+          "place_url": "http://place.map.kakao.com/27581504",
+          "road_address_name": "경북 경주시 외동읍 내외로 577-189",
+          "x": "129.274180028684",
+          "y": "35.6930156576215"
+        },
+        {
+          "address_name": "경북 경주시 외동읍 석계리 산 1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "가정,생활 > 패션 > 의류판매 > 스포츠의류",
+          "distance": "",
+          "id": "511558830",
+          "phone": "",
+          "place_name": "비티알 서라벌CC점",
+          "place_url": "http://place.map.kakao.com/511558830",
+          "road_address_name": "경북 경주시 외동읍 내외로 577-189",
+          "x": "129.276865656627",
+          "y": "35.694547110594"
+        },
+        {
+          "address_name": "경북 경주시 외동읍 석계리 산 1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "서비스,산업 > 관리,운영 > 건물관리사무소",
+          "distance": "",
+          "id": "1888984942",
+          "phone": "",
+          "place_name": "서라벌골프클럽 코스관리동",
+          "place_url": "http://place.map.kakao.com/1888984942",
+          "road_address_name": "경북 경주시 외동읍 내외로 577-189",
+          "x": "129.272811603998",
+          "y": "35.6954320048401"
+        },
+        {
+          "address_name": "경북 경주시 외동읍 석계리 산 1",
+          "category_group_code": "BK9",
+          "category_group_name": "은행",
+          "category_name": "금융,보험 > 금융서비스 > 은행 > ATM",
+          "distance": "",
+          "id": "511519938",
+          "phone": "",
+          "place_name": "롯데ATM BNK부산은행 서라벌CC클럽하우스",
+          "place_url": "http://place.map.kakao.com/511519938",
+          "road_address_name": "",
+          "x": "129.27423559263",
+          "y": "35.692949731665"
+        },
+        {
+          "address_name": "경북 경주시 외동읍 석계리 산 1",
+          "category_group_code": "BK9",
+          "category_group_name": "은행",
+          "category_name": "금융,보험 > 금융서비스 > 은행 > ATM",
+          "distance": "",
+          "id": "174638164",
+          "phone": "",
+          "place_name": "롯데ATM BNK부산은행 서라벌CC B1층",
+          "place_url": "http://place.map.kakao.com/174638164",
+          "road_address_name": "",
+          "x": "129.27423559263",
+          "y": "35.692949731665"
+        }
+      ],
+      "meta": {
+        "is_end": false,
+        "pageable_count": 6,
+        "same_name": {
+          "keyword": "서라벌 CC ",
+          "region": [],
+          "selected_region": "경북 경주시"
+        },
+        "total_count": 6
+      }
+    }
+  },
+  {
+    "query": "아난티남해 CC 경남 남해",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경남 남해군 남면 덕월리 316",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "1453614311",
+          "phone": "1877-8448",
+          "place_name": "아난티남해GC",
+          "place_url": "http://place.map.kakao.com/1453614311",
+          "road_address_name": "경남 남해군 남면 남서대로1179번길 40-109",
+          "x": "127.8518338521368",
+          "y": "34.77672764596254"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 1,
+        "same_name": {
+          "keyword": "아난티남해 CC ",
+          "region": [],
+          "selected_region": "경남 남해군"
+        },
+        "total_count": 1
+      }
+    }
+  },
+  {
+    "query": "아델스코트 CC 경남 합천",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경남 합천군 가야면 성기리 산 114",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "10593450",
+          "phone": "055-930-7777",
+          "place_name": "아델스코트CC",
+          "place_url": "http://place.map.kakao.com/10593450",
+          "road_address_name": "",
+          "x": "128.08561550511396",
+          "y": "35.70071011166276"
+        },
+        {
+          "address_name": "경남 합천군 가야면 성기리 산 114",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "1879325153",
+          "phone": "",
+          "place_name": "아델스코트CC 주차장",
+          "place_url": "http://place.map.kakao.com/1879325153",
+          "road_address_name": "",
+          "x": "128.086392900715",
+          "y": "35.7005967523166"
+        },
+        {
+          "address_name": "경남 합천군 가야면 성기리 산 105-4",
+          "category_group_code": "FD6",
+          "category_group_name": "음식점",
+          "category_name": "음식점 > 구내식당",
+          "distance": "",
+          "id": "1430485711",
+          "phone": "",
+          "place_name": "코앤엠아델스코트CC 직원식당",
+          "place_url": "http://place.map.kakao.com/1430485711",
+          "road_address_name": "경남 합천군 가야면 가조가야로 1916-35",
+          "x": "128.0885296340342",
+          "y": "35.70652373544945"
+        },
+        {
+          "address_name": "경남 합천군 가야면 성기리 산 105-4",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "644251099",
+          "phone": "",
+          "place_name": "아델스코트cc 전기차충전소",
+          "place_url": "http://place.map.kakao.com/644251099",
+          "road_address_name": "경남 합천군 가야면 가조가야로 1916-35",
+          "x": "128.08852963402765",
+          "y": "35.706523735415"
+        },
+        {
+          "address_name": "경남 합천군 가야면 성기리 산 114",
+          "category_group_code": "BK9",
+          "category_group_name": "은행",
+          "category_name": "금융,보험 > 금융서비스 > 은행 > ATM",
+          "distance": "",
+          "id": "2104313579",
+          "phone": "",
+          "place_name": "KB국민은행ATM 아델스코트CC",
+          "place_url": "http://place.map.kakao.com/2104313579",
+          "road_address_name": "",
+          "x": "128.0856405475291",
+          "y": "35.70068284901036"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 5,
+        "same_name": {
+          "keyword": "아델스코트 CC ",
+          "region": [],
+          "selected_region": "경남 합천군"
+        },
+        "total_count": 5
+      }
+    }
+  },
+  {
+    "query": "아시아드 CC 부산 기장군 일광읍",
+    "response": {
+      "documents": [
+        {
+          "address_name": "부산 기장군 일광읍 이천리 12",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "560000972",
+          "phone": "051-720-6000",
+          "place_name": "아시아드CC",
+          "place_url": "http://place.map.kakao.com/560000972",
+          "road_address_name": "부산 기장군 일광읍 차양길 26",
+          "x": "129.2401454302479",
+          "y": "35.28723645276212"
+        },
+        {
+          "address_name": "부산 기장군 일광읍 이천리 12",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "20575175",
+          "phone": "",
+          "place_name": "아시아드CC 주차장",
+          "place_url": "http://place.map.kakao.com/20575175",
+          "road_address_name": "부산 기장군 일광읍 차양길 26",
+          "x": "129.2393211668153",
+          "y": "35.286837211719885"
+        },
+        {
+          "address_name": "부산 기장군 일광읍 이천리 12",
+          "category_group_code": "BK9",
+          "category_group_name": "은행",
+          "category_name": "금융,보험 > 금융서비스 > 은행 > ATM",
+          "distance": "",
+          "id": "1615957660",
+          "phone": "",
+          "place_name": "BNK 부산은행 아시아드 CC ATM",
+          "place_url": "http://place.map.kakao.com/1615957660",
+          "road_address_name": "부산 기장군 일광읍 차양길 26",
+          "x": "129.2401688328",
+          "y": "35.2871684359207"
+        },
+        {
+          "address_name": "부산 기장군 일광읍 이천리 12",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "1787712756",
+          "phone": "",
+          "place_name": "BMW차징스테이션 아시아드CC by동성모터스 전기차충전소",
+          "place_url": "http://place.map.kakao.com/1787712756",
+          "road_address_name": "부산 기장군 일광읍 차양길 26",
+          "x": "129.24016883278722",
+          "y": "35.287168435873596"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 4,
+        "same_name": {
+          "keyword": "아시아드 CC ",
+          "region": [],
+          "selected_region": "부산 기장군 일광읍"
+        },
+        "total_count": 4
+      }
+    }
+  },
+  {
+    "query": "안동 CC 경북 안동시",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경북 안동시 풍천면 어담리 297-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "1817446760",
+          "phone": "054-843-0000",
+          "place_name": "안동리버힐CC",
+          "place_url": "http://place.map.kakao.com/1817446760",
+          "road_address_name": "경북 안동시 풍천면 풍일로 1572",
+          "x": "128.5755788754298",
+          "y": "36.48931211499963"
+        },
+        {
+          "address_name": "경북 안동시 일직면 국곡리 88",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "21359572",
+          "phone": "054-850-2800",
+          "place_name": "남안동컨트리클럽",
+          "place_url": "http://place.map.kakao.com/21359572",
+          "road_address_name": "경북 안동시 일직면 풍일로 1887",
+          "x": "128.60664083893033",
+          "y": "36.47789861608677"
+        },
+        {
+          "address_name": "경북 안동시 성곡동 1572",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "1803760542",
+          "phone": "054-821-9191",
+          "place_name": "안동레이크골프클럽",
+          "place_url": "http://place.map.kakao.com/1803760542",
+          "road_address_name": "",
+          "x": "128.77349097693178",
+          "y": "36.567358739103376"
+        },
+        {
+          "address_name": "경북 안동시 정상동 779",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 파크골프장",
+          "distance": "",
+          "id": "22320564",
+          "phone": "",
+          "place_name": "안동강남파크골프장",
+          "place_url": "http://place.map.kakao.com/22320564",
+          "road_address_name": "경북 안동시 강남로 417-4",
+          "x": "128.7465822549777",
+          "y": "36.5519187624765"
+        },
+        {
+          "address_name": "경북 안동시 옥동 1381-15",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 파크골프장",
+          "distance": "",
+          "id": "1458080163",
+          "phone": "",
+          "place_name": "옥동 파크골프장",
+          "place_url": "http://place.map.kakao.com/1458080163",
+          "road_address_name": "",
+          "x": "128.682852802808",
+          "y": "36.5556638290085"
+        }
+      ],
+      "meta": {
+        "is_end": false,
+        "pageable_count": 13,
+        "same_name": {
+          "keyword": "CC 경북 안동시",
+          "region": [],
+          "selected_region": "경북 안동시"
+        },
+        "total_count": 13
+      }
+    }
+  },
+  {
+    "query": "양산 CC 경남 양산시",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경남 양산시 상북면 소토리 1059-3",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "11345731",
+          "phone": "055-379-0000",
+          "place_name": "양산CC",
+          "place_url": "http://place.map.kakao.com/11345731",
+          "road_address_name": "경남 양산시 상북면 충렬로 687",
+          "x": "129.0401779338762",
+          "y": "35.40228331789821"
+        },
+        {
+          "address_name": "경남 양산시 어곡동 2093",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "679550616",
+          "phone": "055-389-7000",
+          "place_name": "양산동원로얄 컨트리클럽",
+          "place_url": "http://place.map.kakao.com/679550616",
+          "road_address_name": "경남 양산시 어실로 380-45",
+          "x": "129.02166482000197",
+          "y": "35.393969013054594"
+        },
+        {
+          "address_name": "경남 양산시 북부동 690-4",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 당구 > 당구장,포켓볼",
+          "distance": "",
+          "id": "23346716",
+          "phone": "",
+          "place_name": "양산CC",
+          "place_url": "http://place.map.kakao.com/23346716",
+          "road_address_name": "경남 양산시 북안남3길 38",
+          "x": "129.03847932969774",
+          "y": "35.34712271352662"
+        },
+        {
+          "address_name": "경남 양산시 덕계동 223-2",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 파크골프장",
+          "distance": "",
+          "id": "1809097468",
+          "phone": "055-379-8561",
+          "place_name": "동부양산파크골프장",
+          "place_url": "http://place.map.kakao.com/1809097468",
+          "road_address_name": "",
+          "x": "129.164098504245",
+          "y": "35.3796174613137"
+        },
+        {
+          "address_name": "경남 양산시 상북면 소토리 1059-3",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프",
+          "distance": "",
+          "id": "19825975",
+          "phone": "",
+          "place_name": "양산컨트리클럽 클럽하우스",
+          "place_url": "http://place.map.kakao.com/19825975",
+          "road_address_name": "경남 양산시 상북면 충렬로 687",
+          "x": "129.040193154306",
+          "y": "35.4022758516521"
+        }
+      ],
+      "meta": {
+        "is_end": false,
+        "pageable_count": 45,
+        "same_name": {
+          "keyword": "양산 CC ",
+          "region": [],
+          "selected_region": "경남 양산시"
+        },
+        "total_count": 55
+      }
+    }
+  },
+  {
+    "query": "양산동원로얄 CC 경남 양산시",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경남 양산시 어곡동 2093",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "679550616",
+          "phone": "055-389-7000",
+          "place_name": "양산동원로얄 컨트리클럽",
+          "place_url": "http://place.map.kakao.com/679550616",
+          "road_address_name": "경남 양산시 어실로 380-45",
+          "x": "129.02166482000197",
+          "y": "35.393969013054594"
+        },
+        {
+          "address_name": "경남 양산시 어곡동 2093",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "763483819",
+          "phone": "",
+          "place_name": "경남 양산시 양산동원로얄CC 전기차충전소",
+          "place_url": "http://place.map.kakao.com/763483819",
+          "road_address_name": "경남 양산시 어실로 380-45",
+          "x": "129.02176602635436",
+          "y": "35.39401147441881"
+        },
+        {
+          "address_name": "경남 양산시 어곡동 2093",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "514325952",
+          "phone": "",
+          "place_name": "경남 양산시 양산동원로얄CC 전기차충전소",
+          "place_url": "http://place.map.kakao.com/514325952",
+          "road_address_name": "경남 양산시 어실로 380-45",
+          "x": "129.022200344408",
+          "y": "35.3935995909925"
+        },
+        {
+          "address_name": "경남 양산시 어곡동 2093",
+          "category_group_code": "BK9",
+          "category_group_name": "은행",
+          "category_name": "금융,보험 > 금융서비스 > 은행 > ATM",
+          "distance": "",
+          "id": "1459401541",
+          "phone": "",
+          "place_name": "롯데ATM BNK부산은행 양산동원로얄CC",
+          "place_url": "http://place.map.kakao.com/1459401541",
+          "road_address_name": "",
+          "x": "129.021479394991",
+          "y": "35.3952697566288"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 4,
+        "same_name": {
+          "keyword": "양산동원로얄 CC ",
+          "region": [],
+          "selected_region": "경남 양산시"
+        },
+        "total_count": 4
+      }
+    }
+  },
+  {
+    "query": "영천 CC 경북 영천시",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경북 영천시 임고면 효리 1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "9710672",
+          "phone": "054-330-9000",
+          "place_name": "오션힐스 영천CC",
+          "place_url": "http://place.map.kakao.com/9710672",
+          "road_address_name": "경북 영천시 임고면 방목길 34-2",
+          "x": "129.01236606103814",
+          "y": "36.047953305720256"
+        },
+        {
+          "address_name": "경북 영천시 고경면 동도리 산 12",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "1543190509",
+          "phone": "054-333-2100",
+          "place_name": "영천오펠GC",
+          "place_url": "http://place.map.kakao.com/1543190509",
+          "road_address_name": "경북 영천시 고경면 호국로 1221-24",
+          "x": "129.0577823138791",
+          "y": "36.00924793583982"
+        },
+        {
+          "address_name": "경북 영천시 임고면 효리 1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프",
+          "distance": "",
+          "id": "21354094",
+          "phone": "054-336-7000",
+          "place_name": "오션힐스 영천CC 스타트하우스",
+          "place_url": "http://place.map.kakao.com/21354094",
+          "road_address_name": "경북 영천시 임고면 방목길 34-2",
+          "x": "129.01242151502655",
+          "y": "36.04795237456022"
+        },
+        {
+          "address_name": "경북 영천시 임고면 효리 1",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "1563513037",
+          "phone": "",
+          "place_name": "오션힐스 영천CC 주차장",
+          "place_url": "http://place.map.kakao.com/1563513037",
+          "road_address_name": "",
+          "x": "129.01139763444502",
+          "y": "36.048266910930735"
+        },
+        {
+          "address_name": "경북 영천시 고경면 동도리 산 12",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "1879602670",
+          "phone": "",
+          "place_name": "영천오펠GC 주차장",
+          "place_url": "http://place.map.kakao.com/1879602670",
+          "road_address_name": "경북 영천시 고경면 호국로 1221-24",
+          "x": "129.05844866441433",
+          "y": "36.00885805572203"
+        }
+      ],
+      "meta": {
+        "is_end": false,
+        "pageable_count": 27,
+        "same_name": {
+          "keyword": "영천 CC ",
+          "region": [],
+          "selected_region": "경북 영천시"
+        },
+        "total_count": 27
+      }
+    }
+  },
+  {
+    "query": "진주 CC 경남 진주",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경남 진주시 진성면 구천리 산 13-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "8087808",
+          "phone": "055-758-0400",
+          "place_name": "진주컨트리클럽",
+          "place_url": "http://place.map.kakao.com/8087808",
+          "road_address_name": "경남 진주시 진성면 진성로464번길 82",
+          "x": "128.233151457858",
+          "y": "35.1733179660411"
+        },
+        {
+          "address_name": "경남 진주시 상대동 821-2",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 파크골프장",
+          "distance": "",
+          "id": "1108055281",
+          "phone": "",
+          "place_name": "진주상대 그라운드골프장",
+          "place_url": "http://place.map.kakao.com/1108055281",
+          "road_address_name": "경남 진주시 모덕로47번길 68",
+          "x": "128.100155944928",
+          "y": "35.1868287849068"
+        },
+        {
+          "address_name": "경남 진주시 초전동 1638-8",
+          "category_group_code": "CE7",
+          "category_group_name": "카페",
+          "category_name": "음식점 > 카페 > 커피전문점 > 천씨씨커피",
+          "distance": "",
+          "id": "153916396",
+          "phone": "055-754-1008",
+          "place_name": "천씨씨커피 진주초전점",
+          "place_url": "http://place.map.kakao.com/153916396",
+          "road_address_name": "경남 진주시 초전북로52번길 31",
+          "x": "128.11376297646734",
+          "y": "35.20605974791885"
+        },
+        {
+          "address_name": "경남 진주시 상봉동 1105-16",
+          "category_group_code": "CE7",
+          "category_group_name": "카페",
+          "category_name": "음식점 > 카페 > 커피전문점 > 천씨씨커피",
+          "distance": "",
+          "id": "675548657",
+          "phone": "055-920-4880",
+          "place_name": "천씨씨커피 진주보건대점",
+          "place_url": "http://place.map.kakao.com/675548657",
+          "road_address_name": "경남 진주시 창렬로98번길 1",
+          "x": "128.0686897874168",
+          "y": "35.19720964423147"
+        },
+        {
+          "address_name": "경남 진주시 하대동 106-1",
+          "category_group_code": "CE7",
+          "category_group_name": "카페",
+          "category_name": "음식점 > 카페 > 커피전문점 > 천씨씨커피",
+          "distance": "",
+          "id": "1375868481",
+          "phone": "070-8988-1008",
+          "place_name": "천씨씨커피 진주하대점",
+          "place_url": "http://place.map.kakao.com/1375868481",
+          "road_address_name": "경남 진주시 모덕로 260",
+          "x": "128.12242411775387",
+          "y": "35.18875960917991"
+        }
+      ],
+      "meta": {
+        "is_end": false,
+        "pageable_count": 36,
+        "same_name": {
+          "keyword": "진주 CC ",
+          "region": [],
+          "selected_region": "경남 진주시"
+        },
+        "total_count": 36
+      }
+    }
+  },
+  {
+    "query": "진해신항 CC 경남 창원시 진해구",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경남 창원시 진해구 제덕동 898",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "1882610989",
+          "phone": "055-548-9999",
+          "place_name": "진해신항CC",
+          "place_url": "http://place.map.kakao.com/1882610989",
+          "road_address_name": "경남 창원시 진해구 수제로 36",
+          "x": "128.74438422852364",
+          "y": "35.08881201664901"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 1,
+        "same_name": {
+          "keyword": "진해신항 CC ",
+          "region": [],
+          "selected_region": "경남 창원시 진해구"
+        },
+        "total_count": 1
+      }
+    }
+  },
+  {
+    "query": "창원 CC 경남 창원",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경남 창원시 의창구 봉림동 647",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "25070455",
+          "phone": "055-288-4112",
+          "place_name": "창원컨트리클럽",
+          "place_url": "http://place.map.kakao.com/25070455",
+          "road_address_name": "경남 창원시 의창구 대봉로 137",
+          "x": "128.66360852108775",
+          "y": "35.2620901794182"
+        },
+        {
+          "address_name": "경남 창원시 의창구 봉림동 647",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "20587419",
+          "phone": "",
+          "place_name": "창원CC 주차장",
+          "place_url": "http://place.map.kakao.com/20587419",
+          "road_address_name": "경남 창원시 의창구 대봉로 137",
+          "x": "128.664175459449",
+          "y": "35.2616047364944"
+        },
+        {
+          "address_name": "경남 창원시 의창구 동읍 송정리 97-3",
+          "category_group_code": "CE7",
+          "category_group_name": "카페",
+          "category_name": "음식점 > 카페 > 커피전문점 > 천씨씨커피",
+          "distance": "",
+          "id": "54057236",
+          "phone": "055-292-1005",
+          "place_name": "천씨씨커피 창원동읍점",
+          "place_url": "http://place.map.kakao.com/54057236",
+          "road_address_name": "경남 창원시 의창구 동읍 자여로 58",
+          "x": "128.70013998841176",
+          "y": "35.27760397529194"
+        },
+        {
+          "address_name": "경남 창원시 성산구 대원동 121",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "서비스,산업 > 건설,건축 > 인테리어",
+          "distance": "",
+          "id": "27510013",
+          "phone": "055-600-5440",
+          "place_name": "홈씨씨인테리어 창원시티세븐점",
+          "place_url": "http://place.map.kakao.com/27510013",
+          "road_address_name": "경남 창원시 성산구 원이대로 320",
+          "x": "128.653262633968",
+          "y": "35.2404134887919"
+        },
+        {
+          "address_name": "경남 창원시 성산구 대원동 121",
+          "category_group_code": "FD6",
+          "category_group_name": "음식점",
+          "category_name": "음식점 > 중식 > 중국요리",
+          "distance": "",
+          "id": "73524454",
+          "phone": "",
+          "place_name": "씨에씨에마라탕 창원더시티세븐점",
+          "place_url": "http://place.map.kakao.com/73524454",
+          "road_address_name": "경남 창원시 성산구 원이대로 320",
+          "x": "128.6526929147456",
+          "y": "35.24010854782546"
+        }
+      ],
+      "meta": {
+        "is_end": false,
+        "pageable_count": 44,
+        "same_name": {
+          "keyword": "창원 CC ",
+          "region": [],
+          "selected_region": "경남 창원시"
+        },
+        "total_count": 44
+      }
+    }
+  },
+  {
+    "query": "청도그레이스 CC 경북 청도",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경북 청도군 이서면 각계리 426-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "8670798",
+          "phone": "054-370-3000",
+          "place_name": "더 그레이스컨트리클럽",
+          "place_url": "http://place.map.kakao.com/8670798",
+          "road_address_name": "경북 청도군 이서면 서녁길 91",
+          "x": "128.64518534939165",
+          "y": "35.663980835988866"
+        },
+        {
+          "address_name": "경북 청도군 이서면 각계리 426-1",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "20513843",
+          "phone": "",
+          "place_name": "그레이스CC 주차장",
+          "place_url": "http://place.map.kakao.com/20513843",
+          "road_address_name": "경북 청도군 이서면 서녁길 91",
+          "x": "128.64583278985432",
+          "y": "35.66448114434672"
+        },
+        {
+          "address_name": "경북 청도군 이서면 각계리 426-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프",
+          "distance": "",
+          "id": "21518943",
+          "phone": "",
+          "place_name": "그레이스CC 클럽하우스",
+          "place_url": "http://place.map.kakao.com/21518943",
+          "road_address_name": "경북 청도군 이서면 서녁길 91",
+          "x": "128.64518916045",
+          "y": "35.6640051153444"
+        },
+        {
+          "address_name": "경북 청도군 이서면 각계리 426-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "586697234",
+          "phone": "",
+          "place_name": "청도군 그레이스CC 전기차충전소",
+          "place_url": "http://place.map.kakao.com/586697234",
+          "road_address_name": "경북 청도군 이서면 서녁길 91",
+          "x": "128.64776798958178",
+          "y": "35.66418252104541"
+        },
+        {
+          "address_name": "경북 청도군 이서면 각계리 426-1",
+          "category_group_code": "BK9",
+          "category_group_name": "은행",
+          "category_name": "금융,보험 > 금융서비스 > 은행 > ATM",
+          "distance": "",
+          "id": "1057079156",
+          "phone": "",
+          "place_name": "롯데ATM BNK부산은행 그레이스CC",
+          "place_url": "http://place.map.kakao.com/1057079156",
+          "road_address_name": "",
+          "x": "128.645384559398",
+          "y": "35.66470174837"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 5,
+        "same_name": {
+          "keyword": "청도그레이스 CC ",
+          "region": [],
+          "selected_region": "경북 청도군"
+        },
+        "total_count": 5
+      }
+    }
+  },
+  {
+    "query": "통도파인이스트 CC 경남 양산시",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경남 양산시 하북면 순지리 17",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "25070425",
+          "phone": "055-370-1300",
+          "place_name": "통도파인이스트CC",
+          "place_url": "http://place.map.kakao.com/25070425",
+          "road_address_name": "경남 양산시 하북면 신평남부길 78-130",
+          "x": "129.10074389073424",
+          "y": "35.485715501177815"
+        },
+        {
+          "address_name": "경남 양산시 하북면 순지리 17",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "1646840152",
+          "phone": "",
+          "place_name": "통도파인이스트CC 주차장",
+          "place_url": "http://place.map.kakao.com/1646840152",
+          "road_address_name": "경남 양산시 하북면 신평남부길 78-130",
+          "x": "129.099485031219",
+          "y": "35.4857320122407"
+        },
+        {
+          "address_name": "경남 양산시 하북면 순지리 17",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프연습장 > 스크린골프연습장",
+          "distance": "",
+          "id": "982166096",
+          "phone": "055-370-1380",
+          "place_name": "통도파인이스트컨트리클럽 골프연습장",
+          "place_url": "http://place.map.kakao.com/982166096",
+          "road_address_name": "경남 양산시 하북면 신평남부길 78-130",
+          "x": "129.0950804732672",
+          "y": "35.491298173144074"
+        },
+        {
+          "address_name": "경남 양산시 하북면 순지리 17",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "1884286638",
+          "phone": "",
+          "place_name": "양산시 통도파인이스트CC 전기차충전소",
+          "place_url": "http://place.map.kakao.com/1884286638",
+          "road_address_name": "경남 양산시 하북면 신평남부길 78-130",
+          "x": "129.094980149124",
+          "y": "35.4920172010662"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 4,
+        "same_name": {
+          "keyword": "통도파인이스트 CC ",
+          "region": [],
+          "selected_region": "경남 양산시"
+        },
+        "total_count": 4
+      }
+    }
+  },
+  {
+    "query": "통영동원로얄 CC 경남 통영시",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경남 통영시 산양읍 영운리 965",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "1493127856",
+          "phone": "055-640-5000",
+          "place_name": "동원로얄컨트리클럽&리조트",
+          "place_url": "http://place.map.kakao.com/1493127856",
+          "road_address_name": "경남 통영시 산양읍 담안길 240",
+          "x": "128.4276715329666",
+          "y": "34.81013324825872"
+        },
+        {
+          "address_name": "경남 통영시 산양읍 영운리 169-23",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "가정,생활 > 결혼 > 예식장",
+          "distance": "",
+          "id": "1185277950",
+          "phone": "",
+          "place_name": "동원로얄CC&리조트 웨딩홀",
+          "place_url": "http://place.map.kakao.com/1185277950",
+          "road_address_name": "경남 통영시 산양읍 담안길 160-21",
+          "x": "128.422681664312",
+          "y": "34.8174337538698"
+        },
+        {
+          "address_name": "경남 통영시 산양읍 영운리 산 184-5",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "1515192604",
+          "phone": "",
+          "place_name": "동원로얄컨트리클럽앤리조트 주차장2",
+          "place_url": "http://place.map.kakao.com/1515192604",
+          "road_address_name": "경남 통영시 산양읍 담안길 240",
+          "x": "128.42706233891",
+          "y": "34.8104207038245"
+        },
+        {
+          "address_name": "경남 통영시 산양읍 영운리 산 184-1",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "1929163448",
+          "phone": "",
+          "place_name": "동원로얄컨트리클럽앤리조트 주차장1",
+          "place_url": "http://place.map.kakao.com/1929163448",
+          "road_address_name": "경남 통영시 산양읍 담안길 160-21",
+          "x": "128.423695278954",
+          "y": "34.8167008455781"
+        },
+        {
+          "address_name": "경남 통영시 산양읍 영운리 965",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "801007985",
+          "phone": "",
+          "place_name": "경남 통영시 통영동원로얄CC 전기차충전소",
+          "place_url": "http://place.map.kakao.com/801007985",
+          "road_address_name": "경남 통영시 산양읍 담안길 240",
+          "x": "128.427699839944",
+          "y": "34.8100004230169"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 5,
+        "same_name": {
+          "keyword": "통영동원로얄 CC 경남 통영시",
+          "region": [],
+          "selected_region": ""
+        },
+        "total_count": 5
+      }
+    }
+  },
+  {
+    "query": "포웰 CC 경남 김해시",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경남 김해시 진례면 송현리 산 91-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "1118670876",
+          "phone": "055-340-9000",
+          "place_name": "포웰CC",
+          "place_url": "http://place.map.kakao.com/1118670876",
+          "road_address_name": "경남 김해시 진례면 고모로134번길 54-49",
+          "x": "128.783981004821",
+          "y": "35.2322078593965"
+        },
+        {
+          "address_name": "경남 김해시 진례면 송현리 산 91-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "754062737",
+          "phone": "",
+          "place_name": "포웰CC 전기차충전소",
+          "place_url": "http://place.map.kakao.com/754062737",
+          "road_address_name": "경남 김해시 진례면 고모로134번길 54-49",
+          "x": "128.78399437139782",
+          "y": "35.23216620702087"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 2,
+        "same_name": {
+          "keyword": "포웰 CC ",
+          "region": [],
+          "selected_region": "경남 김해시"
+        },
+        "total_count": 2
+      }
+    }
+  },
+  {
+    "query": "포항 CC 경북 포항시",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경북 포항시 북구 송라면 상송리 산 48",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "7963060",
+          "phone": "054-230-2000",
+          "place_name": "포항cc",
+          "place_url": "http://place.map.kakao.com/7963060",
+          "road_address_name": "경북 포항시 북구 송라면 동해대로2751번길 126",
+          "x": "129.34217575527472",
+          "y": "36.22397147843987"
+        },
+        {
+          "address_name": "경북 포항시 북구 송라면 대전리 산 208",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "11193686",
+          "phone": "054-262-9988",
+          "place_name": "오션힐스 포항CC",
+          "place_url": "http://place.map.kakao.com/11193686",
+          "road_address_name": "경북 포항시 북구 송라면 대전길 7",
+          "x": "129.34991225158925",
+          "y": "36.24497625057528"
+        },
+        {
+          "address_name": "경북 포항시 북구 송라면 대전리 산 208",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "26371105",
+          "phone": "",
+          "place_name": "오션힐스 포항CC 주차장",
+          "place_url": "http://place.map.kakao.com/26371105",
+          "road_address_name": "경북 포항시 북구 송라면 대전길 7",
+          "x": "129.3502447396106",
+          "y": "36.24437958226181"
+        },
+        {
+          "address_name": "경북 포항시 남구 이동 608-2",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프연습장",
+          "distance": "",
+          "id": "14663131",
+          "phone": "",
+          "place_name": "포항건강랜드골프클럽",
+          "place_url": "http://place.map.kakao.com/14663131",
+          "road_address_name": "경북 포항시 남구 포스코대로 53",
+          "x": "129.3326392747995",
+          "y": "36.0280899642189"
+        },
+        {
+          "address_name": "경북 포항시 남구 오천읍 원리 1559-9",
+          "category_group_code": "CE7",
+          "category_group_name": "카페",
+          "category_name": "음식점 > 카페 > 커피전문점 > 천씨씨커피",
+          "distance": "",
+          "id": "1600885321",
+          "phone": "054-292-6881",
+          "place_name": "천씨씨커피 포항오천힐스테이트점",
+          "place_url": "http://place.map.kakao.com/1600885321",
+          "road_address_name": "경북 포항시 남구 오천읍 원동로156번길 12-17",
+          "x": "129.4036693043887",
+          "y": "35.97615016953951"
+        }
+      ],
+      "meta": {
+        "is_end": false,
+        "pageable_count": 34,
+        "same_name": {
+          "keyword": "포항 CC ",
+          "region": [],
+          "selected_region": "경북 포항시"
+        },
+        "total_count": 34
+      }
+    }
+  },
+  {
+    "query": "해운대 CC 부산 기장군",
+    "response": {
+      "documents": [
+        {
+          "address_name": "부산 기장군 정관읍 병산리 산 2-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "8617158",
+          "phone": "051-726-8000",
+          "place_name": "해운대컨트리클럽",
+          "place_url": "http://place.map.kakao.com/8617158",
+          "road_address_name": "",
+          "x": "129.20189812741683",
+          "y": "35.36426329585244"
+        },
+        {
+          "address_name": "부산 기장군 정관읍 병산리 산 2-1",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "20588698",
+          "phone": "",
+          "place_name": "해운대CC주차장",
+          "place_url": "http://place.map.kakao.com/20588698",
+          "road_address_name": "",
+          "x": "129.202124028202",
+          "y": "35.3651278454548"
+        },
+        {
+          "address_name": "부산 기장군 정관읍 병산리 산 2-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프",
+          "distance": "",
+          "id": "21443985",
+          "phone": "051-726-8000",
+          "place_name": "해운대CC 클럽하우스",
+          "place_url": "http://place.map.kakao.com/21443985",
+          "road_address_name": "",
+          "x": "129.20195505755035",
+          "y": "35.36425324699297"
+        },
+        {
+          "address_name": "부산 기장군 정관읍 병산리 산 2-1",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "가정,생활 > 패션 > 의류판매 > 남성의류,양복",
+          "distance": "",
+          "id": "512167891",
+          "phone": "051-726-8122",
+          "place_name": "웰메이드 해운대CC점",
+          "place_url": "http://place.map.kakao.com/512167891",
+          "road_address_name": "",
+          "x": "129.201941520803",
+          "y": "35.3642408782499"
+        },
+        {
+          "address_name": "부산 기장군 기장읍 연화리 509",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "23699473",
+          "phone": "051-726-0707",
+          "place_name": "해운대비치골프&리조트",
+          "place_url": "http://place.map.kakao.com/23699473",
+          "road_address_name": "부산 기장군 기장읍 대변로 74",
+          "x": "129.22032211500095",
+          "y": "35.22492938715379"
+        }
+      ],
+      "meta": {
+        "is_end": false,
+        "pageable_count": 10,
+        "same_name": {
+          "keyword": "해운대 CC ",
+          "region": [],
+          "selected_region": "부산 기장군"
+        },
+        "total_count": 10
+      }
+    }
+  },
+  {
+    "query": "힐마루 CC 경남 창녕군",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경남 창녕군 장마면 초곡리 1082",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "8710120",
+          "phone": "055-520-8000",
+          "place_name": "동훈힐마루CC",
+          "place_url": "http://place.map.kakao.com/8710120",
+          "road_address_name": "경남 창녕군 장마면 영산계성로 469-195",
+          "x": "128.4998657557821",
+          "y": "35.4994145825918"
+        },
+        {
+          "address_name": "경남 창녕군 장마면 초곡리 1082",
+          "category_group_code": "PK6",
+          "category_group_name": "주차장",
+          "category_name": "교통,수송 > 교통시설 > 주차장",
+          "distance": "",
+          "id": "2134472242",
+          "phone": "",
+          "place_name": "동훈힐마루CC 주차장",
+          "place_url": "http://place.map.kakao.com/2134472242",
+          "road_address_name": "",
+          "x": "128.500484310822",
+          "y": "35.500082795582"
+        },
+        {
+          "address_name": "경남 창녕군 장마면 초곡리 1082",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "교통,수송 > 자동차 > 전기차 충전소",
+          "distance": "",
+          "id": "424420701",
+          "phone": "",
+          "place_name": "힐마루골프클럽 전기차충전소",
+          "place_url": "http://place.map.kakao.com/424420701",
+          "road_address_name": "경남 창녕군 장마면 영산계성로 469-195",
+          "x": "128.49995565430095",
+          "y": "35.49944861183595"
+        },
+        {
+          "address_name": "경남 창녕군 장마면 초곡리 1082",
+          "category_group_code": "BK9",
+          "category_group_name": "은행",
+          "category_name": "금융,보험 > 금융서비스 > 은행 > ATM",
+          "distance": "",
+          "id": "21877750",
+          "phone": "",
+          "place_name": "BNK경남은행 365코너 동훈힐마루CC",
+          "place_url": "http://place.map.kakao.com/21877750",
+          "road_address_name": "경남 창녕군 장마면 영산계성로 469-195",
+          "x": "128.499865588258",
+          "y": "35.4994055725995"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 4,
+        "same_name": {
+          "keyword": "힐마루 CC ",
+          "region": [],
+          "selected_region": "경남 창녕군"
+        },
+        "total_count": 4
+      }
+    }
+  },
+  {
+    "query": "힐스카이 CC 경북 경주",
+    "response": {
+      "documents": [
+        {
+          "address_name": "경북 경주시 천북면 화산리 산 33-16",
+          "category_group_code": "",
+          "category_group_name": "",
+          "category_name": "스포츠,레저 > 골프 > 골프장",
+          "distance": "",
+          "id": "229961815",
+          "phone": "1811-0770",
+          "place_name": "힐스카이CC 경주지점",
+          "place_url": "http://place.map.kakao.com/229961815",
+          "road_address_name": "경북 경주시 천북면 천강로 412-299",
+          "x": "129.31438625727122",
+          "y": "35.910580187122136"
+        }
+      ],
+      "meta": {
+        "is_end": true,
+        "pageable_count": 1,
+        "same_name": {
+          "keyword": "힐스카이 CC ",
+          "region": [],
+          "selected_region": "경북 경주시"
+        },
+        "total_count": 1
+      }
+    }
+  }
+]

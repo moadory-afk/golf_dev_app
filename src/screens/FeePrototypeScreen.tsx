@@ -633,8 +633,8 @@ export default function FeePrototypeScreen() {
           <View style={s.summaryGrid}>
             <SummaryCard label="전월잔액" value={formatKrw(treasurySummary.previousBalance)} />
             <SummaryCard label="현재잔액" value={formatKrw(treasurySummary.balance)} active={transactionFilter === 'all'} onPress={() => setTransactionFilter('all')} />
-            <SummaryCard label="이번 달 입금" value={formatKrw(treasurySummary.income)} tone={C.green} active={transactionFilter === 'income'} onPress={() => setTransactionFilter('income')} />
-            <SummaryCard label="이번 달 지급" value={formatKrw(treasurySummary.expense)} tone={C.danger} active={transactionFilter === 'expense'} onPress={() => setTransactionFilter('expense')} />
+            <SummaryCard label="이번 달 입금" value={formatKrw(treasurySummary.income)} tone={C.danger} active={transactionFilter === 'income'} onPress={() => setTransactionFilter('income')} />
+            <SummaryCard label="이번 달 지급" value={formatKrw(treasurySummary.expense)} tone={C.info} active={transactionFilter === 'expense'} onPress={() => setTransactionFilter('expense')} />
           </View>
 
           <View style={s.card}>
@@ -651,7 +651,7 @@ export default function FeePrototypeScreen() {
                   onPress={() => openTransactionEditor(item)}
                 >
                   <View style={[s.transactionIcon, item.type === 'income' ? s.incomeIcon : s.expenseIcon]}>
-                    <Text style={s.transactionIconText}>{item.type === 'income' ? '+' : '-'}</Text>
+                    <Text style={[s.transactionIconText, { color: item.type === 'income' ? C.danger : C.info }]}>{item.type === 'income' ? '+' : '-'}</Text>
                   </View>
                   <View style={s.transactionBody}>
                     <View style={s.transactionTopRow}>
@@ -661,7 +661,7 @@ export default function FeePrototypeScreen() {
                       </Text>
                     </View>
                   </View>
-                  <Text style={[s.transactionAmount, { color: item.type === 'income' ? C.green : C.danger }]}>
+                  <Text style={[s.transactionAmount, { color: item.type === 'income' ? C.danger : C.info }]}>
                     {item.type === 'income' ? '+' : '-'}
                     {formatKrw(item.amount)}
                   </Text>
@@ -758,7 +758,7 @@ export default function FeePrototypeScreen() {
 
       <Modal transparent animationType="fade" visible={policyOpen} onRequestClose={() => setPolicyOpen(false)}>
         <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setPolicyOpen(false)}>
-          <TouchableOpacity style={s.policyModal} activeOpacity={1} onPress={() => {}}>
+          <TouchableOpacity style={s.transactionModal} activeOpacity={1} onPress={() => {}}>
             <View style={s.policyHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={s.policyTitle}>회비 정책</Text>
@@ -877,12 +877,12 @@ export default function FeePrototypeScreen() {
         </TouchableOpacity>
       </Modal>
 
-      <Modal transparent animationType="fade" visible={transactionEditorOpen} onRequestClose={() => setTransactionEditorOpen(false)}>
-        <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setTransactionEditorOpen(false)}>
-          <TouchableOpacity style={s.policyModal} activeOpacity={1} onPress={() => {}}>
+      <Modal transparent animationType="slide" visible={transactionEditorOpen} onRequestClose={() => setTransactionEditorOpen(false)}>
+        <TouchableOpacity style={s.transactionModalOverlay} activeOpacity={1} onPress={() => setTransactionEditorOpen(false)}>
+          <TouchableOpacity style={s.transactionModal} activeOpacity={1} onPress={() => {}}>
             <View style={s.policyHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={s.policyTitle}>{transactionDraft.id ? '거래 수정' : '신규거래 추가'}</Text>
+                <Text style={s.policyTitle}>거래관리</Text>
               </View>
               <View style={s.transactionHeaderActions}>
                 {isAdmin ? (
@@ -895,22 +895,19 @@ export default function FeePrototypeScreen() {
                     </TouchableOpacity>
                   </>
                 ) : null}
-                <TouchableOpacity style={s.transactionHeaderBtn} onPress={() => setTransactionEditorOpen(false)}>
-                  <Text style={s.transactionHeaderBtnText}>닫기</Text>
-                </TouchableOpacity>
               </View>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={s.policySection}>
                 <View style={s.transactionEditorTopRow}>
-                  <View style={s.transactionTopCell}>
+                  <View style={s.transactionDateRow}>
                     <DateField
                       value={transactionDraft.entryDate}
                       onChange={(entryDate) => isAdmin && setTransactionDraft((current) => ({ ...current, entryDate }))}
                     />
                   </View>
-                  <View style={s.transactionTopCell}>
+                  <View style={s.transactionTypeRow}>
                     <TouchableOpacity
                       style={[s.transactionTopButton, transactionDraft.type === 'income' && s.segmentBtnActive]}
                       disabled={!isAdmin}
@@ -923,8 +920,6 @@ export default function FeePrototypeScreen() {
                     >
                       <Text style={[s.segmentText, transactionDraft.type === 'income' && s.segmentTextActive]}>입금</Text>
                     </TouchableOpacity>
-                  </View>
-                  <View style={s.transactionTopCell}>
                     <TouchableOpacity
                       style={[s.transactionTopButton, transactionDraft.type === 'expense' && s.segmentBtnActive]}
                       disabled={!isAdmin}
@@ -1174,15 +1169,15 @@ const s = StyleSheet.create({
     borderColor: C.border,
   },
   transactionIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  incomeIcon: { backgroundColor: C.greenLight },
-  expenseIcon: { backgroundColor: '#fbe8e5' },
+  incomeIcon: { backgroundColor: '#fde9e5' },
+  expenseIcon: { backgroundColor: '#e8f1fc' },
   transactionIconText: { fontSize: 15, fontWeight: '900', color: C.text },
   transactionBody: { flex: 1, minWidth: 0 },
   transactionTopRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  transactionDate: { fontSize: 12, fontWeight: '800', color: C.muted },
-  transactionTitle: { fontSize: 13, fontWeight: '800', color: C.text },
+  transactionDate: { fontSize: 14, fontWeight: '800', color: C.muted },
+  transactionTitle: { fontSize: 16, fontWeight: '800', color: C.text },
   transactionMeta: { fontSize: 12, color: C.muted, marginTop: 4 },
-  transactionAmount: { fontSize: 13, fontWeight: '900' },
+  transactionAmount: { fontSize: 16, fontWeight: '900' },
   newTransactionCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1212,6 +1207,16 @@ const s = StyleSheet.create({
   ghostLink: { marginTop: 12, borderRadius: 14, paddingVertical: 11, alignItems: 'center', borderWidth: 1, borderColor: C.border },
   ghostLinkText: { color: C.text, fontSize: 13, fontWeight: '800' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 16 },
+  transactionModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  transactionModal: {
+    backgroundColor: C.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 22,
+    maxHeight: '88%',
+  },
   policyModal: { backgroundColor: C.card, borderRadius: 22, padding: 18, maxHeight: '84%' },
   policyHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 14 },
   policyTitle: { fontSize: 18, fontWeight: '900', color: C.text },
@@ -1235,8 +1240,10 @@ const s = StyleSheet.create({
   policySection: { paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.border },
   policySectionTitle: { fontSize: 14, fontWeight: '900', color: C.text, marginBottom: 10 },
   transactionEditorTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  transactionDateRow: { flex: 1.18, minWidth: 0 },
+  transactionTypeRow: { flex: 1, minWidth: 0, flexDirection: 'row', gap: 6 },
   transactionTopCell: { flex: 1 },
-  transactionTopButton: { borderRadius: 14, borderWidth: 1, borderColor: C.border, paddingVertical: 12, alignItems: 'center', backgroundColor: '#fff' },
+  transactionTopButton: { flex: 1, minWidth: 0, borderRadius: 14, borderWidth: 1, borderColor: C.border, paddingVertical: 12, paddingHorizontal: 4, alignItems: 'center', backgroundColor: '#fff' },
   transactionDateCell: { flex: 1 },
   transactionTypeCell: { flex: 1 },
   segmentRow: { flexDirection: 'row', gap: 8 },
