@@ -1,6 +1,7 @@
 import * as ImageManipulator from 'expo-image-manipulator'
 import { Image, Platform } from 'react-native'
 import { supabase } from '../lib/supabase'
+import { recognizeScorecardByTemplate } from './scorecardTemplateRecognizer'
 
 const MAX_EDGE = 1568
 
@@ -48,7 +49,7 @@ async function resizeToBase64(uri: string): Promise<string> {
   return result.base64!
 }
 
-export async function recognizeScorecard(uri: string): Promise<RecognizedScorecard> {
+async function recognizeScorecardWithApi(uri: string): Promise<RecognizedScorecard> {
   const base64 = await resizeToBase64(uri)
   const { data, error } = await supabase.functions.invoke('recognize-scorecard', {
     body: { imageBase64: base64, mediaType: 'image/jpeg' },
@@ -60,6 +61,20 @@ export async function recognizeScorecard(uri: string): Promise<RecognizedScoreca
   }
   if (data?.error) throw new Error(data.error)
   return normalize(data)
+}
+
+export async function recognizeScorecard(uri: string): Promise<RecognizedScorecard> {
+  try {
+    const templateResult = await recognizeScorecardByTemplate(uri)
+    if (templateResult.status === 'recognized' && templateResult.scorecard) {
+      return templateResult.scorecard
+    }
+  } catch {
+    // Dedicated SmartScore/Kakao recognition is an optimization path.
+    // If it cannot run, keep the existing Claude API flow as the reliable fallback.
+  }
+
+  return recognizeScorecardWithApi(uri)
 }
 
 /**
