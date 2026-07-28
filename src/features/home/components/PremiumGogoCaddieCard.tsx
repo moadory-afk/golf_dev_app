@@ -1,4 +1,4 @@
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, type LayoutRectangle } from 'react-native'
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, type ImageSourcePropType, type LayoutRectangle } from 'react-native'
 import { useEffect, useMemo, useState } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createShadow, radius, spacing } from '../../../design/tokens'
@@ -6,7 +6,19 @@ import { useSkin } from '../../../skins'
 import type { HomeFeedAction, HomeFeedEvent } from '../engine'
 import { TutorialFinger } from '../../../components/tutorial/TutorialFinger'
 
-const caddieCharacter = require('../../../../assets/caddy.png')
+const caddieCharacter = require('../../../../assets/caddie/01.png')
+const caddieWelcome = require('../../../../assets/caddie/02-Photoroom.png')
+const caddieAttendance = require('../../../../assets/caddie/03-Photoroom.png')
+const caddieCaddieBook = require('../../../../assets/caddie/06-Photoroom.png')
+const caddieGroups = require('../../../../assets/caddie/07-Photoroom.png')
+const caddieLotto = require('../../../../assets/caddie/08-Photoroom.png')
+const caddieScore = require('../../../../assets/caddie/09-Photoroom.png')
+const caddieSunny = require('../../../../assets/caddie/10-Photoroom.png')
+const caddieRain = require('../../../../assets/caddie/11-Photoroom.png')
+const caddieWind = require('../../../../assets/caddie/12-Photoroom.png')
+const caddieThinking = require('../../../../assets/caddie/13-Photoroom.png')
+const caddieConfirm = require('../../../../assets/caddie/15-Photoroom.png')
+const caddieCelebrate = require('../../../../assets/caddie/16-Photoroom.png')
 
 type ConciergeAction = {
   key: string
@@ -35,6 +47,46 @@ type PremiumGogoCaddieCardProps = {
   tutorialActive?: boolean
   onTutorialCompleted?: () => void
   onTutorialSkip?: () => void
+}
+
+function weatherCaddieImage(feed: HomeFeedEvent): ImageSourcePropType {
+  const weatherText = [
+    feed.message,
+    ...(feed.weatherHours ?? []).flatMap((hour) => [hour.icon, hour.condition]),
+  ].join(' ').toLowerCase()
+
+  if (/rain|shower|storm|snow|thunder|비|소나기|눈|뇌우|우산/.test(weatherText)) return caddieRain
+  if (/wind|gust|바람|강풍/.test(weatherText)) return caddieWind
+  return caddieSunny
+}
+
+function caddieImageForFeed(feed: HomeFeedEvent): ImageSourcePropType {
+  switch (feed.type) {
+    case 'attendance_request':
+      return caddieAttendance
+    case 'grouping':
+      return caddieGroups
+    case 'round_preparation':
+      return caddieCaddieBook
+    case 'lotto':
+      return caddieLotto
+    case 'score_entry':
+      return caddieScore
+    case 'weather_route':
+      return weatherCaddieImage(feed)
+    case 'round_result':
+      return caddieCelebrate
+    case 'round_analysis':
+      return caddieThinking
+    case 'award':
+      return caddieCelebrate
+    case 'notice':
+      return caddieConfirm
+    case 'empty':
+      return caddieWelcome
+    default:
+      return caddieCharacter
+  }
 }
 
 function fallbackFeed({
@@ -153,6 +205,8 @@ export function PremiumGogoCaddieCard({
     const nextPage = Math.max(0, Math.min(feedItems.length - 1, Math.round(offsetX / slideWidth)))
     setPage(nextPage)
   }
+  const currentFeed = feedItems[page] ?? fallback
+  const currentCaddieImage = caddieImageForFeed(currentFeed)
 
   return (
     <View
@@ -165,8 +219,8 @@ export function PremiumGogoCaddieCard({
       ]}
     >
       <View style={[styles.cardBody, compact && styles.cardBodyCompact]}>
-        <TouchableOpacity activeOpacity={0.9} onPress={() => runFeedAction(feedItems[page] ?? fallback)} style={[styles.characterStage, compact && styles.characterStageCompact]}>
-          <Image source={caddieCharacter} style={[styles.characterImage, compact && styles.characterImageCompact]} resizeMode="contain" />
+        <TouchableOpacity activeOpacity={0.9} onPress={() => runFeedAction(currentFeed)} style={[styles.characterStage, compact && styles.characterStageCompact]}>
+          <Image source={currentCaddieImage} style={[styles.characterImage, compact && styles.characterImageCompact]} resizeMode="contain" />
         </TouchableOpacity>
 
         <View
