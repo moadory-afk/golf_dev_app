@@ -344,12 +344,24 @@ function PremiumHomeHeroSectionComponent({
     };
   }, [tutorialUserId]);
 
-  const startTutorial = useCallback(() => {
+  const startTutorial = useCallback(async () => {
+    // "다음부터 묻지 않기"를 선택한 경우 시작 버튼을 눌러도
+    // 다음 앱 실행부터 튜토리얼 안내창이 다시 나타나지 않도록
+    // 시작 전에 영구 완료 상태를 저장한다.
+    if (doNotAskTutorialAgain) {
+      await markTutorialCompleted(tutorialUserId);
+    }
+
     setShowTutorialPrompt(false);
     setDoNotAskTutorialAgain(false);
     onTutorialStarted?.();
     startTutorialFlow();
-  }, [onTutorialStarted, startTutorialFlow]);
+  }, [
+    doNotAskTutorialAgain,
+    onTutorialStarted,
+    startTutorialFlow,
+    tutorialUserId,
+  ]);
 
   const postponeTutorial = useCallback(async () => {
     setShowTutorialPrompt(false);
