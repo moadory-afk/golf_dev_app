@@ -833,11 +833,41 @@ const HeroRoundCard = memo(function HeroRoundCard({
       }),
     [height, round.heroImageUrl, width],
   );
-  const roundHeroImageSource = round.heroImageUrl
-    ? optimizedHeroImageUrl
-      ? { uri: optimizedHeroImageUrl }
-      : null
-    : getCourseHeroImageSource(round.courseName);
+  // DB의 계절별 이미지 URL은 먼저 Supabase 변환 URL을 사용하지만,
+  // 변환 엔드포인트가 실패하면 원본 image_url로 재시도하고
+  // 원본도 실패하면 기존 골프장 로컬 이미지로 최종 fallback 한다.
+  // 기존 코드는 변환 URL이 실패해도 null을 반환해 히어로가 빈 카드로 남는 문제가 있었다.
+  const [heroImageFallbackLevel, setHeroImageFallbackLevel] = useState(0);
+
+  useEffect(() => {
+    setHeroImageFallbackLevel(0);
+  }, [round.heroImageUrl]);
+
+  const roundHeroImageSource = useMemo(() => {
+    const localFallback = getCourseHeroImageSource(round.courseName);
+
+    if (!round.heroImageUrl) return localFallback;
+
+    if (heroImageFallbackLevel === 0 && optimizedHeroImageUrl) {
+      return { uri: optimizedHeroImageUrl };
+    }
+
+    if (heroImageFallbackLevel <= 1) {
+      return { uri: round.heroImageUrl };
+    }
+
+    return localFallback;
+  }, [
+    heroImageFallbackLevel,
+    optimizedHeroImageUrl,
+    round.courseName,
+    round.heroImageUrl,
+  ]);
+
+  const handleHeroImageError = useCallback(() => {
+    setHeroImageFallbackLevel((current) => Math.min(current + 1, 2));
+  }, []);
+
   const [flipped, setFlipped] = useState(false);
   const flip = useRef(new Animated.Value(0)).current;
   const tutorialPulse = useRef(new Animated.Value(0)).current;
@@ -903,6 +933,7 @@ const HeroRoundCard = memo(function HeroRoundCard({
               style={styles.slideBackgroundImage}
               resizeMode="cover"
               fadeDuration={160}
+              onError={handleHeroImageError}
             />
           ) : (
             <View style={styles.slideBackgroundPlaceholder} />
