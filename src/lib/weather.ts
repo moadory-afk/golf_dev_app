@@ -47,7 +47,7 @@ type KmaFunctionHour = {
   windMs?: number;
   windDeg?: number;
 };
-type KmaFunctionResponse = { hours?: KmaFunctionHour[]; issuedAt?: string };
+type KmaFunctionResponse = { hours?: KmaFunctionHour[]; issuedAt?: string; error?: string };
 
 const CACHE_TTL_MS = 1000 * 60 * 60 * 3;
 const GEO_CACHE_TTL_MS = 1000 * 60 * 60 * 24;
@@ -205,8 +205,12 @@ async function fetchKmaForecast(latitude: number, longitude: number, date: strin
   const { data, error } = await supabase.functions.invoke<KmaFunctionResponse>("kma-weather", {
     body: { latitude, longitude, date, time },
   });
-  if (error || !data?.hours) return { hours: [] as RoundWeatherHour[], issuedAt: undefined };
-  return { hours: pickFiveKmaHours(data.hours, date, time), issuedAt: data.issuedAt };
+  if (error || !data?.hours) {
+    console.warn("[WEATHER] KMA unavailable", { error: error?.message, date, time, latitude, longitude, responseError: data?.error });
+    return { hours: [] as RoundWeatherHour[], issuedAt: undefined };
+  }
+  const hours = pickFiveKmaHours(data.hours, date, time);
+  return { hours, issuedAt: data.issuedAt };
 }
 
 async function fetchOpenMeteoForecast(geo: GeoItem | null, date: string, time?: string) {
@@ -220,7 +224,10 @@ async function fetchOpenMeteoForecast(geo: GeoItem | null, date: string, time?: 
     forecast_days: "7",
   });
   const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`);
-  if (!res.ok) return [] as RoundWeatherHour[];
+  if (!res.ok) {
+    console.warn("[WEATHER] Open-Meteo HTTP error", { status: res.status, date, time, latitude: geo.lat, longitude: geo.lon });
+    return [] as RoundWeatherHour[];
+  }
   return pickFiveOpenMeteoHours((await res.json()) as OpenMeteoForecastResponse, date, time);
 }
 
@@ -234,16 +241,45 @@ export async function getWeatherForRound(params: {
     : params.courseName?.trim() ? await geocodeCourse(params.courseName, params.region) : null;
   if (!geo) return null;
   const coordinateKey = `${geo.lat},${geo.lon}`;
-  const cacheKey = `@gogopar_weather_compare_v4:${coordinateKey}:${params.date}:${params.time ?? ""}`;
-  return getCachedAsync(`weather-compare-v4:${coordinateKey}:${params.date}:${params.time ?? ""}`, CACHE_TTL_MS, async () => {
+  const cacheKey = `@gogopar_weather_compare_v5:${coordinateKey}:${params.date}:${params.time ?? ""}`;
+
+  return getCachedAsync(`weather-compare-v5:${coordinateKey}:${params.date}:${params.time ?? ""}`, CACHE_TTL_MS, async () => {
     const cached = await readCache(cacheKey);
     if (cached) return cached;
+
     const [kma, openMeteoHours] = await Promise.all([
-      fetchKmaForecast(geo.lat, geo.lon, params.date, params.time).catch(() => ({ hours: [], issuedAt: undefined })),
-      fetchOpenMeteoForecast(geo, params.date, params.time).catch(() => []),
+      fetchKmaForecast(geo.lat, geo.lon, params.date, params.time).catch((error) => {
+        console.warn("[WEATHER] KMA exception", error);
+        return { hours: [] as RoundWeatherHour[], issuedAt: undefined };
+      }),
+      fetchOpenMeteoForecast(geo, params.date, params.time).catch((error) => {
+        console.warn("[WEATHER] Open-Meteo exception", error);
+        return [] as RoundWeatherHour[];
+      }),
     ]);
-    const primaryHours = kma.hours.length ? kma.hours : openMeteoHours;
+
+    // KMA가 목표 시간의 5시간을 모두 제공하지 못하면 Open-Meteo를 우선 사용한다.
+    // 신규 골프장/미래 라운드에서 KMA 발표자료가 아직 목표시간을 포함하지 않는 경우에도
+    // Hero Card 날씨가 비어버리지 않도록 한다.
+    const primaryHours = kma.hours.length >= 5
+      ? kma.hours
+      : openMeteoHours.length > 0
+        ? openMeteoHours
+        : kma.hours;
+
+    console.log("[WEATHER] forecast result", {
+      courseName: params.courseName,
+      date: params.date,
+      time: params.time,
+      latitude: geo.lat,
+      longitude: geo.lon,
+      kmaHours: kma.hours.length,
+      openMeteoHours: openMeteoHours.length,
+      source: primaryHours === kma.hours ? "KMA" : "Open-Meteo",
+    });
+
     if (!primaryHours.length) return null;
+
     const first = primaryHours[0];
     const fiveHour = summarizeFiveHourForecast(primaryHours);
     const result: RoundWeather = {
@@ -260,5 +296,4 @@ export async function getWeatherForRound(params: {
   }, { shouldCache: (value) => value !== null });
 }
 
-// 이전 호출부와의 호환성을 유지한다.
 export const getOpenWeatherForRound = getWeatherForRound;
